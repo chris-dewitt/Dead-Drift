@@ -22,17 +22,25 @@ class Thruster(BaseModule):
             heat_gen     = cfg["heat_gen"],
             tags         = ["propulsion", tier],
         )
-        self.base_force = cfg["force"]
-        self.heat       = 0.0
-        self.overheated = False
+        self.base_force      = cfg["force"]
+        self.heat            = 0.0
+        self.overheated      = False
+        self._buff_mult      = 1.0
+        self._buff_remaining = 0.0
 
     @property
     def force(self) -> float:
         if self.overheated:
             return 0.0
-        return self.base_force * (self.integrity / 100.0)
+        return self.base_force * (self.integrity / 100.0) * self._buff_mult
 
     def update(self, dt: float):
+        if self._buff_remaining > 0.0:
+            self._buff_remaining -= dt
+            if self._buff_remaining <= 0.0:
+                self._buff_remaining = 0.0
+                self._buff_mult = 1.0
+
         if not self.active or not self.is_functional():
             self.heat = max(0.0, self.heat - 15.0 * dt)
             if self.heat <= 0.0:
@@ -45,7 +53,7 @@ class Thruster(BaseModule):
 
     def inject_fuel_mix(self, buff_multiplier: float, duration: float):
         """Bax's mixologist injects a volatile concoction."""
-        self._buff_mult     = buff_multiplier
+        self._buff_mult      = buff_multiplier
         self._buff_remaining = duration
 
     def __repr__(self) -> str:

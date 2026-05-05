@@ -18,7 +18,7 @@ class UnionDispatcher(BaseNPC):
         "vessel", "exist", "manifest", "quantum", "undefined", "null"
     }
 
-    def __init__(self, vocabulary_vault):
+    def __init__(self, vocabulary_vault=None):
         super().__init__("DISPATCHER", patience=8)
         self._vault         = vocabulary_vault
         self._concepts_used: set[str] = set()
@@ -72,8 +72,7 @@ class UnionDispatcher(BaseNPC):
 
     def _required_concepts_in(self, parsed: ParsedInput) -> set[str]:
         tokens = set(parsed.tokens)
-        # Also check vault backdoors
-        vault_words = set(self._vault.get_all_terms())
+        vault_words = set(self._vault.get_all_terms()) if self._vault is not None else set()
         available = tokens | vault_words
         return self._REQUIRED_CONCEPTS & available
 

@@ -25,12 +25,14 @@ class RunManager:
         self._active_terminal: Terminal | None = None
         self._sector_timer   = 0.0
         self._sector_dur     = 45.0       # seconds per sector before jump allowed
+        self._ship           = None
 
     # ------------------------------------------------------------------
     def start_run(self, ship):
         self._sector_index = 0
         self._barges.clear()
         self._active_terminal = None
+        self._ship = ship
         self.draft = LoadoutDraft(chapter=self._current_chapter())
         ship.reset()
 
@@ -44,16 +46,21 @@ class RunManager:
         ship.body.mass = S.SHIP_MASS * frame.get("mass_mod", 1.0)
         ship.chain.install(module, 1)
         ship.cargo = cargo
+        self._ship = ship
 
         self._sector = generate_sector(self._sector_index, self._difficulty())
 
     # ------------------------------------------------------------------
     def update(self, dt: float):
-        if self._sector is None:
+        if self._sector is None or self._ship is None:
             return
 
         self._sector_timer += dt
-        self._sector.gravity.apply_all
+        self._sector.gravity.apply_all(self._ship.body)
+
+        cargo = self._ship.cargo
+        if cargo is not None and hasattr(cargo, "update"):
+            cargo.update(dt, self._ship)
 
         for barge in self._barges[:]:
             barge.update(dt)

@@ -77,10 +77,8 @@ class Bax:
         ]))
 
     def _on_module_unbolted(self, module, **_):
-        self.speak(
-            f"They've torched the {module.name}! "
-            f"{'It's holding — barely!' if module.is_functional() else 'IT'S GONE MATE.'}"
-        )
+        status = "It's holding - barely!" if module.is_functional() else "IT'S GONE MATE."
+        self.speak(f"They've torched the {module.name}! {status}")
 
     def _on_exploit_found(self, npc, exploit_key, **_):
         self.vault.add_backdoor(type(npc).__name__.lower(), exploit_key)

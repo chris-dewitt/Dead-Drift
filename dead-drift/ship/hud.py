@@ -60,8 +60,9 @@ class HUD:
         surface.blit(angle_text, (20 + ox, 80 + oy))
 
         # Cargo status
-        cargo_label = self.ship.cargo.name if self.ship.cargo else "NO CARGO"
-        cargo_color = S.AMBER_TERM if self.ship.cargo and self.ship.cargo.is_damaged else S.GREEN_TERM
+        cargo = self.ship.cargo
+        cargo_label = cargo.name if cargo else "NO CARGO"
+        cargo_color = S.AMBER_TERM if cargo and cargo.is_damaged else S.GREEN_TERM
         cargo_text = font.render(f"CARGO  {cargo_label}", True, self._tint(cargo_color))
         surface.blit(cargo_text, (20 + ox, 100 + oy))
 
