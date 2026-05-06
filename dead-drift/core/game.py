@@ -11,6 +11,7 @@ from bax.bax import Bax
 from renderer.vector_renderer import VectorRenderer
 from renderer.hud_renderer import HUDRenderer
 from renderer.terminal_renderer import TerminalRenderer
+from renderer.cockpit_renderer import CockpitRenderer
 
 
 class Game:
@@ -27,9 +28,10 @@ class Game:
         self.ship    = PlayerShip()
         self.bax     = Bax(self.ship, self.meta)
 
-        self.vec_renderer  = VectorRenderer(self.screen)
-        self.hud_renderer  = HUDRenderer(self.screen)
-        self.term_renderer = TerminalRenderer(self.screen)
+        self.vec_renderer     = VectorRenderer(self.screen)
+        self.hud_renderer     = HUDRenderer(self.screen)
+        self.term_renderer    = TerminalRenderer(self.screen)
+        self.cockpit_renderer = CockpitRenderer(self.screen)
 
         self._wire_events()
 
@@ -87,6 +89,7 @@ class Game:
             self.run_mgr.update(dt)
             self.ship.update(dt)
             self.bax.update(dt)
+            self.cockpit_renderer.update(dt)
 
         elif state == GameState.TERMINAL:
             self.run_mgr.active_terminal.update(dt)
@@ -107,6 +110,8 @@ class Game:
         if state == GameState.FLIGHT:
             self.vec_renderer.draw(self.run_mgr, self.ship)
             self.hud_renderer.draw(self.ship)
+            self._render_sector_hud()
+            self.cockpit_renderer.draw(pygame.time.get_ticks() / 1000.0)
 
         elif state == GameState.TERMINAL:
             self.term_renderer.draw(self.run_mgr.active_terminal)
@@ -118,6 +123,27 @@ class Game:
             self._render_decanting()
 
         pygame.display.flip()
+
+    def _render_sector_hud(self):
+        font  = pygame.font.SysFont("monospace", 14)
+        rm    = self.run_mgr
+        sec_w = S.SCREEN_W
+
+        # Sector number — top centre
+        sec_txt = font.render(
+            f"SECTOR  {rm.sector_num} / {S.SECTORS_PER_RUN}",
+            True, S.GREY_DEAD,
+        )
+        self.screen.blit(sec_txt, (sec_w // 2 - sec_txt.get_width() // 2, 20))
+
+        # Jump status — below sector number
+        if rm.jump_ready:
+            jump_txt = font.render("[ J ]  JUMP READY", True, S.GREEN_TERM)
+        else:
+            jump_txt = font.render(
+                f"JUMP IN  {rm.jump_cooldown:>4.0f}s", True, S.GREY_DEAD,
+            )
+        self.screen.blit(jump_txt, (sec_w // 2 - jump_txt.get_width() // 2, 38))
 
     def _render_decanting(self):
         font = pygame.font.SysFont("monospace", 18)

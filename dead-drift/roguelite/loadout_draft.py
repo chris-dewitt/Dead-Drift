@@ -2,7 +2,6 @@ from __future__ import annotations
 import random
 import pygame
 from ship.modules.thruster import Thruster
-from ship.modules.life_support import LifeSupport
 from cargo.acoustic_archive import AcousticArchive
 from cargo.epi_shrooms import EpistemologicalShrooms
 from cargo.paperwork import SentientPaperwork
@@ -20,7 +19,6 @@ _MODULE_POOL = [
     lambda: Thruster("SALVAGE PLASMA",  tier="salvage"),
     lambda: Thruster("STANDARD BURNER", tier="standard"),
     lambda: Thruster("MILITARY TORCH",  tier="military"),
-    lambda: LifeSupport(),
 ]
 
 _CARGO_POOL = [
@@ -42,7 +40,7 @@ class LoadoutDraft:
         self._slot      = 0           # 0=frame, 1=module, 2=cargo
         self._choices   = [
             random.sample(_FRAME_POOL, min(3, len(_FRAME_POOL))),
-            [f() for f in random.sample(_MODULE_POOL, 3)],
+            [f() for f in _MODULE_POOL],
             [_CARGO_POOL[(chapter - 1) % len(_CARGO_POOL)]()],  # chapter-locked cargo
         ]
         self._selected  = [0, 0, 0]

@@ -1,9 +1,11 @@
 import pygame
 
 # --- Display ---
-SCREEN_W = 1280
-SCREEN_H = 720
-FPS = 60
+SCREEN_W  = 1280
+SCREEN_H  = 720
+COCKPIT_H = 80        # bottom strip reserved for Bax cockpit
+FLIGHT_H  = SCREEN_H - COCKPIT_H   # usable flight area height
+FPS   = 60
 TITLE = "DEAD DRIFT"
 
 # --- Colors ---

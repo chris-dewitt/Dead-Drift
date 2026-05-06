@@ -24,7 +24,7 @@ class RunManager:
         self._barges: list[RepoBarge]     = []
         self._active_terminal: Terminal | None = None
         self._sector_timer   = 0.0
-        self._sector_dur     = 45.0       # seconds per sector before jump allowed
+        self._sector_dur     = 20.0       # seconds per sector before jump allowed
         self._ship           = None
 
     # ------------------------------------------------------------------
@@ -121,3 +121,16 @@ class RunManager:
     @property
     def barges(self) -> list[RepoBarge]:
         return self._barges
+
+    @property
+    def sector_num(self) -> int:
+        return self._sector_index + 1
+
+    @property
+    def jump_ready(self) -> bool:
+        return self._sector_timer >= self._sector_dur
+
+    @property
+    def jump_cooldown(self) -> float:
+        """Seconds remaining before jump is allowed."""
+        return max(0.0, self._sector_dur - self._sector_timer)
