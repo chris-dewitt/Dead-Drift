@@ -1,0 +1,19 @@
+{
+  "terms": [
+    "tether",
+    "harpoon",
+    "barge",
+    "repo",
+    "union",
+    "debt",
+    "clone",
+    "thruster",
+    "drift",
+    "cargo"
+  ],
+  "backdoors": {
+    "gary": [],
+    "syntheticdroid": [],
+    "uniondispatcher": []
+  }
+}
