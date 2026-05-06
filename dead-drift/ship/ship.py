@@ -48,11 +48,11 @@ class PlayerShip:
         thrusters = self.chain.get_active("propulsion")
         if keys[pygame.K_UP] or keys[pygame.K_w]:
             for t in thrusters:
-                self.body.apply_thrust(t.force * dt)
+                self.body.apply_thrust(t.force)
 
         if keys[pygame.K_DOWN] or keys[pygame.K_s]:
             for t in thrusters:
-                self.body.apply_thrust(-t.force * 0.4 * dt)
+                self.body.apply_thrust(-t.force * 0.4)
 
     def _wrap_screen(self):
         """Toroidal wrapping — fly off one edge, appear at the other."""

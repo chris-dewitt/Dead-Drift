@@ -80,9 +80,12 @@ class RepoBarge:
             if self._torch_cd <= 0:
                 self._unbolt_module(ship)
                 self._torch_cd = self.TORCH_INTERVAL
-            if self._tether and not self._tether.is_active:
-                self._tether = None
-                self.state = BargeState.PATROL
+            if self._tether:
+                self._tether.barge_pos = self.body.pos
+                self._tether.update(dt)
+                if not self._tether.is_active:
+                    self._tether = None
+                    self.state = BargeState.PATROL
 
         self.body.integrate(dt)
 
