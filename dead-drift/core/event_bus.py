@@ -38,3 +38,6 @@ EVT_RUN_END        = "run_end"           # payload: success
 EVT_SECTOR_CLEAR   = "sector_clear"      # payload: sector_num
 EVT_BAX_SPEAK      = "bax_speak"         # payload: line
 EVT_DEBT_UPDATE    = "debt_update"       # payload: delta, total
+EVT_SLINGSHOT      = "slingshot"         # payload: speed
+EVT_BARGE_NEARBY   = "barge_nearby"     # payload: distance
+EVT_CANISTER_GRAB  = "canister_grab"    # payload: (none)

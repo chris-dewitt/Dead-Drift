@@ -5,7 +5,8 @@ from bax.mixologist import Mixologist
 from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_TETHER_HIT, EVT_TETHER_SNAP,
                              EVT_MODULE_UNBOLTED, EVT_BAX_SPEAK,
-                             EVT_NLP_EXPLOIT)
+                             EVT_NLP_EXPLOIT, EVT_SLINGSHOT,
+                             EVT_BARGE_NEARBY, EVT_CANISTER_GRAB)
 
 _IDLE = [
     "Right then. No rush. I've only been bolted here since the third war.",
@@ -71,6 +72,9 @@ class Bax:
         bus.subscribe(EVT_TETHER_SNAP,     self._on_tether_snap)
         bus.subscribe(EVT_MODULE_UNBOLTED, self._on_module_unbolted)
         bus.subscribe(EVT_NLP_EXPLOIT,     self._on_exploit_found)
+        bus.subscribe(EVT_SLINGSHOT,       self._on_slingshot)
+        bus.subscribe(EVT_BARGE_NEARBY,    self._on_barge_nearby)
+        bus.subscribe(EVT_CANISTER_GRAB,   self._on_canister_grab)
 
     def update(self, dt: float):
         self._speak_cd = max(0.0, self._speak_cd - dt)
@@ -143,6 +147,27 @@ class Bax:
         self.speak(f"FILED THAT. {exploit_key.upper()} works on their lot.")
 
     # ------------------------------------------------------------------
+    def _on_slingshot(self, speed, **_):
+        self.speak(random.choice([
+            f"SLINGSHOT! {speed:.0f} metres per second! HAVE THAT!",
+            "That's gravitational assist, that is. Textbook.",
+            "You beautiful maniac. Jump timer's down, let's GO.",
+        ]))
+
+    def _on_barge_nearby(self, distance, **_):
+        self.speak(random.choice([
+            f"Local 404 signature, {distance:.0f} metres. Eyes up.",
+            "Repo barge inbound. They want our cargo. Obviously.",
+            "Oi — I'm pickin' up a harpoon lock. Move.",
+        ]))
+
+    def _on_canister_grab(self, **_):
+        self.speak(random.choice([
+            "Fuel canister! Thruster's singing, mate.",
+            "Nice grab. I've given her a little boost.",
+            "Bit extra in the tank. Don't waste it.",
+        ]))
+
     def radio_blip(self):
         if self._radio_cd <= 0:
             self.speak("Pickin' up somethin' on the radio... quiet-like. Eyes open.")

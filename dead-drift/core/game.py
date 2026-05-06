@@ -108,7 +108,7 @@ class Game:
         state = self.states.state
 
         if state == GameState.FLIGHT:
-            self.vec_renderer.draw(self.run_mgr, self.ship)
+            self.vec_renderer.draw(self.run_mgr, self.ship, dt)
             self.hud_renderer.draw(self.ship)
             self._render_sector_hud()
             self.cockpit_renderer.draw(pygame.time.get_ticks() / 1000.0)

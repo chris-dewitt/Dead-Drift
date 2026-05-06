@@ -45,6 +45,17 @@ BASE_CLONE_DEBT   = 15000         # credits tacked on per death
 CLONE_FLUID_FEE   = 3500
 WRECKAGE_TOW_FEE  = 8000
 
+# --- Debris / Canisters ---
+DEBRIS_COUNT      = 7
+CANISTER_COUNT    = 3
+CANISTER_PICKUP_R = 28.0
+DEBRIS_DAMAGE     = 9.0
+
+# --- Slingshot ---
+SLINGSHOT_SPEED   = 310.0    # px/s needed to count
+SLINGSHOT_RANGE   = 190.0    # px — must have been this close to a well
+SLINGSHOT_BONUS   = 5.0      # seconds shaved off jump timer
+
 # --- Tether ---
 TETHER_FORCE      = 1200.0        # spring constant for EM harpoon
 TETHER_MAX_LENGTH = 350.0         # px before it snaps on its own

@@ -33,6 +33,8 @@ from ship.ship import PlayerShip
 from ship.hud import HUD
 from renderer.vector_renderer import VectorRenderer
 from antagonists.repo_barge import RepoBarge
+from antagonists.debris import DebrisRock
+from antagonists.fuel_canister import FuelCanister
 
 
 class _DemoSector:
@@ -44,8 +46,10 @@ class _DemoSector:
 class _DemoRunMgr:
     """Minimal stand-in for RunManager — exposes .sector, .barges, ._ship."""
     def __init__(self, gravity: ThreeBodySystem, ship: PlayerShip):
-        self.sector = _DemoSector(gravity)
-        self.barges: list[RepoBarge] = []
+        self.sector   = _DemoSector(gravity)
+        self.barges:    list[RepoBarge]    = []
+        self.debris:    list[DebrisRock]   = [DebrisRock() for _ in range(S.DEBRIS_COUNT)]
+        self.canisters: list[FuelCanister] = [FuelCanister() for _ in range(S.CANISTER_COUNT)]
         self._ship = ship
 
 
@@ -105,12 +109,19 @@ def main():
                     print("[demo] ship reset")
 
         # --- update ---
-        gravity.apply_all(ship.body)            # pull the ship
-        ship.update(dt)                          # input + integrate
+        gravity.apply_all(ship.body)
+        ship.update(dt)
         for barge in run_mgr.barges[:]:
             barge.update(dt)
             if barge.is_destroyed:
                 run_mgr.barges.remove(barge)
+        for rock in run_mgr.debris:
+            rock.update(dt)
+            if rock.collides(ship.pos):
+                ship.take_damage(S.DEBRIS_DAMAGE)
+                rock.hit()
+        for can in run_mgr.canisters:
+            can.update(dt, ship.pos)
         hud.update(dt)
 
         # Gravity well collision = instant heavy damage
@@ -123,7 +134,7 @@ def main():
 
         # --- render ---
         screen.fill(S.VOID)
-        vec_renderer.draw(run_mgr, ship)
+        vec_renderer.draw(run_mgr, ship, dt)
         hud.draw(screen)
         _draw_help(screen, font)
 
