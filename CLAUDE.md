@@ -45,7 +45,7 @@ python play.py        # flight sandbox — no NLTK, boots in seconds
 **DEAD DRIFT** is a 2D Newtonian physics roguelite for PC.
 
 You are a space courier saddled with crushing clone debt. Each run is a
-10-sector gauntlet through hostile space. Unionized repo men (Repo Barges) hunt
+5-sector gauntlet through hostile space. Unionized repo men (Repo Barges) hunt
 your cargo. Gravity wells warp your trajectory. Your only ally is **Bax**, a
 sarcastic Cockney droid bolted to your dashboard. If you die, you wake up in a
 clone tank — deeper in debt than before.
