@@ -121,6 +121,8 @@ class RunManager:
         self._kress_cd         = random.uniform(S.KRESS_INTERVAL_MIN, S.KRESS_INTERVAL_MAX)
         self._collector_cd     = random.uniform(S.COLLECTOR_INTERVAL_MIN, S.COLLECTOR_INTERVAL_MAX)
 
+        self._pending_advance  = False
+
         bus.subscribe(EVT_CANISTER_GRAB, self._on_canister_grab)
 
     # ------------------------------------------------------------------
@@ -131,6 +133,7 @@ class RunManager:
         self._canisters.clear()
         self._shower_rocks.clear()
         self._active_terminal = None
+        self._pending_advance = False
         self._ship = ship
         self.draft = LoadoutDraft(chapter=self._current_chapter())
         self._kress_cd    = random.uniform(S.KRESS_INTERVAL_MIN, S.KRESS_INTERVAL_MAX)
@@ -201,7 +204,7 @@ class RunManager:
 
     def handle_key(self, event: pygame.event.Event):
         if event.key == pygame.K_j and self._sector_timer >= self._sector_dur:
-            self._advance_sector()
+            self._open_jump_terminal()
 
     # ------------------------------------------------------------------
     def _check_bullets(self):
@@ -302,6 +305,17 @@ class RunManager:
         npc = make_npc(npc_type, **npc_kwargs)
         self._active_terminal = Terminal(npc)
         return self._active_terminal
+
+    def _open_jump_terminal(self):
+        npc_type = random.choice(["gary", "synthetic_droid", "union_dispatcher"])
+        self.open_terminal(npc_type)
+        self._pending_advance = True
+
+    def on_terminal_complete(self, outcome):
+        self._active_terminal = None
+        if self._pending_advance:
+            self._pending_advance = False
+            self._advance_sector()
 
     def _advance_sector(self):
         self._sector_index += 1

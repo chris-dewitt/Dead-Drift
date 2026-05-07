@@ -37,7 +37,13 @@ class Terminal:
         if self._done:
             return
 
-        if event.key == pygame.K_RETURN and self._input.strip():
+        if event.key == pygame.K_ESCAPE:
+            # Bail out early — neither win nor lose, just leave
+            self._push("SYSTEM", "[connection terminated by user]")
+            self._done    = True
+            self._outcome = NPCOutcome.RELEASE   # treat bail as neutral release
+            bus.emit(EVT_TERMINAL_CLOSE, outcome=self._outcome)
+        elif event.key == pygame.K_RETURN and self._input.strip():
             self._submit()
         elif event.key == pygame.K_BACKSPACE:
             self._input = self._input[:-1]

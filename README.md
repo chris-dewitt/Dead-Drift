@@ -1,49 +1,77 @@
-# PROJECT 404: The Lambda Array
-> “This GitHub belongs to an Earthman, to be precise, who no more knows his destiny than a tea leaf knows the history of the East India Company. His name is Chris DeWitt”
+# DEAD DRIFT
 
-Broadcasting live from a glowing green terminal somewhere in Charlotte, NC.  
-Part‑time data wizard, full‑time tinkerer. Currently learning to conjure Python, R, SQL, Julia, and a few other arcane tongues.  
+> *5 sectors. crushing debt. one rusted ship.*
 
-Σ Station Programming  
-- Wild code experiments and statistical incantations  
-- Automation spells and machine learning rituals  
-- Occasional blues riffs and cosmic transmissions from my AI co‑DJ  
+A 2D Newtonian physics roguelite for PC. You are a space courier saddled with crushing clone debt. Each run is a 5-sector gauntlet through hostile space. Unionized repo men hunt your cargo. Gravity wells warp your trajectory. Your only ally is **Bax** — a sarcastic Cockney droid bolted to your dashboard. If you die, you wake up in a clone tank, deeper in debt than before.
 
-∫ Vibe: Mischievous, curious, and always under construction.  
-Δ Mission: To learn everything, break a few things, and rebuild them better.  
-∇ Side quests: Running the greenway, strumming guitars, raising jungle‑library plants, and exploring Charlotte’s food scene from taco joints to Michelin stars.  
-λ Transmission log: Currently experimenting with automation, machine learning, and the occasional cosmic signal.  
-ƒ Lab noise: Keyboard clacks, terminal hums, and blues riffs echoing through the wires.  
-Ω Philosophy: Every bug is a ghost in the machine — and every fix is a resurrection spell.  
-∞ Status: Forever tinkering, occasionally broadcasting, always learning.  
+**Tone:** tense, darkly comic, lo-fi cyberpunk. Cowboy Bebop meets Papers Please meets the worst Tuesday you've ever had.
 
 ---
 
-### Fourier Transform: Currently Playing
-> “Transmissions from the edge of the algorithm.”
+## Quick Start
 
-- Coding soundtrack → old scratchy blues, synthwave, and ambient space noise  
-- Now spinning → *The Algorithm’s Blues* — a playlist for late‑night debugging  
-- Featured broadcast → *Machine Learning for Earthlings* — experiments in automation and curiosity  
-- Next up → *Signal to Noise* — exploring the art of finding meaning in messy data  
-
----
-
-### GitHub Stats
-
-![Chris DeWitt's GitHub Stats](https://github-readme-stats.vercel.app/api?username=chris-dewitt&show_icons=true&theme=radical)  
-![Top Languages](https://github-readme-stats.vercel.app/api/top-langs/?username=chris-dewitt&layout=compact&theme=radical)  
-![GitHub Streak](https://github-readme-streak-stats.herokuapp.com/?user=chris-dewitt&theme=radical)
+```bash
+pip install pygame-ce numpy nltk
+python main.py        # full game
+python test_stage.py  # interactive stage launcher — boot into any screen
+```
 
 ---
 
-### Connect
+## Core Mechanics
 
-- [LinkedIn](https://www.linkedin.com/in/CNxnDW)  
-- [Email](mailto:DeWittCN@gmail.com)  
-- [GitHub Projects](https://github.com/Chris-DeWitt?tab=repositories)
+**Newtonian Physics** — No drag, no auto-decel. Real momentum. Gravity wells slingshot you if you swing close at speed. Approach fast, exit faster, shave time off your jump timer.
+
+**Electromagnetic Tether** — Repo Barges fire magnetic harpoons. A spring force drags you toward the barge. Snap it by building enough lateral (sideways) velocity. Drift hard.
+
+**Hotwired Signal Chain** — Power flows through 6 module slots left-to-right. Thrusters only fire if they're drawing enough power. Barges can unbolt your modules mid-flight.
+
+**NLP Terminal Interrogations** — Between sectors, you're patched into a text terminal with an NPC gatekeeper. Type anything. The game reads your sentiment, detects intent (demand, bargain, threaten, confuse, flatter), and checks for paradoxes and exploit patterns. Each NPC has a patience meter. Run it out and the connection dies.
+
+**Diegetic HUD** — The display degrades as hull drops. Below 60%: flicker. Below 30%: panels go dark.
 
 ---
 
-∴ Tune in, stay curious, and don’t trust the blinking cursor — it’s probably sentient.
+## Controls
 
+| Key | Action |
+|---|---|
+| W / Up | Thrust forward |
+| S / Down | Reverse thrust |
+| A / Left | Rotate CCW |
+| D / Right | Rotate CW |
+| Space | Fire gun |
+| J | Jump to next sector (after 20s timer) |
+| ESC | Abort terminal connection |
+
+---
+
+## Run Structure
+
+- 5 sectors per run
+- Each sector: 20s minimum flight timer, then J to jump
+- Pressing J opens an NPC terminal — talk your way through to advance
+- Death → Decanting screen → clone fees stacked onto your debt → try again
+- Clear all 5 sectors → debt reduced, run logged
+
+## Meta-Progression
+
+Debt and clone count persist across runs in `save/meta.json`. Die enough times and the numbers get ugly. The clone corp is not rooting for you.
+
+---
+
+## Cast
+
+**Bax** — BAX-7, Mk.II Navigation/Morale Unit, decommissioned, now zip-tied to your dashboard. Cockney, irreverent, and genuinely fond of you despite everything. Reacts in real-time to speed, damage, tether hits, slingshotting, and more.
+
+**KRESS** — Your employer. Furious. Insulting. Technically still paying you.
+
+**Local 404** — Union of Repo Men. They will come for what you carry.
+
+---
+
+## Tech Stack
+
+- Python + pygame-ce
+- NLTK + VADER for terminal NLP
+- All rendering is procedural `pygame.draw` calls — no sprites, no textures

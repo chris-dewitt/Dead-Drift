@@ -115,7 +115,8 @@ class Game:
         if state == GameState.FLIGHT:
             self.run_mgr.handle_key(event)
         elif state == GameState.TERMINAL:
-            self.run_mgr.active_terminal.handle_key(event)
+            if self.run_mgr.active_terminal is not None:
+                self.run_mgr.active_terminal.handle_key(event)
         elif state == GameState.LOADOUT_DRAFT:
             self.run_mgr.draft.handle_key(event)
         elif state in (GameState.DECANTING, GameState.MAIN_MENU):
@@ -133,9 +134,19 @@ class Game:
             self.ship.update(dt)
             self.bax.update(dt)
             self.cockpit_renderer.update(dt)
+            # Terminal opened by jump key — transition immediately
+            if self.run_mgr.active_terminal is not None:
+                self.states.transition(GameState.TERMINAL)
 
         elif state == GameState.TERMINAL:
-            self.run_mgr.active_terminal.update(dt)
+            terminal = self.run_mgr.active_terminal
+            if terminal is not None:
+                terminal.update(dt)
+                if terminal.is_done:
+                    self.run_mgr.on_terminal_complete(terminal.outcome)
+                    # Only go back to FLIGHT if run_end hasn't already redirected us
+                    if self.states.state == GameState.TERMINAL:
+                        self.states.transition(GameState.FLIGHT)
 
         elif state == GameState.LOADOUT_DRAFT:
             if self.run_mgr.draft.is_confirmed():

@@ -47,6 +47,8 @@ class Gun:
     def update(self, dt: float):
         self._cooldown = max(0.0, self._cooldown - dt)
         self._jam_t    = max(0.0, self._jam_t    - dt)
+        for b in self.bullets:
+            b.update(dt)
         self.bullets   = [b for b in self.bullets if b.alive]
 
     @property
