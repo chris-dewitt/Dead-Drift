@@ -6,7 +6,8 @@ from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_TETHER_HIT, EVT_TETHER_SNAP,
                              EVT_MODULE_UNBOLTED, EVT_BAX_SPEAK,
                              EVT_NLP_EXPLOIT, EVT_SLINGSHOT,
-                             EVT_BARGE_NEARBY, EVT_CANISTER_GRAB)
+                             EVT_BARGE_NEARBY, EVT_CANISTER_GRAB,
+                             EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING)
 
 _IDLE = [
     "Right then. No rush. I've only been bolted here since the third war.",
@@ -72,9 +73,12 @@ class Bax:
         bus.subscribe(EVT_TETHER_SNAP,     self._on_tether_snap)
         bus.subscribe(EVT_MODULE_UNBOLTED, self._on_module_unbolted)
         bus.subscribe(EVT_NLP_EXPLOIT,     self._on_exploit_found)
-        bus.subscribe(EVT_SLINGSHOT,       self._on_slingshot)
+        bus.subscribe(EVT_SLINGSHOT,        self._on_slingshot)
         bus.subscribe(EVT_BARGE_NEARBY,    self._on_barge_nearby)
         bus.subscribe(EVT_CANISTER_GRAB,   self._on_canister_grab)
+        bus.subscribe(EVT_COMMS_INTERCEPT, self._on_comms_intercept)
+        bus.subscribe(EVT_DEBRIS_SHOWER,   self._on_debris_shower)
+        bus.subscribe(EVT_SCAN_PING,       self._on_scan_ping)
 
     def update(self, dt: float):
         self._speak_cd = max(0.0, self._speak_cd - dt)
@@ -166,6 +170,28 @@ class Bax:
             "Fuel canister! Thruster's singing, mate.",
             "Nice grab. I've given her a little boost.",
             "Bit extra in the tank. Don't waste it.",
+        ]))
+
+    def _on_comms_intercept(self, **_):
+        self.speak(random.choice([
+            "I'm in their channel. They've got a manifest update. We're on it.",
+            "Local 404 dispatch. Movin' assets this sector. Could be us they're after.",
+            "Union chatter on the fleet frequency. They've flagged our cargo.",
+            "Intercepted somethin'. Repo dispatch, encrypted-ish. Stay sharp.",
+        ]))
+
+    def _on_debris_shower(self, **_):
+        self.speak(random.choice([
+            "Asteroid fragment burst! Duck and weave, mate!",
+            "She's a heavy one — scatter field incoming. Watch the rocks!",
+            "Debris shower alert. I HATE debris showers.",
+        ]))
+
+    def _on_scan_ping(self, **_):
+        self.speak(random.choice([
+            "Union scanner ping! They've got a sweep runnin' — we're lit up.",
+            "Passive scan pulse. Someone's lookin' for us. Move.",
+            "Radar sweep detected. I'd suggest not hangin' about.",
         ]))
 
     def radio_blip(self):
