@@ -1,6 +1,7 @@
 from __future__ import annotations
 import pygame
 from physics.body import RigidBody2D, Vec2
+import math
 from ship.loadout import SignalChain
 from ship.modules.thruster import Thruster
 from ship.modules.life_support import LifeSupport
@@ -49,6 +50,16 @@ class PlayerShip:
         if keys[pygame.K_UP] or keys[pygame.K_w]:
             for t in thrusters:
                 self.body.apply_thrust(t.force)
+            # RCS: gradually redirect velocity toward facing when thrusting
+            speed = self.body.vel.length()
+            if speed > 30:
+                facing = self.body.facing_vector()
+                v = self.body.vel
+                rdr = S.STEER_RCS_RATE * dt
+                self.body.vel = Vec2(
+                    v.x + (facing.x * speed - v.x) * rdr,
+                    v.y + (facing.y * speed - v.y) * rdr,
+                )
 
         if keys[pygame.K_DOWN] or keys[pygame.K_s]:
             for t in thrusters:

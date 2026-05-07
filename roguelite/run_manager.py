@@ -9,7 +9,8 @@ from antagonists.fuel_canister import FuelCanister
 from terminal.terminal import Terminal
 from terminal.npc_logic import make_npc
 from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
-                             EVT_SLINGSHOT, EVT_BARGE_NEARBY, EVT_CANISTER_GRAB)
+                             EVT_SLINGSHOT, EVT_BARGE_NEARBY, EVT_CANISTER_GRAB,
+                             EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING)
 from config import settings as S
 
 
@@ -38,6 +39,11 @@ class RunManager:
 
         # Proximity alarm cooldown (so Bax doesn't spam it)
         self._prox_cd          = 0.0
+
+        # Mid-flight random events
+        self._event_cd         = 40.0
+        self._shower_rocks: list = []
+        self._shower_t         = 0.0
 
         bus.subscribe(EVT_CANISTER_GRAB, self._on_canister_grab)
 
@@ -97,6 +103,18 @@ class RunManager:
 
         self._check_slingshot()
         self._check_proximity()
+        self._check_random_event(dt)
+
+        # Tick down debris shower
+        if self._shower_t > 0:
+            self._shower_t -= dt
+            for rock in self._shower_rocks:
+                rock.update(dt)
+                if rock.collides(self._ship.pos):
+                    self._ship.take_damage(S.DEBRIS_DAMAGE)
+                    rock.hit()
+            if self._shower_t <= 0:
+                self._shower_rocks.clear()
 
     def handle_key(self, event: pygame.event.Event):
         if event.key == pygame.K_j and self._sector_timer >= self._sector_dur:
@@ -128,6 +146,27 @@ class RunManager:
         if min_dist < 320:
             bus.emit(EVT_BARGE_NEARBY, distance=min_dist)
             self._prox_cd = 12.0
+
+    def _check_random_event(self, dt: float):
+        self._event_cd -= dt
+        if self._event_cd > 0:
+            return
+        import random
+        self._event_cd = random.uniform(S.EVENT_INTERVAL_MIN, S.EVENT_INTERVAL_MAX)
+        kind = random.choice(["comms", "comms", "debris", "scan"])  # comms weighted 2x
+
+        if kind == "comms":
+            bus.emit(EVT_COMMS_INTERCEPT)
+
+        elif kind == "debris":
+            bus.emit(EVT_DEBRIS_SHOWER)
+            self._shower_rocks = [DebrisRock() for _ in range(4)]
+            self._shower_t = 14.0
+
+        elif kind == "scan":
+            bus.emit(EVT_SCAN_PING,
+                     pos_x=random.randint(120, S.SCREEN_W - 120),
+                     pos_y=random.randint(100, S.FLIGHT_H - 60))
 
     def _on_canister_grab(self, **_):
         from ship.modules.thruster import Thruster
@@ -202,6 +241,10 @@ class RunManager:
     @property
     def canisters(self) -> list[FuelCanister]:
         return self._canisters
+
+    @property
+    def shower_rocks(self) -> list:
+        return self._shower_rocks
 
     @property
     def sector_num(self) -> int:
