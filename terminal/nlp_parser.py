@@ -1,9 +1,45 @@
 from __future__ import annotations
 import re
 from dataclasses import dataclass, field
-from nltk.tokenize import word_tokenize
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
-from nltk import pos_tag
+
+try:
+    from nltk.tokenize import word_tokenize as _nltk_tokenize
+    from nltk.sentiment.vader import SentimentIntensityAnalyzer as _VADER
+    from nltk import pos_tag as _pos_tag
+    _NLTK_OK = True
+except Exception:
+    _NLTK_OK = False
+
+def _safe_tokenize(text: str) -> list[str]:
+    if not _NLTK_OK:
+        return re.findall(r"[a-zA-Z']+", text.lower())
+    try:
+        return _nltk_tokenize(text)
+    except LookupError:
+        return re.findall(r"[a-zA-Z']+", text.lower())
+
+def _safe_pos_tag(tokens: list[str]) -> list[tuple[str, str]]:
+    if not _NLTK_OK:
+        return [(t, "NN") for t in tokens]
+    try:
+        return _pos_tag(tokens)
+    except LookupError:
+        return [(t, "NN") for t in tokens]
+
+def _safe_vader(text: str) -> dict:
+    if not _NLTK_OK:
+        return {"neg": 0.0, "neu": 1.0, "pos": 0.0, "compound": 0.0}
+    try:
+        return _sia_instance().polarity_scores(text)
+    except LookupError:
+        return {"neg": 0.0, "neu": 1.0, "pos": 0.0, "compound": 0.0}
+
+_sia_cache = None
+def _sia_instance():
+    global _sia_cache
+    if _sia_cache is None:
+        _sia_cache = _VADER()
+    return _sia_cache
 
 
 @dataclass
@@ -59,16 +95,13 @@ class NLPParser:
       5. SQL/code injection extraction (meta-fictional mechanic)
     """
 
-    def __init__(self):
-        self._sia = SentimentIntensityAnalyzer()
-
     def parse(self, raw_text: str) -> ParsedInput:
         text   = raw_text.strip()
         lower  = text.lower()
-        tokens = word_tokenize(lower)
-        tags   = pos_tag(tokens)
+        tokens = _safe_tokenize(lower)
+        tags   = _safe_pos_tag(tokens)
 
-        sentiment   = self._sia.polarity_scores(text)
+        sentiment   = _safe_vader(text)
         keywords    = self._extract_keywords(tokens)
         intent      = self._detect_intent(lower, keywords)
         paradox     = self._detect_paradox(lower)
