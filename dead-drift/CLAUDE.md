@@ -7,17 +7,9 @@
 **Target repo:** https://github.com/chris-dewitt/Dead-Drift  
 Push target: `main` branch of `chris-dewitt/Dead-Drift`
 
-The remote `dead-drift-origin` points to Dead-Drift but **session auth only
-covers `chris-dewitt/chris-dewitt`** via the local proxy. Direct push to
-Dead-Drift will fail with auth error. Always commit to `origin` (the proxy),
-then tell the user to run the sync command below from their machine:
-
-```powershell
-cd C:\Users\DELL\Documents\GitHub\Dead-Drift
-git fetch https://github.com/chris-dewitt/chris-dewitt claude/dead-drift-gdd-4SbVa
-git merge FETCH_HEAD --allow-unrelated-histories -X theirs -m "Sync from dev branch"
-git push origin main
-```
+This project lives in a subfolder of a separate dev repo during Claude sessions.
+Use the `dead-drift-origin` remote if available, or give sync instructions so
+the user can pull from the dev branch into Dead-Drift via PowerShell.
 
 ### Git Identity — Always Use This
 ```
@@ -45,7 +37,7 @@ python play.py        # flight sandbox — no NLTK, boots in seconds
 **DEAD DRIFT** is a 2D Newtonian physics roguelite for PC.
 
 You are a space courier saddled with crushing clone debt. Each run is a
-5-sector gauntlet through hostile space. Unionized repo men (Repo Barges) hunt
+10-sector gauntlet through hostile space. Unionized repo men (Repo Barges) hunt
 your cargo. Gravity wells warp your trajectory. Your only ally is **Bax**, a
 sarcastic Cockney droid bolted to your dashboard. If you die, you wake up in a
 clone tank — deeper in debt than before.
