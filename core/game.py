@@ -32,10 +32,13 @@ class Game:
         self.vec_renderer     = VectorRenderer(self.screen)
         self.hud_renderer     = HUDRenderer(self.screen)
         self.term_renderer    = TerminalRenderer(self.screen)
-        self.cockpit_renderer = CockpitRenderer(self.screen)
+        # Pass live references so the cockpit info panel always reads current state
+        self.cockpit_renderer = CockpitRenderer(
+            self.screen, self.ship, self.run_mgr, self.meta
+        )
 
-        self._dt = 0.016
-        self._run_just_completed = False  # True if last run succeeded
+        self._dt                  = 0.016
+        self._run_just_completed  = False
 
         self._wire_events()
 
@@ -56,14 +59,47 @@ class Game:
         self.states.transition(GameState.MAIN_MENU)
 
     # ------------------------------------------------------------------
-    def run(self):
-        self.states.transition(GameState.MAIN_MENU)
+    def run(self, start_state: GameState = None, start_sector: int = 0):
+        """
+        Entry point.  Pass start_state to boot directly into any screen
+        (used by test_stage.py).
+        """
+        if start_state is None or start_state == GameState.MAIN_MENU:
+            self.states.transition(GameState.MAIN_MENU)
+        elif start_state == GameState.LOADOUT_DRAFT:
+            self.run_mgr.start_run(self.ship)
+            self.states.transition(GameState.LOADOUT_DRAFT)
+        elif start_state == GameState.FLIGHT:
+            self._dev_start_flight(start_sector)
+        elif start_state == GameState.DECANTING:
+            self.states.transition(GameState.DECANTING)
+        else:
+            self.states.transition(start_state)
 
         while self.running:
             self._dt = self.clock.tick(S.FPS) / 1000.0
             self._handle_events()
             self._update(self._dt)
             self._render()
+
+    def _dev_start_flight(self, sector_index: int = 0):
+        """Boot straight into flight at the given sector (for dev/testing)."""
+        from roguelite.procedural import generate_sector
+        from ship.modules.thruster import Thruster
+        from ship.modules.life_support import LifeSupport
+        from ship.loadout import SignalChain
+
+        self.run_mgr.start_run(self.ship)
+        self.run_mgr._sector_index = sector_index
+        self.run_mgr._sector       = generate_sector(sector_index, self.run_mgr._difficulty())
+        self.run_mgr._spawn_sector_objects()
+
+        self.ship.chain = SignalChain()
+        self.ship.chain.install(LifeSupport(),       0)
+        self.ship.chain.install(Thruster("salvage"), 1)
+        self.run_mgr._ship = self.ship
+
+        self.states.transition(GameState.FLIGHT)
 
     # ------------------------------------------------------------------
     def _handle_events(self):
@@ -107,7 +143,7 @@ class Game:
                 self.states.transition(GameState.FLIGHT)
 
         elif state == GameState.DECANTING:
-            pass  # timed screen; transition handled by ENTER key
+            pass
 
     # ------------------------------------------------------------------
     def _render(self):
@@ -153,6 +189,12 @@ class Game:
             )
         self.screen.blit(jump_txt, (sec_w // 2 - jump_txt.get_width() // 2, 38))
 
+        # Speed readout
+        speed     = self.ship.body.speed()
+        speed_col = (255, 120, 0) if speed > 500 else S.GREY_DEAD
+        spd_txt   = font.render(f"{speed:>5.0f} m/s", True, speed_col)
+        self.screen.blit(spd_txt, (sec_w // 2 - spd_txt.get_width() // 2, 56))
+
     def _render_decanting(self):
         font = pygame.font.SysFont("monospace", 18)
         lines = [
@@ -174,100 +216,83 @@ class Game:
             y += 28
 
     def _render_main_menu(self):
-        t = pygame.time.get_ticks() / 1000.0
-
-        # Animated background
-        self.vec_renderer.draw_menu_background(t)
-
+        t  = pygame.time.get_ticks() / 1000.0
         cx = S.SCREEN_W // 2
+
+        self.vec_renderer.draw_menu_background(t)
 
         # Title
         font_title = pygame.font.SysFont("monospace", 76, bold=True)
         title_surf = font_title.render("DEAD DRIFT", True, S.AMBER_TERM)
-        ty = 100
+        ty = 95
         self.screen.blit(title_surf, (cx - title_surf.get_width() // 2, ty))
 
-        # Amber glow underline
         ul_w = title_surf.get_width() + 20
         ul_x = cx - ul_w // 2
         pygame.draw.line(self.screen, (120, 80, 0),
                          (ul_x, ty + title_surf.get_height() + 4),
                          (ul_x + ul_w, ty + title_surf.get_height() + 4), 1)
 
-        # Tagline
         font_sub = pygame.font.SysFont("monospace", 18)
-        tagline = font_sub.render(
-            "10 sectors. crushing debt. one rusted ship.", True, (70, 70, 90))
+        tagline  = font_sub.render(
+            "5 sectors.  crushing debt.  one rusted ship.", True, (70, 70, 90))
         self.screen.blit(tagline, (cx - tagline.get_width() // 2, ty + 88))
 
-        # Run complete / debt info block
-        font_med = pygame.font.SysFont("monospace", 16)
         y_info = ty + 148
+        font_med = pygame.font.SysFont("monospace", 16)
 
         if self._run_just_completed:
-            complete_surf = font_med.render(
-                "RUN COMPLETE  //  DEBT REDUCED", True, S.GREEN_TERM)
-            self.screen.blit(complete_surf, (cx - complete_surf.get_width() // 2, y_info))
+            c = font_med.render("RUN COMPLETE  //  DEBT REDUCED", True, S.GREEN_TERM)
+            self.screen.blit(c, (cx - c.get_width() // 2, y_info))
             y_info += 28
 
         if self.meta.debt > 0:
             debt_col = S.RED_WARN if self.meta.debt > 50000 else S.AMBER_TERM
-            debt_surf = font_med.render(
+            ds = font_med.render(
                 f"OUTSTANDING DEBT:  {self.meta.debt:,} cr   //   Clone #{self.meta.clone_count}",
                 True, debt_col)
-            self.screen.blit(debt_surf, (cx - debt_surf.get_width() // 2, y_info))
+            self.screen.blit(ds, (cx - ds.get_width() // 2, y_info))
 
-        # Atmospheric lore text
-        lore_y = S.SCREEN_H - 230
+        # Blinking prompt
+        if int(t * 2) % 2 == 0:
+            font_enter = pygame.font.SysFont("monospace", 22, bold=True)
+            es = font_enter.render("[ PRESS ENTER TO BEGIN RUN ]", True, S.WHITE_VEC)
+            self.screen.blit(es, (cx - es.get_width() // 2, S.SCREEN_H // 2 + 40))
+
+        # Lore
         font_lore = pygame.font.SysFont("monospace", 13)
         lore_lines = [
             "Union of Repo Men, Local 404.",
             "They will come for what you carry.",
-            "Fly fast. Drift hard. Don't die again.",
+            "Fly fast.  Drift hard.  Don't die again.",
         ]
         for i, line in enumerate(lore_lines):
-            surf = font_lore.render(line, True, (55, 55, 70))
-            self.screen.blit(surf, (cx - surf.get_width() // 2, lore_y + i * 20))
+            s = font_lore.render(line, True, (55, 55, 70))
+            self.screen.blit(s, (cx - s.get_width() // 2, S.SCREEN_H - 225 + i * 20))
 
-        # Controls hint
+        # Controls
         font_hint = pygame.font.SysFont("monospace", 12)
-        hint_lines = [
-            "WASD / ARROWS  move       J  jump sector       N  spawn barge (sandbox)",
-            "ESC  quit",
+        hints = [
+            "WASD / ARROWS  move     SPACE  fire     J  jump     N  spawn barge",
         ]
-        for i, line in enumerate(hint_lines):
-            surf = font_hint.render(line, True, (45, 45, 58))
-            self.screen.blit(surf, (cx - surf.get_width() // 2,
-                                    S.SCREEN_H - 75 + i * 18))
+        for i, line in enumerate(hints):
+            s = font_hint.render(line, True, (45, 45, 58))
+            self.screen.blit(s, (cx - s.get_width() // 2, S.SCREEN_H - 75 + i * 18))
 
-        # Blinking PRESS ENTER prompt
-        if int(t * 2) % 2 == 0:
-            font_enter = pygame.font.SysFont("monospace", 22, bold=True)
-            enter_surf = font_enter.render("[ PRESS ENTER TO BEGIN RUN ]",
-                                           True, S.WHITE_VEC)
-            ey = S.SCREEN_H // 2 + 40
-            self.screen.blit(enter_surf, (cx - enter_surf.get_width() // 2, ey))
-
-        # Bax portrait (small, bottom-right corner)
         self._render_menu_bax_portrait(t)
 
     def _render_menu_bax_portrait(self, t: float):
-        """Tiny Bax silhouette on the menu for atmosphere."""
         px = S.SCREEN_W - 110
         py = S.SCREEN_H - 120
         head = [(px-14,py-22),(px+14,py-22),(px+18,py-4),(px-18,py-4)]
         pygame.draw.polygon(self.screen, (20, 20, 30), head)
         pygame.draw.polygon(self.screen, (55, 44, 0), head, 1)
-        # Eyes — dim amber
-        glow = 0.4 + 0.3 * abs(math.sin(t * 0.9))
-        eye_col = (int(180 * glow), int(110 * glow), 0)
-        pygame.draw.circle(self.screen, eye_col, (px - 5, py - 14), 3)
-        pygame.draw.circle(self.screen, eye_col, (px + 5, py - 14), 3)
-        # Antenna
-        pygame.draw.line(self.screen, (55, 44, 0),
-                         (px + 12, py - 22), (px + 16, py - 32), 1)
-        pygame.draw.circle(self.screen, (80, 60, 0), (px + 16, py - 33), 2)
-        # Body
+        glow   = 0.4 + 0.3 * abs(math.sin(t * 0.9))
+        ec     = (int(180 * glow), int(110 * glow), 0)
+        pygame.draw.circle(self.screen, ec, (px-5, py-14), 3)
+        pygame.draw.circle(self.screen, ec, (px+5, py-14), 3)
+        pygame.draw.line(self.screen, (55, 44, 0), (px+12, py-22), (px+16, py-32), 1)
+        pygame.draw.circle(self.screen, (80, 60, 0), (px+16, py-33), 2)
         body = [(px-16,py-4),(px+16,py-4),(px+14,py+20),(px-14,py+20)]
         pygame.draw.polygon(self.screen, (18, 18, 28), body)
         pygame.draw.polygon(self.screen, (55, 44, 0), body, 1)

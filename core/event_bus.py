@@ -44,3 +44,6 @@ EVT_CANISTER_GRAB  = "canister_grab"    # payload: (none)
 EVT_COMMS_INTERCEPT = "comms_intercept" # random Union radio chatter intercepted
 EVT_DEBRIS_SHOWER  = "debris_shower"    # temporary asteroid belt fragment shower
 EVT_SCAN_PING      = "scan_ping"        # Union passive scanner pulse; payload: pos_x, pos_y
+EVT_GUN_FIRE       = "gun_fire"         # bullet fired successfully
+EVT_GUN_MALFUNCTION = "gun_malfunction" # gun fizzled/jammed
+EVT_COMMS_SPEAK    = "comms_speak"      # non-Bax transmission; payload: speaker, line

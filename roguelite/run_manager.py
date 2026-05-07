@@ -1,4 +1,5 @@
 from __future__ import annotations
+import random
 import pygame
 from roguelite.procedural import generate_sector, SectorLayout
 from roguelite.loadout_draft import LoadoutDraft
@@ -10,14 +11,85 @@ from terminal.terminal import Terminal
 from terminal.npc_logic import make_npc
 from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
                              EVT_SLINGSHOT, EVT_BARGE_NEARBY, EVT_CANISTER_GRAB,
-                             EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING)
+                             EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING,
+                             EVT_COMMS_SPEAK)
 from config import settings as S
+
+
+# ---------------------------------------------------------------------------
+_KRESS_LINES = [
+    "What in the seven hells are you doing out there? "
+    "I am LOOKING at your trajectory. A drunk pigeon has better spatial awareness.",
+
+    "Do you know what this cargo is worth? OF COURSE YOU DON'T "
+    "because you failed basic numeracy THREE TIMES.",
+
+    "I swear on the Union's pension fund, if you scratch that hull again, "
+    "I am docking your clone allowance.",
+
+    "The other couriers don't do this. SANDRA doesn't do this. "
+    "Sandra has ZERO hull incidents. You are worse than Sandra.",
+
+    "I'm getting a reading that says your ship is worth negative forty credits. "
+    "That's not a typo. NEGATIVE. FORTY.",
+
+    "JUST JUMP. JUMP THE SECTOR. WHY ARE YOU STILL IN THIS SECTOR. JUMP.",
+
+    "Your debt is visible from orbit. I mean that literally. "
+    "The creditors have a telescope.",
+
+    "We had a meeting about you. It lasted four hours. "
+    "No one said anything nice. I checked the minutes.",
+
+    "You have the survival instincts of a tax form. DO SOMETHING.",
+
+    "I hired you because you were cheap. I now understand why you were cheap.",
+]
+
+_COLLECTOR_LINES = [
+    ("MEDI-CORP",
+     "Hello. This is a courtesy call from MediCorp Genomics regarding your outstanding "
+     "clone fluid balance. We do hope your new body is treating you well. It won't for long. Pay up."),
+
+    ("MEDI-CORP",
+     "We notice you've been cloned again. Congratulations on not dying permanently. "
+     "Your bill has been updated accordingly. Have a productive existence."),
+
+    ("MEDI-CORP",
+     "Your clone account is in arrears. We are legally permitted to reduce "
+     "next-body quality. Enjoy your current teeth while you have them."),
+
+    ("DOCK-7",
+     "Dock Seven Salvage and Repair. We've been patient. We've been reasonable. "
+     "We've been neither of those things, actually. Where's our money."),
+
+    ("DOCK-7",
+     "This is automated message four hundred and twelve regarding your outstanding "
+     "hull repair invoice. You owe us more than your ship is worth. We checked."),
+
+    ("DOCK-7",
+     "Sir or madam, our records show you have not paid your repair bill since "
+     "the Third Republic. That is not an exaggeration. Pay us."),
+
+    ("DOCK-7",
+     "We have your previous hull on a shelf. We're going to keep it. "
+     "Not for any legal reason. We just want you to know we have it."),
+
+    ("REP. LEGAL",
+     "Union of Repo Men, Legal Division. We've been authorized to inform you "
+     "that Local 404 has filed a lien on your soul. This is legally binding in twelve sectors."),
+
+    ("REP. LEGAL",
+     "You are in violation of Clause 9, Sub-section F of the Repo Charter: "
+     "fleeing a lawful harpoon. The fine is your entire net worth. "
+     "We've confirmed this is a very easy fine to calculate."),
+]
 
 
 class RunManager:
     """
-    Manages a single 10-Miler run: sector progression, barge spawning,
-    debris fields, fuel canisters, slingshot detection.
+    Manages a single run: sector progression, barge spawning,
+    debris fields, fuel canisters, bullet-rock collision, random events.
     """
 
     def __init__(self, meta: MetaProgression):
@@ -37,13 +109,17 @@ class RunManager:
         self._sling_well_t: dict[int, float] = {}
         self._sling_cd         = 0.0
 
-        # Proximity alarm cooldown (so Bax doesn't spam it)
+        # Proximity alarm cooldown
         self._prox_cd          = 0.0
 
-        # Mid-flight random events
+        # Mid-flight random events (debris shower / scan / comms intercept)
         self._event_cd         = 40.0
-        self._shower_rocks: list = []
+        self._shower_rocks: list[DebrisRock] = []
         self._shower_t         = 0.0
+
+        # KRESS and bill-collector transmission timers
+        self._kress_cd         = random.uniform(S.KRESS_INTERVAL_MIN, S.KRESS_INTERVAL_MAX)
+        self._collector_cd     = random.uniform(S.COLLECTOR_INTERVAL_MIN, S.COLLECTOR_INTERVAL_MAX)
 
         bus.subscribe(EVT_CANISTER_GRAB, self._on_canister_grab)
 
@@ -53,9 +129,12 @@ class RunManager:
         self._barges.clear()
         self._debris.clear()
         self._canisters.clear()
+        self._shower_rocks.clear()
         self._active_terminal = None
         self._ship = ship
         self.draft = LoadoutDraft(chapter=self._current_chapter())
+        self._kress_cd    = random.uniform(S.KRESS_INTERVAL_MIN, S.KRESS_INTERVAL_MAX)
+        self._collector_cd = random.uniform(S.COLLECTOR_INTERVAL_MIN, S.COLLECTOR_INTERVAL_MAX)
         ship.reset()
 
     def apply_draft(self, ship):
@@ -101,11 +180,7 @@ class RunManager:
         for can in self._canisters:
             can.update(dt, self._ship.pos)
 
-        self._check_slingshot()
-        self._check_proximity()
-        self._check_random_event(dt)
-
-        # Tick down debris shower
+        # Debris shower tick
         if self._shower_t > 0:
             self._shower_t -= dt
             for rock in self._shower_rocks:
@@ -116,11 +191,44 @@ class RunManager:
             if self._shower_t <= 0:
                 self._shower_rocks.clear()
 
+        # Bullet-rock collision
+        self._check_bullets()
+
+        self._check_slingshot()
+        self._check_proximity()
+        self._check_random_event(dt)
+        self._check_comms(dt)
+
     def handle_key(self, event: pygame.event.Event):
         if event.key == pygame.K_j and self._sector_timer >= self._sector_dur:
             self._advance_sector()
 
     # ------------------------------------------------------------------
+    def _check_bullets(self):
+        if self._ship is None or not hasattr(self._ship, "gun"):
+            return
+        bullets   = self._ship.gun.bullets
+        all_rocks = list(self._debris) + list(self._shower_rocks)
+        destroyed = []
+
+        for bullet in list(bullets):
+            if not bullet.alive:
+                continue
+            for rock in all_rocks:
+                if rock in destroyed:
+                    continue
+                if (rock.pos - bullet.pos).length() < rock.radius + 3:
+                    bullet.lifetime = -1   # kill bullet
+                    if rock.hit():         # returns True when hp reaches 0
+                        destroyed.append(rock)
+                    break
+
+        for rock in destroyed:
+            if rock in self._debris:
+                self._debris.remove(rock)
+            elif rock in self._shower_rocks:
+                self._shower_rocks.remove(rock)
+
     def _check_slingshot(self):
         if self._sling_cd > 0 or self._sector is None:
             return
@@ -151,22 +259,35 @@ class RunManager:
         self._event_cd -= dt
         if self._event_cd > 0:
             return
-        import random
         self._event_cd = random.uniform(S.EVENT_INTERVAL_MIN, S.EVENT_INTERVAL_MAX)
-        kind = random.choice(["comms", "comms", "debris", "scan"])  # comms weighted 2x
+        kind = random.choice(["comms", "comms", "debris", "scan"])
 
         if kind == "comms":
             bus.emit(EVT_COMMS_INTERCEPT)
-
         elif kind == "debris":
             bus.emit(EVT_DEBRIS_SHOWER)
             self._shower_rocks = [DebrisRock() for _ in range(4)]
             self._shower_t = 14.0
-
         elif kind == "scan":
             bus.emit(EVT_SCAN_PING,
                      pos_x=random.randint(120, S.SCREEN_W - 120),
                      pos_y=random.randint(100, S.FLIGHT_H - 60))
+
+    def _check_comms(self, dt: float):
+        self._kress_cd    -= dt
+        self._collector_cd -= dt
+
+        if self._kress_cd <= 0:
+            self._kress_cd = random.uniform(S.KRESS_INTERVAL_MIN, S.KRESS_INTERVAL_MAX)
+            bus.emit(EVT_COMMS_SPEAK,
+                     speaker="KRESS",
+                     line=random.choice(_KRESS_LINES))
+
+        if self._collector_cd <= 0:
+            self._collector_cd = random.uniform(S.COLLECTOR_INTERVAL_MIN,
+                                                S.COLLECTOR_INTERVAL_MAX)
+            speaker, line = random.choice(_COLLECTOR_LINES)
+            bus.emit(EVT_COMMS_SPEAK, speaker=speaker, line=line)
 
     def _on_canister_grab(self, **_):
         from ship.modules.thruster import Thruster
@@ -200,12 +321,10 @@ class RunManager:
             self._spawn_barge()
 
     def _spawn_sector_objects(self):
-        import random
         self._debris    = [DebrisRock() for _ in range(S.DEBRIS_COUNT)]
         self._canisters = [FuelCanister() for _ in range(S.CANISTER_COUNT)]
 
     def _spawn_barge(self):
-        import random
         side  = random.choice(["left", "right", "top", "bottom"])
         pos_x = {"left": 0, "right": S.SCREEN_W}.get(side, random.randint(0, S.SCREEN_W))
         pos_y = {"top":  0, "bottom": S.SCREEN_H}.get(side, random.randint(0, S.SCREEN_H))
@@ -222,6 +341,7 @@ class RunManager:
                 return ch
         return 4
 
+    # ------------------------------------------------------------------
     @property
     def active_terminal(self) -> Terminal | None:
         return self._active_terminal
@@ -243,7 +363,7 @@ class RunManager:
         return self._canisters
 
     @property
-    def shower_rocks(self) -> list:
+    def shower_rocks(self) -> list[DebrisRock]:
         return self._shower_rocks
 
     @property

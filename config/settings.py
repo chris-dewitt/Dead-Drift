@@ -23,12 +23,19 @@ GRAVITY_CONSTANT  = 6.674e-3      # scaled G for gameplay feel
 MAX_VELOCITY      = 600.0         # px/s hard cap
 DRAG              = 0.0           # true Newtonian: no drag
 ROTATION_SPEED    = 210.0         # degrees/s
-STEER_RCS_RATE    = 0.22          # velocity-toward-facing redirect per second when thrusting
+STEER_RCS_DEG     = 90.0          # deg/s velocity redirect toward facing when thrusting (post-integrate)
 
 # --- Ship ---
 HULL_MAX          = 100.0
 THRUSTER_FORCE    = 280.0         # Newtons (gameplay units)
 SHIP_MASS         = 1.0
+
+# --- Guns ---
+BULLET_SPEED          = 860.0     # px/s
+BULLET_LIFETIME       = 0.52      # seconds before bullet expires
+GUN_COOLDOWN          = 0.17      # seconds between shots
+GUN_MALFUNCTION_CHANCE = 0.07     # probability per shot of fizzle
+GUN_JAM_DURATION      = 2.2       # seconds gun is out after malfunction
 
 # --- HUD Glitch Thresholds ---
 HUD_FLICKER_HP    = 60.0          # below this: HUD flickers
@@ -41,7 +48,7 @@ TERMINAL_ROWS     = 24
 CURSOR_BLINK_MS   = 530
 
 # --- Roguelite ---
-SECTORS_PER_RUN   = 10            # the 10-Miler
+SECTORS_PER_RUN   = 5             # the 5-sector sprint
 BASE_CLONE_DEBT   = 15000         # credits tacked on per death
 CLONE_FLUID_FEE   = 3500
 WRECKAGE_TOW_FEE  = 8000
@@ -55,6 +62,10 @@ DEBRIS_DAMAGE     = 9.0
 # --- Mid-flight Events ---
 EVENT_INTERVAL_MIN = 35.0         # min seconds between random flight events
 EVENT_INTERVAL_MAX = 75.0         # max seconds between random flight events
+KRESS_INTERVAL_MIN = 50.0         # min seconds between KRESS transmissions
+KRESS_INTERVAL_MAX = 90.0
+COLLECTOR_INTERVAL_MIN = 70.0
+COLLECTOR_INTERVAL_MAX = 130.0
 
 # --- Slingshot ---
 SLINGSHOT_SPEED   = 310.0    # px/s needed to count
