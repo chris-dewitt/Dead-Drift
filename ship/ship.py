@@ -1,4 +1,5 @@
 from __future__ import annotations
+import math
 import pygame
 from physics.body import RigidBody2D, Vec2
 from ship.loadout import SignalChain
@@ -68,7 +69,10 @@ class PlayerShip:
                 self.body.apply_thrust(-t.force * 0.4)
 
         if keys[pygame.K_SPACE]:
-            self.gun.fire(self.body.pos, self.body.angle)
+            rad = math.radians(self.body.angle)
+            nose = Vec2(self.body.pos.x + math.cos(rad) * 22,
+                        self.body.pos.y + math.sin(rad) * 22)
+            self.gun.fire(nose, self.body.angle)
 
     def _wrap_screen(self):
         pos = self.body.pos
