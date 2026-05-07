@@ -19,6 +19,7 @@ class DebrisRock:
         self.angle     = random.uniform(0, 360)
         self.rot_speed = random.uniform(-25, 25)
         self.radius    = random.randint(9, 19)
+        self.hp        = 3 if self.radius >= 13 else 2   # large=3 hits, small=2 hits
         self.is_hit    = False   # brief flash on collision
         self._hit_t    = 0.0
 
@@ -39,12 +40,14 @@ class DebrisRock:
             self._hit_t = max(0.0, self._hit_t - dt)
             self.is_hit = self._hit_t > 0
 
-    def hit(self):
+    def hit(self) -> bool:
+        """Decrement HP, flash, knock away.  Returns True when destroyed."""
+        self.hp    -= 1
         self.is_hit = True
         self._hit_t = 0.15
-        # Knock it away a bit
         self.vel.x += random.uniform(-30, 30)
         self.vel.y += random.uniform(-30, 30)
+        return self.hp <= 0
 
     def collides(self, pos: Vec2) -> bool:
         return (self.pos - pos).length() < self.radius + 10

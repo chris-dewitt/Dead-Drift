@@ -75,6 +75,26 @@ class RigidBody2D:
     def rotate(self, degrees: float):
         self.angle = (self.angle + degrees) % 360.0
 
+    def redirect_velocity(self, facing: Vec2, rate_degs: float, dt: float):
+        """
+        Post-integrate step: rotate the velocity vector toward `facing` at up
+        to `rate_degs` degrees per second.  Speed is preserved exactly —
+        no interaction with the velocity cap.
+        """
+        speed = self.vel.length()
+        if speed < 1.0:
+            return
+        vel_angle    = math.atan2(self.vel.y, self.vel.x)
+        target_angle = math.atan2(facing.y, facing.x)
+        diff = target_angle - vel_angle
+        # Normalise to (-π, π)
+        while diff >  math.pi: diff -= math.tau
+        while diff < -math.pi: diff += math.tau
+        max_rot  = math.radians(rate_degs) * dt
+        rot      = max(-max_rot, min(max_rot, diff))
+        new_ang  = vel_angle + rot
+        self.vel = Vec2(math.cos(new_ang) * speed, math.sin(new_ang) * speed)
+
     # ------------------------------------------------------------------
     def integrate(self, dt: float):
         """Symplectic Euler integration."""

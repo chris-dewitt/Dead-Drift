@@ -1,17 +1,17 @@
 from __future__ import annotations
 import pygame
 from physics.body import RigidBody2D, Vec2
-import math
 from ship.loadout import SignalChain
 from ship.modules.thruster import Thruster
 from ship.modules.life_support import LifeSupport
+from ship.gun import Gun
 from config import settings as S
 from core.event_bus import bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL, EVT_SHIP_DESTROYED
 
 
 class PlayerShip:
     """
-    The rust-bucket.  Owns the physics body, signal chain, and cargo slot.
+    The rust-bucket.  Owns the physics body, signal chain, gun, and cargo slot.
     Input is sampled directly from pygame key state each frame.
     """
 
@@ -19,12 +19,13 @@ class PlayerShip:
         self.body       = RigidBody2D(S.SCREEN_W / 2, S.SCREEN_H / 2, mass=S.SHIP_MASS)
         self.hull       = S.HULL_MAX
         self.chain      = SignalChain()
-        self.cargo      = None   # set by RunManager at run start
+        self.gun        = Gun()
+        self.cargo      = None
         self._destroyed = False
+        self._thrusting = False   # set each frame; used for post-integrate RCS
 
-        # Default starting loadout
-        self._thruster   = Thruster(tier="salvage")
-        self._life_sup   = LifeSupport()
+        self._thruster  = Thruster(tier="salvage")
+        self._life_sup  = LifeSupport()
         self.chain.install(self._life_sup, 0)
         self.chain.install(self._thruster, 1)
 
@@ -36,10 +37,20 @@ class PlayerShip:
         self._read_input(dt)
         self.chain.update(dt)
         self.body.integrate(dt)
+
+        # Post-integrate RCS: rotates velocity vector toward facing.
+        # Happens AFTER the velocity cap so the redirect is never undone.
+        if self._thrusting:
+            self.body.redirect_velocity(
+                self.body.facing_vector(), S.STEER_RCS_DEG, dt
+            )
+
+        self.gun.update(dt)
         self._wrap_screen()
 
     def _read_input(self, dt: float):
         keys = pygame.key.get_pressed()
+        self._thrusting = False
 
         if keys[pygame.K_LEFT]  or keys[pygame.K_a]:
             self.body.rotate(-S.ROTATION_SPEED * dt)
@@ -48,25 +59,18 @@ class PlayerShip:
 
         thrusters = self.chain.get_active("propulsion")
         if keys[pygame.K_UP] or keys[pygame.K_w]:
+            self._thrusting = True
             for t in thrusters:
                 self.body.apply_thrust(t.force)
-            # RCS: gradually redirect velocity toward facing when thrusting
-            speed = self.body.vel.length()
-            if speed > 30:
-                facing = self.body.facing_vector()
-                v = self.body.vel
-                rdr = S.STEER_RCS_RATE * dt
-                self.body.vel = Vec2(
-                    v.x + (facing.x * speed - v.x) * rdr,
-                    v.y + (facing.y * speed - v.y) * rdr,
-                )
 
         if keys[pygame.K_DOWN] or keys[pygame.K_s]:
             for t in thrusters:
                 self.body.apply_thrust(-t.force * 0.4)
 
+        if keys[pygame.K_SPACE]:
+            self.gun.fire(self.body.pos, self.body.angle)
+
     def _wrap_screen(self):
-        """Toroidal wrapping — fly off one edge, appear at the other."""
         pos = self.body.pos
         if pos.x < 0:            pos.x = S.SCREEN_W
         elif pos.x > S.SCREEN_W: pos.x = 0
@@ -77,10 +81,8 @@ class PlayerShip:
     def take_damage(self, amount: float):
         self.hull = max(0.0, self.hull - amount)
         bus.emit(EVT_HULL_DAMAGE, amount=amount)
-
         if self.hull <= S.HUD_SCRAMBLE_HP:
             bus.emit(EVT_HULL_CRITICAL, hp=self.hull)
-
         if self.hull <= 0.0 and not self._destroyed:
             self._destroyed = True
             bus.emit(EVT_SHIP_DESTROYED)
@@ -113,4 +115,6 @@ class PlayerShip:
         self.body       = RigidBody2D(S.SCREEN_W / 2, S.SCREEN_H / 2, mass=S.SHIP_MASS)
         self.hull       = S.HULL_MAX
         self._destroyed = False
+        self._thrusting = False
         self.cargo      = None
+        self.gun        = Gun()

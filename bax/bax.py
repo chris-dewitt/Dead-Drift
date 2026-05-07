@@ -7,7 +7,8 @@ from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_MODULE_UNBOLTED, EVT_BAX_SPEAK,
                              EVT_NLP_EXPLOIT, EVT_SLINGSHOT,
                              EVT_BARGE_NEARBY, EVT_CANISTER_GRAB,
-                             EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING)
+                             EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING,
+                             EVT_GUN_MALFUNCTION)
 
 _IDLE = [
     "Right then. No rush. I've only been bolted here since the third war.",
@@ -76,9 +77,10 @@ class Bax:
         bus.subscribe(EVT_SLINGSHOT,        self._on_slingshot)
         bus.subscribe(EVT_BARGE_NEARBY,    self._on_barge_nearby)
         bus.subscribe(EVT_CANISTER_GRAB,   self._on_canister_grab)
-        bus.subscribe(EVT_COMMS_INTERCEPT, self._on_comms_intercept)
-        bus.subscribe(EVT_DEBRIS_SHOWER,   self._on_debris_shower)
-        bus.subscribe(EVT_SCAN_PING,       self._on_scan_ping)
+        bus.subscribe(EVT_COMMS_INTERCEPT,  self._on_comms_intercept)
+        bus.subscribe(EVT_DEBRIS_SHOWER,    self._on_debris_shower)
+        bus.subscribe(EVT_SCAN_PING,        self._on_scan_ping)
+        bus.subscribe(EVT_GUN_MALFUNCTION,  self._on_gun_malfunction)
 
     def update(self, dt: float):
         self._speak_cd = max(0.0, self._speak_cd - dt)
@@ -170,6 +172,14 @@ class Bax:
             "Fuel canister! Thruster's singing, mate.",
             "Nice grab. I've given her a little boost.",
             "Bit extra in the tank. Don't waste it.",
+        ]))
+
+    def _on_gun_malfunction(self, **_):
+        self.speak(random.choice([
+            "Gun's thrown a wobbler. Give it a sec.",
+            "Weapon malfunction! Yeah, she does that.",
+            "That's what you get for second-hand ordinance, mate.",
+            "I told you not to kick it. You kicked it.",
         ]))
 
     def _on_comms_intercept(self, **_):
