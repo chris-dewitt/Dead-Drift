@@ -38,6 +38,7 @@ def _launch(mode: str, sector: int):
         try:
             import nltk
             for pkg, path in [
+                ("punkt_tab",                "tokenizers/punkt_tab"),
                 ("punkt",                    "tokenizers/punkt"),
                 ("averaged_perceptron_tagger","taggers/averaged_perceptron_tagger"),
                 ("vader_lexicon",             "sentiment/vader_lexicon"),
