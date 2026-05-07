@@ -1,4 +1,3 @@
-import sys
 import pygame
 
 from config import settings as S
@@ -17,30 +16,31 @@ from renderer.cockpit_renderer import CockpitRenderer
 class Game:
     def __init__(self):
         pygame.init()
-        self.screen  = pygame.display.set_mode((S.SCREEN_W, S.SCREEN_H))
+        self.screen = pygame.display.set_mode((S.SCREEN_W, S.SCREEN_H))
         pygame.display.set_caption(S.TITLE)
-        self.clock   = pygame.time.Clock()
+        self.clock = pygame.time.Clock()
         self.running = True
 
-        self.states  = StateManager()
-        self.meta    = MetaProgression()
+        self.states = StateManager()
+        self.meta = MetaProgression()
         self.run_mgr = RunManager(self.meta)
-        self.ship    = PlayerShip()
-        self.bax     = Bax(self.ship, self.meta)
+        self.ship = PlayerShip()
+        self.bax = Bax(self.ship, self.meta)
 
-        self.vec_renderer     = VectorRenderer(self.screen)
-        self.hud_renderer     = HUDRenderer(self.screen)
-        self.term_renderer    = TerminalRenderer(self.screen)
+        self.vec_renderer = VectorRenderer(self.screen)
+        self.hud_renderer = HUDRenderer(self.screen)
+        self.term_renderer = TerminalRenderer(self.screen)
         self.cockpit_renderer = CockpitRenderer(self.screen)
 
         self._wire_events()
 
     def _wire_events(self):
         bus.subscribe(EVT_SHIP_DESTROYED, self._on_ship_destroyed)
-        bus.subscribe(EVT_RUN_END,        self._on_run_end)
+        bus.subscribe(EVT_RUN_END, self._on_run_end)
 
     def _on_ship_destroyed(self, **_):
         self.meta.apply_death_penalty()
+        self.meta.save()
         self.states.transition(GameState.DECANTING)
 
     def _on_run_end(self, success, **_):
@@ -51,13 +51,16 @@ class Game:
 
     # ------------------------------------------------------------------
     def run(self):
+        self.run_mgr.start_run(self.ship)
         self.states.transition(GameState.LOADOUT_DRAFT)
 
         while self.running:
             dt = self.clock.tick(S.FPS) / 1000.0
             self._handle_events()
             self._update(dt)
-            self._render()
+            self._render(dt)
+
+        pygame.quit()
 
     # ------------------------------------------------------------------
     def _handle_events(self):
@@ -68,11 +71,15 @@ class Game:
                 self._route_keydown(event)
 
     def _route_keydown(self, event: pygame.event.Event):
+        if event.key in (pygame.K_ESCAPE, pygame.K_q):
+            self.running = False
+            return
+
         state = self.states.state
 
         if state == GameState.FLIGHT:
             self.run_mgr.handle_key(event)
-        elif state == GameState.TERMINAL:
+        elif state == GameState.TERMINAL and self.run_mgr.active_terminal is not None:
             self.run_mgr.active_terminal.handle_key(event)
         elif state == GameState.LOADOUT_DRAFT:
             self.run_mgr.draft.handle_key(event)
@@ -91,7 +98,7 @@ class Game:
             self.bax.update(dt)
             self.cockpit_renderer.update(dt)
 
-        elif state == GameState.TERMINAL:
+        elif state == GameState.TERMINAL and self.run_mgr.active_terminal is not None:
             self.run_mgr.active_terminal.update(dt)
 
         elif state == GameState.LOADOUT_DRAFT:
@@ -100,10 +107,10 @@ class Game:
                 self.states.transition(GameState.FLIGHT)
 
         elif state == GameState.DECANTING:
-            pass  # timed screen; transition handled by run loop timer
+            pass
 
     # ------------------------------------------------------------------
-    def _render(self):
+    def _render(self, dt: float):
         self.screen.fill(S.VOID)
         state = self.states.state
 
@@ -113,7 +120,7 @@ class Game:
             self._render_sector_hud()
             self.cockpit_renderer.draw(pygame.time.get_ticks() / 1000.0)
 
-        elif state == GameState.TERMINAL:
+        elif state == GameState.TERMINAL and self.run_mgr.active_terminal is not None:
             self.term_renderer.draw(self.run_mgr.active_terminal)
 
         elif state == GameState.LOADOUT_DRAFT:
@@ -122,28 +129,55 @@ class Game:
         elif state == GameState.DECANTING:
             self._render_decanting()
 
+        elif state == GameState.MAIN_MENU:
+            self._render_main_menu()
+
         pygame.display.flip()
 
     def _render_sector_hud(self):
-        font  = pygame.font.SysFont("monospace", 14)
-        rm    = self.run_mgr
+        font = pygame.font.SysFont("monospace", 14)
+        rm = self.run_mgr
         sec_w = S.SCREEN_W
 
-        # Sector number — top centre
         sec_txt = font.render(
             f"SECTOR  {rm.sector_num} / {S.SECTORS_PER_RUN}",
-            True, S.GREY_DEAD,
+            True,
+            S.GREY_DEAD,
         )
         self.screen.blit(sec_txt, (sec_w // 2 - sec_txt.get_width() // 2, 20))
 
-        # Jump status — below sector number
         if rm.jump_ready:
             jump_txt = font.render("[ J ]  JUMP READY", True, S.GREEN_TERM)
         else:
             jump_txt = font.render(
-                f"JUMP IN  {rm.jump_cooldown:>4.0f}s", True, S.GREY_DEAD,
+                f"JUMP IN  {rm.jump_cooldown:>4.0f}s",
+                True,
+                S.GREY_DEAD,
             )
         self.screen.blit(jump_txt, (sec_w // 2 - jump_txt.get_width() // 2, 38))
+
+    def _render_main_menu(self):
+        font = pygame.font.SysFont("monospace", 20)
+        title_font = pygame.font.SysFont("monospace", 42, bold=True)
+        lines = [
+            "RUN COMPLETE OR ABORTED",
+            "",
+            f"TOTAL DEBT: {self.meta.debt:,} cr",
+            f"CLONES PRINTED: {self.meta.clone_count}",
+            "",
+            "[ PRESS ENTER TO START A NEW RUN ]",
+            "[ ESC / Q TO QUIT ]",
+        ]
+
+        title = title_font.render("DEAD DRIFT", True, S.AMBER_TERM)
+        self.screen.blit(title, (S.SCREEN_W // 2 - title.get_width() // 2, S.SCREEN_H // 4))
+
+        y = S.SCREEN_H // 4 + 80
+        for line in lines:
+            color = S.GREEN_TERM if line.startswith("[") else S.GREY_DEAD
+            surf = font.render(line, True, color)
+            self.screen.blit(surf, (S.SCREEN_W // 2 - surf.get_width() // 2, y))
+            y += 30
 
     def _render_decanting(self):
         font = pygame.font.SysFont("monospace", 18)
