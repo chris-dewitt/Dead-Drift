@@ -41,3 +41,6 @@ EVT_DEBT_UPDATE    = "debt_update"       # payload: delta, total
 EVT_SLINGSHOT      = "slingshot"         # payload: speed
 EVT_BARGE_NEARBY   = "barge_nearby"     # payload: distance
 EVT_CANISTER_GRAB  = "canister_grab"    # payload: (none)
+EVT_COMMS_INTERCEPT = "comms_intercept" # random Union radio chatter intercepted
+EVT_DEBRIS_SHOWER  = "debris_shower"    # temporary asteroid belt fragment shower
+EVT_SCAN_PING      = "scan_ping"        # Union passive scanner pulse; payload: pos_x, pos_y

@@ -22,7 +22,8 @@ GREY_DEAD   = (60,  60,  60)
 GRAVITY_CONSTANT  = 6.674e-3      # scaled G for gameplay feel
 MAX_VELOCITY      = 600.0         # px/s hard cap
 DRAG              = 0.0           # true Newtonian: no drag
-ROTATION_SPEED    = 180.0         # degrees/s
+ROTATION_SPEED    = 210.0         # degrees/s
+STEER_RCS_RATE    = 0.22          # velocity-toward-facing redirect per second when thrusting
 
 # --- Ship ---
 HULL_MAX          = 100.0
@@ -50,6 +51,10 @@ DEBRIS_COUNT      = 7
 CANISTER_COUNT    = 3
 CANISTER_PICKUP_R = 28.0
 DEBRIS_DAMAGE     = 9.0
+
+# --- Mid-flight Events ---
+EVENT_INTERVAL_MIN = 35.0         # min seconds between random flight events
+EVENT_INTERVAL_MAX = 75.0         # max seconds between random flight events
 
 # --- Slingshot ---
 SLINGSHOT_SPEED   = 310.0    # px/s needed to count
