@@ -34,9 +34,9 @@ class Terminal:
         self._tw_pos   = -1
         self._tw_chars = 0.0
 
-        self._font:    pygame.font.Font | None = None
-        self._font_sm: pygame.font.Font | None = None
-        self._font_hd: pygame.font.Font | None = None
+        self._font:    pygame.font.Font | None = None   # 16px dialogue
+        self._font_sm: pygame.font.Font | None = None   # 13px labels
+        self._font_hd: pygame.font.Font | None = None   # 14px bold name tag
 
         bus.emit(EVT_TERMINAL_OPEN, npc=npc)
         self._push(npc.name.upper(), npc.intro())
@@ -44,17 +44,17 @@ class Terminal:
     # ------------------------------------------------------------------
     def _get_font(self) -> pygame.font.Font:
         if self._font is None:
-            self._font = pygame.font.SysFont("monospace", 15)
+            self._font = pygame.font.SysFont("monospace", 17)
         return self._font
 
     def _get_font_sm(self) -> pygame.font.Font:
         if self._font_sm is None:
-            self._font_sm = pygame.font.SysFont("monospace", 12)
+            self._font_sm = pygame.font.SysFont("monospace", 14)
         return self._font_sm
 
     def _get_font_hd(self) -> pygame.font.Font:
         if self._font_hd is None:
-            self._font_hd = pygame.font.SysFont("monospace", 14, bold=True)
+            self._font_hd = pygame.font.SysFont("monospace", 15, bold=True)
         return self._font_hd
 
     # ------------------------------------------------------------------
@@ -130,7 +130,7 @@ class Terminal:
                      (p_rect.left + 8, name_y))
 
         # Disposition bar
-        surface.blit(font_sm.render("DISPOSITION", True, (55, 55, 55)),
+        surface.blit(font_sm.render("DISPOSITION", True, (110, 110, 110)),
                      (p_rect.left + 8, name_y + 18))
         bx = p_rect.left + 8
         bw = PW - M - 18
@@ -139,7 +139,7 @@ class Terminal:
         dpct = (self.npc.disposition + 10) / 20.0
         dcol = (0, 190, 70) if self.npc.disposition >= 0 else (200, 38, 38)
         pygame.draw.rect(surface, dcol, pygame.Rect(bx, by, int(bw * dpct), 8))
-        pygame.draw.rect(surface, (55, 55, 55), pygame.Rect(bx, by, bw, 8), 1)
+        pygame.draw.rect(surface, (110, 110, 110), pygame.Rect(bx, by, bw, 8), 1)
 
         # ── vertical divider ──────────────────────────────────────────
         div_x = PW + 6
@@ -179,7 +179,7 @@ class Terminal:
         pygame.draw.line(surface, (0, 100, 40), (M, strip_y), (W - M, strip_y), 1)
 
         # Patience bar
-        surface.blit(font_sm.render("PATIENCE", True, (55, 55, 55)), (M, strip_y + 7))
+        surface.blit(font_sm.render("PATIENCE", True, (110, 110, 110)), (M, strip_y + 7))
         pb_x = M + 76
         pb_w = 200
         pb_y = strip_y + 8
@@ -192,7 +192,7 @@ class Terminal:
         # Hint text
         surface.blit(
             font_sm.render("try: bribe · complain · negotiate · threaten · [ESC] bail out",
-                           True, (40, 40, 40)),
+                           True, (120, 120, 120)),
             (pb_x + pb_w + 14, strip_y + 9))
 
         # Input line

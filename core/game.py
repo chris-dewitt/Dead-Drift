@@ -136,7 +136,7 @@ class Game:
             self.ship.update(dt)
             self.bax.update(dt)
             self.cockpit_renderer.update(dt)
-            self.audio.update(self.ship.body.speed())
+            self.audio.update(self.ship.body.speed(), dt)
             # Terminal opened by jump key — transition immediately
             if self.run_mgr.active_terminal is not None:
                 self.states.transition(GameState.TERMINAL)
