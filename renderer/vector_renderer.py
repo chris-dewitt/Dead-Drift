@@ -65,6 +65,7 @@ class VectorRenderer:
         self._draw_exhaust(ship, t)
         self._draw_proximity_alarm(run_mgr, ship, t)
         self._draw_flash(dt)
+        self._draw_spore_effect(ship, t)
 
     def draw_menu_background(self, t: float):
         self._draw_nebulae(t)
@@ -542,6 +543,23 @@ class VectorRenderer:
         self._flash_t -= dt
 
     # ------------------------------------------------------------------
+    def _draw_spore_effect(self, ship, t: float):
+        """Green psychedelic tint + warning text when MycoShroom inverts controls."""
+        cargo = getattr(ship, "cargo", None)
+        if cargo is None or not getattr(cargo, "inversion_active", False):
+            return
+        pct   = cargo.invert_pct
+        alpha = int(28 + 22 * math.sin(t * 8.0))   # fast shimmer
+        overlay = pygame.Surface((S.SCREEN_W, S.FLIGHT_H), pygame.SRCALPHA)
+        overlay.fill((0, 180, 60, alpha))
+        self.surface.blit(overlay, (0, 0))
+
+        if int(t * 3) % 2 == 0:
+            font = pygame.font.SysFont("monospace", 22, bold=True)
+            msg  = font.render("⚠  CONTROLS INVERTED  ⚠", True, (0, 255, 80))
+            self.surface.blit(msg, (S.SCREEN_W // 2 - msg.get_width() // 2,
+                                    S.FLIGHT_H // 2 - 60))
+
     @staticmethod
     def _rotate_pt(pt: tuple, angle_deg: float, origin) -> tuple:
         rad = math.radians(angle_deg)

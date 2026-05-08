@@ -8,7 +8,7 @@ from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_NLP_EXPLOIT, EVT_SLINGSHOT,
                              EVT_BARGE_NEARBY, EVT_CANISTER_GRAB,
                              EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING,
-                             EVT_GUN_MALFUNCTION)
+                             EVT_GUN_MALFUNCTION, EVT_SPORE_INVERTED)
 
 _IDLE = [
     "Right then. No rush. I've only been bolted here since the third war.",
@@ -81,6 +81,7 @@ class Bax:
         bus.subscribe(EVT_DEBRIS_SHOWER,    self._on_debris_shower)
         bus.subscribe(EVT_SCAN_PING,        self._on_scan_ping)
         bus.subscribe(EVT_GUN_MALFUNCTION,  self._on_gun_malfunction)
+        bus.subscribe(EVT_SPORE_INVERTED,   self._on_spore_inverted)
 
     def update(self, dt: float):
         self._speak_cd = max(0.0, self._speak_cd - dt)
@@ -203,6 +204,22 @@ class Bax:
             "Passive scan pulse. Someone's lookin' for us. Move.",
             "Radar sweep detected. I'd suggest not hangin' about.",
         ]))
+
+    def _on_spore_inverted(self, active, **_):
+        if active:
+            self.speak(random.choice([
+                "I've inhaled somethin'. Either that or space is sideways now.",
+                "Right, so LEFT is RIGHT and UP is DOWN. Totally fine. Carry on.",
+                "Oh no. OH NO. The shrooms are leaking. EVERYTHING IS BACKWARDS.",
+                "Navigation update: your controls are lying to you. You're welcome.",
+                "I did NOT consent to whatever the cargo just did to the flight computer.",
+            ]))
+        else:
+            self.speak(random.choice([
+                "Right, we're back. That was a thing that happened.",
+                "Controls nominal. I think. Mostly. Check everything.",
+                "Spore event over. I'm filing an incident report with meself.",
+            ]))
 
     def radio_blip(self):
         if self._radio_cd <= 0:

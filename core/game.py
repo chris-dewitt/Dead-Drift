@@ -13,6 +13,7 @@ from renderer.vector_renderer import VectorRenderer
 from renderer.hud_renderer import HUDRenderer
 from renderer.terminal_renderer import TerminalRenderer
 from renderer.cockpit_renderer import CockpitRenderer
+from audio.audio_manager import AudioManager
 
 
 class Game:
@@ -36,6 +37,7 @@ class Game:
         self.cockpit_renderer = CockpitRenderer(
             self.screen, self.ship, self.run_mgr, self.meta
         )
+        self.audio = AudioManager()
 
         self._dt                  = 0.016
         self._run_just_completed  = False
@@ -134,6 +136,7 @@ class Game:
             self.ship.update(dt)
             self.bax.update(dt)
             self.cockpit_renderer.update(dt)
+            self.audio.update(self.ship.body.speed())
             # Terminal opened by jump key — transition immediately
             if self.run_mgr.active_terminal is not None:
                 self.states.transition(GameState.TERMINAL)

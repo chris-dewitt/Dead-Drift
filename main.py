@@ -8,9 +8,15 @@ import nltk
 
 def _bootstrap_nltk():
     """Download required NLTK data on first run."""
-    for pkg in ("punkt", "averaged_perceptron_tagger", "vader_lexicon"):
+    packages = [
+        ("punkt_tab",                    "tokenizers/punkt_tab"),
+        ("punkt",                        "tokenizers/punkt"),
+        ("averaged_perceptron_tagger",   "taggers/averaged_perceptron_tagger"),
+        ("vader_lexicon",                "sentiment/vader_lexicon"),
+    ]
+    for pkg, path in packages:
         try:
-            nltk.data.find(f"tokenizers/{pkg}" if pkg == "punkt" else f"sentiment/{pkg}" if "vader" in pkg else f"taggers/{pkg}")
+            nltk.data.find(path)
         except LookupError:
             nltk.download(pkg, quiet=True)
 
