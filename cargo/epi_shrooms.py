@@ -1,23 +1,58 @@
+from __future__ import annotations
+import random
 from cargo.cargo_base import BaseCargo
-from core.event_bus import bus, EVT_CARGO_DAMAGED
+from core.event_bus import bus, EVT_CARGO_DAMAGED, EVT_SPORE_INVERTED
+from config import settings as S
 
 
 class EpistemologicalShrooms(BaseCargo):
     """
-    Ch.2: Bioluminescent psychic fungi — destroy the concept of object permanence.
-    Damage effect: vector graphics melt, physics inverts, Bax hallucinates.
-    Terminal climax: navigate asteroid field while Bax screams about space badgers.
+    Ch.2 — bioluminescent psychic fungi.
+    Every SPORE_INTERVAL seconds, controls invert for SPORE_DURATION seconds.
+    Cargo damage raises spore_level which shortens the interval.
     """
 
     def __init__(self):
         super().__init__("WEAPONIZED EPISTEMOLOGICAL SHROOMS")
-        self.spore_level = 0.0
-        self.physics_inverted = False
+        self.spore_level     = 0.0
+        self._invert_active  = False
+        self._invert_t       = 0.0
+        self._next_cd        = random.uniform(S.SPORE_INTERVAL_MIN, S.SPORE_INTERVAL_MAX)
+
+    # ------------------------------------------------------------------
+    def update(self, dt: float, ship) -> None:
+        if self._invert_active:
+            self._invert_t -= dt
+            if self._invert_t <= 0.0:
+                self._invert_active    = False
+                ship.controls_inverted = False
+                bus.emit(EVT_SPORE_INVERTED, active=False)
+            return
+
+        self._next_cd -= dt
+        if self._next_cd <= 0.0:
+            self._trigger(ship)
+
+    def _trigger(self, ship):
+        self._invert_active    = True
+        self._invert_t         = S.SPORE_DURATION
+        ship.controls_inverted = True
+        bus.emit(EVT_SPORE_INVERTED, active=True)
+        # More damaged → more frequent
+        interval = random.uniform(S.SPORE_INTERVAL_MIN, S.SPORE_INTERVAL_MAX)
+        self._next_cd = interval * max(0.4, 1.0 - self.spore_level * 0.6)
+
+    # ------------------------------------------------------------------
+    @property
+    def inversion_active(self) -> bool:
+        return self._invert_active
+
+    @property
+    def invert_pct(self) -> float:
+        return self._invert_t / S.SPORE_DURATION if self._invert_active else 0.0
 
     def _on_damage(self):
         self.spore_level = min(1.0, self.spore_level + 0.25)
-        if self.spore_level >= 0.75 and not self.physics_inverted:
-            self.physics_inverted = True
         bus.emit(EVT_CARGO_DAMAGED, cargo=self, severity=self.spore_level)
 
     def terminal_climax(self) -> str:

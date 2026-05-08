@@ -25,8 +25,9 @@ class PlayerShip:
         self._destroyed = False
         self._thrusting = False   # set each frame; used for post-integrate RCS
 
-        self._thruster  = Thruster(tier="salvage")
-        self._life_sup  = LifeSupport()
+        self._thruster       = Thruster(tier="salvage")
+        self._life_sup       = LifeSupport()
+        self.controls_inverted = False
         self.chain.install(self._life_sup, 0)
         self.chain.install(self._thruster, 1)
 
@@ -52,19 +53,28 @@ class PlayerShip:
     def _read_input(self, dt: float):
         keys = pygame.key.get_pressed()
         self._thrusting = False
+        inv = self.controls_inverted
 
-        if keys[pygame.K_LEFT]  or keys[pygame.K_a]:
+        left  = keys[pygame.K_LEFT]  or keys[pygame.K_a]
+        right = keys[pygame.K_RIGHT] or keys[pygame.K_d]
+        fwd   = keys[pygame.K_UP]    or keys[pygame.K_w]
+        rev   = keys[pygame.K_DOWN]  or keys[pygame.K_s]
+
+        if inv:
+            left, right, fwd, rev = right, left, rev, fwd
+
+        if left:
             self.body.rotate(-S.ROTATION_SPEED * dt)
-        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+        if right:
             self.body.rotate(S.ROTATION_SPEED * dt)
 
         thrusters = self.chain.get_active("propulsion")
-        if keys[pygame.K_UP] or keys[pygame.K_w]:
+        if fwd:
             self._thrusting = True
             for t in thrusters:
                 self.body.apply_thrust(t.force)
 
-        if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+        if rev:
             for t in thrusters:
                 self.body.apply_thrust(-t.force * 0.4)
 
@@ -116,9 +126,10 @@ class PlayerShip:
         return not self._destroyed
 
     def reset(self):
-        self.body       = RigidBody2D(S.SCREEN_W / 2, S.SCREEN_H / 2, mass=S.SHIP_MASS)
-        self.hull       = S.HULL_MAX
-        self._destroyed = False
-        self._thrusting = False
-        self.cargo      = None
-        self.gun        = Gun()
+        self.body              = RigidBody2D(S.SCREEN_W / 2, S.SCREEN_H / 2, mass=S.SHIP_MASS)
+        self.hull              = S.HULL_MAX
+        self._destroyed        = False
+        self._thrusting        = False
+        self.controls_inverted = False
+        self.cargo             = None
+        self.gun               = Gun()
