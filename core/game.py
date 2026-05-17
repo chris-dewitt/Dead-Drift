@@ -194,7 +194,9 @@ class Game:
         pygame.display.flip()
 
     def _render_sector_hud(self):
-        font  = pygame.font.SysFont("monospace", 14)
+        font     = pygame.font.SysFont("monospace", 14)
+        font_sm  = pygame.font.SysFont("monospace", 12)
+        font_hd  = pygame.font.SysFont("monospace", 14, bold=True)
         rm    = self.run_mgr
         sec_w = S.SCREEN_W
         t     = pygame.time.get_ticks() / 1000.0
@@ -204,6 +206,18 @@ class Game:
             True, S.GREY_DEAD,
         )
         self.screen.blit(sec_txt, (sec_w // 2 - sec_txt.get_width() // 2, 20))
+
+        # Sector name + "formerly" — the corporate rebrand
+        sector = rm.sector
+        if sector is not None and getattr(sector, "name", ""):
+            name_surf = font_hd.render(sector.name, True, (170, 170, 110))
+            self.screen.blit(name_surf,
+                             (sec_w // 2 - name_surf.get_width() // 2, 74))
+            if sector.formerly:
+                fm_surf = font_sm.render(
+                    f"(formerly: {sector.formerly})", True, (95, 95, 95))
+                self.screen.blit(fm_surf,
+                                 (sec_w // 2 - fm_surf.get_width() // 2, 92))
 
         if rm.jump_ready:
             jump_txt = font.render("[ J ]  JUMP READY", True, S.GREEN_TERM)
@@ -228,6 +242,13 @@ class Game:
         debt_txt = font.render(
             f"DEBT  {displayed_debt:,} cr  +{interest_per_sec:.2f}/s", True, ticker_col)
         self.screen.blit(debt_txt, (10, S.FLIGHT_H - 22))
+
+        # Kress comm hint — bottom-right, dim when unavailable, brighter when ready
+        kress_avail = not rm._kress_called_this_sector
+        k_col   = (90, 110, 130) if kress_avail else (60, 60, 60)
+        k_label = "[ K ]  CALL KRESS" if kress_avail else "[ K ]  channel used"
+        k_surf  = font_sm.render(k_label, True, k_col)
+        self.screen.blit(k_surf, (sec_w - k_surf.get_width() - 12, S.FLIGHT_H - 22))
 
     def _render_drift_strip(self):
         """Amber status bar shown at top of terminal during mid-flight intercept."""

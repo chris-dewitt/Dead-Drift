@@ -102,6 +102,7 @@ class RunManager:
         self._canisters: list[FuelCanister] = []
         self._active_terminal: Terminal | None = None
         self._intercepting_barge = None   # set when a barge opens a mid-flight comm
+        self._kress_called_this_sector = False
         self._sector_timer     = 0.0
         self._sector_dur       = 20.0
         self._ship             = None
@@ -136,6 +137,7 @@ class RunManager:
         self._active_terminal    = None
         self._intercepting_barge = None
         self._pending_advance    = False
+        self._kress_called_this_sector = False
         self._ship = ship
         self.draft = LoadoutDraft(chapter=self._current_chapter())
         self._kress_cd    = random.uniform(S.KRESS_INTERVAL_MIN, S.KRESS_INTERVAL_MAX)
@@ -207,6 +209,14 @@ class RunManager:
     def handle_key(self, event: pygame.event.Event):
         if event.key == pygame.K_j and self._sector_timer >= self._sector_dur:
             self._open_jump_terminal()
+        elif event.key == pygame.K_k and not self._kress_called_this_sector:
+            self._open_kress_terminal()
+
+    def _open_kress_terminal(self):
+        from core.event_bus import EVT_KRESS_DIALLED
+        self._kress_called_this_sector = True
+        bus.emit(EVT_KRESS_DIALLED)
+        self.open_terminal("kress")
 
     # ------------------------------------------------------------------
     def _check_bullets(self):
@@ -341,6 +351,7 @@ class RunManager:
         self._sector_timer = 0.0
         self._barges.clear()
         self._sling_well_t.clear()
+        self._kress_called_this_sector = False
         self._spawn_sector_objects()
 
         if self._sector.is_ambush:

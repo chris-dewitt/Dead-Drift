@@ -3,7 +3,10 @@ import math
 import random
 import pygame
 from config import settings as S
-from core.event_bus import bus, EVT_SLINGSHOT, EVT_SCAN_PING
+from core.event_bus import (bus, EVT_SLINGSHOT, EVT_SCAN_PING,
+                             EVT_TETHER_HIT, EVT_TETHER_SNAP,
+                             EVT_MODULE_UNBOLTED, EVT_HULL_DAMAGE,
+                             EVT_HULL_CRITICAL)
 
 
 # ---------------------------------------------------------------------------
@@ -36,8 +39,17 @@ class VectorRenderer:
         self._flash_t    = 0.0
         self._flash_col  = (180, 220, 255)
         self._scan_pings: list[tuple[int, int, float]] = []
-        bus.subscribe(EVT_SLINGSHOT,  self._on_slingshot)
-        bus.subscribe(EVT_SCAN_PING,  self._on_scan_ping)
+
+        # Screen shake state: trauma decays exponentially; offset is random per frame
+        self._shake_trauma = 0.0   # 0.0 (none) → 1.0 (huge)
+
+        bus.subscribe(EVT_SLINGSHOT,        self._on_slingshot)
+        bus.subscribe(EVT_SCAN_PING,        self._on_scan_ping)
+        bus.subscribe(EVT_TETHER_HIT,       self._on_tether_hit)
+        bus.subscribe(EVT_TETHER_SNAP,      self._on_tether_snap)
+        bus.subscribe(EVT_MODULE_UNBOLTED,  self._on_module_unbolted)
+        bus.subscribe(EVT_HULL_DAMAGE,      self._on_hull_damage)
+        bus.subscribe(EVT_HULL_CRITICAL,    self._on_hull_critical)
 
     def _on_slingshot(self, **_):
         self._flash_t   = 0.45
@@ -46,6 +58,28 @@ class VectorRenderer:
     def _on_scan_ping(self, pos_x, pos_y, **_):
         t = pygame.time.get_ticks() / 1000.0
         self._scan_pings.append((int(pos_x), int(pos_y), t))
+
+    def _on_tether_hit(self, **_):
+        self._shake_trauma = min(1.0, self._shake_trauma + 0.75)
+        self._flash_t   = 0.25
+        self._flash_col = (255, 140, 40)
+
+    def _on_tether_snap(self, **_):
+        self._shake_trauma = min(1.0, self._shake_trauma + 0.55)
+        self._flash_t   = 0.5
+        self._flash_col = (220, 255, 220)   # green relief flash
+
+    def _on_module_unbolted(self, **_):
+        self._shake_trauma = min(1.0, self._shake_trauma + 0.55)
+        self._flash_t   = 0.3
+        self._flash_col = (255, 60, 20)
+
+    def _on_hull_damage(self, amount=0.0, **_):
+        # Tiny shake on small hits, big shake on hard hits
+        self._shake_trauma = min(1.0, self._shake_trauma + min(0.45, amount * 0.04))
+
+    def _on_hull_critical(self, **_):
+        self._shake_trauma = min(1.0, self._shake_trauma + 0.4)
 
     # ------------------------------------------------------------------
     def draw(self, run_mgr, ship, dt: float = 0.016):
@@ -66,6 +100,21 @@ class VectorRenderer:
         self._draw_proximity_alarm(run_mgr, ship, t)
         self._draw_flash(dt)
         self._draw_spore_effect(ship, t)
+        self._apply_screen_shake(dt)
+
+    def _apply_screen_shake(self, dt: float):
+        if self._shake_trauma <= 0.01:
+            self._shake_trauma = 0.0
+            return
+        # Quadratic curve: huge shake when trauma is high, gentle when low
+        amplitude = (self._shake_trauma ** 2) * 16.0
+        dx = random.uniform(-amplitude, amplitude)
+        dy = random.uniform(-amplitude, amplitude)
+        snapshot = self.surface.copy()
+        self.surface.fill(S.BLACK)
+        self.surface.blit(snapshot, (int(dx), int(dy)))
+        # Trauma decays at ~1.6/sec — half-life ~0.4s
+        self._shake_trauma = max(0.0, self._shake_trauma - 1.6 * dt)
 
     def draw_menu_background(self, t: float):
         self._draw_nebulae(t)

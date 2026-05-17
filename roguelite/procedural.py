@@ -12,6 +12,8 @@ class SectorLayout:
     hazards:      list[str]       # e.g. ["solar_flare", "asteroid_field"]
     enemy_budget: int             # how many barge spawns to allow
     is_ambush:    bool            # stealth repo barge present from start
+    name:         str = ""        # corporate-speak sector designation
+    formerly:     str = ""        # what locals used to call it, if anything
 
 
 _HAZARD_POOL = [
@@ -20,6 +22,36 @@ _HAZARD_POOL = [
     "collapsing_gravity_well",
     "debris_cloud",
     "toll_checkpoint",
+]
+
+
+# Corporate-speak sector designations — Nova Soma management consultant brain
+_SECTOR_NAMES = [
+    "OPTIMISED COMPLIANCE ZONE",
+    "LEGACY EXTRACTION CORRIDOR",
+    "MERIDIAN DEBT RECLAMATION AREA",
+    "POST-PROFITABILITY WASTE FIELD",
+    "HERITAGE ASSET RECOVERY GRID",
+    "TIER-2 SYNERGY VOID",
+    "RATIONALISED PATROL SECTOR",
+    "MONETISED DARK BAND",
+    "QUARTERLY OBJECTIVES OVERLAP REGION",
+    "DOWNSTREAM VALUE EXTRACTION CORRIDOR",
+    "ACTIONABLE INTERCEPT BUFFER",
+    "NON-CORE POPULATION DENSITY GRID",
+]
+
+# What people used to call them before Nova Soma "rationalised the nomenclature"
+_FORMERLY_NAMES = [
+    "HOME",
+    "THE QUIET BELT",
+    "ST. ANN'S PASSAGE",
+    "THE OLD ROUTE",
+    "GRANDFATHER REACH",
+    "FREE HARBOUR",
+    "THE WIDOW'S CROSSING",
+    "MILLER STATION",
+    "THE COMMONS",
 ]
 
 
@@ -35,12 +67,18 @@ def generate_sector(index: int, difficulty: float = 1.0) -> SectorLayout:
     budget  = max(1, int(1 + difficulty * 1.5))
     ambush  = index >= 5 and rng.random() < 0.25 * difficulty
 
+    name     = rng.choice(_SECTOR_NAMES)
+    # ~45% chance the sector has a "formerly" name people remember
+    formerly = rng.choice(_FORMERLY_NAMES) if rng.random() < 0.45 else ""
+
     return SectorLayout(
         index        = index,
         gravity      = gravity,
         hazards      = hazards,
         enemy_budget = budget,
         is_ambush    = ambush,
+        name         = name,
+        formerly     = formerly,
     )
 
 

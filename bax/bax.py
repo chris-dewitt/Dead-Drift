@@ -9,7 +9,7 @@ from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_BARGE_NEARBY, EVT_CANISTER_GRAB,
                              EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING,
                              EVT_GUN_MALFUNCTION, EVT_SPORE_INVERTED,
-                             EVT_BARGE_INTERCEPT)
+                             EVT_BARGE_INTERCEPT, EVT_KRESS_DIALLED)
 
 _IDLE = [
     "Right then. No rush. I've only been bolted here since the third war.",
@@ -93,6 +93,7 @@ class Bax:
         bus.subscribe(EVT_GUN_MALFUNCTION,  self._on_gun_malfunction)
         bus.subscribe(EVT_SPORE_INVERTED,   self._on_spore_inverted)
         bus.subscribe(EVT_BARGE_INTERCEPT,  self._on_barge_intercept)
+        bus.subscribe(EVT_KRESS_DIALLED,    self._on_kress_dialled)
 
     def update(self, dt: float):
         self._speak_cd = max(0.0, self._speak_cd - dt)
@@ -243,6 +244,14 @@ class Bax:
             "It's a repo intercept. Brilliant. Type smart, we'll be fine.",
             "Gary's opened a channel. Ship ain't stoppin'. Multitask, mate.",
             "BARGE COMM. LIVE. We are drifting at speed. Choose your words carefully.",
+        ]))
+
+    def _on_kress_dialled(self, **_):
+        self.speak(random.choice([
+            "...Kress? You sure, mate? 'E's a piece of work, that one.",
+            "Dialin' Kress. Don't tell 'im I said hello.",
+            "Old Kress. We go back. Sort of. He owes me a thing. Doesn't matter.",
+            "Right — opening the underground channel. Mind your wallet.",
         ]))
 
     def radio_blip(self):
