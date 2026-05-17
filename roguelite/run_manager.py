@@ -126,8 +126,17 @@ class RunManager:
         self._pending_advance  = False
         self._run_debt_reduced = 0   # credits recovered this run (shown in HUD)
 
+        # Per-sector stat tracking for the between-sector flash card
+        self._sector_slingshots = 0
+        self._sector_snaps      = 0
+        self._sector_credits    = 0
+        self._sector_start_hull = S.HULL_MAX
+        self._flash_t           = 0.0
+        self._last_stats: dict | None = None
+
         bus.subscribe(EVT_CANISTER_GRAB, self._on_canister_grab)
         bus.subscribe(EVT_TETHER_SNAP,   self._on_tether_snap)
+        bus.subscribe(EVT_SLINGSHOT,     self._on_slingshot)
 
     # ------------------------------------------------------------------
     def start_run(self, ship):
@@ -141,6 +150,12 @@ class RunManager:
         self._pending_advance    = False
         self._kress_called_this_sector = False
         self._run_debt_reduced   = 0
+        self._sector_slingshots  = 0
+        self._sector_snaps       = 0
+        self._sector_credits     = 0
+        self._sector_start_hull  = ship.hull if ship else S.HULL_MAX
+        self._flash_t            = 0.0
+        self._last_stats         = None
         self._ship = ship
         self.draft = LoadoutDraft(chapter=self._current_chapter())
         self._kress_cd    = random.uniform(S.KRESS_INTERVAL_MIN, S.KRESS_INTERVAL_MAX)
@@ -159,6 +174,7 @@ class RunManager:
         self._ship      = ship
 
         self._sector    = generate_sector(self._sector_index, self._difficulty())
+        self._sector_start_hull = ship.hull
         self._spawn_sector_objects()
 
     # ------------------------------------------------------------------
@@ -169,6 +185,7 @@ class RunManager:
         self._sector_timer += dt
         self._sling_cd      = max(0.0, self._sling_cd - dt)
         self._prox_cd       = max(0.0, self._prox_cd  - dt)
+        self._flash_t       = max(0.0, self._flash_t  - dt)
 
         self._sector.gravity.apply_all(self._ship.body)
 
@@ -319,10 +336,15 @@ class RunManager:
             speaker, line = random.choice(_COLLECTOR_LINES)
             bus.emit(EVT_COMMS_SPEAK, speaker=speaker, line=line)
 
+    def _on_slingshot(self, **_):
+        self._sector_slingshots += 1
+
     def _on_tether_snap(self, **_):
         bonus = 1200
         self.meta.pay_off(bonus)
         self._run_debt_reduced += bonus
+        self._sector_snaps     += 1
+        self._sector_credits   += bonus
         bus.emit(EVT_BAX_SPEAK, line=random.choice([
             f"Snap! That's {bonus:,} off your tab. Union's gonna be LIVID.",
             "Beautiful lateral drift! Their claims department can cry about it.",
@@ -360,6 +382,7 @@ class RunManager:
             bonus = 9000
             self.meta.pay_off(bonus)
             self._run_debt_reduced += bonus
+            self._sector_credits   += bonus
             bus.emit(EVT_BAX_SPEAK, line=random.choice([
                 f"EXPLOITED their system. {bonus:,} credits rerouted. Blevins is gonna lose his MIND.",
                 f"Their firewall had the structural integrity of wet paper. {bonus:,} back.",
@@ -369,6 +392,7 @@ class RunManager:
             bonus = 2500
             self.meta.pay_off(bonus)
             self._run_debt_reduced += bonus
+            self._sector_credits   += bonus
             bus.emit(EVT_BAX_SPEAK, line=random.choice([
                 f"Talked your way out. {bonus:,} off the invoice. Not bad.",
                 f"They folded. {bonus:,} waived. Still in debt, but less of it.",
@@ -389,6 +413,25 @@ class RunManager:
         sector_bonus = 4500
         self.meta.pay_off(sector_bonus)
         self._run_debt_reduced += sector_bonus
+        self._sector_credits   += sector_bonus
+
+        # Snapshot stats for the between-sector flash card
+        hull_now  = self._ship.hull if self._ship else S.HULL_MAX
+        hull_lost = max(0, int(self._sector_start_hull - hull_now))
+        self._last_stats = {
+            "sector":     self._sector_index + 1,   # the one we just cleared
+            "credits":    self._sector_credits,
+            "snaps":      self._sector_snaps,
+            "slingshots": self._sector_slingshots,
+            "hull_lost":  hull_lost,
+        }
+        self._flash_t = 2.8
+
+        # Reset per-sector counters
+        self._sector_slingshots = 0
+        self._sector_snaps      = 0
+        self._sector_credits    = 0
+        self._sector_start_hull = hull_now
 
         self._sector_index += 1
         bus.emit(EVT_SECTOR_CLEAR, sector_num=self._sector_index)

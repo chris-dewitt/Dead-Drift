@@ -175,6 +175,9 @@ class Game:
             self.vec_renderer.draw(self.run_mgr, self.ship, self._dt)
             self.hud_renderer.draw(self.ship)
             self._render_sector_hud()
+            if self.run_mgr._flash_t > 0 and self.run_mgr._last_stats:
+                self._render_sector_flash(
+                    self.run_mgr._last_stats, self.run_mgr._flash_t)
             self.cockpit_renderer.draw(pygame.time.get_ticks() / 1000.0)
 
         elif state == GameState.TERMINAL:
@@ -256,6 +259,69 @@ class Game:
         k_label = "[ K ]  CALL KRESS" if kress_avail else "[ K ]  channel used"
         k_surf  = font_sm.render(k_label, True, k_col)
         self.screen.blit(k_surf, (sec_w - k_surf.get_width() - 12, S.FLIGHT_H - 22))
+
+    def _render_sector_flash(self, stats: dict, t_left: float):
+        """Celebration card overlaid for ~2.8s after a sector clear."""
+        cx = S.SCREEN_W // 2
+        cy = S.FLIGHT_H // 2
+        W, H = 480, 252
+
+        # Fade alpha: pop in fast, hold, fade out in last 0.5s
+        if t_left > 2.5:
+            fade = (2.8 - t_left) / 0.3
+        elif t_left < 0.5:
+            fade = t_left / 0.5
+        else:
+            fade = 1.0
+        fade = max(0.0, min(1.0, fade))
+        a    = int(255 * fade)
+        a_bg = int(225 * fade)
+
+        panel = pygame.Surface((W, H), pygame.SRCALPHA)
+        panel.fill((6, 18, 8, a_bg))
+        pygame.draw.rect(panel, (0, 220, 90, a), (0, 0, W, H), 2)
+        pygame.draw.rect(panel, (0, 110, 45, a), (4, 4, W - 8, H - 8), 1)
+
+        font_hd = pygame.font.SysFont("monospace", 19, bold=True)
+        font_md = pygame.font.SysFont("monospace", 17)
+        font_sm = pygame.font.SysFont("monospace", 13)
+
+        # Header
+        hdr = font_hd.render(
+            f"SECTOR {stats['sector']} / {S.SECTORS_PER_RUN}  CLEARED",
+            True, (0, 240, 110))
+        hdr.set_alpha(a)
+        panel.blit(hdr, (W // 2 - hdr.get_width() // 2, 20))
+        pygame.draw.line(panel, (0, 130, 60, a), (24, 54), (W - 24, 54), 1)
+
+        rows = [
+            ("CREDITS RECOVERED", f"{stats['credits']:,} cr",
+             (90, 230, 110) if stats['credits'] > 0 else (140, 140, 140)),
+            ("TETHER SNAPS",      f"{stats['snaps']}",
+             (255, 180, 50) if stats['snaps'] > 0 else (110, 110, 110)),
+            ("SLINGSHOTS",        f"{stats['slingshots']}",
+             (180, 130, 255) if stats['slingshots'] > 0 else (110, 110, 110)),
+            ("HULL LOST",         f"{stats['hull_lost']}",
+             (220, 90, 90) if stats['hull_lost'] > 0 else (90, 200, 100)),
+        ]
+
+        y = 76
+        for label, value, col in rows:
+            lbl = font_md.render(label, True, (150, 160, 150))
+            val = font_md.render(value, True, col)
+            lbl.set_alpha(a)
+            val.set_alpha(a)
+            panel.blit(lbl, (32, y))
+            panel.blit(val, (W - 32 - val.get_width(), y))
+            y += 30
+
+        # Footer
+        pygame.draw.line(panel, (0, 130, 60, a), (24, H - 38), (W - 24, H - 38), 1)
+        foot = font_sm.render("// JUMPING TO NEXT SECTOR //", True, (90, 200, 110))
+        foot.set_alpha(a)
+        panel.blit(foot, (W // 2 - foot.get_width() // 2, H - 28))
+
+        self.screen.blit(panel, (cx - W // 2, cy - H // 2))
 
     def _render_drift_strip(self):
         """Amber status bar shown at top of terminal during mid-flight intercept."""
