@@ -20,14 +20,14 @@ GREY_DEAD   = (60,  60,  60)
 
 # --- Physics ---
 GRAVITY_CONSTANT  = 6.674e-3      # scaled G for gameplay feel
-MAX_VELOCITY      = 600.0         # px/s hard cap
+MAX_VELOCITY      = 440.0         # px/s hard cap
 DRAG              = 0.0           # true Newtonian: no drag
-ROTATION_SPEED    = 210.0         # degrees/s
+ROTATION_SPEED    = 200.0         # degrees/s
 STEER_RCS_DEG     = 90.0          # deg/s velocity redirect toward facing when thrusting (post-integrate)
 
 # --- Ship ---
 HULL_MAX          = 100.0
-THRUSTER_FORCE    = 280.0         # Newtons (gameplay units)
+THRUSTER_FORCE    = 205.0         # Newtons (gameplay units)
 SHIP_MASS         = 1.0
 
 # --- Guns ---
@@ -75,7 +75,7 @@ COLLECTOR_INTERVAL_MIN = 70.0
 COLLECTOR_INTERVAL_MAX = 130.0
 
 # --- Slingshot ---
-SLINGSHOT_SPEED   = 310.0    # px/s needed to count
+SLINGSHOT_SPEED   = 220.0    # px/s needed to count
 SLINGSHOT_RANGE   = 190.0    # px — must have been this close to a well
 SLINGSHOT_BONUS   = 5.0      # seconds shaved off jump timer
 

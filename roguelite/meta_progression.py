@@ -46,6 +46,13 @@ class MetaProgression:
         bus.emit(EVT_DEBT_UPDATE, delta=penalty, total=self.debt)
         self.save()
 
+    def pay_off(self, amount: int):
+        """Reduce debt by amount (sector, terminal win, tether snap, etc.)."""
+        actual = min(amount, self._data["debt"])
+        self._data["debt"] = max(0, self._data["debt"] - amount)
+        if actual > 0:
+            bus.emit(EVT_DEBT_UPDATE, delta=-actual, total=self.debt)
+
     def clear_debt_chunk(self, amount: int = 50000):
         self._data["debt"] = max(0, self._data["debt"] - amount)
         bus.emit(EVT_DEBT_UPDATE, delta=-amount, total=self.debt)
