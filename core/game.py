@@ -136,7 +136,7 @@ class Game:
             self.ship.update(dt)
             self.bax.update(dt)
             self.cockpit_renderer.update(dt)
-            self.audio.update(self.ship.body.speed())
+            self.audio.update(self.ship.body.speed(), dt)
             # Terminal opened by jump key — transition immediately
             if self.run_mgr.active_terminal is not None:
                 self.states.transition(GameState.TERMINAL)
@@ -145,6 +145,13 @@ class Game:
             terminal = self.run_mgr.active_terminal
             if terminal is not None:
                 terminal.update(dt)
+                # Ship keeps drifting mid-intercept — gravity + momentum, no controls
+                if self.run_mgr._intercepting_barge is not None:
+                    sector = self.run_mgr.sector
+                    if sector is not None:
+                        sector.gravity.apply_all(self.ship.body)
+                    self.ship.body.integrate(dt)
+                    self.ship._wrap_screen()
                 if terminal.is_done:
                     self.run_mgr.on_terminal_complete(terminal.outcome)
                     # Only go back to FLIGHT if run_end hasn't already redirected us
@@ -172,6 +179,8 @@ class Game:
 
         elif state == GameState.TERMINAL:
             self.term_renderer.draw(self.run_mgr.active_terminal)
+            if self.run_mgr._intercepting_barge is not None:
+                self._render_drift_strip()
 
         elif state == GameState.LOADOUT_DRAFT:
             self.run_mgr.draft.render(self.screen)
@@ -185,15 +194,30 @@ class Game:
         pygame.display.flip()
 
     def _render_sector_hud(self):
-        font  = pygame.font.SysFont("monospace", 14)
+        font     = pygame.font.SysFont("monospace", 14)
+        font_sm  = pygame.font.SysFont("monospace", 12)
+        font_hd  = pygame.font.SysFont("monospace", 14, bold=True)
         rm    = self.run_mgr
         sec_w = S.SCREEN_W
+        t     = pygame.time.get_ticks() / 1000.0
 
         sec_txt = font.render(
             f"SECTOR  {min(rm.sector_num, S.SECTORS_PER_RUN)} / {S.SECTORS_PER_RUN}",
             True, S.GREY_DEAD,
         )
         self.screen.blit(sec_txt, (sec_w // 2 - sec_txt.get_width() // 2, 20))
+
+        # Sector name + "formerly" — the corporate rebrand
+        sector = rm.sector
+        if sector is not None and getattr(sector, "name", ""):
+            name_surf = font_hd.render(sector.name, True, (170, 170, 110))
+            self.screen.blit(name_surf,
+                             (sec_w // 2 - name_surf.get_width() // 2, 74))
+            if sector.formerly:
+                fm_surf = font_sm.render(
+                    f"(formerly: {sector.formerly})", True, (95, 95, 95))
+                self.screen.blit(fm_surf,
+                                 (sec_w // 2 - fm_surf.get_width() // 2, 92))
 
         if rm.jump_ready:
             jump_txt = font.render("[ J ]  JUMP READY", True, S.GREEN_TERM)
@@ -209,25 +233,95 @@ class Game:
         spd_txt   = font.render(f"{speed:>5.0f} m/s", True, speed_col)
         self.screen.blit(spd_txt, (sec_w // 2 - spd_txt.get_width() // 2, 56))
 
+        # Debt ticker — bottom-left, always running
+        interest_per_sec = max(0.01, self.meta.debt * S.DEBT_INTEREST_RATE)
+        session_accrued  = t * interest_per_sec
+        displayed_debt   = int(self.meta.debt + session_accrued)
+        blink = int(t * 1.6) % 2 == 0
+        ticker_col = (110, 50, 50) if not blink else (160, 60, 60)
+        debt_txt = font.render(
+            f"DEBT  {displayed_debt:,} cr  +{interest_per_sec:.2f}/s", True, ticker_col)
+        self.screen.blit(debt_txt, (10, S.FLIGHT_H - 22))
+
+        # Kress comm hint — bottom-right, dim when unavailable, brighter when ready
+        kress_avail = not rm._kress_called_this_sector
+        k_col   = (90, 110, 130) if kress_avail else (60, 60, 60)
+        k_label = "[ K ]  CALL KRESS" if kress_avail else "[ K ]  channel used"
+        k_surf  = font_sm.render(k_label, True, k_col)
+        self.screen.blit(k_surf, (sec_w - k_surf.get_width() - 12, S.FLIGHT_H - 22))
+
+    def _render_drift_strip(self):
+        """Amber status bar shown at top of terminal during mid-flight intercept."""
+        speed    = self.ship.body.speed()
+        hull_pct = self.ship.hull_pct * 100
+        t        = pygame.time.get_ticks() / 1000.0
+        blink    = int(t * 2) % 2 == 0
+
+        font = pygame.font.SysFont("monospace", 14, bold=True)
+        col  = (255, 80, 0) if speed > 400 else S.AMBER_TERM
+
+        strip = pygame.Surface((S.SCREEN_W, 20), pygame.SRCALPHA)
+        strip.fill((0, 0, 0, 180))
+        self.screen.blit(strip, (0, 0))
+
+        if blink:
+            warn = font.render(
+                f"  !! SHIP DRIFTING  {speed:>5.0f} m/s  |  HULL {hull_pct:.0f}%  |  "
+                "NEGOTIATE OR CLAMP IN ~20s  !!",
+                True, col)
+            self.screen.blit(warn, (8, 3))
+
     def _render_decanting(self):
-        font = pygame.font.SysFont("monospace", 18)
+        t = pygame.time.get_ticks() / 1000.0
+        font_sm  = pygame.font.SysFont("monospace", 13)
+        font     = pygame.font.SysFont("monospace", 17)
+        font_hd  = pygame.font.SysFont("monospace", 11)
+
+        # Nova Soma header — cheerful, monstrous
+        header = pygame.font.SysFont("monospace", 15, bold=True)
+        tagline_surf = header.render(
+            "NOVA SOMA SOLUTIONS  ·  Your Body, Our Investment  ·  Est. 2041",
+            True, (80, 80, 80))
+        self.screen.blit(tagline_surf,
+                         (S.SCREEN_W // 2 - tagline_surf.get_width() // 2, 18))
+        pygame.draw.line(self.screen, (50, 50, 50), (80, 36), (S.SCREEN_W - 80, 36), 1)
+
         lines = [
-            "DECANTING SEQUENCE INITIATED",
-            f"Clone #{self.meta.clone_count}  |  Body: BASELINE MODEL",
-            "",
-            f"Clone fluid . . . . . -{S.CLONE_FLUID_FEE:,} cr",
-            f"Wreckage tow  . . . . -{S.WRECKAGE_TOW_FEE:,} cr",
-            f"Clone fee . . . . . . -{S.BASE_CLONE_DEBT:,} cr",
-            "",
-            f"TOTAL DEBT: {self.meta.debt:,} cr",
-            "",
-            "[ PRESS ENTER TO BEGIN NEXT RUN ]",
+            ("PATIENT INTAKE SUMMARY", S.AMBER_TERM, font),
+            (f"Unit ID: CLN-{self.meta.clone_count:04d}  ·  Template: BASELINE-7  ·  "
+             f"Condition on Arrival: DECEASED", (140, 140, 140), font_sm),
+            ("", None, font),
+            ("ITEMISED CHARGES", (100, 100, 100), font_sm),
+            (f"  Clone fluid & substrate . . . . -{S.CLONE_FLUID_FEE:>8,} cr",
+             (180, 180, 180), font),
+            (f"  Wreckage recovery & tow . . . . -{S.WRECKAGE_TOW_FEE:>8,} cr",
+             (180, 180, 180), font),
+            (f"  Body lease (standard term) . . . -{S.BASE_CLONE_DEBT:>8,} cr",
+             (180, 180, 180), font),
+            ("", None, font),
+            (f"OUTSTANDING BALANCE:   {self.meta.debt:,} cr",
+             S.AMBER_TERM, pygame.font.SysFont("monospace", 20, bold=True)),
+            ("", None, font),
+            ("This invoice is non-negotiable. Debt is hereditary and compound.",
+             (70, 70, 70), font_sm),
+            ("Nova Soma Solutions is not responsible for psychological distress",
+             (70, 70, 70), font_sm),
+            ("arising from repeated decanting. See Form NS-19b for opt-out options.",
+             (70, 70, 70), font_sm),
+            ("(Form NS-19b is not available in your jurisdiction.)",
+             (55, 55, 55), font_sm),
+            ("", None, font),
+            ("[ PRESS ENTER TO CONTINUE ]", S.GREEN_TERM, font),
         ]
-        y = S.SCREEN_H // 3
-        for line in lines:
-            surf = font.render(line, True, S.AMBER_TERM)
+
+        y = 56
+        for text, col, f in lines:
+            if col is None:
+                y += 10
+                continue
+            surf = f.render(text, True, col)
             self.screen.blit(surf, (S.SCREEN_W // 2 - surf.get_width() // 2, y))
-            y += 28
+            y += f.get_linesize() + 2
 
     def _render_main_menu(self):
         t  = pygame.time.get_ticks() / 1000.0

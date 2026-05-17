@@ -95,6 +95,8 @@ class PlayerShip:
     def take_damage(self, amount: float):
         self.hull = max(0.0, self.hull - amount)
         bus.emit(EVT_HULL_DAMAGE, amount=amount)
+        if self.cargo is not None:
+            self.cargo.take_damage(amount * 0.4)
         if self.hull <= S.HUD_SCRAMBLE_HP:
             bus.emit(EVT_HULL_CRITICAL, hp=self.hull)
         if self.hull <= 0.0 and not self._destroyed:

@@ -3,7 +3,10 @@ import math
 import random
 import pygame
 from config import settings as S
-from core.event_bus import bus, EVT_SLINGSHOT, EVT_SCAN_PING
+from core.event_bus import (bus, EVT_SLINGSHOT, EVT_SCAN_PING,
+                             EVT_TETHER_HIT, EVT_TETHER_SNAP,
+                             EVT_MODULE_UNBOLTED, EVT_HULL_DAMAGE,
+                             EVT_HULL_CRITICAL)
 
 
 # ---------------------------------------------------------------------------
@@ -36,8 +39,17 @@ class VectorRenderer:
         self._flash_t    = 0.0
         self._flash_col  = (180, 220, 255)
         self._scan_pings: list[tuple[int, int, float]] = []
-        bus.subscribe(EVT_SLINGSHOT,  self._on_slingshot)
-        bus.subscribe(EVT_SCAN_PING,  self._on_scan_ping)
+
+        # Screen shake state: trauma decays exponentially; offset is random per frame
+        self._shake_trauma = 0.0   # 0.0 (none) → 1.0 (huge)
+
+        bus.subscribe(EVT_SLINGSHOT,        self._on_slingshot)
+        bus.subscribe(EVT_SCAN_PING,        self._on_scan_ping)
+        bus.subscribe(EVT_TETHER_HIT,       self._on_tether_hit)
+        bus.subscribe(EVT_TETHER_SNAP,      self._on_tether_snap)
+        bus.subscribe(EVT_MODULE_UNBOLTED,  self._on_module_unbolted)
+        bus.subscribe(EVT_HULL_DAMAGE,      self._on_hull_damage)
+        bus.subscribe(EVT_HULL_CRITICAL,    self._on_hull_critical)
 
     def _on_slingshot(self, **_):
         self._flash_t   = 0.45
@@ -46,6 +58,28 @@ class VectorRenderer:
     def _on_scan_ping(self, pos_x, pos_y, **_):
         t = pygame.time.get_ticks() / 1000.0
         self._scan_pings.append((int(pos_x), int(pos_y), t))
+
+    def _on_tether_hit(self, **_):
+        self._shake_trauma = min(1.0, self._shake_trauma + 0.75)
+        self._flash_t   = 0.25
+        self._flash_col = (255, 140, 40)
+
+    def _on_tether_snap(self, **_):
+        self._shake_trauma = min(1.0, self._shake_trauma + 0.55)
+        self._flash_t   = 0.5
+        self._flash_col = (220, 255, 220)   # green relief flash
+
+    def _on_module_unbolted(self, **_):
+        self._shake_trauma = min(1.0, self._shake_trauma + 0.55)
+        self._flash_t   = 0.3
+        self._flash_col = (255, 60, 20)
+
+    def _on_hull_damage(self, amount=0.0, **_):
+        # Tiny shake on small hits, big shake on hard hits
+        self._shake_trauma = min(1.0, self._shake_trauma + min(0.45, amount * 0.04))
+
+    def _on_hull_critical(self, **_):
+        self._shake_trauma = min(1.0, self._shake_trauma + 0.4)
 
     # ------------------------------------------------------------------
     def draw(self, run_mgr, ship, dt: float = 0.016):
@@ -66,6 +100,21 @@ class VectorRenderer:
         self._draw_proximity_alarm(run_mgr, ship, t)
         self._draw_flash(dt)
         self._draw_spore_effect(ship, t)
+        self._apply_screen_shake(dt)
+
+    def _apply_screen_shake(self, dt: float):
+        if self._shake_trauma <= 0.01:
+            self._shake_trauma = 0.0
+            return
+        # Quadratic curve: huge shake when trauma is high, gentle when low
+        amplitude = (self._shake_trauma ** 2) * 16.0
+        dx = random.uniform(-amplitude, amplitude)
+        dy = random.uniform(-amplitude, amplitude)
+        snapshot = self.surface.copy()
+        self.surface.fill(S.BLACK)
+        self.surface.blit(snapshot, (int(dx), int(dy)))
+        # Trauma decays at ~1.6/sec — half-life ~0.4s
+        self._shake_trauma = max(0.0, self._shake_trauma - 1.6 * dt)
 
     def draw_menu_background(self, t: float):
         self._draw_nebulae(t)
@@ -544,21 +593,82 @@ class VectorRenderer:
 
     # ------------------------------------------------------------------
     def _draw_spore_effect(self, ship, t: float):
-        """Green psychedelic tint + warning text when MycoShroom inverts controls."""
+        """Psychedelic panic overlay when EpistemologicalShrooms inverts controls."""
         cargo = getattr(ship, "cargo", None)
-        if cargo is None or not getattr(cargo, "inversion_active", False):
+        if cargo is None or not hasattr(cargo, "inversion_active"):
             return
-        pct   = cargo.invert_pct
-        alpha = int(28 + 22 * math.sin(t * 8.0))   # fast shimmer
-        overlay = pygame.Surface((S.SCREEN_W, S.FLIGHT_H), pygame.SRCALPHA)
-        overlay.fill((0, 180, 60, alpha))
+
+        spore_level = getattr(cargo, "spore_level", 0.0)
+        W, H = S.SCREEN_W, S.FLIGHT_H
+
+        # Ambient pre-warning: spore meter pulses on screen edge when cargo is agitated
+        if spore_level > 0.0 and not cargo.inversion_active:
+            pulse = 0.4 + 0.6 * abs(math.sin(t * (2.0 + spore_level * 4.0)))
+            edge_a = int(spore_level * 60 * pulse)
+            if edge_a > 0:
+                vignette = pygame.Surface((W, H), pygame.SRCALPHA)
+                for i in range(4):
+                    a = max(0, edge_a - i * 14)
+                    pygame.draw.rect(vignette, (140, 0, 200, a),
+                                     pygame.Rect(i*4, i*4, W - i*8, H - i*8), 8)
+                self.surface.blit(vignette, (0, 0))
+            # Tiny spore level readout bottom-left
+            font_xs = pygame.font.SysFont("monospace", 13)
+            bars = int(spore_level * 8)
+            spore_txt = font_xs.render(
+                f"SPORE {'|' * bars}{'.' * (8 - bars)}", True, (160, 0, 220))
+            self.surface.blit(spore_txt, (8, H - 22))
+            return
+
+        if not cargo.inversion_active:
+            return
+
+        pct = cargo.invert_pct          # 1.0→0.0 as inversion wears off
+        pulse = abs(math.sin(t * 7.0))
+
+        # Chromatic split: R left, B right, G centre — gives cheap aberration feel
+        shift = int(3 + spore_level * 5)
+        for dx, col in [(-shift, (200, 0, 0, 20)), (shift, (0, 0, 200, 20))]:
+            layer = pygame.Surface((W, H), pygame.SRCALPHA)
+            layer.fill(col)
+            self.surface.blit(layer, (dx, 0))
+
+        # Full-screen magenta/purple breathing overlay
+        base_a = int(35 + 45 * pulse)
+        overlay = pygame.Surface((W, H), pygame.SRCALPHA)
+        r = int(120 + 80 * pulse)
+        overlay.fill((r, 0, 255, base_a))
         self.surface.blit(overlay, (0, 0))
 
-        if int(t * 3) % 2 == 0:
-            font = pygame.font.SysFont("monospace", 22, bold=True)
-            msg  = font.render("⚠  CONTROLS INVERTED  ⚠", True, (0, 255, 80))
-            self.surface.blit(msg, (S.SCREEN_W // 2 - msg.get_width() // 2,
-                                    S.FLIGHT_H // 2 - 60))
+        # Pulsing purple vignette border
+        vignette = pygame.Surface((W, H), pygame.SRCALPHA)
+        border_a = int(100 + 80 * pulse)
+        for i in range(5):
+            a = max(0, border_a - i * 18)
+            pygame.draw.rect(vignette, (180, 0, 255, a),
+                             pygame.Rect(i*5, i*5, W - i*10, H - i*10), 10)
+        self.surface.blit(vignette, (0, 0))
+
+        # Main warning — alternates cyan/magenta, large and bold
+        font_big = pygame.font.SysFont("monospace", 30, bold=True)
+        font_sm  = pygame.font.SysFont("monospace", 15)
+        col_a = (0, 255, 255) if int(t * 5) % 2 == 0 else (255, 0, 255)
+        col_b = (255, 0, 255) if int(t * 5) % 2 == 0 else (0, 255, 255)
+
+        warn = font_big.render("!! CONTROLS INVERTED !!", True, col_a)
+        self.surface.blit(warn, (W // 2 - warn.get_width() // 2, H // 2 - 54))
+
+        # Spore level bar
+        bars   = int(spore_level * 10)
+        spore_line = font_sm.render(
+            f"SPORE LEVEL  {'|' * bars}{'.' * (10 - bars)}  {'HOT' if spore_level > 0.6 else 'ACTIVE'}",
+            True, col_b)
+        self.surface.blit(spore_line, (W // 2 - spore_line.get_width() // 2, H // 2 - 16))
+
+        # Countdown
+        secs_left = pct * S.SPORE_DURATION
+        timer = font_sm.render(f"NORMALIZING IN  {secs_left:.1f}s", True, col_a)
+        self.surface.blit(timer, (W // 2 - timer.get_width() // 2, H // 2 + 10))
 
     @staticmethod
     def _rotate_pt(pt: tuple, angle_deg: float, origin) -> tuple:

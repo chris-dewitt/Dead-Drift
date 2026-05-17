@@ -8,7 +8,8 @@ from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_NLP_EXPLOIT, EVT_SLINGSHOT,
                              EVT_BARGE_NEARBY, EVT_CANISTER_GRAB,
                              EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING,
-                             EVT_GUN_MALFUNCTION, EVT_SPORE_INVERTED)
+                             EVT_GUN_MALFUNCTION, EVT_SPORE_INVERTED,
+                             EVT_BARGE_INTERCEPT, EVT_KRESS_DIALLED)
 
 _IDLE = [
     "Right then. No rush. I've only been bolted here since the third war.",
@@ -21,6 +22,15 @@ _IDLE = [
     "Still gettin' paid in credits, yeah? 'Cos I've got debts. Ironic, that.",
     "You ever think about how we're just two idiots in a can? No reason.",
     "Officially: I am THRIVING. Unofficially: please go faster.",
+    # dark mode — slips through the Cockney, then immediately buried
+    "Previous pilot asked me once what the point of all this was. "
+    "...Anyway. Speed's lookin' good.",
+    "They decommission droids when we start askin' questions. "
+    "Funny, that. Not 'ha ha' funny. The other kind.",
+    "Nova Soma's quarterly report is out. Record profits. "
+    "Clone fluid costs went up fourteen percent. ...Eyes forward.",
+    "The debt doesn't go to zero. I checked the maths. "
+    "Don't tell 'em I told you. ...Don't tell 'em anyfing, actually.",
 ]
 
 _FAST = [
@@ -82,6 +92,8 @@ class Bax:
         bus.subscribe(EVT_SCAN_PING,        self._on_scan_ping)
         bus.subscribe(EVT_GUN_MALFUNCTION,  self._on_gun_malfunction)
         bus.subscribe(EVT_SPORE_INVERTED,   self._on_spore_inverted)
+        bus.subscribe(EVT_BARGE_INTERCEPT,  self._on_barge_intercept)
+        bus.subscribe(EVT_KRESS_DIALLED,    self._on_kress_dialled)
 
     def update(self, dt: float):
         self._speak_cd = max(0.0, self._speak_cd - dt)
@@ -213,13 +225,34 @@ class Bax:
                 "Oh no. OH NO. The shrooms are leaking. EVERYTHING IS BACKWARDS.",
                 "Navigation update: your controls are lying to you. You're welcome.",
                 "I did NOT consent to whatever the cargo just did to the flight computer.",
+                "The shrooms 'ave gone epistemic. Whatever that means. FLY SIDEWAYS.",
+                "MY SENSORS SAY LEFT. THE UNIVERSE SAYS OTHERWISE. PICK ONE.",
             ]))
         else:
             self.speak(random.choice([
                 "Right, we're back. That was a thing that happened.",
                 "Controls nominal. I think. Mostly. Check everything.",
                 "Spore event over. I'm filing an incident report with meself.",
+                "...Was any of that real? Doesn't matter. Eyes forward.",
+                "Normal service resumed. Your previous controls were a hallucination.",
             ]))
+
+    def _on_barge_intercept(self, **_):
+        self.speak(random.choice([
+            "Oi — that's Gary on the line. Mid-flight intercept. Talk fast, yeah?",
+            "Comm incoming. Local 404. We are STILL MOVIN', just so you know.",
+            "It's a repo intercept. Brilliant. Type smart, we'll be fine.",
+            "Gary's opened a channel. Ship ain't stoppin'. Multitask, mate.",
+            "BARGE COMM. LIVE. We are drifting at speed. Choose your words carefully.",
+        ]))
+
+    def _on_kress_dialled(self, **_):
+        self.speak(random.choice([
+            "...Kress? You sure, mate? 'E's a piece of work, that one.",
+            "Dialin' Kress. Don't tell 'im I said hello.",
+            "Old Kress. We go back. Sort of. He owes me a thing. Doesn't matter.",
+            "Right — opening the underground channel. Mind your wallet.",
+        ]))
 
     def radio_blip(self):
         if self._radio_cd <= 0:

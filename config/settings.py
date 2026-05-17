@@ -58,6 +58,7 @@ SECTORS_PER_RUN   = 5             # the 5-sector sprint
 BASE_CLONE_DEBT   = 15000         # credits tacked on per death
 CLONE_FLUID_FEE   = 3500
 WRECKAGE_TOW_FEE  = 8000
+DEBT_INTEREST_RATE = 0.00004      # fraction of debt accruing per second (display only)
 
 # --- Debris / Canisters ---
 DEBRIS_COUNT      = 4

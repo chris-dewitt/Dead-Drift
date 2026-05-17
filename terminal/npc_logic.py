@@ -2,6 +2,7 @@ from __future__ import annotations
 from terminal.npcs.gary import Gary
 from terminal.npcs.synthetic_droid import SyntheticDroid
 from terminal.npcs.union_dispatcher import UnionDispatcher
+from terminal.npcs.kress import Kress
 from terminal.npcs.base_npc import BaseNPC
 
 
@@ -11,6 +12,7 @@ def make_npc(npc_type: str, **kwargs) -> BaseNPC:
         "gary":               Gary,
         "synthetic_droid":    SyntheticDroid,
         "union_dispatcher":   UnionDispatcher,
+        "kress":              Kress,
     }
     cls = registry.get(npc_type)
     if cls is None:

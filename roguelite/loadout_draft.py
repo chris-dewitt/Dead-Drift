@@ -38,10 +38,14 @@ class LoadoutDraft:
     def __init__(self, chapter: int = 1):
         self._confirmed = False
         self._slot      = 0           # 0=frame, 1=module, 2=cargo
+        # Chapter cargo is always first option; two random others fill the rest
+        ch_idx    = (chapter - 1) % len(_CARGO_POOL)
+        others    = [i for i in range(len(_CARGO_POOL)) if i != ch_idx]
+        cargo_idx = [ch_idx] + random.sample(others, min(2, len(others)))
         self._choices   = [
             random.sample(_FRAME_POOL, min(3, len(_FRAME_POOL))),
             [f() for f in _MODULE_POOL],
-            [_CARGO_POOL[(chapter - 1) % len(_CARGO_POOL)]()],  # chapter-locked cargo
+            [_CARGO_POOL[i]() for i in cargo_idx],
         ]
         self._selected  = [0, 0, 0]
 
