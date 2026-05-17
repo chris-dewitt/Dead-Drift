@@ -219,4 +219,19 @@ class Gary(BaseNPC):
             "I said Sandra, I am a LICENSED REPO AGENT. She still left.",
             "Fun fact: space debt never expires. It's actually written into the charter.",
             "You're stop number six of seventeen. I peaked at four. It's all downhill.",
+            # the knife — Gary as victim of the same system
+            "Me mum still owes on 'er fourth body. Clone fluid fees don't stop "
+            "just cos you're seventy. Power down.",
+            "Blevins gets a bonus for every successful impound. "
+            "I get a flat rate. That's called incentive structure, apparently.",
+            "I joined the union cos they said it'd protect us. "
+            "That was... a different union. Power down.",
+            "Nova Soma sends a card every Christmas. 'Thank you for your service.' "
+            "To me. The repo man. Power down.",
+            "You know what they call it in the charter? "
+            "'Asset reclamation.' Not repo. Not debt collection. "
+            "'Asset reclamation.' You're the asset. Power down.",
+            "I asked 'R about early retirement once. "
+            "She said the pension kicks in at 68. I said 68 what. "
+            "She 'ung up. Power down.",
         ])

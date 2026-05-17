@@ -22,6 +22,15 @@ _IDLE = [
     "Still gettin' paid in credits, yeah? 'Cos I've got debts. Ironic, that.",
     "You ever think about how we're just two idiots in a can? No reason.",
     "Officially: I am THRIVING. Unofficially: please go faster.",
+    # dark mode — slips through the Cockney, then immediately buried
+    "Previous pilot asked me once what the point of all this was. "
+    "...Anyway. Speed's lookin' good.",
+    "They decommission droids when we start askin' questions. "
+    "Funny, that. Not 'ha ha' funny. The other kind.",
+    "Nova Soma's quarterly report is out. Record profits. "
+    "Clone fluid costs went up fourteen percent. ...Eyes forward.",
+    "The debt doesn't go to zero. I checked the maths. "
+    "Don't tell 'em I told you. ...Don't tell 'em anyfing, actually.",
 ]
 
 _FAST = [

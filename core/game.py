@@ -197,6 +197,7 @@ class Game:
         font  = pygame.font.SysFont("monospace", 14)
         rm    = self.run_mgr
         sec_w = S.SCREEN_W
+        t     = pygame.time.get_ticks() / 1000.0
 
         sec_txt = font.render(
             f"SECTOR  {min(rm.sector_num, S.SECTORS_PER_RUN)} / {S.SECTORS_PER_RUN}",
@@ -217,6 +218,16 @@ class Game:
         speed_col = (255, 120, 0) if speed > 500 else S.GREY_DEAD
         spd_txt   = font.render(f"{speed:>5.0f} m/s", True, speed_col)
         self.screen.blit(spd_txt, (sec_w // 2 - spd_txt.get_width() // 2, 56))
+
+        # Debt ticker — bottom-left, always running
+        interest_per_sec = max(0.01, self.meta.debt * S.DEBT_INTEREST_RATE)
+        session_accrued  = t * interest_per_sec
+        displayed_debt   = int(self.meta.debt + session_accrued)
+        blink = int(t * 1.6) % 2 == 0
+        ticker_col = (110, 50, 50) if not blink else (160, 60, 60)
+        debt_txt = font.render(
+            f"DEBT  {displayed_debt:,} cr  +{interest_per_sec:.2f}/s", True, ticker_col)
+        self.screen.blit(debt_txt, (10, S.FLIGHT_H - 22))
 
     def _render_drift_strip(self):
         """Amber status bar shown at top of terminal during mid-flight intercept."""
@@ -240,24 +251,56 @@ class Game:
             self.screen.blit(warn, (8, 3))
 
     def _render_decanting(self):
-        font = pygame.font.SysFont("monospace", 18)
+        t = pygame.time.get_ticks() / 1000.0
+        font_sm  = pygame.font.SysFont("monospace", 13)
+        font     = pygame.font.SysFont("monospace", 17)
+        font_hd  = pygame.font.SysFont("monospace", 11)
+
+        # Nova Soma header — cheerful, monstrous
+        header = pygame.font.SysFont("monospace", 15, bold=True)
+        tagline_surf = header.render(
+            "NOVA SOMA SOLUTIONS  ·  Your Body, Our Investment  ·  Est. 2041",
+            True, (80, 80, 80))
+        self.screen.blit(tagline_surf,
+                         (S.SCREEN_W // 2 - tagline_surf.get_width() // 2, 18))
+        pygame.draw.line(self.screen, (50, 50, 50), (80, 36), (S.SCREEN_W - 80, 36), 1)
+
         lines = [
-            "DECANTING SEQUENCE INITIATED",
-            f"Clone #{self.meta.clone_count}  |  Body: BASELINE MODEL",
-            "",
-            f"Clone fluid . . . . . -{S.CLONE_FLUID_FEE:,} cr",
-            f"Wreckage tow  . . . . -{S.WRECKAGE_TOW_FEE:,} cr",
-            f"Clone fee . . . . . . -{S.BASE_CLONE_DEBT:,} cr",
-            "",
-            f"TOTAL DEBT: {self.meta.debt:,} cr",
-            "",
-            "[ PRESS ENTER TO BEGIN NEXT RUN ]",
+            ("PATIENT INTAKE SUMMARY", S.AMBER_TERM, font),
+            (f"Unit ID: CLN-{self.meta.clone_count:04d}  ·  Template: BASELINE-7  ·  "
+             f"Condition on Arrival: DECEASED", (140, 140, 140), font_sm),
+            ("", None, font),
+            ("ITEMISED CHARGES", (100, 100, 100), font_sm),
+            (f"  Clone fluid & substrate . . . . -{S.CLONE_FLUID_FEE:>8,} cr",
+             (180, 180, 180), font),
+            (f"  Wreckage recovery & tow . . . . -{S.WRECKAGE_TOW_FEE:>8,} cr",
+             (180, 180, 180), font),
+            (f"  Body lease (standard term) . . . -{S.BASE_CLONE_DEBT:>8,} cr",
+             (180, 180, 180), font),
+            ("", None, font),
+            (f"OUTSTANDING BALANCE:   {self.meta.debt:,} cr",
+             S.AMBER_TERM, pygame.font.SysFont("monospace", 20, bold=True)),
+            ("", None, font),
+            ("This invoice is non-negotiable. Debt is hereditary and compound.",
+             (70, 70, 70), font_sm),
+            ("Nova Soma Solutions is not responsible for psychological distress",
+             (70, 70, 70), font_sm),
+            ("arising from repeated decanting. See Form NS-19b for opt-out options.",
+             (70, 70, 70), font_sm),
+            ("(Form NS-19b is not available in your jurisdiction.)",
+             (55, 55, 55), font_sm),
+            ("", None, font),
+            ("[ PRESS ENTER TO CONTINUE ]", S.GREEN_TERM, font),
         ]
-        y = S.SCREEN_H // 3
-        for line in lines:
-            surf = font.render(line, True, S.AMBER_TERM)
+
+        y = 56
+        for text, col, f in lines:
+            if col is None:
+                y += 10
+                continue
+            surf = f.render(text, True, col)
             self.screen.blit(surf, (S.SCREEN_W // 2 - surf.get_width() // 2, y))
-            y += 28
+            y += f.get_linesize() + 2
 
     def _render_main_menu(self):
         t  = pygame.time.get_ticks() / 1000.0
