@@ -145,6 +145,13 @@ class Game:
             terminal = self.run_mgr.active_terminal
             if terminal is not None:
                 terminal.update(dt)
+                # Ship keeps drifting mid-intercept — gravity + momentum, no controls
+                if self.run_mgr._intercepting_barge is not None:
+                    sector = self.run_mgr.sector
+                    if sector is not None:
+                        sector.gravity.apply_all(self.ship.body)
+                    self.ship.body.integrate(dt)
+                    self.ship._wrap_screen()
                 if terminal.is_done:
                     self.run_mgr.on_terminal_complete(terminal.outcome)
                     # Only go back to FLIGHT if run_end hasn't already redirected us
@@ -172,6 +179,8 @@ class Game:
 
         elif state == GameState.TERMINAL:
             self.term_renderer.draw(self.run_mgr.active_terminal)
+            if self.run_mgr._intercepting_barge is not None:
+                self._render_drift_strip()
 
         elif state == GameState.LOADOUT_DRAFT:
             self.run_mgr.draft.render(self.screen)
@@ -208,6 +217,27 @@ class Game:
         speed_col = (255, 120, 0) if speed > 500 else S.GREY_DEAD
         spd_txt   = font.render(f"{speed:>5.0f} m/s", True, speed_col)
         self.screen.blit(spd_txt, (sec_w // 2 - spd_txt.get_width() // 2, 56))
+
+    def _render_drift_strip(self):
+        """Amber status bar shown at top of terminal during mid-flight intercept."""
+        speed    = self.ship.body.speed()
+        hull_pct = self.ship.hull_pct * 100
+        t        = pygame.time.get_ticks() / 1000.0
+        blink    = int(t * 2) % 2 == 0
+
+        font = pygame.font.SysFont("monospace", 14, bold=True)
+        col  = (255, 80, 0) if speed > 400 else S.AMBER_TERM
+
+        strip = pygame.Surface((S.SCREEN_W, 20), pygame.SRCALPHA)
+        strip.fill((0, 0, 0, 180))
+        self.screen.blit(strip, (0, 0))
+
+        if blink:
+            warn = font.render(
+                f"  !! SHIP DRIFTING  {speed:>5.0f} m/s  |  HULL {hull_pct:.0f}%  |  "
+                "NEGOTIATE OR CLAMP IN ~20s  !!",
+                True, col)
+            self.screen.blit(warn, (8, 3))
 
     def _render_decanting(self):
         font = pygame.font.SysFont("monospace", 18)

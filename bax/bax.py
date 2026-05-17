@@ -8,7 +8,8 @@ from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_NLP_EXPLOIT, EVT_SLINGSHOT,
                              EVT_BARGE_NEARBY, EVT_CANISTER_GRAB,
                              EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING,
-                             EVT_GUN_MALFUNCTION, EVT_SPORE_INVERTED)
+                             EVT_GUN_MALFUNCTION, EVT_SPORE_INVERTED,
+                             EVT_BARGE_INTERCEPT)
 
 _IDLE = [
     "Right then. No rush. I've only been bolted here since the third war.",
@@ -82,6 +83,7 @@ class Bax:
         bus.subscribe(EVT_SCAN_PING,        self._on_scan_ping)
         bus.subscribe(EVT_GUN_MALFUNCTION,  self._on_gun_malfunction)
         bus.subscribe(EVT_SPORE_INVERTED,   self._on_spore_inverted)
+        bus.subscribe(EVT_BARGE_INTERCEPT,  self._on_barge_intercept)
 
     def update(self, dt: float):
         self._speak_cd = max(0.0, self._speak_cd - dt)
@@ -224,6 +226,15 @@ class Bax:
                 "...Was any of that real? Doesn't matter. Eyes forward.",
                 "Normal service resumed. Your previous controls were a hallucination.",
             ]))
+
+    def _on_barge_intercept(self, **_):
+        self.speak(random.choice([
+            "Oi — that's Gary on the line. Mid-flight intercept. Talk fast, yeah?",
+            "Comm incoming. Local 404. We are STILL MOVIN', just so you know.",
+            "It's a repo intercept. Brilliant. Type smart, we'll be fine.",
+            "Gary's opened a channel. Ship ain't stoppin'. Multitask, mate.",
+            "BARGE COMM. LIVE. We are drifting at speed. Choose your words carefully.",
+        ]))
 
     def radio_blip(self):
         if self._radio_cd <= 0:

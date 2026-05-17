@@ -31,14 +31,29 @@ class Gary(BaseNPC):
                          "discount", "reduce", "knock off", "negotiate",
                          "percentage", "portion", "fraction", "split"]
 
-    def __init__(self, cargo_ch1_active: bool = False):
+    def __init__(self, cargo_ch1_active: bool = False, intercepted: bool = False):
         super().__init__("Gary", patience=7)
         self._therapy_mode    = cargo_ch1_active
+        self._intercepted     = intercepted
         self._therapy_points  = 0
         self._bribe_attempts  = 0
         self._deal_attempts   = 0
 
     def _intro_line(self) -> str:
+        if self._intercepted:
+            return random.choice([
+                "Oi! Gary Pruitt, Local 404. I am RIGHT BEHIND YOU. "
+                "You've got outstanding fees on three vessels an' I've got "
+                "a harpoon with your name on it. Power down or we do this the 'ard way.",
+                "LOCAL 404 INTERCEPT. Gary Pruitt speakin'. "
+                "I'm closin' to harpoon range as we speak, mate. "
+                "Outstanding debt across seventeen jurisdictions. "
+                "You gonna talk or am I gonna shoot?",
+                "Gary Pruitt, repo an' recovery. I got you on radar an' I'm "
+                "twenty seconds from your hull. "
+                "Outstanding fees. Three vessels. Power down NOW "
+                "or this gets a lot worse for both of us.",
+            ])
         return (
             "Gary Pruitt, Local 404. You got outstanding fees on three "
             "registered vessels, mate. Gonna need you to power down "

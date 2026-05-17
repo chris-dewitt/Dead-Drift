@@ -101,6 +101,7 @@ class RunManager:
         self._debris: list[DebrisRock]    = []
         self._canisters: list[FuelCanister] = []
         self._active_terminal: Terminal | None = None
+        self._intercepting_barge = None   # set when a barge opens a mid-flight comm
         self._sector_timer     = 0.0
         self._sector_dur       = 20.0
         self._ship             = None
@@ -132,8 +133,9 @@ class RunManager:
         self._debris.clear()
         self._canisters.clear()
         self._shower_rocks.clear()
-        self._active_terminal = None
-        self._pending_advance = False
+        self._active_terminal    = None
+        self._intercepting_barge = None
+        self._pending_advance    = False
         self._ship = ship
         self.draft = LoadoutDraft(chapter=self._current_chapter())
         self._kress_cd    = random.uniform(S.KRESS_INTERVAL_MIN, S.KRESS_INTERVAL_MAX)
@@ -306,6 +308,11 @@ class RunManager:
         self._active_terminal = Terminal(npc)
         return self._active_terminal
 
+    def open_barge_terminal(self, barge) -> Terminal:
+        """Mid-flight intercept: Gary opens a comm, no sector advance on close."""
+        self._intercepting_barge = barge
+        return self.open_terminal("gary", intercepted=True)
+
     def _open_jump_terminal(self):
         npc_type = random.choice(["gary", "synthetic_droid", "union_dispatcher"])
         self.open_terminal(npc_type)
@@ -313,6 +320,11 @@ class RunManager:
 
     def on_terminal_complete(self, outcome):
         self._active_terminal = None
+        if self._intercepting_barge is not None:
+            barge = self._intercepting_barge
+            self._intercepting_barge = None
+            barge.on_terminal_outcome(outcome)
+            return
         if self._pending_advance:
             self._pending_advance = False
             self._advance_sector()

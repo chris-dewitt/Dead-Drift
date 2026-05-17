@@ -47,4 +47,5 @@ EVT_SCAN_PING      = "scan_ping"        # Union passive scanner pulse; payload: 
 EVT_GUN_FIRE       = "gun_fire"         # bullet fired successfully
 EVT_GUN_MALFUNCTION = "gun_malfunction" # gun fizzled/jammed
 EVT_COMMS_SPEAK    = "comms_speak"      # non-Bax transmission; payload: speaker, line
-EVT_SPORE_INVERTED = "spore_inverted"   # payload: active (bool)
+EVT_SPORE_INVERTED  = "spore_inverted"   # payload: active (bool)
+EVT_BARGE_INTERCEPT = "barge_intercept" # barge opened comm mid-flight; payload: barge
