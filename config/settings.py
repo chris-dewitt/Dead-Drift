@@ -60,9 +60,10 @@ CLONE_FLUID_FEE   = 3500
 WRECKAGE_TOW_FEE  = 8000
 DEBT_INTEREST_RATE = 0.00004      # fraction of debt accruing per second (display only)
 
-# --- Debris / Canisters ---
+# --- Debris / Canisters / Satellites ---
 DEBRIS_COUNT      = 4
 CANISTER_COUNT    = 3
+SATELLITE_COUNT   = 4
 CANISTER_PICKUP_R = 28.0
 DEBRIS_DAMAGE     = 9.0
 

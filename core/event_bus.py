@@ -50,3 +50,7 @@ EVT_COMMS_SPEAK    = "comms_speak"      # non-Bax transmission; payload: speaker
 EVT_SPORE_INVERTED  = "spore_inverted"   # payload: active (bool)
 EVT_BARGE_INTERCEPT = "barge_intercept" # barge opened comm mid-flight; payload: barge
 EVT_KRESS_DIALLED   = "kress_dialled"   # player called Kress mid-flight
+EVT_SATELLITE_HIT   = "satellite_hit"   # player ship hit a satellite
+EVT_ALIEN_SIGHTING  = "alien_sighting"  # alien ship passed through sector
+EVT_TORCH_ACTIVE    = "torch_active"    # barge entered TORCH state; payload: barge
+EVT_DEMO_NOTICE     = "demo_notice"     # galactic infrastructure demolition notice

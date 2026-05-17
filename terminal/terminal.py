@@ -2,6 +2,7 @@ from __future__ import annotations
 import pygame
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import NLPParser
+from terminal.npc_portraits import draw_portrait
 from core.event_bus import bus, EVT_TERMINAL_OPEN, EVT_TERMINAL_CLOSE
 from config import settings as S
 
@@ -100,9 +101,10 @@ class Terminal:
     def draw(self, surface: pygame.Surface):
         W, H = surface.get_size()
         t    = pygame.time.get_ticks() / 1000.0
-        M    = 22       # side margin
-        HDR_H = 60      # header bar
+        M    = 18       # side margin
+        HDR_H = 58      # header bar
         BTM_H = 100     # input area at bottom
+        PNL_W = 290     # portrait panel width
         GAP   = 12      # vertical gap between message blocks
 
         font    = self._get_font()
@@ -110,13 +112,13 @@ class Terminal:
         font_hd = self._get_font_hd()
         lh = font.get_linesize()
 
-        # Scanline overlay — built once, reused every frame
+        # Scanline overlay — built once per resolution
         if not hasattr(self, '_scan_surf') or self._scan_surf.get_size() != (W, H):
             self._scan_surf = pygame.Surface((W, H), pygame.SRCALPHA)
             for sy in range(0, H, 3):
                 pygame.draw.line(self._scan_surf, (0, 0, 0, 32), (0, sy), (W, sy))
 
-        # ── Background + border ───────────────────────────────────────
+        # ── Background + outer border ────────────────────────────────
         surface.fill((2, 7, 2))
         pygame.draw.rect(surface, (0, 118, 48), (2, 2, W - 4, H - 4), 1)
 
@@ -124,48 +126,71 @@ class Terminal:
         pygame.draw.rect(surface, (4, 20, 7), (0, 0, W, HDR_H))
         pygame.draw.line(surface, (0, 140, 58), (0, HDR_H), (W, HDR_H), 1)
 
-        fn_title = pygame.font.SysFont("monospace", 21, bold=True)
+        fn_title = pygame.font.SysFont("monospace", 20, bold=True)
         nm = fn_title.render(f"  {self.npc.name.upper()}", True, (255, 186, 34))
         surface.blit(nm, (M, HDR_H // 2 - nm.get_height() // 2))
 
-        # Disposition bar (centre)
+        # Disposition bar
         disp  = self.npc.disposition
         cx_d  = W // 2 - 90
         d_lbl = font_sm.render("DISP", True, (72, 105, 72))
         surface.blit(d_lbl, (cx_d, HDR_H // 2 - 8))
         bx = cx_d + d_lbl.get_width() + 8
-        bw, bh2, by = 112, 14, HDR_H // 2 - 6
+        bw, bh2, by = 110, 14, HDR_H // 2 - 6
         pygame.draw.rect(surface, (14, 26, 14), (bx, by, bw, bh2))
         dpct = max(0.0, min(1.0, (disp + 10) / 20.0))
         dcol = (0, 195, 80) if disp >= 0 else (195, 46, 46)
         pygame.draw.rect(surface, dcol, (bx, by, int(bw * dpct), bh2))
         pygame.draw.rect(surface, (48, 76, 48), (bx, by, bw, bh2), 1)
 
-        # Patience pips (right side)
+        # Patience pips
         total_p = self.npc.patience
         curr_p  = self.npc._patience
         p_lbl   = font_sm.render("PATIENCE", True, (72, 105, 72))
-        pip_w   = 13
-        pip_gap = 3
+        pip_w, pip_gap = 12, 3
         pip_block_w = total_p * (pip_w + pip_gap) - pip_gap
         right_x = W - M - pip_block_w - p_lbl.get_width() - 14
         surface.blit(p_lbl, (right_x, HDR_H // 2 - 8))
         px0 = right_x + p_lbl.get_width() + 10
         for i in range(total_p):
-            col = (255, 145, 0) if i < curr_p else (24, 36, 24)
-            rx = px0 + i * (pip_w + pip_gap)
-            pygame.draw.rect(surface, col,   (rx, HDR_H // 2 - 6, pip_w, 14))
-            pygame.draw.rect(surface, (52, 76, 52), (rx, HDR_H // 2 - 6, pip_w, 14), 1)
+            col = (255, 145, 0) if i < curr_p else (22, 34, 22)
+            rx  = px0 + i * (pip_w + pip_gap)
+            pygame.draw.rect(surface, col, (rx, HDR_H // 2 - 6, pip_w, 14))
+            pygame.draw.rect(surface, (50, 76, 50), (rx, HDR_H // 2 - 6, pip_w, 14), 1)
 
-        # ── Dialogue area ─────────────────────────────────────────────
+        # ── Portrait panel ───────────────────────────────────────────
+        p_rect = pygame.Rect(M, HDR_H + 4, PNL_W - M - 4, H - BTM_H - HDR_H - 8)
+        pygame.draw.rect(surface, (4, 12, 4), p_rect)
+        pygame.draw.rect(surface, (0, 80, 34), p_rect, 1)
+
+        draw_portrait(surface, self.npc.name, p_rect, self.npc.disposition, t)
+
+        # CRT scanlines over portrait only
+        if not hasattr(self, '_p_scan') or self._p_scan.get_size() != (p_rect.w, p_rect.h):
+            self._p_scan = pygame.Surface((p_rect.w, p_rect.h), pygame.SRCALPHA)
+            for sy in range(0, p_rect.h, 2):
+                pygame.draw.line(self._p_scan, (0, 0, 0, 55), (0, sy), (p_rect.w, sy))
+        surface.blit(self._p_scan, p_rect.topleft)
+
+        # "SIGNAL DEGRADED" label
+        sig_col = (50, 90, 50) if int(t * 2) % 3 != 0 else (80, 130, 80)
+        sig_surf = font_sm.render("COMM  ·  SIGNAL: DEGRADED", True, sig_col)
+        surface.blit(sig_surf, (p_rect.left + 4, p_rect.bottom - sig_surf.get_height() - 4))
+
+        # ── Vertical divider ─────────────────────────────────────────
+        div_x = PNL_W + 2
+        pygame.draw.line(surface, (0, 100, 42), (div_x, HDR_H + 2), (div_x, H - BTM_H - 2), 1)
+
+        # ── Dialogue panel ───────────────────────────────────────────
+        dl_x  = PNL_W + 10
+        dl_w  = W - dl_x - M
         DIAG_Y0 = HDR_H + 8
         DIAG_Y1 = H - BTM_H
         char_w    = max(1, font.size("A")[0])
-        wrap_cols = max(30, (W - 2 * M - 20) // char_w)
+        wrap_cols = max(30, dl_w // char_w)
 
         fn_sp = pygame.font.SysFont("monospace", 17, bold=True)
 
-        # Build message blocks
         blocks: list[tuple[str, bool, bool, list[str]]] = []
         for i, (speaker, text) in enumerate(self._history):
             disp_text = text[:int(self._tw_chars)] if i == self._tw_pos else text
@@ -190,21 +215,20 @@ class Terminal:
                 break
 
             if is_npc:
-                # Amber left accent bar
                 bar_end = min(y + b_h - GAP - 2, DIAG_Y1)
                 if y < DIAG_Y1:
                     pygame.draw.line(surface, (195, 122, 0),
-                                     (M + 2, max(y, DIAG_Y0)),
-                                     (M + 2, bar_end), 2)
+                                     (dl_x, max(y, DIAG_Y0)),
+                                     (dl_x, bar_end), 2)
                 sp = fn_sp.render(f"  [{speaker}]", True, (255, 180, 34))
                 if DIAG_Y0 <= y < DIAG_Y1:
-                    surface.blit(sp, (M + 8, y))
+                    surface.blit(sp, (dl_x + 6, y))
                 y += lh
                 for line in wrapped:
                     if DIAG_Y0 <= y < DIAG_Y1:
                         surface.blit(
                             font.render(f"    {line}", True, (205, 152, 36)),
-                            (M + 8, y))
+                            (dl_x + 6, y))
                     y += lh
 
             elif is_sys:
@@ -212,7 +236,7 @@ class Terminal:
                     if DIAG_Y0 <= y < DIAG_Y1:
                         surface.blit(
                             font_sm.render(f"  // {line}", True, (68, 86, 68)),
-                            (M, y))
+                            (dl_x, y))
                     y += lh
 
             else:  # YOU
@@ -224,7 +248,7 @@ class Terminal:
                     if DIAG_Y0 <= y < DIAG_Y1:
                         surface.blit(
                             font.render(f"    {line}", True, (84, 200, 104)),
-                            (M + 52, y))
+                            (dl_x + 48, y))
                     y += lh
 
             y += GAP
@@ -242,10 +266,9 @@ class Terminal:
             font.render(f"  > {self._input}{cursor}", True, (0, 236, 94)),
             (M + 8, inp_y + 8))
 
-        # Hints
         surface.blit(
             font_sm.render(
-                "deal · bribe · threaten · negotiate · complain · [ESC] abort",
+                "deal · bribe · sympathy · complain · threaten · [ESC] abort",
                 True, (50, 98, 60)),
             (M, inp_y + 46))
 
@@ -273,7 +296,7 @@ class Terminal:
                 (ox - 14, oy - 7, osurf.get_width() + 28, osurf.get_height() + 14), 1)
             surface.blit(osurf, (ox, oy))
 
-        # ── Scanlines on top ─────────────────────────────────────────
+        # ── Global scanlines on top ───────────────────────────────────
         surface.blit(self._scan_surf, (0, 0))
 
     # ------------------------------------------------------------------

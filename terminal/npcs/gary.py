@@ -9,50 +9,80 @@ class Gary(BaseNPC):
     """
     Gary Pruitt — Local 404 Field Agent, 17 years service.
 
-    Paths to release:
-    - Bribe: mention money/credits/pay. Small amounts get brushed off but
-      wear him down (3 attempts). Big amounts (5k+) work immediately.
-    - Management complaint: complain about the union/management/overtime.
-      Mention "Blevins" for a +3 disposition bonus.
-    - Positive rapport: generally friendly/sympathetic tone builds
-      disposition. Reach +5 and he lets you go.
-    - Therapy (Ch.1 cargo active): talk him through his feelings (3 turns).
-    - Article 7 exploit: say "overtime" + "article 7" in the same message.
-    - 15% deal: use deal/percent/discount keywords twice and Gary folds.
+    Win paths (designed to feel discoverable in 3-4 natural turns):
+
+    DEAL / NEGOTIATION  — say "deal", "reduce", "negotiate", "how about",
+                          "settlement" etc. First attempt gets a clear
+                          "I'm listening" response. Second attempt closes it.
+                          One attempt if they include a specific % or "waive".
+
+    BRIBE               — mention a specific amount ≥ 3000 cr with any bribe
+                          keyword → immediate release. Vague bribe → Gary asks
+                          for the number (one more turn).
+
+    SYMPATHY            — desperation, family, please → disposition +2 per turn.
+                          Two sympathetic turns → release. Gary's from the same
+                          system and he knows it.
+
+    MANAGEMENT COMPLAINT — complain about the union/quotas/overtime. Mention
+                          "Blevins" for +3 disposition bonus. Reach +5 → release.
+
+    THERAPY (Ch.1 cargo) — 3 turns of genuine emotional engagement → Gary calls
+                          his sister, lets you go.
+
+    ARTICLE 7 EXPLOIT   — say both "overtime" and "article 7" in one message.
+                          Instant release on a technicality.
+
+    FRIENDLY RAPPORT    — kind, patient tone builds disposition. Gary signals
+                          clearly when you're close.
     """
 
-    SUPERVISOR_NAME = "District Supervisor Blevins"
-
-    _BRIBE_KEYWORDS  = ["bribe", "pay", "credits", "money", "cash", "offer",
-                         "compensate", "deal", "buy"]
-    _BIG_AMOUNTS     = ["five thousand", "10k", "ten thousand", "15k", "twenty",
-                         "20k", "fifty", "50k", "hundred", "a lot"]
-    _DEAL_KEYWORDS   = ["percent", "fifteen", "15%", "cut me", "how about",
-                         "discount", "reduce", "knock off", "negotiate",
-                         "percentage", "portion", "fraction", "split"]
+    _DEAL_KEYWORDS = [
+        "percent", "fifteen", "15%", "discount", "reduce", "knock off",
+        "negotiate", "percentage", "portion", "split", "cut me",
+        "deal", "settlement", "arrangement", "work something out",
+        "how about", "what if", "reduction", "waive", "write off",
+    ]
+    _BRIBE_KEYWORDS = [
+        "bribe", "pay", "credits", "money", "cash", "offer",
+        "compensate", "buy", "slip", "transfer",
+    ]
+    _SYMPATHY_KEYWORDS = [
+        "desperate", "please", "family", "kids", "children", "wife", "husband",
+        "survive", "struggling", "starving", "no choice", "last run",
+        "lost everything", "dying", "broke", "nothing left", "help me",
+        "can't afford", "cannot afford", "just let me", "i'm begging", "begging",
+    ]
+    _BIG_AMOUNTS = [
+        "five thousand", "ten thousand", "fifteen thousand", "twenty thousand",
+        "thirty thousand", "fifty thousand",
+        "5000", "10000", "15000", "20000",
+        "5k", "10k", "15k", "20k", "30k", "50k",
+        "five grand", "ten grand", "twenty grand",
+    ]
 
     def __init__(self, cargo_ch1_active: bool = False, intercepted: bool = False):
-        super().__init__("Gary", patience=7)
+        super().__init__("Gary", patience=9)
         self._therapy_mode    = cargo_ch1_active
         self._intercepted     = intercepted
         self._therapy_points  = 0
         self._bribe_attempts  = 0
         self._deal_attempts   = 0
+        self._sympathy_turns  = 0
 
     def _intro_line(self) -> str:
         if self._intercepted:
             return random.choice([
                 "Oi! Gary Pruitt, Local 404. I am RIGHT BEHIND YOU. "
-                "You've got outstanding fees on three vessels an' I've got "
-                "a harpoon with your name on it. Power down or we do this the 'ard way.",
-                "LOCAL 404 INTERCEPT. Gary Pruitt speakin'. "
-                "I'm closin' to harpoon range as we speak, mate. "
+                "Outstanding fees on three vessels. "
+                "Power down or we do this the 'ard way. Your call, mate.",
+                "LOCAL 404 INTERCEPT. Gary Pruitt. "
+                "I'm closing to harpoon range as we speak. "
                 "Outstanding debt across seventeen jurisdictions. "
-                "You gonna talk or am I gonna shoot?",
-                "Gary Pruitt, repo an' recovery. I got you on radar an' I'm "
-                "twenty seconds from your hull. "
-                "Outstanding fees. Three vessels. Power down NOW "
-                "or this gets a lot worse for both of us.",
+                "Talk fast or I shoot. Simple as.",
+                "Gary Pruitt, repo an' recovery. I got you on radar. "
+                "I'm twenty seconds from your hull. Outstanding fees. "
+                "Power down NOW or this gets much worse for both of us.",
             ])
         return (
             "Gary Pruitt, Local 404. You got outstanding fees on three "
@@ -63,18 +93,19 @@ class Gary(BaseNPC):
 
     def exploits(self) -> dict[str, str]:
         return {
-            "middle_management": "Complain about Blevins by name",
+            "middle_management": "Mention Blevins by name",
             "overtime":          "Cite Article 7 forced overtime clause",
-            "therapy":           "Act as an amateur therapist (Ch.1 cargo active)",
+            "therapy":           "Talk him through his feelings (Ch.1 cargo)",
             "bribe":             "Offer enough credits",
-            "deal_offer":        "Negotiate a 15% reduction deal",
+            "deal_offer":        "Negotiate a reduction deal",
+            "sympathy":          "Appeal to his humanity",
         }
 
     # ------------------------------------------------------------------
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         raw = parsed.raw.lower()
 
-        # ARTICLE 7 EXPLOIT
+        # ARTICLE 7 EXPLOIT — specific, immediate
         if "overtime" in raw and "article 7" in raw:
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="overtime")
             return NPCOutcome.RELEASE, (
@@ -84,103 +115,188 @@ class Gary(BaseNPC):
                 "I was never 'ere."
             )
 
-        # 15% DEAL PATH — two deal/discount mentions and Gary folds
-        if any(w in raw for w in self._DEAL_KEYWORDS):
+        # SYMPATHY PATH — new and naturalistic
+        if (any(w in raw for w in self._SYMPATHY_KEYWORDS) or
+                parsed.intent == "sympathy"):
+            self._sympathy_turns += 1
+            self.disposition += 2
+            if self.disposition >= 4:
+                bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="sympathy")
+                return NPCOutcome.RELEASE, random.choice([
+                    "*long pause* ...Look. I got a mum on 'er fourth body. "
+                    "Clone fluid ain't free either. I know 'ow this goes. "
+                    "One time. Get out of 'ere. Don't make me regret it.",
+                    "*sighs* ...You know what, sod the quota. "
+                    "I'm not the villain in everyone's story. Go on. Go.",
+                    "*quiet* I joined this job 'cos I needed the money too, yeah. "
+                    "Don't broadcast that. Just go. "
+                    "*marks form: 'vessel not located'*",
+                ])
+            return NPCOutcome.CONTINUE, random.choice([
+                "...Look, I 'ear you. I genuinely do. "
+                "But I got quotas and they don't care about circumstances.",
+                "*quieter* Don't do that to me, mate. "
+                "I'm tryin' to be professional 'ere.",
+                "...That's rough. I'm not sayin' I'm unmoved. "
+                "I'm sayin' keep talkin'.",
+            ])
+
+        # DEAL / NEGOTIATION PATH
+        if (any(w in raw for w in self._DEAL_KEYWORDS) or
+                parsed.intent == "negotiate"):
             self._deal_attempts += 1
-            if self._deal_attempts >= 2:
+            has_proposal = any(w in raw for w in [
+                "percent", "%", "fifteen", "twenty", "thirty",
+                "reduction", "waive", "write off", "settlement",
+                "knock off", "portion", "cut",
+            ])
+            if self._deal_attempts >= 2 or has_proposal:
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="deal_offer")
-                return NPCOutcome.RELEASE, (
+                return NPCOutcome.RELEASE, random.choice([
                     "*very long pause* ...Right. I'm not supposed to do this. "
                     "But I got seventeen more stops tonight an' me dogs are barkin'. "
                     "Fifteen percent off the fees, I mark it 'partial compliance', "
                     "we both go 'ome. Yeah? Yeah. Done. "
-                    "Don't ring this number again. Cheers."
-                )
+                    "Don't ring this number again. Cheers.",
+                    "*sighs* ...Fine. FINE. "
+                    "I write it up as 'disputed asset, released pending review'. "
+                    "Buys you 48 hours. Don't waste 'em. "
+                    "An' don't tell Blevins. He'll 'ave my badge.",
+                    "You know what? It's been a LONG shift. "
+                    "*taps screen* Reducin' fees by fifteen percent, "
+                    "markin' 'cooperation noted'. That's the deal. Take it.",
+                ])
+            # First attempt — clearly signal to keep going
             return NPCOutcome.CONTINUE, random.choice([
-                "Fifteen percent? You fink I'm a market stall? I'm the Union, mate.",
-                "A deal. *laughs* Mate, the fees ARE the deal. This is me bein' generous.",
-                "Negotiate. Right. Bold. Still gonna need you to power down though.",
-                "You've got a nerve, I'll give you that. Wrong number though, innit.",
+                "A deal? *pause* ...You got my attention. "
+                "What exactly are you proposin'?",
+                "*slowly* Alright. I'm listenin'. "
+                "What kind of arrangement did you 'ave in mind?",
+                "Go on then. I'm not a market stall but I'm also not stupid. "
+                "What's the offer?",
+                "...'Ave you got an actual number, or are we still feelin' it out?",
             ])
 
         # BRIBE PATH
-        if any(w in raw for w in self._BRIBE_KEYWORDS) or parsed.intent == "bribe":
-            if any(amt in raw for amt in self._BIG_AMOUNTS):
+        if (any(w in raw for w in self._BRIBE_KEYWORDS) or
+                parsed.intent == "bribe"):
+            has_big = (any(amt in raw for amt in self._BIG_AMOUNTS) or
+                       (parsed.amount is not None and parsed.amount >= 3000))
+            if has_big:
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="bribe")
-                return NPCOutcome.RELEASE, (
-                    "*long pause* ...Right. I didn't see nuffin'. Drive safe, yeah. "
-                    "An' tell your droid to stop broadcastin' on our frequency. "
-                    "Cheers, mate."
-                )
+                return NPCOutcome.RELEASE, random.choice([
+                    "*long pause* ...Right. I didn't see nuffin'. "
+                    "Drive safe, yeah. An' tell your droid to stop broadcastin' "
+                    "on our frequency. Cheers, mate.",
+                    "*very quietly* Don't say the number out loud again. "
+                    "The barges record audio. *tap* You're clear. Go.",
+                    "*sound of form being filed very thoroughly* "
+                    "Vessel: not located. Fees: administrative error. "
+                    "Me conscience: also not located. Go on then.",
+                ])
             self._bribe_attempts += 1
-            if self._bribe_attempts >= 3:
-                self.disposition += 2
+            if self._bribe_attempts == 1:
+                return NPCOutcome.CONTINUE, random.choice([
+                    "Now we're talkin'. What's the number, specifically?",
+                    "I'm not NOT interested. Give me an actual figure.",
+                    "*laughs* You're the first one today to try that. "
+                    "What number are we talkin' about?",
+                ])
+            elif self._bribe_attempts >= 3:
+                self.disposition += 1
                 if self.disposition >= 3:
                     return NPCOutcome.RELEASE, (
-                        "*long pause* You know what? Sod it. I got eleven more stops tonight "
-                        "an' you ain't worth the paperwork. Get out of 'ere, go on."
+                        "Alright, alright. You know what, I'm tired. "
+                        "It's been six stops and none of 'em 'ave offered me anyfing. "
+                        "You at least 'ave the initiative. Go on. *waves hand* "
+                        "Just don't tell Blevins."
                     )
-            responses = [
-                "You fink I do this for the credits? I do it for the pension, mate. Try 'arder.",
-                "That's it? Me lunch costs more'n that. Come on, I'm not made of stone.",
-                "Look, I'm not sayin' the right number is twenty fousand. "
+            return NPCOutcome.CONTINUE, [
+                "That's it? Me lunch costs more'n that. Come on.",
+                "Look, I'm not sayin' the right number is twenty thousand. "
                 "I'm not NOT sayin' it either.",
-            ]
-            return NPCOutcome.CONTINUE, responses[min(self._bribe_attempts - 1, 2)]
+                "*sighs* Persistent. I'll give you that. "
+                "More persistent would 'elp.",
+            ][min(self._bribe_attempts - 1, 2)]
 
         # MANAGEMENT COMPLAINT
-        if parsed.intent == "complain" or any(w in raw for w in
-                ["union", "management", "supervisor", "quota", "overtime",
-                 "unfair", "underpaid", "bureaucracy"]):
-            if "blevins" in raw or self.SUPERVISOR_NAME.lower() in raw:
+        if (parsed.intent == "complain" or
+                any(w in raw for w in [
+                    "union", "management", "supervisor", "quota", "overtime",
+                    "unfair", "underpaid", "bureaucracy", "system",
+                ])):
+            blevins_hit = "blevins" in raw or "district supervisor" in raw
+            if blevins_hit:
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="middle_management")
                 self.disposition += 3
             else:
                 self.disposition += 1
             if self.disposition >= 5:
-                return NPCOutcome.RELEASE, (
+                return NPCOutcome.RELEASE, random.choice([
                     "You know what? Blevins can tow it 'imself. "
-                    "I'm on me break. Get out of 'ere, go on. Shoo."
-                )
+                    "I'm on me break. Get out of 'ere. Shoo.",
+                    "Right. That's it. I am NOT doin' this for Blevins's bonus. "
+                    "Clear off. *stamps form 'vessel vacated premises'*",
+                    "*quietly furious* Twenty-two years on this route. "
+                    "Twenty-two years and Blevins gets the commendation. "
+                    "...Go. Just go. Before I change me mind.",
+                ])
             return NPCOutcome.CONTINUE, random.choice([
-                "...Yeah. The quotas are brutal, mate. Not that I'm agreein' wiv you. Power down.",
-                "Union's been ridin' us 'ard lately. Doesn't mean you're off the 'ook though.",
-                "I 'ear you, I do. Still got a job to do. You know 'ow it is.",
+                "...Yeah. The quotas are brutal, mate. "
+                "Not that I'm agreein' wiv you. Power down.",
+                "Union's been ridin' us 'ard lately. "
+                "Doesn't mean you're off the 'ook though.",
                 "...Blevins changed our tow quotas again. Mid-quarter. What a muppet.",
-                "Seventeen stops tonight. SEVENTEEN. An' 'e wonders why morale's in the bin.",
+                "Seventeen stops tonight. SEVENTEEN. "
+                "An' 'e wonders why morale's in the bin.",
+                "I 'ear you, I do. Still got a job to do. You know 'ow it is.",
+                "Tell me about it. *quieter* Tell me more about it actually.",
             ])
 
-        # THERAPY (Chapter 1 cargo active)
-        if self._therapy_mode and parsed.intent in ("therapy", "philosophical"):
+        # THERAPY PATH (Chapter 1 cargo active)
+        if self._therapy_mode and parsed.intent in ("therapy", "philosophical", "sympathy"):
             self._therapy_points += 1
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="therapy")
             if self._therapy_points >= 3:
                 return NPCOutcome.RELEASE, (
                     "*long silence* ...I 'aven't talked to anyone like that in years. "
                     "You're free to go, mate. I'm gonna ring me sister. "
-                    "She's been on at me for months."
+                    "She's been on at me for months. *quietly* Cheers."
                 )
             return NPCOutcome.CONTINUE, [
-                "I just... I dunno why I'm even out 'ere anymore. The routes never end.",
-                "Nobody asks 'ow *I'm* doin', you know? I'm the one wiv the 'arpoon.",
-                "Me therapist says I 'catastrophize.' I said Dave, I work in SPACE DEBT COLLECTION.",
+                "I just... I dunno why I'm even out 'ere anymore. "
+                "The routes never end. *static* Sorry. Power down.",
+                "Nobody asks 'ow *I'm* doin', you know? "
+                "I'm the one wiv the 'arpoon.",
+                "Me therapist says I 'catastrophize.' "
+                "I said Dave, I work in SPACE DEBT COLLECTION.",
             ][min(self._therapy_points - 1, 2)]
 
         # POSITIVE RAPPORT
         compound = parsed.sentiment.get("compound", 0.0)
-        if compound > 0.25 or parsed.intent in ("negotiate", "legal"):
+        if compound > 0.2 or parsed.intent in ("negotiate", "legal"):
             self.disposition += 1
             if self.disposition >= 5:
                 return NPCOutcome.RELEASE, (
                     "Alright, alright. You seem like a decent enough sort. "
-                    "I'll mark it as 'unable to locate vessel'. "
+                    "I'll mark it 'unable to locate vessel'. "
                     "Don't make me regret it, yeah?"
                 )
+            if self.disposition >= 3:
+                return NPCOutcome.CONTINUE, random.choice([
+                    "...Look, you're bein' reasonable. That goes a long way. "
+                    "Keep talkin'.",
+                    "Nice try wiv the charm. I got feelings. "
+                    "They're PROFESSIONAL feelings, but still.",
+                    "You're alright, you know that? "
+                    "Still got seventeen jurisdictions though.",
+                    "*quieter* Look, I'm not heartless. "
+                    "Just... give me somethin' to work with. Anyfing.",
+                ])
             return NPCOutcome.CONTINUE, random.choice([
-                "...Look, I appreciate the tone. Doesn't change the fees though.",
-                "You're bein' reasonable. I'll give you that. Still need you to power down.",
-                "Nice try wiv the charm. I got feelings. They're just... professional feelings.",
-                "You're alright, you know that? Shame about the seventeen jurisdictions.",
+                "...I appreciate the tone. Doesn't change the fees though.",
+                "You're bein' reasonable. I'll give you that. "
+                "Still need you to power down.",
             ])
 
         # HOSTILE
@@ -189,17 +305,49 @@ class Gary(BaseNPC):
             if self.disposition <= -4:
                 self._patience = max(0, self._patience - 1)
             return NPCOutcome.CONTINUE, random.choice([
-                "You wanna add 'resistin' impound' to the charges? Keep it up, mate.",
+                "You wanna add 'resistin' impound' to the charges? "
+                "Keep it up, mate.",
                 "I've dealt wiv worse'n you. A lot worse. Power down.",
                 "That's real charmin'. I'm addin' a 'andlin' fee.",
                 "Blimey. You kiss your mum wiv that mouth?",
                 "Right. Addin' that to the file. You're welcome.",
             ])
 
-        # DEFAULT FILLER
+        # DEFAULT — changes tone based on progress
         return NPCOutcome.CONTINUE, self._gary_filler()
 
     def _gary_filler(self) -> str:
+        # Signal when close
+        if self.disposition >= 3:
+            return random.choice([
+                "...Look. You seem alright. "
+                "Give me somethin' concrete and we can talk.",
+                "I'm not sayin' I'm convinced. "
+                "But I'm listenin'. That's somethin'.",
+                "*quieter* What exactly are you proposin'? "
+                "Cos I might — MIGHT — be open to it.",
+                "You're wearin' me down. That's not a compliment. "
+                "Keep goin'.",
+            ])
+
+        # Hint if player is stuck after 3 turns with zero progress
+        if (self._turn >= 3 and self._deal_attempts == 0 and
+                self._bribe_attempts == 0 and self._sympathy_turns == 0 and
+                self.disposition <= 0):
+            return random.choice([
+                "*sighs* Look, I'm gonna level with you. "
+                "I got two 'ours left on shift. "
+                "Find an angle — a deal, a number, a story — "
+                "and make it somethin' I can work with. "
+                "I'm not made of stone. Mostly not.",
+                "Alright look. *quieter* I've been doin' this twelve years. "
+                "The ones who get out charm me, pay me, or confuse me. "
+                "Pick one.",
+                "...You know, most people just offer credits. Or they apologize. "
+                "Or they mention their kids. "
+                "Any of those would 'onestly be a nice change of pace.",
+            ])
+
         return random.choice([
             "Look, I got a quota. Just power down.",
             "I don't make the rules. Well, the union makes some of 'em. Power down.",
@@ -210,28 +358,21 @@ class Gary(BaseNPC):
             "Seventeen stops tonight. You're number six. Let's keep it movin'.",
             "I 'ad a microwave meal waitin' for me back at depot. "
             "It's probably stone cold now. Thanks for that.",
-            "You ever just look at your life choices? Because I 'ave. Every Tuesday.",
+            "You ever just look at your life choices? "
+            "Because I 'ave. Every Tuesday.",
             "Me 'arpoon calibration's a bit off. Don't make me test it on you.",
             "The union 'as a dental plan now. Still not worth it, if I'm 'onest.",
             "I got a bad knee from a tow-barge incident in Sector Four. "
             "I don't want to talk about it.",
             "Me ex-wife said I'd never amount to anyfing. "
             "I said Sandra, I am a LICENSED REPO AGENT. She still left.",
-            "Fun fact: space debt never expires. It's actually written into the charter.",
-            "You're stop number six of seventeen. I peaked at four. It's all downhill.",
-            # the knife — Gary as victim of the same system
-            "Me mum still owes on 'er fourth body. Clone fluid fees don't stop "
-            "just cos you're seventy. Power down.",
+            "Me mum still owes on 'er fourth body. "
+            "Clone fluid fees don't stop just cos you're seventy. Power down.",
             "Blevins gets a bonus for every successful impound. "
-            "I get a flat rate. That's called incentive structure, apparently.",
-            "I joined the union cos they said it'd protect us. "
-            "That was... a different union. Power down.",
-            "Nova Soma sends a card every Christmas. 'Thank you for your service.' "
-            "To me. The repo man. Power down.",
+            "I get a flat rate. That's incentive structure, apparently.",
+            "Nova Soma sends a card every Christmas. "
+            "'Thank you for your service.' To me. The repo man. Power down.",
             "You know what they call it in the charter? "
             "'Asset reclamation.' Not repo. Not debt collection. "
             "'Asset reclamation.' You're the asset. Power down.",
-            "I asked 'R about early retirement once. "
-            "She said the pension kicks in at 68. I said 68 what. "
-            "She 'ung up. Power down.",
         ])

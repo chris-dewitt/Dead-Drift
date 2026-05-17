@@ -4,7 +4,7 @@ import pygame
 
 from config import settings as S
 from core.state_manager import StateManager, GameState
-from core.event_bus import bus, EVT_SHIP_DESTROYED, EVT_RUN_END
+from core.event_bus import bus, EVT_SHIP_DESTROYED, EVT_RUN_END, EVT_TORCH_ACTIVE
 from roguelite.meta_progression import MetaProgression
 from roguelite.run_manager import RunManager
 from ship.ship import PlayerShip
@@ -41,12 +41,17 @@ class Game:
 
         self._dt                  = 0.016
         self._run_just_completed  = False
+        self._torch_warn_t        = 0.0   # seconds remaining until next module loss
 
         self._wire_events()
 
     def _wire_events(self):
         bus.subscribe(EVT_SHIP_DESTROYED, self._on_ship_destroyed)
         bus.subscribe(EVT_RUN_END,        self._on_run_end)
+        bus.subscribe(EVT_TORCH_ACTIVE,   self._on_torch_active)
+
+    def _on_torch_active(self, countdown=5.0, **_):
+        self._torch_warn_t = countdown
 
     def _on_ship_destroyed(self, **_):
         self.meta.apply_death_penalty()
@@ -132,6 +137,7 @@ class Game:
         state = self.states.state
 
         if state == GameState.FLIGHT:
+            self._torch_warn_t = max(0.0, self._torch_warn_t - dt)
             self.run_mgr.update(dt)
             self.ship.update(dt)
             self.bax.update(dt)
@@ -259,6 +265,22 @@ class Game:
         k_label = "[ K ]  CALL KRESS" if kress_avail else "[ K ]  channel used"
         k_surf  = font_sm.render(k_label, True, k_col)
         self.screen.blit(k_surf, (sec_w - k_surf.get_width() - 12, S.FLIGHT_H - 22))
+
+        # Torch countdown — pulsing red danger bar when barge is torching hull
+        if self._torch_warn_t > 0:
+            pulse = abs(math.sin(t * 9.0))
+            r_val = int(200 + 55 * pulse)
+            torch_font = pygame.font.SysFont("monospace", 20, bold=True)
+            torch_surf = torch_font.render(
+                f"!! SNAP TETHER — MODULE LOSS IN  {self._torch_warn_t:.1f}s !!",
+                True, (r_val, 30, 20))
+            cx_t = sec_w // 2 - torch_surf.get_width() // 2
+            # Dark backing strip
+            bg_r  = pygame.Rect(cx_t - 6, S.FLIGHT_H // 2 - 40,
+                                torch_surf.get_width() + 12, 30)
+            pygame.draw.rect(self.screen, (12, 2, 2), bg_r)
+            pygame.draw.rect(self.screen, (r_val, 30, 20), bg_r, 1)
+            self.screen.blit(torch_surf, (cx_t, S.FLIGHT_H // 2 - 37))
 
     def _render_sector_flash(self, stats: dict, t_left: float):
         """Celebration card overlaid for ~2.8s after a sector clear."""
