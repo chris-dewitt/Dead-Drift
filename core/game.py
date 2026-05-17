@@ -1,5 +1,6 @@
 import sys
 import math
+import random
 import pygame
 
 from config import settings as S
@@ -424,65 +425,271 @@ class Game:
 
         self.vec_renderer.draw_menu_background(t)
 
-        # Title
-        font_title = pygame.font.SysFont("monospace", 76, bold=True)
-        title_surf = font_title.render("DEAD DRIFT", True, S.AMBER_TERM)
-        ty = 95
-        self.screen.blit(title_surf, (cx - title_surf.get_width() // 2, ty))
-
-        ul_w = title_surf.get_width() + 20
-        ul_x = cx - ul_w // 2
+        # --- Cinematic letterbox bars ---
+        bar_h = 56
+        pygame.draw.rect(self.screen, (0, 0, 0),
+                         pygame.Rect(0, 0, S.SCREEN_W, bar_h))
+        pygame.draw.rect(self.screen, (0, 0, 0),
+                         pygame.Rect(0, S.SCREEN_H - bar_h, S.SCREEN_W, bar_h))
         pygame.draw.line(self.screen, (120, 80, 0),
-                         (ul_x, ty + title_surf.get_height() + 4),
-                         (ul_x + ul_w, ty + title_surf.get_height() + 4), 1)
+                         (0, bar_h), (S.SCREEN_W, bar_h), 1)
+        pygame.draw.line(self.screen, (120, 80, 0),
+                         (0, S.SCREEN_H - bar_h), (S.SCREEN_W, S.SCREEN_H - bar_h), 1)
 
+        # --- Top bar text: classification stamp + chapter ---
+        font_corp = pygame.font.SysFont("monospace", 12)
+        stamp = font_corp.render(
+            "CLASSIFIED // NOVA SOMA ENTERTAINMENT DIVISION // INTERNAL USE",
+            True, (130, 95, 30))
+        self.screen.blit(stamp, (16, 22))
+        ver = font_corp.render("VER 0.5  //  SECTOR BUILD", True, (130, 95, 30))
+        self.screen.blit(ver, (S.SCREEN_W - ver.get_width() - 16, 22))
+
+        # --- Title with chromatic aberration ---
+        font_title = pygame.font.SysFont("monospace", 96, bold=True)
+        title_str  = "DEAD DRIFT"
+        ty = 138
+
+        # Glitch jitter — occasional one-frame offset
+        glitch = (int(t * 6.3) % 47) == 0
+        gx, gy = (random.randint(-3, 3), random.randint(-2, 2)) if glitch else (0, 0)
+
+        # Chromatic split: red/cyan offsets behind the main amber title
+        title_r = font_title.render(title_str, True, (200, 30, 30))
+        title_c = font_title.render(title_str, True, (30, 220, 220))
+        title_m = font_title.render(title_str, True, S.AMBER_TERM)
+        offset  = 4 + int(2 * math.sin(t * 0.8))
+        tx      = cx - title_m.get_width() // 2 + gx
+        ty_g    = ty + gy
+        self.screen.blit(title_r, (tx - offset, ty_g))
+        self.screen.blit(title_c, (tx + offset, ty_g))
+        self.screen.blit(title_m, (tx, ty_g))
+
+        # Underline + outer brackets
+        ul_y = ty + title_m.get_height() + 4
+        ul_w = title_m.get_width() + 60
+        ul_x = cx - ul_w // 2
+        pygame.draw.line(self.screen, (160, 110, 0),
+                         (ul_x, ul_y), (ul_x + ul_w, ul_y), 1)
+        # Bracket caps
+        cap = 14
+        pygame.draw.line(self.screen, (200, 140, 0), (ul_x, ul_y - cap), (ul_x, ul_y + 2), 2)
+        pygame.draw.line(self.screen, (200, 140, 0), (ul_x + ul_w, ul_y - cap), (ul_x + ul_w, ul_y + 2), 2)
+
+        # --- Tagline ---
         font_sub = pygame.font.SysFont("monospace", 18)
-        tagline  = font_sub.render(
-            "5 sectors.  crushing debt.  one rusted ship.", True, (70, 70, 90))
-        self.screen.blit(tagline, (cx - tagline.get_width() // 2, ty + 88))
+        tagline_lines = [
+            "A NEWTONIAN COURIER SIMULATION  //  FOR THE TERMINALLY INDEBTED",
+            "5 sectors. crushing debt. one rusted ship. one bolted-on droid.",
+        ]
+        for i, line in enumerate(tagline_lines):
+            col = (170, 120, 30) if i == 0 else (80, 80, 100)
+            ts  = font_sub.render(line, True, col)
+            self.screen.blit(ts, (cx - ts.get_width() // 2, ul_y + 16 + i * 24))
 
-        y_info = ty + 148
-        font_med = pygame.font.SysFont("monospace", 16)
+        # --- Live debt / clone counter panel (top-left) ---
+        self._render_menu_debt_panel(t)
 
-        if self._run_just_completed:
-            c = font_med.render("RUN COMPLETE  //  DEBT REDUCED", True, S.GREEN_TERM)
-            self.screen.blit(c, (cx - c.get_width() // 2, y_info))
-            y_info += 28
+        # --- Run status / spec sheet panel (top-right) ---
+        self._render_menu_spec_panel(t)
 
-        if self.meta.debt > 0:
-            debt_col = S.RED_WARN if self.meta.debt > 50000 else S.AMBER_TERM
-            ds = font_med.render(
-                f"OUTSTANDING DEBT:  {self.meta.debt:,} cr   //   Clone #{self.meta.clone_count}",
-                True, debt_col)
-            self.screen.blit(ds, (cx - ds.get_width() // 2, y_info))
+        # --- Wireframe rotating ship hull "studio" panel (mid-left) ---
+        self._render_menu_ship_studio(t)
 
-        # Blinking prompt
-        if int(t * 2) % 2 == 0:
-            font_enter = pygame.font.SysFont("monospace", 22, bold=True)
-            es = font_enter.render("[ PRESS ENTER TO BEGIN RUN ]", True, S.WHITE_VEC)
-            self.screen.blit(es, (cx - es.get_width() // 2, S.SCREEN_H // 2 + 40))
+        # --- "Begin Run" pulsing prompt ---
+        self._render_menu_begin_prompt(t)
 
-        # Lore
+        # --- Lore strap line (above bottom bar) ---
         font_lore = pygame.font.SysFont("monospace", 13)
         lore_lines = [
-            "Union of Repo Men, Local 404.",
-            "They will come for what you carry.",
-            "Fly fast.  Drift hard.  Don't die again.",
+            "Union of Repo Men, Local 404. They will come for what you carry.",
+            "Fly fast.  Drift hard.  Snap the tether.  Don't die again.",
         ]
         for i, line in enumerate(lore_lines):
-            s = font_lore.render(line, True, (55, 55, 70))
-            self.screen.blit(s, (cx - s.get_width() // 2, S.SCREEN_H - 225 + i * 20))
+            s = font_lore.render(line, True, (75, 75, 95))
+            self.screen.blit(s, (cx - s.get_width() // 2,
+                                  S.SCREEN_H - bar_h - 60 + i * 18))
 
-        # Controls
-        font_hint = pygame.font.SysFont("monospace", 12)
-        hints = [
-            "WASD / ARROWS  move     SPACE  fire     J  jump     N  spawn barge",
-        ]
-        for i, line in enumerate(hints):
-            s = font_hint.render(line, True, (45, 45, 58))
-            self.screen.blit(s, (cx - s.get_width() // 2, S.SCREEN_H - 75 + i * 18))
+        # --- Bottom bar: scrolling Nova Soma propaganda ticker ---
+        self._render_menu_propaganda(t)
 
+        # --- Bax mini portrait (bottom right) ---
         self._render_menu_bax_portrait(t)
+
+        # --- Outer corner brackets + scanlines ---
+        self._render_menu_corner_brackets()
+        self._render_menu_scanlines()
+
+    # ------------------------------------------------------------------
+    def _render_menu_debt_panel(self, t: float):
+        panel = pygame.Rect(20, 80, 280, 80)
+        pygame.draw.rect(self.screen, (8, 4, 4), panel)
+        pygame.draw.rect(self.screen, (160, 50, 50), panel, 1)
+        # bracket caps
+        for c, sx, sy in ((panel.topleft, 1, 1), (panel.topright, -1, 1),
+                          (panel.bottomleft, 1, -1), (panel.bottomright, -1, -1)):
+            pygame.draw.line(self.screen, (200, 70, 70), c, (c[0] + sx * 10, c[1]), 2)
+            pygame.draw.line(self.screen, (200, 70, 70), c, (c[0], c[1] + sy * 10), 2)
+
+        font_h = pygame.font.SysFont("monospace", 11, bold=True)
+        font_d = pygame.font.SysFont("monospace", 22, bold=True)
+        font_s = pygame.font.SysFont("monospace", 11)
+
+        hdr = font_h.render("OUTSTANDING BALANCE", True, (200, 80, 80))
+        self.screen.blit(hdr, (panel.left + 12, panel.top + 8))
+
+        # Live drip — interest accruing per second
+        interest = max(0.01, self.meta.debt * S.DEBT_INTEREST_RATE)
+        displayed = int(self.meta.debt + t * interest)
+        blink = int(t * 1.6) % 2 == 0
+        debt_col = (220, 80, 80) if not blink else (255, 110, 110)
+        ds = font_d.render(f"{displayed:>10,} cr", True, debt_col)
+        self.screen.blit(ds, (panel.left + 12, panel.top + 26))
+
+        ts = font_s.render(f"+{interest:.2f} cr/s  //  CLONE #{self.meta.clone_count}",
+                           True, (180, 100, 100))
+        self.screen.blit(ts, (panel.left + 12, panel.top + 56))
+
+    # ------------------------------------------------------------------
+    def _render_menu_spec_panel(self, t: float):
+        panel = pygame.Rect(S.SCREEN_W - 300, 80, 280, 80)
+        pygame.draw.rect(self.screen, (4, 6, 8), panel)
+        pygame.draw.rect(self.screen, (60, 130, 180), panel, 1)
+        for c, sx, sy in ((panel.topleft, 1, 1), (panel.topright, -1, 1),
+                          (panel.bottomleft, 1, -1), (panel.bottomright, -1, -1)):
+            pygame.draw.line(self.screen, (80, 160, 220), c, (c[0] + sx * 10, c[1]), 2)
+            pygame.draw.line(self.screen, (80, 160, 220), c, (c[0], c[1] + sy * 10), 2)
+
+        font_h = pygame.font.SysFont("monospace", 11, bold=True)
+        font_v = pygame.font.SysFont("monospace", 12)
+
+        hdr = font_h.render("PILOT MANIFEST", True, (120, 200, 255))
+        self.screen.blit(hdr, (panel.left + 12, panel.top + 8))
+
+        rows = [
+            ("STATUS", "ALIVE-ISH" if self.meta.clone_count > 0 else "ROOKIE"),
+            ("DEBT TIER", "CRUSHING" if self.meta.debt > 50000 else "MANAGEABLE"),
+            ("LICENCE", "PROVISIONAL // L-404"),
+        ]
+        for i, (k, v) in enumerate(rows):
+            ks = font_v.render(f"{k:<10}", True, (90, 140, 180))
+            vs = font_v.render(v, True, (180, 220, 240))
+            self.screen.blit(ks, (panel.left + 12, panel.top + 26 + i * 16))
+            self.screen.blit(vs, (panel.left + 110, panel.top + 26 + i * 16))
+
+    # ------------------------------------------------------------------
+    def _render_menu_ship_studio(self, t: float):
+        """Slowly rotating wireframe ship in the bottom-left — like a brochure shot."""
+        panel = pygame.Rect(40, S.SCREEN_H // 2 + 30, 250, 180)
+        pygame.draw.rect(self.screen, (4, 6, 10, 220), panel)
+        pygame.draw.rect(self.screen, (60, 80, 110), panel, 1)
+        for c, sx, sy in ((panel.topleft, 1, 1), (panel.topright, -1, 1),
+                          (panel.bottomleft, 1, -1), (panel.bottomright, -1, -1)):
+            pygame.draw.line(self.screen, (80, 110, 150), c, (c[0] + sx * 10, c[1]), 2)
+            pygame.draw.line(self.screen, (80, 110, 150), c, (c[0], c[1] + sy * 10), 2)
+
+        font = pygame.font.SysFont("monospace", 10, bold=True)
+        hdr = font.render("HULL SCHEMATIC // RUSTBUCKET-α", True, (110, 150, 200))
+        self.screen.blit(hdr, (panel.left + 8, panel.top + 6))
+
+        cx_p = panel.centerx
+        cy_p = panel.centery + 12
+        ry   = t * 0.55
+        scale = 1.6
+
+        verts = [
+            ( 40,  0,  0), (-28, -22, 0), (-28,  22, 0),
+            (-20,  0,  10), (-20,  0, -10),
+            (  5, -30, 0), (  5,  30, 0),
+        ]
+        edges = [(0,1),(0,2),(1,2),(0,5),(0,6),(1,5),(2,6),
+                 (0,3),(1,3),(2,3),(0,4),(1,4),(2,4)]
+
+        def proj(x, y, z):
+            rx = x * math.cos(ry) - z * math.sin(ry)
+            rz = x * math.sin(ry) + z * math.cos(ry)
+            tilt = 0.45
+            fy = y * math.cos(tilt) - rz * math.sin(tilt)
+            return (int(cx_p + rx * scale), int(cy_p + fy * scale))
+
+        pts = [proj(*v) for v in verts]
+        for i, j in edges:
+            pygame.draw.line(self.screen, (50, 80, 110), pts[i], pts[j], 2)
+        for i, j in edges:
+            pygame.draw.line(self.screen, (180, 220, 255), pts[i], pts[j], 1)
+        for p in pts:
+            pygame.draw.circle(self.screen, (200, 230, 255), p, 2)
+
+        # Bottom label strip
+        font_s = pygame.font.SysFont("monospace", 9)
+        s1 = font_s.render(f"ROT  {ry:5.2f} rad", True, (90, 120, 160))
+        s2 = font_s.render("MASS  1.0t  //  HULL 100", True, (90, 120, 160))
+        self.screen.blit(s1, (panel.left + 8, panel.bottom - 24))
+        self.screen.blit(s2, (panel.left + 8, panel.bottom - 12))
+
+    # ------------------------------------------------------------------
+    def _render_menu_begin_prompt(self, t: float):
+        cx = S.SCREEN_W // 2
+        py = S.SCREEN_H // 2 + 70
+
+        pulse = 0.5 + 0.5 * math.sin(t * 3.0)
+        font_enter = pygame.font.SysFont("monospace", 26, bold=True)
+        text = "[  PRESS  ENTER  TO  BEGIN  RUN  ]"
+
+        # Soft glow background
+        glow_col = (int(60 + 60 * pulse), int(255 * pulse * 0.5), int(40 + 40 * pulse))
+        gs = font_enter.render(text, True, glow_col)
+        self.screen.blit(gs, (cx - gs.get_width() // 2 + 2, py + 2))
+
+        main_col = (int(180 + 75 * pulse), int(180 + 75 * pulse), int(190 + 65 * pulse))
+        ms = font_enter.render(text, True, main_col)
+        self.screen.blit(ms, (cx - ms.get_width() // 2, py))
+
+        # Subtitle below
+        if self._run_just_completed:
+            font_c = pygame.font.SysFont("monospace", 14, bold=True)
+            cs = font_c.render("// RUN COMPLETE //  DEBT REDUCED  //",
+                               True, S.GREEN_TERM)
+            self.screen.blit(cs, (cx - cs.get_width() // 2, py - 38))
+
+    # ------------------------------------------------------------------
+    def _render_menu_propaganda(self, t: float):
+        bar_h = 56
+        bar_y = S.SCREEN_H - bar_h
+        # Inside the letterbox bar — scrolling ticker
+        font = pygame.font.SysFont("monospace", 14, bold=True)
+        text = (
+            "  >>  NOVA SOMA :: DEBT IS OPPORTUNITY  "
+            "  >>  CLONE FASTER. EARN FASTER. THRIVE.  "
+            "  >>  LOCAL 404 :: A PROUD PARTNER IN ENFORCEMENT  "
+            "  >>  REMEMBER: YOUR BODY IS LEASED  "
+            "  >>  GENUINE NOVA SOMA® PARTS IN EVERY CLONE  "
+            "  >>  NEGATIVE-INTEREST DEBT CONSOLIDATION (T&Cs APPLY)  "
+            "  >>  IF YOU CAN READ THIS YOU OWE NOVA SOMA THIRTY-TWO CREDITS  "
+        )
+        full = text + text
+        surf = font.render(full, True, (200, 140, 30))
+        speed = 70
+        ox = int((t * speed) % (surf.get_width() // 2))
+        self.screen.blit(surf, (-ox, bar_y + 16))
+        self.screen.blit(surf, (-ox + surf.get_width() // 2, bar_y + 16))
+
+    # ------------------------------------------------------------------
+    def _render_menu_corner_brackets(self):
+        col = (110, 110, 130)
+        L = 26
+        for cx, cy, sx, sy in (
+            (6, 6, 1, 1), (S.SCREEN_W - 7, 6, -1, 1),
+            (6, S.SCREEN_H - 7, 1, -1), (S.SCREEN_W - 7, S.SCREEN_H - 7, -1, -1)):
+            pygame.draw.line(self.screen, col, (cx, cy), (cx + sx * L, cy), 2)
+            pygame.draw.line(self.screen, col, (cx, cy), (cx, cy + sy * L), 2)
+
+    # ------------------------------------------------------------------
+    def _render_menu_scanlines(self):
+        sl = pygame.Surface((S.SCREEN_W, S.SCREEN_H), pygame.SRCALPHA)
+        for y in range(0, S.SCREEN_H, 4):
+            pygame.draw.line(sl, (0, 0, 0, 32), (0, y), (S.SCREEN_W, y), 1)
+        self.screen.blit(sl, (0, 0))
 
     def _render_menu_bax_portrait(self, t: float):
         px = S.SCREEN_W - 110
