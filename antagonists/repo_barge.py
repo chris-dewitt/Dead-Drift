@@ -4,7 +4,7 @@ import random
 from physics.body import RigidBody2D, Vec2
 from physics.tether import Tether
 from config import settings as S
-from core.event_bus import bus, EVT_MODULE_UNBOLTED, EVT_TETHER_HIT, EVT_BARGE_INTERCEPT, EVT_BAX_SPEAK
+from core.event_bus import bus, EVT_MODULE_UNBOLTED, EVT_TETHER_HIT, EVT_BARGE_INTERCEPT, EVT_BAX_SPEAK, EVT_TORCH_ACTIVE
 from terminal.npcs.base_npc import NPCOutcome
 
 
@@ -54,6 +54,7 @@ class RepoBarge:
         self._retreat_t      = 0.0
         self._intercept_cd   = 0.0   # cooldown before next intercept attempt
         self._disruption_hits = 0    # bullet hits since last disruption reset
+        self._torch_warned   = False  # track if torch_active event was emitted
 
     # ------------------------------------------------------------------
     def update(self, dt: float):
@@ -92,20 +93,27 @@ class RepoBarge:
                 self._tether.update(dt)
                 if not self._tether.is_active:
                     self._tether = None
+                    self._torch_warned = False
                     self.state = BargeState.PATROL
                 else:
                     self.state = BargeState.TORCH
 
         elif self.state == BargeState.TORCH:
+            if not self._torch_warned:
+                self._torch_warned = True
+                bus.emit(EVT_TORCH_ACTIVE, barge=self, countdown=self.TORCH_INTERVAL)
             self._torch_cd -= dt
             if self._torch_cd <= 0:
                 self._unbolt_module(ship)
                 self._torch_cd = self.TORCH_INTERVAL
+                # Re-emit so countdown resets each cycle
+                bus.emit(EVT_TORCH_ACTIVE, barge=self, countdown=self.TORCH_INTERVAL)
             if self._tether:
                 self._tether.barge_pos = self.body.pos
                 self._tether.update(dt)
                 if not self._tether.is_active:
                     self._tether = None
+                    self._torch_warned = False
                     self.state = BargeState.PATROL
 
         elif self.state == BargeState.RETREAT:

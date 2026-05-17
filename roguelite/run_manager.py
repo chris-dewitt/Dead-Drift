@@ -7,12 +7,15 @@ from roguelite.meta_progression import MetaProgression
 from antagonists.repo_barge import RepoBarge
 from antagonists.debris import DebrisRock
 from antagonists.fuel_canister import FuelCanister
+from antagonists.satellite import SpinningSatellite
+from antagonists.alien_ship import AlienShip
 from terminal.terminal import Terminal
 from terminal.npc_logic import make_npc
 from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
                              EVT_SLINGSHOT, EVT_BARGE_NEARBY, EVT_CANISTER_GRAB,
                              EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING,
-                             EVT_COMMS_SPEAK, EVT_TETHER_SNAP, EVT_BAX_SPEAK)
+                             EVT_COMMS_SPEAK, EVT_TETHER_SNAP, EVT_BAX_SPEAK,
+                             EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_DEMO_NOTICE)
 from config import settings as S
 
 
@@ -44,6 +47,33 @@ _KRESS_LINES = [
     "You have the survival instincts of a tax form. DO SOMETHING.",
 
     "I hired you because you were cheap. I now understand why you were cheap.",
+]
+
+_DEMO_NOTICES = [
+    ("GALACTIC INFRA.",
+     "NOTICE: This sector is scheduled for clearance to accommodate Hyperspace Bypass Route 7-B. "
+     "A planning notice was displayed at Nova Soma Central Admin for thirty seconds. "
+     "Your concerns have been logged and disregarded."),
+
+    ("GALACTIC INFRA.",
+     "COMPULSORY ACQUISITION ORDER REF. SPC-7742: The route you are currently occupying "
+     "has been allocated for infrastructure development. Resistance is noted as non-compliant. "
+     "Have a productive existence."),
+
+    ("GALACTIC INFRA.",
+     "This message constitutes the legally required notification of demolition works. "
+     "Residents were informed. Nobody they could find, but they were informed. "
+     "Works commence regardless. Please clear the sector."),
+
+    ("GALACTIC INFRA.",
+     "A bypass corridor has been approved through this sector. "
+     "The review committee met once, in a restaurant, and agreed. "
+     "We appreciate your cooperation is not required."),
+
+    ("GALACTIC INFRA.",
+     "INFRASTRUCTURE UPDATE: The homes and livelihoods of this sector "
+     "have been assessed as non-core assets and will be repurposed. "
+     "Compensation forms are available. They have not been printed yet."),
 ]
 
 _COLLECTOR_LINES = [
@@ -100,6 +130,9 @@ class RunManager:
         self._barges: list[RepoBarge]     = []
         self._debris: list[DebrisRock]    = []
         self._canisters: list[FuelCanister] = []
+        self._satellites: list[SpinningSatellite] = []
+        self._alien: AlienShip | None = None
+        self._alien_spoken = False
         self._active_terminal: Terminal | None = None
         self._intercepting_barge = None   # set when a barge opens a mid-flight comm
         self._kress_called_this_sector = False
@@ -144,6 +177,9 @@ class RunManager:
         self._barges.clear()
         self._debris.clear()
         self._canisters.clear()
+        self._satellites.clear()
+        self._alien      = None
+        self._alien_spoken = False
         self._shower_rocks.clear()
         self._active_terminal    = None
         self._intercepting_barge = None
@@ -207,6 +243,27 @@ class RunManager:
         for can in self._canisters:
             can.update(dt, self._ship.pos)
 
+        # Satellites — update + collision
+        for sat in self._satellites[:]:
+            sat.update(dt)
+            if not sat.alive:
+                self._satellites.remove(sat)
+                continue
+            if sat.collides(self._ship.pos):
+                self._ship.take_damage(sat.HULL_DAMAGE)
+                sat.hit()
+                bus.emit(EVT_SATELLITE_HIT)
+
+        # Alien ship — update, one-time Bax reaction
+        if self._alien is not None:
+            if self._alien.alive:
+                self._alien.update(dt)
+                if not self._alien_spoken:
+                    self._alien_spoken = True
+                    bus.emit(EVT_ALIEN_SIGHTING)
+            else:
+                self._alien = None
+
         # Debris shower tick
         if self._shower_t > 0:
             self._shower_t -= dt
@@ -263,6 +320,18 @@ class RunManager:
                 self._debris.remove(rock)
             elif rock in self._shower_rocks:
                 self._shower_rocks.remove(rock)
+
+        # Bullet hits on satellites
+        for bullet in list(bullets):
+            if not bullet.alive:
+                continue
+            for sat in list(self._satellites):
+                if (sat.pos - bullet.pos).length() < sat.arm_len + 4:
+                    bullet.lifetime = -1
+                    if sat.hit():
+                        self._satellites.remove(sat)
+                        bus.emit(EVT_SATELLITE_HIT)
+                    break
 
         # Bullet hits on repo barges — 3 hits forces a retreat
         for bullet in list(bullets):
@@ -447,18 +516,46 @@ class RunManager:
         self._kress_called_this_sector = False
         self._spawn_sector_objects()
 
+        # Ambush: spawn an additional barge that's already hunting
         if self._sector.is_ambush:
-            self._spawn_barge()
+            self._spawn_barge(immediate_chase=True)
 
     def _spawn_sector_objects(self):
-        self._debris    = [DebrisRock() for _ in range(S.DEBRIS_COUNT)]
-        self._canisters = [FuelCanister() for _ in range(S.CANISTER_COUNT)]
+        self._debris      = [DebrisRock() for _ in range(S.DEBRIS_COUNT)]
+        self._canisters   = [FuelCanister() for _ in range(S.CANISTER_COUNT)]
+        self._satellites  = [SpinningSatellite() for _ in range(S.SATELLITE_COUNT)]
+        self._alien       = None
+        self._alien_spoken = False
 
-    def _spawn_barge(self):
+        # 35% chance of alien flythrough per sector
+        if random.random() < 0.35:
+            self._alien = AlienShip()
+
+        # Barge spawn ramp — sector 1-2 are intro, then escalate
+        idx = self._sector_index
+        barge_count = 0
+        if idx >= 2:
+            barge_count = 1
+        if idx >= 6:
+            barge_count = 2
+        for _ in range(barge_count):
+            self._spawn_barge()
+
+        # Demolition notice — 35% chance from sector 2 onward
+        if idx >= 1 and random.random() < 0.35:
+            speaker, line = random.choice(_DEMO_NOTICES)
+            bus.emit(EVT_DEMO_NOTICE)
+            bus.emit(EVT_COMMS_SPEAK, speaker=speaker, line=line)
+
+    def _spawn_barge(self, immediate_chase: bool = False):
+        from antagonists.repo_barge import BargeState
         side  = random.choice(["left", "right", "top", "bottom"])
         pos_x = {"left": 0, "right": S.SCREEN_W}.get(side, random.randint(0, S.SCREEN_W))
         pos_y = {"top":  0, "bottom": S.SCREEN_H}.get(side, random.randint(0, S.SCREEN_H))
-        self._barges.append(RepoBarge(pos_x, pos_y, self))
+        barge = RepoBarge(pos_x, pos_y, self)
+        if immediate_chase:
+            barge.state = BargeState.CHASE
+        self._barges.append(barge)
 
     # ------------------------------------------------------------------
     def _difficulty(self) -> float:
@@ -495,6 +592,14 @@ class RunManager:
     @property
     def shower_rocks(self) -> list[DebrisRock]:
         return self._shower_rocks
+
+    @property
+    def satellites(self) -> list[SpinningSatellite]:
+        return self._satellites
+
+    @property
+    def alien(self) -> AlienShip | None:
+        return self._alien
 
     @property
     def sector_num(self) -> int:

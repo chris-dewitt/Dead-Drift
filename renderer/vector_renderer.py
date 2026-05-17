@@ -3,6 +3,8 @@ import math
 import random
 import pygame
 from config import settings as S
+from antagonists.repo_barge import BargeState
+from antagonists.alien_ship import HULL_PTS as _ALIEN_HULL, INNER_PTS as _ALIEN_INNER
 from core.event_bus import (bus, EVT_SLINGSHOT, EVT_SCAN_PING,
                              EVT_TETHER_HIT, EVT_TETHER_SNAP,
                              EVT_MODULE_UNBOLTED, EVT_HULL_DAMAGE,
@@ -90,9 +92,12 @@ class VectorRenderer:
         self._draw_scan_pings(t)
         self._draw_gravity_wells(run_mgr, t)
         self._draw_debris(run_mgr, t)
+        self._draw_satellites(run_mgr, t)
         self._draw_canisters(run_mgr, t)
         self._draw_bullets(ship)
+        self._draw_alien(run_mgr, t)
         self._draw_barges(run_mgr, ship, t)
+        self._draw_barge_radar(run_mgr, ship, t)
         self._draw_trail(ship, t)
         self._draw_velocity_indicator(ship)
         self._draw_ship(ship, t)
@@ -369,6 +374,143 @@ class VectorRenderer:
             pygame.draw.line(self.surface, c_bright, (tx1, ty1), (tx2, ty2), 1)
         pygame.draw.line(self.surface, c_bright, (cx-3,cy), (cx+3,cy), 1)
         pygame.draw.line(self.surface, c_bright, (cx,cy-3), (cx,cy+3), 1)
+
+    # ------------------------------------------------------------------  SATELLITES
+    def _draw_satellites(self, run_mgr, t: float):
+        surf = self.surface
+        for sat in getattr(run_mgr, "satellites", []):
+            if not sat.alive:
+                continue
+            cx, cy = int(sat.pos.x), int(sat.pos.y)
+            ang    = math.radians(sat.angle)
+
+            # Hit flash
+            if sat._hit_t > 0:
+                col = (255, 210, 80)
+                dim = (180, 140, 40)
+            else:
+                col = (120, 105, 75)
+                dim = (52, 46, 33)
+
+            # Four solar panel arms at 0°, 90°, 180°, 270°
+            for arm_angle in (ang, ang + math.pi / 2, ang + math.pi, ang + 3 * math.pi / 2):
+                cos_a, sin_a = math.cos(arm_angle), math.sin(arm_angle)
+                # Arm strut
+                ix = int(cx + cos_a * 7)
+                iy = int(cy + sin_a * 7)
+                ox = int(cx + cos_a * sat.arm_len)
+                oy = int(cy + sin_a * sat.arm_len)
+                pygame.draw.line(surf, col, (ix, iy), (ox, oy), 1)
+                # Panel (perpendicular bar at tip)
+                pa = arm_angle + math.pi / 2
+                pcos, psin = math.cos(pa), math.sin(pa)
+                p1 = (int(ox + pcos * 8), int(oy + psin * 8))
+                p2 = (int(ox - pcos * 8), int(oy - psin * 8))
+                pygame.draw.line(surf, dim, p1, p2, 3)
+                pygame.draw.line(surf, col, p1, p2, 1)
+
+            # Central hub
+            pygame.draw.circle(surf, dim,  (cx, cy), 6)
+            pygame.draw.circle(surf, col,  (cx, cy), 6, 1)
+
+            # Fuel beacon — pulsing green dot at hub centre
+            if sat.has_fuel:
+                pulse = 0.55 + 0.45 * math.sin(sat._fuel_t * 3.2)
+                beacon_col = (0, int(140 + 115 * pulse), int(60 + 68 * pulse))
+                pygame.draw.circle(surf, beacon_col, (cx, cy), 3)
+
+    # ------------------------------------------------------------------  ALIEN SHIP
+    def _draw_alien(self, run_mgr, t: float):
+        alien = getattr(run_mgr, "alien", None)
+        if alien is None or not alien.alive:
+            return
+        surf = self.surface
+
+        # Trail — dots fading from cyan to nothing
+        n = len(alien._trail)
+        for i, (tx, ty) in enumerate(alien._trail):
+            frac = (i + 1) / max(1, n)
+            r = int(frac * 20)
+            g = int(frac * 220)
+            b = int(frac * 200)
+            size = max(1, int(frac * 4))
+            if 0 <= int(tx) < S.SCREEN_W and 0 <= int(ty) < S.FLIGHT_H:
+                pygame.draw.circle(surf, (r, g, b), (int(tx), int(ty)), size)
+
+        # Hull fill + outline
+        hull  = alien.world_pts(_ALIEN_HULL)
+        inner = alien.world_pts(_ALIEN_INNER)
+        if len(hull) >= 3:
+            pygame.draw.polygon(surf, (0, 16, 12), hull)
+            pygame.draw.polygon(surf, (0, 235, 200), hull, 2)
+        if len(inner) >= 3:
+            pygame.draw.polygon(surf, (0, 50, 38), inner)
+
+        # Pulsing glow behind hull
+        glow_surf = pygame.Surface((160, 160), pygame.SRCALPHA)
+        ga = int(35 + 20 * math.sin(t * 5.0))
+        pygame.draw.circle(glow_surf, (0, 235, 200, ga), (80, 80), 58)
+        surf.blit(glow_surf, (int(alien.pos.x) - 80, int(alien.pos.y) - 80))
+
+    # ------------------------------------------------------------------  BARGE RADAR
+    def _draw_barge_radar(self, run_mgr, ship, t: float):
+        barges = getattr(run_mgr, "barges", [])
+        if not barges:
+            return
+        surf = self.surface
+        R    = 36    # radar circle radius px
+        cx   = S.SCREEN_W - R - 14
+        cy   = R + 14
+
+        # Background circle
+        bg = pygame.Surface((R * 2 + 4, R * 2 + 4), pygame.SRCALPHA)
+        pygame.draw.circle(bg, (6, 6, 10, 200), (R + 2, R + 2), R)
+        pygame.draw.circle(bg, (60, 60, 80, 120), (R + 2, R + 2), R, 1)
+        surf.blit(bg, (cx - R - 2, cy - R - 2))
+
+        # Dim crosshair
+        pygame.draw.line(surf, (30, 30, 40), (cx - R, cy), (cx + R, cy), 1)
+        pygame.draw.line(surf, (30, 30, 40), (cx, cy - R), (cx, cy + R), 1)
+
+        # Ship dot (always centre)
+        pygame.draw.circle(surf, (0, 200, 80), (cx, cy), 2)
+
+        # Map scale: radar covers the full screen
+        scale_x = R / (S.SCREEN_W / 2)
+        scale_y = R / (S.FLIGHT_H / 2)
+        scx = ship.body.pos.x if hasattr(ship, "body") else ship.pos.x
+        scy = ship.body.pos.y if hasattr(ship, "body") else ship.pos.y
+
+        for barge in barges:
+            bx = barge.body.pos.x
+            by = barge.body.pos.y
+            dx = (bx - scx) * scale_x
+            dy = (by - scy) * scale_y
+            # Clamp blip to radar circle edge if off range
+            dist2d = math.hypot(dx, dy)
+            if dist2d > R - 3:
+                dx = dx / dist2d * (R - 3)
+                dy = dy / dist2d * (R - 3)
+            bx_r = int(cx + dx)
+            by_r = int(cy + dy)
+
+            # Color by state
+            state = barge.state
+            if state in ("torch", "clamp"):
+                pulse = 0.5 + 0.5 * math.sin(t * 8.0)
+                blip_col = (int(220 + 35 * pulse), int(30 + 20 * pulse), 20)
+            elif state == "chase":
+                blip_col = (255, 140, 0)
+            else:
+                blip_col = (120, 85, 0)
+
+            pygame.draw.circle(surf, blip_col, (bx_r, by_r), 3)
+            pygame.draw.circle(surf, blip_col, (bx_r, by_r), 3, 1)
+
+        # Label
+        font = pygame.font.SysFont("monospace", 8)
+        label = font.render("RADAR", True, (40, 40, 55))
+        surf.blit(label, (cx - label.get_width() // 2, cy + R + 2))
 
     # ------------------------------------------------------------------  BULLETS
     def _draw_bullets(self, ship):

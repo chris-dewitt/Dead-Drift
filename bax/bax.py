@@ -9,7 +9,8 @@ from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_BARGE_NEARBY, EVT_CANISTER_GRAB,
                              EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING,
                              EVT_GUN_MALFUNCTION, EVT_SPORE_INVERTED,
-                             EVT_BARGE_INTERCEPT, EVT_KRESS_DIALLED)
+                             EVT_BARGE_INTERCEPT, EVT_KRESS_DIALLED,
+                             EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_TORCH_ACTIVE)
 
 _IDLE = [
     "Right then. No rush. I've only been bolted here since the third war.",
@@ -94,6 +95,9 @@ class Bax:
         bus.subscribe(EVT_SPORE_INVERTED,   self._on_spore_inverted)
         bus.subscribe(EVT_BARGE_INTERCEPT,  self._on_barge_intercept)
         bus.subscribe(EVT_KRESS_DIALLED,    self._on_kress_dialled)
+        bus.subscribe(EVT_SATELLITE_HIT,    self._on_satellite_hit)
+        bus.subscribe(EVT_ALIEN_SIGHTING,   self._on_alien_sighting)
+        bus.subscribe(EVT_TORCH_ACTIVE,     self._on_torch_active)
 
     def update(self, dt: float):
         self._speak_cd = max(0.0, self._speak_cd - dt)
@@ -252,6 +256,39 @@ class Bax:
             "Dialin' Kress. Don't tell 'im I said hello.",
             "Old Kress. We go back. Sort of. He owes me a thing. Doesn't matter.",
             "Right — opening the underground channel. Mind your wallet.",
+        ]))
+
+    def _on_satellite_hit(self, **_):
+        self.speak(random.choice([
+            "Ow! Bloody satellite! Who LEAVES these things out here?",
+            "That was a Union comm relay. Well. Was.",
+            "Derelict hardware! Hull's taken a knock. Watch where you're flyin'!",
+            "Hull contact — old satellite. Nova Soma owns the debris too, probably.",
+        ]))
+
+    def _on_alien_sighting(self, **_):
+        self.speak(random.choice([
+            "OI OI OI. WHAT WAS THAT. That was NOT human. That was NOT Union. "
+            "Did you SEE that thing? Did you — it's gone. It's GONE. Are you alright? I'm not alright.",
+            "I'm reading a hull signature that is categorically NOT in any Union registry. "
+            "That's — mate, that's an alien ship. ALIEN. And it didn't even LOOK at us. "
+            "I don't know if that's good.",
+            "CONTACT. Unknown origin. Moving fast. Won't respond to — "
+            "...it's leaving. It just... left. Like we weren't worth stopping for. "
+            "Which is probably fine. Probably.",
+            "Right so either my sensors are having another episode or "
+            "something out there has entirely different ideas about ship design. "
+            "They didn't try to repo us. Small mercies.",
+            "They came, they passed through, they didn't file any paperwork. "
+            "Honestly? I respect it. We could all learn something.",
+        ]))
+
+    def _on_torch_active(self, **_):
+        self.speak(random.choice([
+            "PLASMA TORCH IS HOT. SNAP THE TETHER. NOW. NOW. NOW.",
+            "They're cuttin' into the hull! Snap that cable SIDEWAYS. GO!",
+            "TORCH STATE. Drift HARD or lose a module. You've got seconds!",
+            "OI. They are unbolting your ship. SNAP THE TETHER. Lateral velocity. DO IT.",
         ]))
 
     def radio_blip(self):
