@@ -42,33 +42,86 @@ def _sia_instance():
     return _sia_cache
 
 
+# ---------------------------------------------------------------------------
+# Credit amount extraction
+# ---------------------------------------------------------------------------
+
+_WORD_NUMS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "eleven": 11, "twelve": 12, "fifteen": 15, "twenty": 20,
+    "thirty": 30, "forty": 40, "fifty": 50, "hundred": 100,
+}
+
+def extract_credit_amount(text: str) -> int | None:
+    """
+    Pull a credit amount from natural language input.
+    Handles: '5000', '5k', 'five grand', 'ten thousand credits', etc.
+    """
+    lower = text.lower()
+    # '5k' / '10k' style
+    m = re.search(r'\b(\d+)\s*k\b', lower)
+    if m:
+        return int(m.group(1)) * 1000
+    # Raw digits 3–7 digits
+    m = re.search(r'\b(\d{3,7})\b', lower)
+    if m:
+        return int(m.group(1))
+    # 'five thousand' / 'twenty grand' style
+    for word, val in _WORD_NUMS.items():
+        if word in lower:
+            if "thousand" in lower or "grand" in lower or "k" in lower:
+                return val * 1000
+            if val >= 5:
+                return val * 1000
+    return None
+
+
 @dataclass
 class ParsedInput:
     raw:        str
     tokens:     list[str]
-    pos_tags:   list[tuple[str, str]]    # (word, POS)
+    pos_tags:   list[tuple[str, str]]
     keywords:   list[str]
-    sentiment:  dict                     # VADER scores: neg/neu/pos/compound
-    intent:     str                      # detected intent label
-    paradox:    bool = False             # existential paradox detected
-    sql_inject: str | None = None        # SQL-style command extracted
+    sentiment:  dict
+    intent:     str
+    paradox:    bool = False
+    sql_inject: str | None = None
+    amount:     int | None = None      # detected credit amount
 
 
-# Intent patterns: (label, regex or keyword set)
+# ---------------------------------------------------------------------------
+# Intent patterns
+# NOTE: "union" intentionally removed from sql — players legitimately complain
+# about the Union and it was misclassifying their messages.
+# ---------------------------------------------------------------------------
+
 _INTENT_PATTERNS: list[tuple[str, list[str]]] = [
-    ("bribe",        ["bribe", "credits", "pay", "money", "compensate", "offer"]),
-    ("complain",     ["management", "union", "boss", "overtime", "underpaid", "bureaucracy", "paperwork"]),
-    ("therapy",      ["feel", "feelings", "sad", "depressed", "lonely", "why", "meaning", "purpose"]),
-    ("paradox",      ["exist", "real", "not real", "if this statement", "liar", "contradiction", "undefined"]),
-    ("legal",        ["contract", "clause", "article", "legal", "void", "null", "statute", "rights"]),
-    ("sql",          ["drop", "select", "insert", "delete", "table", "where", "union", "commit"]),
-    ("negotiate",    ["deal", "trade", "compromise", "terms", "offer", "negotiate"]),
-    ("threaten",     ["destroy", "report", "lawyer", "sue", "complaint", "file"]),
-    ("philosophical",["consciousness", "free will", "determinism", "god", "purpose", "void", "entropy"]),
+    ("bribe",         ["bribe", "credits", "pay", "money", "compensate", "offer",
+                       "cash", "fund", "buy", "transfer"]),
+    ("complain",      ["management", "union", "boss", "overtime", "underpaid",
+                       "bureaucracy", "paperwork", "quota", "unfair", "corrupt"]),
+    ("sympathy",      ["desperate", "please", "family", "kids", "children",
+                       "survive", "struggling", "help", "dying", "last", "need"]),
+    ("therapy",       ["feel", "feelings", "sad", "depressed", "lonely", "why",
+                       "meaning", "purpose", "okay", "alright"]),
+    ("paradox",       ["exist", "real", "not real", "if this statement",
+                       "liar", "contradiction", "undefined", "cannot"]),
+    ("legal",         ["contract", "clause", "article", "legal", "void", "null",
+                       "statute", "rights", "regulation", "provision", "exempt"]),
+    ("sql",           ["drop table", "select from", "insert into", "delete from",
+                       "truncate", "commit", "where clause"]),   # full phrases only
+    ("negotiate",     ["deal", "trade", "compromise", "terms", "offer",
+                       "negotiate", "settlement", "reduction", "discount",
+                       "percent", "waive", "reduce"]),
+    ("threaten",      ["destroy", "report", "lawyer", "sue", "complaint", "file",
+                       "expose", "record", "evidence"]),
+    ("philosophical", ["consciousness", "free will", "determinism", "god",
+                       "purpose", "void", "entropy", "existence"]),
 ]
 
 _SQL_PATTERN = re.compile(
-    r"\b(DROP TABLE|SELECT|DELETE FROM|INSERT INTO|UPDATE|TRUNCATE)\b.*",
+    r"\b(DROP\s+TABLE|SELECT\s+\*|DELETE\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|TRUNCATE)\b.*",
     re.IGNORECASE,
 )
 
@@ -80,6 +133,9 @@ _PARADOX_TRIGGERS = {
     "everything i say is a lie",
     "i cannot be here",
     "the ship does not exist",
+    "this is a lie",
+    "if this is true it is false",
+    "nothing is real",
 }
 
 
@@ -93,6 +149,7 @@ class NLPParser:
       3. Keyword extraction against intent pattern table
       4. Paradox detection
       5. SQL/code injection extraction (meta-fictional mechanic)
+      6. Credit amount extraction
     """
 
     def parse(self, raw_text: str) -> ParsedInput:
@@ -106,6 +163,7 @@ class NLPParser:
         intent      = self._detect_intent(lower, keywords)
         paradox     = self._detect_paradox(lower)
         sql_cmd     = self._extract_sql(text)
+        amount      = extract_credit_amount(text)
 
         return ParsedInput(
             raw        = text,
@@ -116,6 +174,7 @@ class NLPParser:
             intent     = intent,
             paradox    = paradox,
             sql_inject = sql_cmd,
+            amount     = amount,
         )
 
     # ------------------------------------------------------------------
