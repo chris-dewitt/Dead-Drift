@@ -213,12 +213,16 @@ class Bax:
                 "Oh no. OH NO. The shrooms are leaking. EVERYTHING IS BACKWARDS.",
                 "Navigation update: your controls are lying to you. You're welcome.",
                 "I did NOT consent to whatever the cargo just did to the flight computer.",
+                "The shrooms 'ave gone epistemic. Whatever that means. FLY SIDEWAYS.",
+                "MY SENSORS SAY LEFT. THE UNIVERSE SAYS OTHERWISE. PICK ONE.",
             ]))
         else:
             self.speak(random.choice([
                 "Right, we're back. That was a thing that happened.",
                 "Controls nominal. I think. Mostly. Check everything.",
                 "Spore event over. I'm filing an incident report with meself.",
+                "...Was any of that real? Doesn't matter. Eyes forward.",
+                "Normal service resumed. Your previous controls were a hallucination.",
             ]))
 
     def radio_blip(self):
