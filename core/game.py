@@ -233,7 +233,7 @@ class Game:
         spd_txt   = font.render(f"{speed:>5.0f} m/s", True, speed_col)
         self.screen.blit(spd_txt, (sec_w // 2 - spd_txt.get_width() // 2, 56))
 
-        # Debt ticker — bottom-left, always running
+        # Debt ticker — bottom-left
         interest_per_sec = max(0.01, self.meta.debt * S.DEBT_INTEREST_RATE)
         session_accrued  = t * interest_per_sec
         displayed_debt   = int(self.meta.debt + session_accrued)
@@ -241,6 +241,13 @@ class Game:
         ticker_col = (110, 50, 50) if not blink else (160, 60, 60)
         debt_txt = font.render(
             f"DEBT  {displayed_debt:,} cr  +{interest_per_sec:.2f}/s", True, ticker_col)
+
+        run_reduced = rm._run_debt_reduced
+        if run_reduced > 0:
+            rec_surf = font_sm.render(
+                f"recovered: -{run_reduced:,} cr this run", True, (55, 185, 75))
+            self.screen.blit(rec_surf, (10, S.FLIGHT_H - 38))
+
         self.screen.blit(debt_txt, (10, S.FLIGHT_H - 22))
 
         # Kress comm hint — bottom-right, dim when unavailable, brighter when ready

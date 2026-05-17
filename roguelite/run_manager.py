@@ -12,7 +12,7 @@ from terminal.npc_logic import make_npc
 from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
                              EVT_SLINGSHOT, EVT_BARGE_NEARBY, EVT_CANISTER_GRAB,
                              EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING,
-                             EVT_COMMS_SPEAK)
+                             EVT_COMMS_SPEAK, EVT_TETHER_SNAP, EVT_BAX_SPEAK)
 from config import settings as S
 
 
@@ -124,8 +124,10 @@ class RunManager:
         self._collector_cd     = random.uniform(S.COLLECTOR_INTERVAL_MIN, S.COLLECTOR_INTERVAL_MAX)
 
         self._pending_advance  = False
+        self._run_debt_reduced = 0   # credits recovered this run (shown in HUD)
 
         bus.subscribe(EVT_CANISTER_GRAB, self._on_canister_grab)
+        bus.subscribe(EVT_TETHER_SNAP,   self._on_tether_snap)
 
     # ------------------------------------------------------------------
     def start_run(self, ship):
@@ -138,6 +140,7 @@ class RunManager:
         self._intercepting_barge = None
         self._pending_advance    = False
         self._kress_called_this_sector = False
+        self._run_debt_reduced   = 0
         self._ship = ship
         self.draft = LoadoutDraft(chapter=self._current_chapter())
         self._kress_cd    = random.uniform(S.KRESS_INTERVAL_MIN, S.KRESS_INTERVAL_MAX)
@@ -244,6 +247,18 @@ class RunManager:
             elif rock in self._shower_rocks:
                 self._shower_rocks.remove(rock)
 
+        # Bullet hits on repo barges — 3 hits forces a retreat
+        for bullet in list(bullets):
+            if not bullet.alive:
+                continue
+            for barge in self._barges:
+                if barge.is_destroyed:
+                    continue
+                if (barge.pos - bullet.pos).length() < 26:
+                    bullet.lifetime = -1
+                    barge.take_hit()
+                    break
+
     def _check_slingshot(self):
         if self._sling_cd > 0 or self._sector is None:
             return
@@ -304,6 +319,17 @@ class RunManager:
             speaker, line = random.choice(_COLLECTOR_LINES)
             bus.emit(EVT_COMMS_SPEAK, speaker=speaker, line=line)
 
+    def _on_tether_snap(self, **_):
+        bonus = 1200
+        self.meta.pay_off(bonus)
+        self._run_debt_reduced += bonus
+        bus.emit(EVT_BAX_SPEAK, line=random.choice([
+            f"Snap! That's {bonus:,} off your tab. Union's gonna be LIVID.",
+            "Beautiful lateral drift! Their claims department can cry about it.",
+            f"{bonus:,} credits back. Every snap counts, mate.",
+            "Tether snapped! Ha! They'll be filing an incident report for a WEEK.",
+        ]))
+
     def _on_canister_grab(self, **_):
         from ship.modules.thruster import Thruster
         if self._ship is None:
@@ -329,6 +355,26 @@ class RunManager:
         self._pending_advance = True
 
     def on_terminal_complete(self, outcome):
+        # Grant debt reduction based on how the negotiation went
+        if outcome == "exploit":
+            bonus = 9000
+            self.meta.pay_off(bonus)
+            self._run_debt_reduced += bonus
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                f"EXPLOITED their system. {bonus:,} credits rerouted. Blevins is gonna lose his MIND.",
+                f"Their firewall had the structural integrity of wet paper. {bonus:,} back.",
+                f"You just robbed a repo man digitally. {bonus:,} off. I'm proud.",
+            ]))
+        elif outcome == "release":
+            bonus = 2500
+            self.meta.pay_off(bonus)
+            self._run_debt_reduced += bonus
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                f"Talked your way out. {bonus:,} off the invoice. Not bad.",
+                f"They folded. {bonus:,} waived. Still in debt, but less of it.",
+                f"Negotiated like a professional. A broke professional, but still. {bonus:,} saved.",
+            ]))
+
         self._active_terminal = None
         if self._intercepting_barge is not None:
             barge = self._intercepting_barge
@@ -340,6 +386,10 @@ class RunManager:
             self._advance_sector()
 
     def _advance_sector(self):
+        sector_bonus = 4500
+        self.meta.pay_off(sector_bonus)
+        self._run_debt_reduced += sector_bonus
+
         self._sector_index += 1
         bus.emit(EVT_SECTOR_CLEAR, sector_num=self._sector_index)
 

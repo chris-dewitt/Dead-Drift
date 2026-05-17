@@ -4,7 +4,7 @@ import random
 from physics.body import RigidBody2D, Vec2
 from physics.tether import Tether
 from config import settings as S
-from core.event_bus import bus, EVT_MODULE_UNBOLTED, EVT_TETHER_HIT, EVT_BARGE_INTERCEPT
+from core.event_bus import bus, EVT_MODULE_UNBOLTED, EVT_TETHER_HIT, EVT_BARGE_INTERCEPT, EVT_BAX_SPEAK
 from terminal.npcs.base_npc import NPCOutcome
 
 
@@ -29,13 +29,15 @@ class RepoBarge:
     If already retreated recently, skip INTERCEPT and CLAMP immediately.
     """
 
-    DETECT_RANGE      = 400.0
-    CLAMP_RANGE       = 120.0
-    TORCH_INTERVAL    = 5.0
-    PATROL_SPEED      = 60.0
-    CHASE_SPEED       = 140.0
-    RETREAT_DURATION  = 14.0   # seconds barge runs away after losing negotiation
-    INTERCEPT_COOLDOWN = 45.0  # seconds before barge can intercept again
+    DETECT_RANGE       = 400.0
+    CLAMP_RANGE        = 120.0
+    TORCH_INTERVAL     = 5.0
+    PATROL_SPEED       = 60.0
+    CHASE_SPEED        = 140.0
+    RETREAT_DURATION   = 14.0   # seconds barge runs away after losing negotiation
+    INTERCEPT_COOLDOWN = 45.0   # seconds before barge can intercept again
+    DISRUPTION_HITS    = 3      # bullets needed to force a retreat
+    DISRUPTION_RETREAT = 11.0   # seconds of retreat after being disrupted
 
     def __init__(self, x: float, y: float, run_manager):
         self.body       = RigidBody2D(x, y, mass=8.0)
@@ -47,10 +49,11 @@ class RepoBarge:
             random.randint(100, S.SCREEN_W - 100),
             random.randint(100, S.SCREEN_H - 100),
         )
-        self.is_destroyed   = False
-        self._hp            = 60.0
-        self._retreat_t     = 0.0
-        self._intercept_cd  = 0.0   # cooldown before next intercept attempt
+        self.is_destroyed    = False
+        self._hp             = 60.0
+        self._retreat_t      = 0.0
+        self._intercept_cd   = 0.0   # cooldown before next intercept attempt
+        self._disruption_hits = 0    # bullet hits since last disruption reset
 
     # ------------------------------------------------------------------
     def update(self, dt: float):
@@ -159,6 +162,25 @@ class RepoBarge:
         ship.chain.unbolt_random()
 
     # ------------------------------------------------------------------
+    def take_hit(self):
+        """Called when a player bullet connects. Three hits forces a retreat."""
+        if self.state == BargeState.RETREAT:
+            return
+        self._disruption_hits += 1
+        if self._disruption_hits >= self.DISRUPTION_HITS:
+            self._disruption_hits = 0
+            self._retreat_t = self.DISRUPTION_RETREAT
+            self.state = BargeState.RETREAT
+            if self._tether:
+                self._tether.active = False
+                self._tether = None
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "THREE HITS. They're pullin' back! Move it!",
+                "Disrupted their nav! You've got eleven seconds — GO!",
+                "Ha! Union property, dented. Get out of 'ere!",
+                "Their instruments are screamin'. Leg it!",
+            ]))
+
     def take_damage(self, amount: float):
         self._hp -= amount
         if self._hp <= 0:
