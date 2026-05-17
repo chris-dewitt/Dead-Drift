@@ -38,9 +38,17 @@ class VectorRenderer:
         self._stars      = self._gen_stars()
         self._nebulae    = self._gen_nebulae()
         self._dust       = self._gen_dust()
+        self._planets    = self._gen_planets()
         self._flash_t    = 0.0
         self._flash_col  = (180, 220, 255)
         self._scan_pings: list[tuple[int, int, float]] = []
+
+        # Shooting stars — (x, y, vx, vy, age, lifetime)
+        self._shooting_stars: list[list[float]] = []
+        self._next_shooting_star = random.uniform(4.0, 10.0)
+
+        # Ember particles trailing exhaust — (x, y, vx, vy, age, lifetime, hue)
+        self._embers: list[list[float]] = []
 
         # Screen shake state: trauma decays exponentially; offset is random per frame
         self._shake_trauma = 0.0   # 0.0 (none) → 1.0 (huge)
@@ -88,7 +96,10 @@ class VectorRenderer:
         t = pygame.time.get_ticks() / 1000.0
         self._draw_nebulae(t)
         self._draw_dust(t)
+        self._draw_planets(t)
         self._draw_stars(t)
+        self._update_shooting_stars(dt, t)
+        self._draw_shooting_stars(t)
         self._draw_scan_pings(t)
         self._draw_gravity_wells(run_mgr, t)
         self._draw_debris(run_mgr, t)
@@ -100,6 +111,8 @@ class VectorRenderer:
         self._draw_barge_radar(run_mgr, ship, t)
         self._draw_trail(ship, t)
         self._draw_velocity_indicator(ship)
+        self._update_embers(dt)
+        self._draw_embers()
         self._draw_ship(ship, t)
         self._draw_exhaust(ship, t)
         self._draw_proximity_alarm(run_mgr, ship, t)
@@ -124,6 +137,7 @@ class VectorRenderer:
     def draw_menu_background(self, t: float):
         self._draw_nebulae(t)
         self._draw_dust(t)
+        self._draw_planets(t)
         self._draw_stars(t)
         # Single decorative well centred behind the title
         class _FW:
@@ -158,6 +172,179 @@ class VectorRenderer:
             for scale, alpha in ((1.0, 20), (0.68, 32), (0.40, 44)):
                 pygame.draw.circle(surf, (*col, alpha), (x, y), int(r * scale))
         self.surface.blit(surf, (0, 0))
+
+    # ------------------------------------------------------------------  PLANETS (decorative background)
+    def _gen_planets(self) -> list:
+        rng = random.Random(self._STAR_SEED + 311)
+        out = []
+        # 1-2 distant planets in screen corners
+        configs = [
+            # (corner: 0=TL, 1=TR, 2=BL, 3=BR), radius, hue, sat, has_ring, ring_tilt
+            (rng.choice([0, 1, 2, 3]), rng.randint(80, 130), rng.random(),
+             rng.uniform(0.55, 0.85), rng.random() < 0.5, rng.uniform(0.2, 0.6)),
+        ]
+        for corner, r, hue, sat, has_ring, ring_tilt in configs:
+            if corner == 0:
+                cx, cy = -int(r * 0.35), -int(r * 0.35)
+            elif corner == 1:
+                cx, cy = S.SCREEN_W + int(r * 0.35), -int(r * 0.35)
+            elif corner == 2:
+                cx, cy = -int(r * 0.35), S.FLIGHT_H + int(r * 0.35)
+            else:
+                cx, cy = S.SCREEN_W + int(r * 0.35), S.FLIGHT_H + int(r * 0.35)
+            # Atmosphere band offset (continent-ish)
+            band_seed = rng.random()
+            out.append((cx, cy, r, hue, sat, has_ring, ring_tilt, band_seed))
+        return out
+
+    def _draw_planets(self, t: float):
+        for cx, cy, r, base_hue, sat, has_ring, ring_tilt, band_seed in self._planets:
+            hue = (base_hue + t * 0.005) % 1.0
+            # Soft outer glow
+            glow = pygame.Surface((r * 3, r * 3), pygame.SRCALPHA)
+            glow_col = _hsv(hue, sat * 0.5, 0.18)
+            for ring in range(6):
+                ra = int(r * (1.0 + ring * 0.08))
+                a  = max(0, 14 - ring * 2)
+                pygame.draw.circle(glow, (*glow_col, a), (r * 3 // 2, r * 3 // 2), ra)
+            self.surface.blit(glow, (cx - r * 3 // 2, cy - r * 3 // 2))
+
+            # Ring (if any) — behind planet
+            if has_ring:
+                ring_surf = pygame.Surface((r * 3, int(r * 2.4)), pygame.SRCALPHA)
+                ring_col = _hsv((hue + 0.08) % 1.0, sat * 0.4, 0.35)
+                for rw in range(int(r * 1.4), int(r * 1.8), 2):
+                    rh = int(rw * ring_tilt)
+                    pygame.draw.ellipse(ring_surf, (*ring_col, 80),
+                                        (r * 3 // 2 - rw, ring_surf.get_height() // 2 - rh,
+                                         rw * 2, rh * 2), 1)
+                self.surface.blit(ring_surf, (cx - r * 3 // 2,
+                                              cy - ring_surf.get_height() // 2))
+
+            # Planet body — dark side gradient
+            body_surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+            for layer in range(6, 0, -1):
+                lr = int(r * layer / 6)
+                shade = 0.22 + 0.10 * (1 - layer / 6)
+                col = _hsv(hue, sat, shade)
+                pygame.draw.circle(body_surf, (*col, 245), (r, r), lr)
+            # Surface band (cloud belt)
+            for i in range(3):
+                band_y = int(r * (0.4 + i * 0.3 + band_seed))
+                if 0 < band_y < 2 * r:
+                    band_col = _hsv((hue + 0.04) % 1.0, sat * 0.7, 0.35)
+                    pygame.draw.line(body_surf, (*band_col, 120),
+                                     (max(0, r - int(r * 0.8)), band_y),
+                                     (min(2 * r, r + int(r * 0.8)), band_y), 2)
+            # Terminator (day/night line)
+            terminator = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+            for px in range(int(r * 0.3)):
+                a = int(120 * (1 - px / (r * 0.3)))
+                pygame.draw.line(terminator, (0, 0, 0, a),
+                                 (px, 0), (px, 2 * r), 1)
+            body_surf.blit(terminator, (0, 0))
+
+            self.surface.blit(body_surf, (cx - r, cy - r))
+
+            # Atmosphere highlight (lit edge)
+            atm_surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+            atm_col = _hsv(hue, sat * 0.6, 1.0)
+            pygame.draw.circle(atm_surf, (*atm_col, 28), (r, r), r, 3)
+            self.surface.blit(atm_surf, (cx - r, cy - r))
+
+            # Ring foreground arc
+            if has_ring:
+                ring_surf = pygame.Surface((r * 3, int(r * 2.4)), pygame.SRCALPHA)
+                ring_col = _hsv((hue + 0.08) % 1.0, sat * 0.4, 0.5)
+                for rw in range(int(r * 1.4), int(r * 1.8), 2):
+                    rh = int(rw * ring_tilt)
+                    pygame.draw.arc(ring_surf, (*ring_col, 120),
+                                    (r * 3 // 2 - rw, ring_surf.get_height() // 2 - rh,
+                                     rw * 2, rh * 2),
+                                    0, math.pi, 2)
+                self.surface.blit(ring_surf, (cx - r * 3 // 2,
+                                              cy - ring_surf.get_height() // 2))
+
+    # ------------------------------------------------------------------  SHOOTING STARS
+    def _update_shooting_stars(self, dt: float, t: float):
+        # Maybe spawn
+        self._next_shooting_star -= dt
+        if self._next_shooting_star <= 0:
+            self._next_shooting_star = random.uniform(5.0, 14.0)
+            # Spawn from random edge
+            edge = random.randint(0, 3)
+            if edge == 0:    # top
+                x, y = random.randint(0, S.SCREEN_W), -20
+                vx, vy = random.uniform(-280, 280), random.uniform(180, 380)
+            elif edge == 1:  # right
+                x, y = S.SCREEN_W + 20, random.randint(0, S.FLIGHT_H)
+                vx, vy = random.uniform(-380, -180), random.uniform(-180, 180)
+            elif edge == 2:  # bottom (unusual but ok)
+                x, y = random.randint(0, S.SCREEN_W), S.FLIGHT_H + 20
+                vx, vy = random.uniform(-280, 280), random.uniform(-380, -180)
+            else:            # left
+                x, y = -20, random.randint(0, S.FLIGHT_H)
+                vx, vy = random.uniform(180, 380), random.uniform(-180, 180)
+            life = random.uniform(0.9, 1.6)
+            self._shooting_stars.append([x, y, vx, vy, 0.0, life])
+
+        # Update
+        alive = []
+        for s in self._shooting_stars:
+            s[0] += s[2] * dt
+            s[1] += s[3] * dt
+            s[4] += dt
+            if s[4] < s[5] and -40 < s[0] < S.SCREEN_W + 40 and -40 < s[1] < S.FLIGHT_H + 40:
+                alive.append(s)
+        self._shooting_stars = alive
+
+    def _draw_shooting_stars(self, t: float):
+        for x, y, vx, vy, age, life in self._shooting_stars:
+            frac = age / life
+            speed = math.hypot(vx, vy)
+            if speed < 1:
+                continue
+            ux, uy = vx / speed, vy / speed
+            # Tail length scales with life remaining
+            tail_len = (1 - frac * 0.6) * 60
+            tx, ty = x - ux * tail_len, y - uy * tail_len
+            # Color: cyan-white head, fades
+            brightness = (1 - frac) ** 1.3
+            head_col = (int(220 * brightness), int(240 * brightness),
+                        int(255 * brightness))
+            tail_col = (int(20 * brightness), int(80 * brightness),
+                        int(180 * brightness))
+            pygame.draw.line(self.surface, tail_col, (tx, ty), (x, y), 2)
+            pygame.draw.line(self.surface, head_col,
+                             (x - ux * 8, y - uy * 8), (x, y), 2)
+            pygame.draw.circle(self.surface, head_col, (int(x), int(y)), 2)
+
+    # ------------------------------------------------------------------  EMBERS (exhaust particles)
+    def _spawn_ember(self, x: float, y: float, vx: float, vy: float, hue: float):
+        self._embers.append([x, y, vx, vy, 0.0, random.uniform(0.5, 1.1), hue])
+
+    def _update_embers(self, dt: float):
+        alive = []
+        for e in self._embers:
+            e[0] += e[2] * dt
+            e[1] += e[3] * dt
+            # Decelerate slightly (space drag-free, but visual decay)
+            e[2] *= 0.97
+            e[3] *= 0.97
+            e[4] += dt
+            if e[4] < e[5]:
+                alive.append(e)
+        self._embers = alive
+
+    def _draw_embers(self):
+        for x, y, vx, vy, age, life, hue in self._embers:
+            if not (0 <= x < S.SCREEN_W and 0 <= y < S.FLIGHT_H):
+                continue
+            frac = 1.0 - age / life
+            val  = 0.4 + 0.6 * frac
+            col  = _hsv(hue, 0.85, val)
+            size = 1 if frac < 0.5 else 2
+            pygame.draw.circle(self.surface, col, (int(x), int(y)), size)
 
     # ------------------------------------------------------------------  DUST
     def _gen_dust(self) -> list:
@@ -301,6 +488,24 @@ class VectorRenderer:
             y2 = cy + int(math.sin(ang) * r * 1.5)
             pygame.draw.line(self.surface, fine_col, (x1, y1), (x2, y2), 1)
 
+        # Accretion disc — orbiting particles
+        n_particles = 28
+        for i in range(n_particles):
+            base_ang = (i / n_particles) * math.tau
+            # Particle has its own orbital radius and speed
+            seed = (cx * 17 + cy * 31 + i * 53) % 100
+            orbit_r = r * (1.5 + (seed / 100) * 0.8)
+            orbit_speed = 0.7 + (seed % 7) * 0.12
+            ang = base_ang + t * orbit_speed
+            px = cx + math.cos(ang) * orbit_r
+            py = cy + math.sin(ang) * orbit_r * 0.42   # squashed = inclined disc
+            phue = (drift + 0.15 + (seed / 100) * 0.2) % 1.0
+            # Brightness pulses as particle orbits
+            bright = 0.5 + 0.5 * math.sin(ang * 2 + t * 1.4)
+            pcol = _hsv(phue, 0.85, 0.5 + 0.4 * bright)
+            pygame.draw.circle(self.surface, pcol, (int(px), int(py)),
+                               2 if bright > 0.5 else 1)
+
         # Pulsing core
         core_r   = max(5, int(r * 0.24))
         core_hue = (drift + 0.5) % 1.0
@@ -310,6 +515,13 @@ class VectorRenderer:
                            (cx, cy), core_r)
         pygame.draw.circle(self.surface, (255, 255, 255), (cx, cy),
                            max(2, core_r // 3))
+
+        # Lensing distortion — bright ring around event horizon
+        lens_pulse = 0.7 + 0.3 * math.sin(t * 2.5)
+        lens_col = (int(255 * lens_pulse), int(255 * lens_pulse),
+                    int(220 * lens_pulse))
+        pygame.draw.circle(self.surface, lens_col, (cx, cy),
+                           core_r + 9, 1)
 
     # ------------------------------------------------------------------  DEBRIS
     def _draw_debris(self, run_mgr, t: float):
@@ -357,13 +569,25 @@ class VectorRenderer:
         c_bright = _hsv(hue, 0.9, 1.0)
         c_mid    = _hsv(hue, 0.7, 0.55)
         c_glow   = _hsv(hue, 0.7, 0.30)
+        c_dim    = _hsv(hue, 0.5, 0.18)
 
+        # Outer halo
+        halo_surf = pygame.Surface((size * 4, size * 4), pygame.SRCALPHA)
+        pygame.draw.circle(halo_surf, (*c_dim, 70),
+                           (size * 2, size * 2), size + 8)
+        pygame.draw.circle(halo_surf, (*c_glow, 40),
+                           (size * 2, size * 2), size + 14)
+        self.surface.blit(halo_surf, (cx - size * 2, cy - size * 2))
+
+        # Diamond layers
         pygame.draw.polygon(self.surface, c_glow,
                             [(cx, cy-size-5),(cx+size+5,cy),(cx,cy+size+5),(cx-size-5,cy)])
         pygame.draw.polygon(self.surface, c_mid,
                             [(cx, cy-size-1),(cx+size+1,cy),(cx,cy+size+1),(cx-size-1,cy)])
         pygame.draw.polygon(self.surface, c_bright,
                             [(cx, cy-size),(cx+size,cy),(cx,cy+size),(cx-size,cy)], 2)
+
+        # Rotating tick marks
         ang_off = t * 1.2
         for i in range(4):
             ang = ang_off + i * math.pi / 2
@@ -372,8 +596,22 @@ class VectorRenderer:
             tx2 = int(cx + math.cos(ang) * (size - 2))
             ty2 = int(cy + math.sin(ang) * (size - 2))
             pygame.draw.line(self.surface, c_bright, (tx1, ty1), (tx2, ty2), 1)
+
+        # Inner cross + dot
         pygame.draw.line(self.surface, c_bright, (cx-3,cy), (cx+3,cy), 1)
         pygame.draw.line(self.surface, c_bright, (cx,cy-3), (cx,cy+3), 1)
+        # Centre fuel-marker dot
+        center_pulse = 0.6 + 0.4 * math.sin(t * 6.0 + can.pulse)
+        center_col = (int(220 * center_pulse), int(255 * center_pulse), int(180 * center_pulse))
+        pygame.draw.circle(self.surface, center_col, (cx, cy), 2)
+
+        # Orbiting sparkles
+        for spk in range(2):
+            sang = t * 2.0 + spk * math.pi + can.pulse
+            sr   = size + 6 + 2 * math.sin(t * 3.0 + spk)
+            sx   = int(cx + math.cos(sang) * sr)
+            sy   = int(cy + math.sin(sang) * sr)
+            pygame.draw.circle(self.surface, c_bright, (sx, sy), 1)
 
     # ------------------------------------------------------------------  SATELLITES
     def _draw_satellites(self, run_mgr, t: float):
@@ -584,38 +822,121 @@ class VectorRenderer:
         pts   = [self._rotate_pt(p, angle, pos) for p in raw]
 
         hp = ship.hull_pct
-        glow_r = int((1.0 - hp) * 60)
+
+        # Engine ambient glow halo (below ship outline)
+        thrust_pulse = 0.7 + 0.3 * math.sin(t * 8.0)
+        ambient_glow_r = int(28 + 6 * thrust_pulse)
+        glow_surf = pygame.Surface((ambient_glow_r * 2, ambient_glow_r * 2), pygame.SRCALPHA)
+        glow_hue = 0.58 + (1.0 - hp) * 0.20
+        ag_col = _hsv(glow_hue, 0.5, 0.8)
+        for layer in range(3):
+            la = max(0, 28 - layer * 9)
+            pygame.draw.circle(glow_surf, (*ag_col, la),
+                               (ambient_glow_r, ambient_glow_r),
+                               ambient_glow_r - layer * 6)
+        self.surface.blit(glow_surf,
+                          (int(pos.x) - ambient_glow_r, int(pos.y) - ambient_glow_r))
+
+        # Damage glow (red halo when low HP)
+        glow_r   = int((1.0 - hp) * 60)
         glow_col = (glow_r, max(0, 55 - int((1-hp)*42)), max(0, 115 - int((1-hp)*85)))
-
         pygame.draw.polygon(self.surface, glow_col, pts, 4)
-        pygame.draw.polygon(self.surface, S.WHITE_VEC, pts, 2)
 
-        # Interior spine
-        nose  = self._rotate_pt((18, 0), angle, pos)
-        belly = self._rotate_pt((-5, 0), angle, pos)
-        pygame.draw.line(self.surface, (100, 100, 130), nose, belly, 1)
+        # Hull fill — darker blue interior, like ship is solid
+        hull_fill = (8, 14, 28)
+        pygame.draw.polygon(self.surface, hull_fill, pts)
 
+        # Hull outline — slightly thicker, brighter on intact ship
+        outline_col = S.WHITE_VEC if hp > 0.4 else (200, 180, 180)
+        pygame.draw.polygon(self.surface, outline_col, pts, 2)
+
+        # Panel/plate seams — subdivide hull
+        seam_col = (60, 60, 90)
+        seam_pts = [
+            ((10, -5), (-8, -5)),    # top panel seam
+            ((10, 6),  (-8, 6)),     # bottom panel seam
+            ((5, -9),  (5, 10)),     # mid vertical seam
+            ((-2, -7), (-2, 9)),     # rear vertical seam
+        ]
+        for a, b in seam_pts:
+            pa = self._rotate_pt(a, angle, pos)
+            pb = self._rotate_pt(b, angle, pos)
+            pygame.draw.line(self.surface, seam_col, pa, pb, 1)
+
+        # Cockpit window — cyan glow on the nose
+        cockpit_pts = [(15, -2), (10, -4), (5, -3), (5, 4), (10, 5), (15, 3)]
+        cpt = [self._rotate_pt(p, angle, pos) for p in cockpit_pts]
+        cockpit_pulse = 0.6 + 0.4 * math.sin(t * 1.8)
+        cockpit_col = (int(20 + 80 * cockpit_pulse),
+                       int(140 + 80 * cockpit_pulse),
+                       int(180 + 60 * cockpit_pulse))
+        pygame.draw.polygon(self.surface, (4, 30, 60), cpt)
+        pygame.draw.polygon(self.surface, cockpit_col, cpt, 1)
+        # Cockpit glint
+        glint_pt = self._rotate_pt((12, -1), angle, pos)
+        pygame.draw.circle(self.surface, (180, 240, 255), glint_pt, 1)
+
+        # Engine nozzle (rear) — darker housing with hot core
         nozzle = [self._rotate_pt(p, angle, pos) for p in
                   ((-14,-5),(-20,-3),(-20,5),(-14,7))]
-        pygame.draw.polygon(self.surface, (0, 35, 75), nozzle, 3)
-        pygame.draw.polygon(self.surface, S.GREY_DEAD, nozzle, 1)
+        pygame.draw.polygon(self.surface, (0, 22, 50), nozzle)
+        pygame.draw.polygon(self.surface, (75, 95, 130), nozzle, 1)
+        # Inner nozzle heat ring
+        nozzle_inner_pulse = 0.6 + 0.4 * math.sin(t * 14.0)
+        nz_inner = self._rotate_pt((-17, 0), angle, pos)
+        nz_col = (int(200 * nozzle_inner_pulse),
+                  int(140 * nozzle_inner_pulse),
+                  int(40 * nozzle_inner_pulse))
+        pygame.draw.circle(self.surface, nz_col, nz_inner, 2)
 
-        # RCS port dots
+        # RCS port dots — slight pulse
+        rcs_pulse = 0.4 + 0.4 * math.sin(t * 6.0)
+        rcs_col = (int(40 + 60 * rcs_pulse), int(40 + 60 * rcs_pulse), int(80 + 50 * rcs_pulse))
         for lx, ly in ((8,-8),(8,10),(-10,-6),(-10,8)):
             rpt = self._rotate_pt((lx, ly), angle, pos)
-            pygame.draw.circle(self.surface, (40, 40, 60), rpt, 1)
+            pygame.draw.circle(self.surface, rcs_col, rpt, 1)
+
+        # Wing tip nav lights — red left, green right (constant)
+        nav_l = self._rotate_pt((-14, -7), angle, pos)
+        nav_r = self._rotate_pt((-14, 9), angle, pos)
+        pygame.draw.circle(self.surface, (255, 60, 60), nav_l, 2)
+        pygame.draw.circle(self.surface, (60, 255, 100), nav_r, 2)
+
+        # Battle damage scars — appear on low HP
+        if hp < 0.6:
+            # Deterministic scar positions based on ship's "scar seed"
+            n_scars = int((0.6 - hp) * 10)
+            rng = random.Random(id(ship) & 0xFFFF)
+            for i in range(n_scars):
+                sx = rng.uniform(-12, 14)
+                sy = rng.uniform(-7, 8)
+                slen = rng.uniform(2, 4)
+                sang = rng.uniform(0, math.tau)
+                p1 = self._rotate_pt((sx, sy), angle, pos)
+                p2 = self._rotate_pt((sx + math.cos(sang) * slen,
+                                     sy + math.sin(sang) * slen), angle, pos)
+                pygame.draw.line(self.surface, (180, 60, 50), p1, p2, 1)
+
+            # Sparking scar — flickers
+            if hp < 0.3 and int(t * 6) % 2 == 0:
+                spk = self._rotate_pt((rng.uniform(-10, 8), rng.uniform(-5, 5)), angle, pos)
+                pygame.draw.circle(self.surface, (255, 220, 80), spk, 2)
+                pygame.draw.circle(self.surface, (255, 80, 30), spk, 1)
 
         # Gun barrel indicator
         if hasattr(ship, "gun") and not ship.gun.is_jammed:
-            barrel_tip  = self._rotate_pt((22, 0), angle, pos)
-            barrel_base = self._rotate_pt((15, 0), angle, pos)
-            pygame.draw.line(self.surface, (100, 220, 100), barrel_base, barrel_tip, 1)
+            barrel_tip  = self._rotate_pt((24, 0), angle, pos)
+            barrel_base = self._rotate_pt((16, 0), angle, pos)
+            pygame.draw.line(self.surface, (130, 130, 160), barrel_base, barrel_tip, 2)
+            pygame.draw.line(self.surface, (100, 230, 130), barrel_base, barrel_tip, 1)
+            # Muzzle dot
+            pygame.draw.circle(self.surface, (60, 180, 90), barrel_tip, 1)
         elif hasattr(ship, "gun") and ship.gun.is_jammed:
             jam_pulse = 0.5 + 0.5 * abs(math.sin(t * 8))
             jam_col   = (int(200 * jam_pulse), 0, 0)
-            barrel_tip  = self._rotate_pt((22, 0), angle, pos)
-            barrel_base = self._rotate_pt((15, 0), angle, pos)
-            pygame.draw.line(self.surface, jam_col, barrel_base, barrel_tip, 1)
+            barrel_tip  = self._rotate_pt((24, 0), angle, pos)
+            barrel_base = self._rotate_pt((16, 0), angle, pos)
+            pygame.draw.line(self.surface, jam_col, barrel_base, barrel_tip, 2)
 
     def _draw_exhaust(self, ship, t: float):
         keys      = pygame.key.get_pressed()
@@ -633,16 +954,53 @@ class VectorRenderer:
             c_outer = _hsv(hue, 0.75, 0.32 * flick)
             c_mid   = _hsv(hue, 0.92, 0.72 * flick)
             c_core  = _hsv(hue - 0.04, 0.25, 1.0)
-            outer = [self._rotate_pt(p, angle, pos) for p in ((-14,-9),(-58,0),(-14,11))]
-            mid   = [self._rotate_pt(p, angle, pos) for p in ((-14,-5),(-38,0),(-14,7))]
-            core  = [self._rotate_pt(p, angle, pos) for p in ((-14,-2),(-24,0),(-14,4))]
+            # Wavering plume — slight perpendicular jitter
+            jitter = math.sin(t * 22.0) * 1.5
+            outer = [self._rotate_pt(p, angle, pos) for p in
+                     ((-14,-9),(-58, jitter),(-14,11))]
+            mid   = [self._rotate_pt(p, angle, pos) for p in
+                     ((-14,-5),(-38, jitter * 0.6),(-14,7))]
+            core  = [self._rotate_pt(p, angle, pos) for p in
+                     ((-14,-2),(-26, jitter * 0.3),(-14,4))]
+
+            # Soft glow under plume
+            glow_surf = pygame.Surface((120, 80), pygame.SRCALPHA)
+            gp_col = _hsv(hue, 0.8, 0.9)
+            pygame.draw.circle(glow_surf, (*gp_col, 35), (60, 40), 36)
+            pygame.draw.circle(glow_surf, (*gp_col, 50), (60, 40), 22)
+            cx_glow = self._rotate_pt((-30, 0), angle, pos)
+            self.surface.blit(glow_surf, (cx_glow[0] - 60, cx_glow[1] - 40))
+
             pygame.draw.polygon(self.surface, c_outer, outer)
             pygame.draw.polygon(self.surface, c_mid,   mid)
             pygame.draw.polygon(self.surface, c_core,  core)
 
+            # White hot inner flame
+            inner_core = [self._rotate_pt(p, angle, pos) for p in
+                          ((-14,-1),(-18,0),(-14,2))]
+            pygame.draw.polygon(self.surface, (240, 250, 255), inner_core)
+
+            # Spawn embers — small chance each frame to add particles
+            if random.random() < 0.45:
+                # Particle exits the nozzle in the opposite direction of facing
+                rad = math.radians(angle + 180)
+                spawn = self._rotate_pt((-18, random.uniform(-3, 3)), angle, pos)
+                base_speed = random.uniform(140, 240)
+                spread = math.radians(random.uniform(-15, 15))
+                # Inherit ship velocity for natural look
+                ship_vx = ship.body.vel.x if hasattr(ship, "body") else 0
+                ship_vy = ship.body.vel.y if hasattr(ship, "body") else 0
+                evx = math.cos(rad + spread) * base_speed + ship_vx * 0.5
+                evy = math.sin(rad + spread) * base_speed + ship_vy * 0.5
+                ember_hue = (hue + random.uniform(-0.05, 0.05)) % 1.0
+                self._spawn_ember(spawn[0], spawn[1], evx, evy, ember_hue)
+
         if reversing:
-            retro = [self._rotate_pt(p, angle, pos) for p in ((18,-2),(30,0),(18,2))]
+            retro = [self._rotate_pt(p, angle, pos) for p in ((18,-2),(30, math.sin(t*20)*0.8),(18,2))]
             pygame.draw.polygon(self.surface, (200, 80, 20), retro)
+            # Forward glow
+            fwd_glow = self._rotate_pt((28, 0), angle, pos)
+            pygame.draw.circle(self.surface, (255, 140, 40), fwd_glow, 3)
 
     # ------------------------------------------------------------------  BARGES
     def _draw_barges(self, run_mgr, ship, t: float = 0.0):
@@ -653,32 +1011,79 @@ class VectorRenderer:
         pos    = barge.pos
         ticks  = pygame.time.get_ticks()
         bx, by = int(pos.x), int(pos.y)
+        state  = barge.state
 
+        # Aggressive halo when in chase/clamp/torch
+        if state in ("chase", "clamp", "torch"):
+            halo_pulse = 0.6 + 0.4 * math.sin(t * 6.0)
+            halo_col = (220, 60, 30) if state in ("clamp", "torch") else (220, 130, 0)
+            halo = pygame.Surface((100, 70), pygame.SRCALPHA)
+            pygame.draw.ellipse(halo, (*halo_col, int(35 * halo_pulse)), (0, 0, 100, 70))
+            pygame.draw.ellipse(halo, (*halo_col, int(60 * halo_pulse)), (8, 5, 84, 60))
+            self.surface.blit(halo, (bx - 50, by - 35))
+
+        # Hull body — filled dark with amber outline
         rect = pygame.Rect(bx-30, by-16, 60, 32)
+        pygame.draw.rect(self.surface, (16, 10, 0), rect)
         pygame.draw.rect(self.surface, (55, 35, 0), rect, 4)
         pygame.draw.rect(self.surface, S.AMBER_TERM, rect, 2)
+
+        # Hazard stripes — angled diagonal warning bars on top
+        for stripe_x in range(bx - 26, bx + 26, 6):
+            pygame.draw.line(self.surface, (80, 50, 0),
+                             (stripe_x, by - 14), (stripe_x + 4, by - 10), 2)
 
         # Cargo hold dividers
         for dx in (-14, 0, 14):
             pygame.draw.line(self.surface, (45, 28, 0), (bx+dx, by-14), (bx+dx, by+14), 1)
         pygame.draw.line(self.surface, (70, 44, 0), (bx-22, by), (bx+22, by), 1)
 
-        # Engine pods (rear)
-        engine_pulse = 0.55 + 0.45 * abs(math.sin(t * 4.1))
+        # Top-mounted harpoon turret
+        turret_y = by - 22
+        pygame.draw.rect(self.surface, (50, 30, 0), (bx - 5, turret_y, 10, 8))
+        pygame.draw.rect(self.surface, S.AMBER_TERM, (bx - 5, turret_y, 10, 8), 1)
+        # Turret barrel — aimed at ship if in chase
+        if state in ("chase", "clamp", "torch") and ship is not None:
+            aim_dx = ship.pos.x - bx
+            aim_dy = ship.pos.y - by
+            aim_len = math.hypot(aim_dx, aim_dy) or 1
+            barrel_end = (int(bx + aim_dx / aim_len * 14),
+                          int(turret_y - 2 + aim_dy / aim_len * 6))
+            pygame.draw.line(self.surface, (200, 150, 50),
+                             (bx, turret_y), barrel_end, 2)
+
+        # Engine pods (rear) — bigger, brighter when in chase
+        engine_pulse_speed = 8.0 if state in ("chase", "clamp", "torch") else 4.1
+        engine_pulse = 0.55 + 0.45 * abs(math.sin(t * engine_pulse_speed))
         pod_col  = _hsv(0.09, 0.9, engine_pulse)
         pod_glow = _hsv(0.09, 0.6, engine_pulse * 0.25)
         for py_off in (-10, 10):
             pcx, pcy = bx - 32, by + py_off
-            pygame.draw.circle(self.surface, pod_glow, (pcx, pcy), 8)
-            pygame.draw.circle(self.surface, pod_col,  (pcx, pcy), 4)
+            pygame.draw.circle(self.surface, pod_glow, (pcx, pcy), 9)
+            pygame.draw.circle(self.surface, pod_col,  (pcx, pcy), 5)
             pygame.draw.circle(self.surface, (255, 240, 200), (pcx, pcy), 2)
+            # Exhaust trail
+            if state in ("chase", "clamp", "torch"):
+                pygame.draw.line(self.surface, pod_col,
+                                 (pcx, pcy), (pcx - 18, pcy), 2)
+                pygame.draw.line(self.surface, (255, 200, 100),
+                                 (pcx, pcy), (pcx - 10, pcy), 1)
 
-        # Forward sensor dome
-        pygame.draw.circle(self.surface, (30, 30, 50),   (bx+32, by), 6)
-        pygame.draw.circle(self.surface, (80, 80, 120),  (bx+32, by), 4, 1)
-        pygame.draw.circle(self.surface, (150, 150, 200),(bx+32, by), 2)
+        # Forward sensor dome — eye-like, glows red when hunting
+        dome_col_outer = (60, 14, 14) if state in ("chase", "clamp", "torch") else (30, 30, 50)
+        dome_col_iris  = (220, 50, 30) if state in ("chase", "clamp", "torch") else (80, 80, 120)
+        dome_col_pupil = (255, 230, 230) if state in ("chase", "clamp", "torch") else (150, 150, 200)
+        pygame.draw.circle(self.surface, dome_col_outer, (bx+32, by), 7)
+        pygame.draw.circle(self.surface, dome_col_iris,  (bx+32, by), 4, 1)
+        pygame.draw.circle(self.surface, dome_col_pupil, (bx+32, by), 2)
 
-        # Hazard lights
+        # Side running lights (always on, slow blink)
+        run_blink = (ticks // 800) % 2 == 0
+        side_col = (200, 0, 0) if run_blink else (60, 0, 0)
+        pygame.draw.circle(self.surface, side_col, (bx - 28, by - 16), 1)
+        pygame.draw.circle(self.surface, side_col, (bx + 28, by - 16), 1)
+
+        # Hazard lights — corner amber pulse
         blink = (ticks // 380) % 2 == 0
         for (lx, ly), on in (((bx-24, by-11), blink), ((bx+24, by+11), not blink)):
             if on:
@@ -686,6 +1091,15 @@ class VectorRenderer:
                 pygame.draw.circle(self.surface, S.AMBER_TERM,  (lx, ly), 4)
             else:
                 pygame.draw.circle(self.surface, (50, 32, 0), (lx, ly), 4)
+
+        # Local 404 badge
+        badge_rect = pygame.Rect(bx - 8, by - 4, 16, 8)
+        pygame.draw.rect(self.surface, (8, 4, 0), badge_rect)
+        pygame.draw.rect(self.surface, (140, 90, 0), badge_rect, 1)
+        font = pygame.font.SysFont("monospace", 7)
+        surface_404 = font.render("404", True, (200, 140, 0))
+        self.surface.blit(surface_404, (bx - surface_404.get_width() // 2,
+                                        by - surface_404.get_height() // 2))
 
         # Tether — jagged lightning polyline
         tether = getattr(barge, "_tether", None)

@@ -141,7 +141,7 @@ class Terminal:
         W, H = surface.get_size()
         t    = pygame.time.get_ticks() / 1000.0
         M    = 18
-        HDR_H = 62
+        HDR_H = 74        # taller header for delta-flash row
         BTM_H = 108
         PNL_W = 290
         GAP   = 12
@@ -165,22 +165,27 @@ class Terminal:
         pygame.draw.rect(surface, (4, 20, 7), (0, 0, W, HDR_H))
         pygame.draw.line(surface, (0, 140, 58), (0, HDR_H), (W, HDR_H), 1)
 
-        fn_title = pygame.font.SysFont("monospace", 20, bold=True)
-        nm = fn_title.render(f"  {self.npc.name.upper()}", True, (255, 186, 34))
-        surface.blit(nm, (M, HDR_H // 2 - nm.get_height() // 2))
+        # Header has two rows: top = name/disposition/patience, bottom = delta/warnings
+        ROW1_Y = 18
+        ROW2_Y = 50
 
-        # ── Disposition bar ───────────────────────────────────────────
+        fn_title = pygame.font.SysFont("monospace", 19, bold=True)
+        nm = fn_title.render(self.npc.name.upper(), True, (255, 186, 34))
+        surface.blit(nm, (M, ROW1_Y - nm.get_height() // 2 + 7))
+
+        # ── Disposition bar (centred) ─────────────────────────────────
         disp  = self.npc.disposition
-        cx_d  = W // 2 - 120
-        d_lbl = font_sm.render("DISPOSITION", True, (72, 105, 72))
-        surface.blit(d_lbl, (cx_d, HDR_H // 2 - 10))
-        bx = cx_d + d_lbl.get_width() + 8
-        bw, bh2, by = 120, 14, HDR_H // 2 - 7
+        d_lbl = font_sm.render("DISP", True, (72, 105, 72))
+        bw, bh2 = 130, 12
+        bar_total_w = d_lbl.get_width() + 8 + bw
+        bar_left = (W - bar_total_w) // 2
+        surface.blit(d_lbl, (bar_left, ROW1_Y - 8))
+        bx = bar_left + d_lbl.get_width() + 8
+        by = ROW1_Y - bh2 // 2
 
         pygame.draw.rect(surface, (14, 26, 14), (bx, by, bw, bh2))
         dpct = max(0.0, min(1.0, (disp + 10) / 20.0))
 
-        # Color shifts: green when positive, red when negative, amber neutral
         if disp >= 4:
             dcol = (0, 235, 100)
         elif disp >= 1:
@@ -194,39 +199,18 @@ class Terminal:
 
         pygame.draw.rect(surface, dcol, (bx, by, int(bw * dpct), bh2))
         pygame.draw.rect(surface, (48, 76, 48), (bx, by, bw, bh2), 1)
+        # Centre tick
+        cx_tick = bx + bw // 2
+        pygame.draw.line(surface, (90, 110, 90), (cx_tick, by - 2), (cx_tick, by + bh2 + 2), 1)
 
-        # MOMENTUM label when disposition high
-        if disp >= 3:
-            pulse = int(200 + 55 * math.sin(t * 3.0))
-            mom_col = (0, pulse, int(pulse * 0.4))
-            mom = font_sm.render("MOMENTUM +", True, mom_col)
-            surface.blit(mom, (bx + bw + 8, HDR_H // 2 - 8))
-
-        # Disposition delta flash
-        if self._disp_flash is not None:
-            delta, flash_t = self._disp_flash
-            age = t - flash_t
-            if age < 1.8:
-                alpha = max(0, int(255 * (1.0 - age / 1.8)))
-                sign  = "+" if delta > 0 else ""
-                col   = (0, 220, 80) if delta > 0 else (220, 60, 60)
-                fs = pygame.font.SysFont("monospace", 18, bold=True)
-                ds = fs.render(f"{sign}{delta}", True, col)
-                # Slight upward drift
-                drift_y = int(age * 18)
-                surface.blit(ds, (bx + bw + 8 if disp < 3 else bx + bw + 70,
-                                  HDR_H // 2 - 8 - drift_y))
-            else:
-                self._disp_flash = None
-
-        # ── Patience pips ─────────────────────────────────────────────
+        # ── Patience pips (right) ─────────────────────────────────────
         total_p = self.npc.patience
         curr_p  = self.npc._patience
         p_lbl   = font_sm.render("PATIENCE", True, (72, 105, 72))
-        pip_w, pip_gap = 12, 3
+        pip_w, pip_gap = 10, 3
         pip_block_w = total_p * (pip_w + pip_gap) - pip_gap
-        right_x = W - M - pip_block_w - p_lbl.get_width() - 14
-        surface.blit(p_lbl, (right_x, HDR_H // 2 - 10))
+        right_x = W - M - pip_block_w - p_lbl.get_width() - 12
+        surface.blit(p_lbl, (right_x, ROW1_Y - 8))
         px0 = right_x + p_lbl.get_width() + 10
         for i in range(total_p):
             active = i < curr_p
@@ -239,13 +223,39 @@ class Terminal:
             else:
                 col = (22, 34, 22)
             rx = px0 + i * (pip_w + pip_gap)
-            pygame.draw.rect(surface, col, (rx, HDR_H // 2 - 6, pip_w, 14))
-            pygame.draw.rect(surface, (50, 76, 50), (rx, HDR_H // 2 - 6, pip_w, 14), 1)
+            pygame.draw.rect(surface, col, (rx, ROW1_Y - 6, pip_w, 12))
+            pygame.draw.rect(surface, (50, 76, 50), (rx, ROW1_Y - 6, pip_w, 12), 1)
 
-        # Low patience warning
+        # ── ROW 2 — momentum / delta / patience warning ───────────────
+        # MOMENTUM (left of disp bar)
+        if disp >= 3:
+            pulse = int(200 + 55 * math.sin(t * 3.0))
+            mom_col = (0, pulse, int(pulse * 0.4))
+            mom = font_sm.render("MOMENTUM +", True, mom_col)
+            surface.blit(mom, (bar_left + bar_total_w + 12, ROW1_Y - 7))
+
+        # Disposition delta flash — in row 2, directly under bar
+        if self._disp_flash is not None:
+            delta, flash_t = self._disp_flash
+            age = t - flash_t
+            if age < 1.8:
+                sign = "+" if delta > 0 else ""
+                col  = (0, 230, 100) if delta > 0 else (230, 60, 60)
+                fs   = pygame.font.SysFont("monospace", 16, bold=True)
+                ds   = fs.render(f"{sign}{delta} DISP", True, col)
+                drift_y = int(age * 14)
+                surface.blit(ds, (bx + bw // 2 - ds.get_width() // 2,
+                                  ROW2_Y - 4 - drift_y))
+            else:
+                self._disp_flash = None
+
+        # Low patience warning — under patience pips
         if 0 < curr_p <= 2:
-            warn = font_sm.render(f"!! {curr_p} TURN{'S' if curr_p > 1 else ''} LEFT !!", True, (220, 60, 60))
-            surface.blit(warn, (right_x, HDR_H // 2 + 8))
+            warn = font_sm.render(
+                f"!! {curr_p} TURN{'S' if curr_p > 1 else ''} LEFT !!",
+                True, (220, 60, 60))
+            surface.blit(warn, (right_x + (pip_block_w + p_lbl.get_width() + 10 - warn.get_width()) // 2,
+                                ROW2_Y - 6))
 
         # ── Portrait panel ────────────────────────────────────────────
         p_rect = pygame.Rect(M, HDR_H + 4, PNL_W - M - 4, H - BTM_H - HDR_H - 8)
@@ -291,7 +301,14 @@ class Terminal:
 
         total_px = sum(_block_h(bl) for bl in blocks)
         avail    = DIAG_Y1 - DIAG_Y0 - 10
-        y = DIAG_Y0 + 6 + max(0, avail - total_px)
+        # Anchor newest messages to BOTTOM. When content overflows, start y
+        # negative so oldest messages clip off the top.
+        y = DIAG_Y0 + 6 + (avail - total_px)
+
+        # Set up clip rect so blocks crossing the top edge don't draw above
+        prev_clip = surface.get_clip()
+        clip_rect = pygame.Rect(0, DIAG_Y0, W, DIAG_Y1 - DIAG_Y0)
+        surface.set_clip(clip_rect)
 
         for speaker, is_npc, is_sys, wrapped in blocks:
             b_h = _block_h((speaker, is_npc, is_sys, wrapped))
@@ -302,43 +319,38 @@ class Terminal:
                 break
 
             if is_npc:
-                bar_end = min(y + b_h - GAP - 2, DIAG_Y1)
-                if y < DIAG_Y1:
-                    pygame.draw.line(surface, (195, 122, 0),
-                                     (dl_x, max(y, DIAG_Y0)),
-                                     (dl_x, bar_end), 2)
+                bar_end = y + b_h - GAP - 2
+                pygame.draw.line(surface, (195, 122, 0),
+                                 (dl_x, y), (dl_x, bar_end), 2)
                 sp = fn_sp.render(f"  [{speaker}]", True, (255, 180, 34))
-                if DIAG_Y0 <= y < DIAG_Y1:
-                    surface.blit(sp, (dl_x + 6, y))
+                surface.blit(sp, (dl_x + 6, y))
                 y += lh
                 for line in wrapped:
-                    if DIAG_Y0 <= y < DIAG_Y1:
-                        surface.blit(
-                            font.render(f"    {line}", True, (205, 152, 36)),
-                            (dl_x + 6, y))
+                    surface.blit(
+                        font.render(f"    {line}", True, (205, 152, 36)),
+                        (dl_x + 6, y))
                     y += lh
 
             elif is_sys:
                 for line in wrapped:
-                    if DIAG_Y0 <= y < DIAG_Y1:
-                        surface.blit(
-                            font_sm.render(f"  // {line}", True, (68, 86, 68)),
-                            (dl_x, y))
+                    surface.blit(
+                        font_sm.render(f"  // {line}", True, (68, 86, 68)),
+                        (dl_x, y))
                     y += lh
 
             else:  # YOU
                 sp = fn_sp.render("[YOU]  »", True, (62, 212, 98))
-                if DIAG_Y0 <= y < DIAG_Y1:
-                    surface.blit(sp, (W - M - sp.get_width(), y))
+                surface.blit(sp, (W - M - sp.get_width(), y))
                 y += lh
                 for line in wrapped:
-                    if DIAG_Y0 <= y < DIAG_Y1:
-                        surface.blit(
-                            font.render(f"    {line}", True, (84, 200, 104)),
-                            (dl_x + 48, y))
+                    surface.blit(
+                        font.render(f"    {line}", True, (84, 200, 104)),
+                        (dl_x + 48, y))
                     y += lh
 
             y += GAP
+
+        surface.set_clip(prev_clip)
 
         # ── Bottom divider ─────────────────────────────────────────────
         pygame.draw.line(surface, (0, 138, 56), (0, H - BTM_H), (W, H - BTM_H), 1)
