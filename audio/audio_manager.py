@@ -1,64 +1,114 @@
 from __future__ import annotations
 import random
 import pygame
-from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_TETHER_HIT, EVT_TETHER_SNAP,
-                             EVT_GUN_FIRE, EVT_TERMINAL_OPEN, EVT_TERMINAL_CLOSE,
-                             EVT_SPORE_INVERTED)
-from audio.synth import (engine_drone, ambient_static, gun_shot,
-                          hull_impact, tether_clang, tether_snap,
-                          terminal_beep, spore_sting)
+from core.event_bus import (
+    bus,
+    EVT_HULL_DAMAGE, EVT_TETHER_HIT, EVT_TETHER_SNAP,
+    EVT_GUN_FIRE, EVT_TERMINAL_OPEN, EVT_TERMINAL_CLOSE,
+    EVT_SPORE_INVERTED, EVT_SHIP_DESTROYED, EVT_SLINGSHOT,
+    EVT_CANISTER_GRAB, EVT_BARGE_NEARBY, EVT_BAX_SPEAK,
+    EVT_VOICE_CHAR,
+)
+from audio.synth import (
+    engine_drone, ambient_static, gun_shot, hull_impact,
+    tether_clang, tether_snap, terminal_beep, spore_sting,
+    death_sting, slingshot_whoosh, canister_chime,
+    barge_alert, terminal_drone,
+)
 from audio.blues_licks import prebuild_all
+from audio.voices import prebuild_voices
 
-_N_TIERS   = 5
-_SPEED_BP  = [0.0, 120.0, 240.0, 380.0, 520.0]
-_ENG_CH    = 0   # channels 0-4: engine tiers
-_AMB_CH    = 5
-_LICK_CH   = 6   # dedicated channel for blues licks
-_SFX_START = 7
+# ---------------------------------------------------------------------------
+# Channel layout
+_N_TIERS  = 5
+_SPEED_BP = [0.0, 120.0, 240.0, 380.0, 520.0]
+
+_ENG_CH   = 0    # channels 0-4: engine tiers (5)
+_AMB_CH   = 5    # deep-space ambient static
+_LICK_CH  = 6    # blues harmonica licks
+_BAX_V_CH = 7    # Bax voice blips
+_NPC_V_CH = 8    # NPC terminal voice blips
+_DRONE_CH = 9    # terminal drone pad
+_SFX_POOL = 10   # channels 10-19: one-shot SFX pool
+
+_BAX_CHARS_PER_SEC = 32.0   # matches cockpit_renderer typewriter speed
 
 
 class AudioManager:
     """
     Procedural space-blues audio — no asset files required.
-    Engine: 5 numpy drone loops crossfaded by ship speed.
-    Blues licks: random harmonica ditties every 22-55s during flight.
-    Ambient: looping deep-space static.
-    SFX: event-driven one-shots.
+
+    Channels:
+      0-4   engine tier drones (crossfaded by ship speed)
+      5     deep-space ambient static (looping)
+      6     blues harmonica licks (random interval)
+      7     Bax voice blips (during EVT_BAX_SPEAK typewriter)
+      8     NPC terminal voice blips (via EVT_VOICE_CHAR)
+      9     terminal drone pad (looping while in terminal)
+      10-19 one-shot SFX pool
+
+    Voice system:
+      Each NPC and Bax has 5 pitch-varied formant-synthesized blips.
+      Blips play every 3 characters during the typewriter effect —
+      giving each character a distinct 'voice texture'.
     """
 
     def __init__(self):
         if not pygame.mixer.get_init():
             pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
-        pygame.mixer.set_num_channels(20)
+        pygame.mixer.set_num_channels(24)
 
         self._eng_ch:   list[pygame.mixer.Channel] = []
         self._eng_snd:  list[pygame.mixer.Sound]   = []
         self._amb_ch:   pygame.mixer.Channel | None = None
         self._lick_ch:  pygame.mixer.Channel | None = None
+        self._bax_v_ch: pygame.mixer.Channel | None = None
+        self._npc_v_ch: pygame.mixer.Channel | None = None
+        self._drone_ch: pygame.mixer.Channel | None = None
         self._licks:    list[pygame.mixer.Sound]   = []
         self._sfx:      dict[str, pygame.mixer.Sound] = {}
+        self._voices:   dict[str, list[pygame.mixer.Sound]] = {}
 
         self._master      = 0.70
         self._in_terminal = False
         self._lick_cd     = random.uniform(18.0, 38.0)
 
+        # Bax voice timer — fires blips for the duration of a Bax line
+        self._bax_speaking   = False
+        self._bax_speak_t    = 0.0   # elapsed
+        self._bax_speak_dur  = 0.0   # total duration
+        self._bax_blip_cd    = 0.0   # countdown to next blip
+
         self._build()
         self._start_loops()
         self._wire()
 
+    # ------------------------------------------------------------------
     def _build(self):
         print("[audio] generating engine tones…", flush=True)
         for tier in range(_N_TIERS):
             self._eng_snd.append(engine_drone(tier))
-        self._sfx["ambient"] = ambient_static()
-        self._sfx["gun"]     = gun_shot()
-        self._sfx["hull"]    = hull_impact()
-        self._sfx["clang"]   = tether_clang()
-        self._sfx["snap"]    = tether_snap()
-        self._sfx["beep"]    = terminal_beep()
-        self._sfx["spore"]   = spore_sting()
+
+        print("[audio] generating SFX…", flush=True)
+        self._sfx["ambient"]   = ambient_static()
+        self._sfx["gun"]       = gun_shot()
+        self._sfx["hull"]      = hull_impact()
+        self._sfx["clang"]     = tether_clang()
+        self._sfx["snap"]      = tether_snap()
+        self._sfx["beep"]      = terminal_beep()
+        self._sfx["spore"]     = spore_sting()
+        self._sfx["death"]     = death_sting()
+        self._sfx["slingshot"] = slingshot_whoosh()
+        self._sfx["canister"]  = canister_chime()
+        self._sfx["barge"]     = barge_alert()
+        self._sfx["drone"]     = terminal_drone()
+
         print("[audio] generating blues licks…", flush=True)
         self._licks = prebuild_all()
+
+        print("[audio] generating character voices…", flush=True)
+        self._voices = prebuild_voices()   # {char_name: [Sound, ...]}
+
         print("[audio] ready.", flush=True)
 
     def _start_loops(self):
@@ -72,7 +122,10 @@ class AudioManager:
         self._amb_ch.set_volume(self._master * 0.20)
         self._amb_ch.play(self._sfx["ambient"], loops=-1)
 
-        self._lick_ch = pygame.mixer.Channel(_LICK_CH)
+        self._lick_ch  = pygame.mixer.Channel(_LICK_CH)
+        self._bax_v_ch = pygame.mixer.Channel(_BAX_V_CH)
+        self._npc_v_ch = pygame.mixer.Channel(_NPC_V_CH)
+        self._drone_ch = pygame.mixer.Channel(_DRONE_CH)
 
     def _wire(self):
         bus.subscribe(EVT_HULL_DAMAGE,    self._on_hull)
@@ -82,13 +135,19 @@ class AudioManager:
         bus.subscribe(EVT_TERMINAL_OPEN,  self._on_term_open)
         bus.subscribe(EVT_TERMINAL_CLOSE, self._on_term_close)
         bus.subscribe(EVT_SPORE_INVERTED, self._on_spore)
+        bus.subscribe(EVT_SHIP_DESTROYED, self._on_death)
+        bus.subscribe(EVT_SLINGSHOT,      self._on_slingshot)
+        bus.subscribe(EVT_CANISTER_GRAB,  self._on_canister)
+        bus.subscribe(EVT_BARGE_NEARBY,   self._on_barge_nearby)
+        bus.subscribe(EVT_BAX_SPEAK,      self._on_bax_speak)
+        bus.subscribe(EVT_VOICE_CHAR,     self._on_voice_char)
 
     # ------------------------------------------------------------------
     def update(self, speed: float, dt: float = 0.016):
-        if self._in_terminal:
-            return
-        self._update_engine(speed)
-        self._tick_licks(dt)
+        if not self._in_terminal:
+            self._update_engine(speed)
+            self._tick_licks(dt)
+        self._tick_bax_voice(dt)
 
     def _update_engine(self, speed: float):
         tier = 0
@@ -121,25 +180,72 @@ class AudioManager:
             self._lick_ch.play(lick)
             self._lick_cd = random.uniform(22.0, 55.0)
 
+    def _tick_bax_voice(self, dt: float):
+        if not self._bax_speaking:
+            return
+        self._bax_speak_t += dt
+        self._bax_blip_cd -= dt
+        if self._bax_speak_t >= self._bax_speak_dur:
+            self._bax_speaking = False
+            return
+        if self._bax_blip_cd <= 0.0:
+            self._play_voice_blip("bax", channel=self._bax_v_ch)
+            self._bax_blip_cd = 0.095   # blip every ~95ms
+
     # ------------------------------------------------------------------
     def _play_sfx(self, key: str, vol_scale: float = 1.0):
         snd = self._sfx.get(key)
-        if snd:
-            ch = pygame.mixer.find_channel(True)
-            if ch:
-                ch.set_volume(self._master * vol_scale)
-                ch.play(snd)
+        if snd is None:
+            return
+        ch = pygame.mixer.find_channel(True)
+        if ch and ch.get_busy() is False or ch:
+            ch.set_volume(self._master * vol_scale)
+            ch.play(snd)
+
+    def _play_voice_blip(self, speaker: str, channel: pygame.mixer.Channel | None):
+        key   = speaker.lower().lstrip("[").rstrip("]").strip()
+        blips = self._voices.get(key) or self._voices.get("bax")
+        if not blips or channel is None:
+            return
+        snd = random.choice(blips)
+        channel.set_volume(self._master * 0.48)
+        channel.play(snd)
+
+    # ------------------------------------------------------------------
+    # Event handlers
 
     def _on_hull(self, amount, **_):
         if amount > 5:
             self._play_sfx("hull", 0.82)
 
-    def _on_clang(self, **_):  self._play_sfx("clang")
-    def _on_snap(self, **_):   self._play_sfx("snap")
-    def _on_gun(self, **_):    self._play_sfx("gun", 0.62)
+    def _on_clang(self, **_):   self._play_sfx("clang")
+    def _on_snap(self, **_):    self._play_sfx("snap")
+    def _on_gun(self, **_):     self._play_sfx("gun", 0.62)
+    def _on_death(self, **_):   self._play_sfx("death", 0.90)
+    def _on_slingshot(self, **_): self._play_sfx("slingshot", 0.80)
+    def _on_canister(self, **_):  self._play_sfx("canister", 0.70)
+
     def _on_spore(self, active, **_):
         if active:
             self._play_sfx("spore", 0.75)
+
+    def _on_barge_nearby(self, distance=0, **_):
+        # Only fire the alert once per proximity event (guard with channel busy check)
+        ch = self._bax_v_ch
+        if ch and not ch.get_busy():
+            self._play_sfx("barge", 0.65)
+
+    def _on_bax_speak(self, line: str = "", **_):
+        if not line:
+            return
+        # Schedule voice blips for the typewriter duration
+        self._bax_speaking  = True
+        self._bax_speak_t   = 0.0
+        self._bax_speak_dur = len(line) / _BAX_CHARS_PER_SEC
+        self._bax_blip_cd   = 0.0   # fire first blip immediately
+
+    def _on_voice_char(self, speaker: str = "", **_):
+        self._play_voice_blip(speaker, self._npc_v_ch)
 
     def _on_term_open(self, **_):
         self._in_terminal = True
@@ -151,8 +257,15 @@ class AudioManager:
             self._lick_ch.stop()
         self._play_sfx("beep", 0.50)
 
+        # Start the ominous terminal drone
+        if self._drone_ch and self._sfx.get("drone"):
+            self._drone_ch.set_volume(self._master * 0.32)
+            self._drone_ch.play(self._sfx["drone"], loops=-1)
+
     def _on_term_close(self, **_):
         self._in_terminal = False
         if self._amb_ch:
             self._amb_ch.set_volume(self._master * 0.20)
-        self._lick_cd = random.uniform(8.0, 20.0)   # resume soon after terminal
+        if self._drone_ch:
+            self._drone_ch.stop()
+        self._lick_cd = random.uniform(8.0, 20.0)

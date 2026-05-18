@@ -4,7 +4,7 @@ import pygame
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import NLPParser
 from terminal.npc_portraits import draw_portrait
-from core.event_bus import bus, EVT_TERMINAL_OPEN, EVT_TERMINAL_CLOSE
+from core.event_bus import bus, EVT_TERMINAL_OPEN, EVT_TERMINAL_CLOSE, EVT_VOICE_CHAR
 from config import settings as S
 
 
@@ -167,9 +167,15 @@ class Terminal:
             self._cursor_timer   = 0.0
 
         if 0 <= self._tw_pos < len(self._history):
-            _, text = self._history[self._tw_pos]
+            speaker, text = self._history[self._tw_pos]
+            prev_n = int(self._tw_chars)
             self._tw_chars = min(float(len(text)),
                                  self._tw_chars + S.TYPEWRITER_SPEED * dt)
+            new_n  = int(self._tw_chars)
+            # Emit a voice blip every 3 newly revealed characters (NPC lines only)
+            if (new_n > prev_n and new_n % 3 == 0
+                    and speaker not in ("YOU", "SYSTEM", "ANALYSIS")):
+                bus.emit(EVT_VOICE_CHAR, speaker=speaker)
 
     # ------------------------------------------------------------------
     def draw(self, surface: pygame.Surface):
