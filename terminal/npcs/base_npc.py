@@ -28,6 +28,8 @@ class BaseNPC(ABC):
         self._parser    = NLPParser()
         self._turn      = 0
         self._log: list[tuple[str, str]] = []   # (speaker, text)
+        self.last_parsed: ParsedInput | None = None
+        self._current_path: str = ""            # set by subclass during _evaluate
 
     # ------------------------------------------------------------------
     @abstractmethod
@@ -51,6 +53,8 @@ class BaseNPC(ABC):
         Patience ticks down every turn.
         """
         parsed   = self._parser.parse(player_input)
+        self.last_parsed  = parsed
+        self._current_path = ""
         self._turn += 1
         self._log.append(("PLAYER", player_input))
 
@@ -78,6 +82,10 @@ class BaseNPC(ABC):
         elif parsed.sentiment["compound"] < -0.4:
             self.disposition -= 1
         self.disposition = max(-10, min(10, self.disposition))
+
+    def get_path_progress(self) -> list[tuple[str, int, int]]:
+        """Return [(display_name, current, max), ...] for the dossier panel."""
+        return []
 
     def _out_of_patience_line(self) -> str:
         return "Alright, that's it. Harpoon's locked. You're getting towed."

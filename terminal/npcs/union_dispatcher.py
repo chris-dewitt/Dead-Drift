@@ -50,6 +50,7 @@ class UnionDispatcher(BaseNPC):
         self._certainty          = 10
         self._forms_mentions     = 0
         self._forty_two_hit      = False
+        self._coffee_hit         = False
 
     def _intro_line(self) -> str:
         return random.choice([
@@ -89,6 +90,8 @@ class UnionDispatcher(BaseNPC):
 
         # COFFEE BREAK — mandatory break clause
         if any(w in raw for w in self._COFFEE_WORDS):
+            self._current_path = "COFFEE BREAK"
+            self._coffee_hit   = True
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="coffee_break")
             responses = [
                 "*very long pause* "
@@ -117,7 +120,8 @@ class UnionDispatcher(BaseNPC):
 
         # THE 42 PATH — existential crisis
         if "42" in raw and not self._forty_two_hit:
-            self._forty_two_hit = True
+            self._forty_two_hit  = True
+            self._current_path   = "42 CRISIS"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="the_42_path")
             return NPCOutcome.RELEASE, random.choice([
                 "*long silence* "
@@ -144,6 +148,7 @@ class UnionDispatcher(BaseNPC):
 
         # LARGE BRIBE
         if any(w in raw for w in self._BRIBE_KEYWORDS):
+            self._current_path = "BRIBERY (10k+)"
             if (any(amt in raw for amt in self._BIG_BRIBES) or
                     (parsed.amount is not None and parsed.amount >= 10000)):
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="corruption")
@@ -175,6 +180,7 @@ class UnionDispatcher(BaseNPC):
         # BUREAUCRATIC OVERWHELM — mention paperwork/forms enough times
         if any(w in raw for w in self._FORMS_WORDS):
             self._forms_mentions += 1
+            self._current_path    = "FORMS OVERLOAD"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="bureaucratic_overwhelm")
             if self._forms_mentions >= 3:
                 return NPCOutcome.RELEASE, random.choice([
@@ -212,6 +218,7 @@ class UnionDispatcher(BaseNPC):
         if (parsed.intent == "legal" or
                 any(w in raw for w in self._LEGAL_KEYWORDS)):
             self._legal_points += 1
+            self._current_path  = "LEGAL PRESSURE"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="legal_pressure")
             if self._legal_points >= 3:
                 return NPCOutcome.RELEASE, (
@@ -241,6 +248,7 @@ class UnionDispatcher(BaseNPC):
             return NPCOutcome.RELEASE, self._debt_deleted_monologue()
 
         if new_hits:
+            self._current_path = "QUANTUM ESCAPE"
             self._certainty -= len(new_hits)
             if self._certainty <= 2:
                 return NPCOutcome.RELEASE, (
@@ -299,6 +307,16 @@ class UnionDispatcher(BaseNPC):
 
         # DEFAULT — the 47-forms-behind running gag
         return NPCOutcome.CONTINUE, self._dispatcher_filler()
+
+    def get_path_progress(self) -> list[tuple[str, int, int]]:
+        return [
+            ("COFFEE BREAK",   int(self._coffee_hit),      1),
+            ("FORMS OVERLOAD", self._forms_mentions,       3),
+            ("42 CRISIS",      int(self._forty_two_hit),   1),
+            ("LEGAL PRESSURE", self._legal_points,         3),
+            ("QUANTUM ESCAPE", len(self._concepts_used),   4),
+            ("BRIBERY (10k+)", min(self._bribe_attempts, 1), 1),
+        ]
 
     def _dispatcher_filler(self) -> str:
         return random.choice([
