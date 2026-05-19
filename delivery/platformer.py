@@ -14,7 +14,7 @@ from delivery.obstacles import (
     Guard, Gate, MovingPlatform, ScannerBeam,
     CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H,
 )
-from core.event_bus import bus, EVT_BAX_SPEAK
+from core.event_bus import bus, EVT_BAX_SPEAK, EVT_DELIVERY_STEP, EVT_DELIVERY_HIT, EVT_DELIVERY_DONE
 
 # ── Layout inside the corridor surface ──────────────────────────────────────
 CORRIDOR_W     = 400    # visible width of the corridor viewport
@@ -115,6 +115,10 @@ class DeliveryRun:
         self._stars      = 0
         self._result_t   = 0.0    # countdown before auto-advance
 
+        self._step_cd    = 0.0    # footstep sound cooldown
+        self._mid1_spoken = False
+        self._mid2_spoken = False
+
         # Surface for the corridor viewport
         self._surf = pygame.Surface((CORRIDOR_W, CORRIDOR_H))
 
@@ -141,6 +145,12 @@ class DeliveryRun:
         self._elapsed += dt
         self._stun_t   = max(0.0, self._stun_t - dt)
         self._leg_t   += dt
+
+        # Footstep rhythm
+        self._step_cd -= dt
+        if self._step_cd <= 0.0 and self._grounded:
+            bus.emit(EVT_DELIVERY_STEP)
+            self._step_cd = 0.32
 
         # Auto-run
         self._player_x += RUN_SPEED * dt
@@ -188,7 +198,25 @@ class DeliveryRun:
             if hit:
                 self._hits   += 1
                 self._stun_t  = 1.2
+                bus.emit(EVT_DELIVERY_HIT)
                 bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_HIT))
+
+        # Mid-run Bax updates
+        prog = self._player_x / LEVEL_LENGTH
+        if not self._mid1_spoken and prog > 0.33:
+            self._mid1_spoken = True
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "Third of the way through! Dodge the guards, yeah?",
+                "I can see you on the station cameras. You look ridiculous. Keep going.",
+                "Halfway soon. Don't get scanned, mate.",
+            ]))
+        if not self._mid2_spoken and prog > 0.66:
+            self._mid2_spoken = True
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "Two thirds done! One last push!",
+                "Almost there — don't balls it now!",
+                "Door's just ahead! I can see it! RUN!",
+            ]))
 
         # Near-end Bax line
         if not self._near_end_spoken and self._player_x > LEVEL_LENGTH - 600:
@@ -201,6 +229,7 @@ class DeliveryRun:
 
     def _finish(self):
         self._done = True
+        bus.emit(EVT_DELIVERY_DONE)
         if self._elapsed <= STAR_3_TIME and self._hits == 0:
             self._stars = 3
             bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_3STAR))

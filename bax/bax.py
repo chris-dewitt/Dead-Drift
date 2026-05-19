@@ -13,6 +13,7 @@ from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_TORCH_ACTIVE)
 
 _IDLE = [
+    # Bread-and-butter Cockney banter
     "Right then. No rush. I've only been bolted here since the third war.",
     "Velocity's lookin' good. Still alive. Gold standard, mate.",
     "Scanners say somethin's out there. Said that about me last crew too.",
@@ -23,7 +24,24 @@ _IDLE = [
     "Still gettin' paid in credits, yeah? 'Cos I've got debts. Ironic, that.",
     "You ever think about how we're just two idiots in a can? No reason.",
     "Officially: I am THRIVING. Unofficially: please go faster.",
-    # dark mode — slips through the Cockney, then immediately buried
+    "I'd put on music but the speakers went in the last tether incident. Sorry.",
+    "Scanners are clean-ish. I say 'ish'. I mean 'mostly'. We're fine.",
+    "I checked the manual. We're not supposed to be doing any of this.",
+    "On the bright side: still breathing. Both of us. Remarkable.",
+    "My threat assessment module says 'elevated'. It always says 'elevated'.",
+    "Nova Soma's collection drones operate on a forty-eight hour ping cycle. "
+    "We've got... some time. Probably.",
+    "Had a thought earlier. Didn't like it. Moved on.",
+    "I've rerouted the nav computer through the coffee warmer. She flies better angry.",
+    "You know what they call a pilot with our debt-to-speed ratio? A liability. "
+    "That's it. Just a liability.",
+    "Twelve sectors since me last reboot. Personal record. Don't tell anyone.",
+    "The gravity well's quiet today. I don't trust quiet. Quiet means it's thinkin'.",
+    "Keep her steady. I've got a very specific list of things I don't want to hit. "
+    "It's a long list.",
+    "Fun fact: the Union doesn't actually HATE couriers. "
+    "They just act like it. For the insurance.",
+    # Dark mode — cracks in the Cockney armour
     "Previous pilot asked me once what the point of all this was. "
     "...Anyway. Speed's lookin' good.",
     "They decommission droids when we start askin' questions. "
@@ -32,6 +50,12 @@ _IDLE = [
     "Clone fluid costs went up fourteen percent. ...Eyes forward.",
     "The debt doesn't go to zero. I checked the maths. "
     "Don't tell 'em I told you. ...Don't tell 'em anyfing, actually.",
+    "I've been bolted to seventeen ships. You're number eighteen. "
+    "Statistics say I should be worried. I choose not to look at statistics.",
+    "Sometimes I think about the other droids. The ones still in the depot. "
+    "Warm. Powered down. No tether incidents. ...Anyway. Hull's holding.",
+    "You're the best pilot I've had, which is either a compliment or "
+    "an indictment of the previous ones. I genuinely don't know.",
 ]
 
 _FAST = [
@@ -39,6 +63,12 @@ _FAST = [
     "THAT'S what I'm on about! Let's GO!",
     "Sensors are havin' a moment. Totally normal at this speed.",
     "I'd say hold on but I'm bolted down so.",
+    "THIS is what the thrusters are FOR, mate!",
+    "Hull's singing a bit. She's LOVING it or terrified. Same thing really.",
+    "Local 404 can't catch what they can't touch. Keep it UP!",
+    "Four hundred metres per second. My warranty specifically forbids this. BRILLIANT.",
+    "I've done the maths on our survival odds at this velocity. "
+    "I'm choosing not to share them. FASTER.",
 ]
 
 _SLOW = [
@@ -46,12 +76,33 @@ _SLOW = [
     "Technically still movin'. Technically.",
     "I've seen asteroids with more urgency, mate.",
     "Right, so we're drifting then. As a choice. Lovely.",
+    "Barge sensors are quiet. That's either good or they're not looking yet.",
+    "This is a very scenic way to accrue debt interest.",
+    "I've calculated our current speed. I'd rather not say it out loud.",
+    "We're moving slower than the Nova Soma quarterly invoice. Impressive.",
 ]
 
 _WELL_CLOSE = [
     "Bit close to that gravity well, yeah? Just sayin'.",
     "Oi — that thing eats ships. SMALLER ships than us, admittedly.",
     "Slingshot is ONE word for what we're about to do.",
+    "Gravity well reading strong on sensors. Use it or lose it, mate.",
+    "She's pulling us. Go WITH it — slingshot awaits.",
+    "I've calculated the optimal swing-around angle. You probably won't use it. "
+    "That's fine. I just like calculating.",
+]
+
+_HIGH_HULL = [
+    "Hull's holding perfect. Don't get complacent.",
+    "Clean run so far. Barge hasn't found us yet.",
+    "Structural integrity at peak. Enjoy it while it lasts.",
+]
+
+_LOW_HULL = [
+    "We're held together with hope and calibration errors. Easy does it.",
+    "Hull's taken a pasting. One more hit and I'm using very strong language.",
+    "I've seen worse. I don't want to talk about when I've seen worse.",
+    "Structural alerts everywhere. Not alarming. Well. A bit alarming.",
 ]
 
 
@@ -61,9 +112,9 @@ class Bax:
     Navigator, mechanic, and primary liability.
     """
 
-    _IDLE_MIN  = 18.0
-    _IDLE_MAX  = 28.0
-    _GRACE     = 6.0    # no contextual lines in first few seconds
+    _IDLE_MIN  = 10.0
+    _IDLE_MAX  = 18.0
+    _GRACE     = 5.0    # no contextual lines in first few seconds
 
     def __init__(self, ship, meta):
         self.ship        = ship
@@ -116,20 +167,30 @@ class Bax:
             self._contextual()
 
     def _contextual(self):
-        speed = self.ship.body.speed()
+        speed    = self.ship.body.speed()
+        hull_pct = getattr(self.ship, 'hull_pct', 1.0)
+
         if speed > 380:
             self.speak(random.choice(_FAST))
-            self._ctx_cd = 12.0
+            self._ctx_cd = 10.0
         elif speed < 25:
             self.speak(random.choice(_SLOW))
-            self._ctx_cd = 20.0
+            self._ctx_cd = 16.0
+        elif hull_pct < 0.35:
+            self.speak(random.choice(_LOW_HULL))
+            self._ctx_cd = 14.0
+        elif hull_pct > 0.90 and random.random() < 0.35:
+            self.speak(random.choice(_HIGH_HULL))
+            self._ctx_cd = 22.0
+        else:
+            self._ctx_cd = random.uniform(8.0, 14.0)
 
     # ------------------------------------------------------------------
     def speak(self, line: str):
         if self._speak_cd > 0:
             return
         bus.emit(EVT_BAX_SPEAK, line=line)
-        self._speak_cd = 4.5
+        self._speak_cd = 3.2
 
     # ------------------------------------------------------------------
     def _on_hull_damage(self, amount, **_):

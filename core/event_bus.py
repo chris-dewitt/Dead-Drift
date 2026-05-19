@@ -57,3 +57,6 @@ EVT_TORCH_ACTIVE    = "torch_active"    # barge entered TORCH state; payload: ba
 EVT_DEMO_NOTICE     = "demo_notice"     # galactic infrastructure demolition notice
 EVT_JUMP_READY      = "jump_ready"      # sector timer complete — jump window open
 EVT_DEBT_DING       = "debt_ding"       # debt crossed another 1000cr milestone
+EVT_DELIVERY_STEP   = "delivery_step"   # footstep during delivery run
+EVT_DELIVERY_HIT    = "delivery_hit"    # obstacle contact during delivery run
+EVT_DELIVERY_DONE   = "delivery_done"   # courier reached drop-off

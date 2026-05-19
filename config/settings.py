@@ -19,7 +19,7 @@ RED_WARN    = (220, 40,  40)
 GREY_DEAD   = (60,  60,  60)
 
 # --- Physics ---
-GRAVITY_CONSTANT  = 6.674e-3      # scaled G for gameplay feel
+GRAVITY_CONSTANT  = 340.0         # scaled G for gameplay feel — produces ~13 px/s² at 200px from a standard well
 MAX_VELOCITY      = 440.0         # px/s hard cap
 DRAG              = 0.0           # true Newtonian: no drag
 ROTATION_SPEED    = 200.0         # degrees/s

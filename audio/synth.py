@@ -191,6 +191,44 @@ def barge_alert() -> pygame.mixer.Sound:
     return _to_sound(_adsr(w, 0.001, 0.05, 0.42, 0.20))
 
 
+def delivery_footstep() -> pygame.mixer.Sound:
+    """Soft metallic tap — courier boots on deck plate."""
+    dur = 0.048
+    n   = int(SAMPLE_RATE * dur)
+    t   = np.linspace(0.0, dur, n, endpoint=False)
+    env = np.exp(-t * 70.0)
+    w   = np.random.uniform(-1.0, 1.0, n) * 0.45 * env
+    w  += np.sin(_2PI * 260.0 * t) * 0.18 * env
+    return _to_sound(w)
+
+
+def delivery_hit_sting() -> pygame.mixer.Sound:
+    """Sharp dissonant shock on obstacle contact."""
+    dur = 0.20
+    t   = _t(dur)
+    f   = np.linspace(900.0, 140.0, len(t))
+    phase = np.cumsum(_2PI * f / SAMPLE_RATE)
+    w   = np.sin(phase) * 0.50
+    w  += _noise(dur, amp=0.38)
+    w  += _sine(55.0, dur, amp=0.28)
+    return _to_sound(_adsr(w, 0.001, 0.04, 0.18, 0.12))
+
+
+def delivery_door_chime() -> pygame.mixer.Sound:
+    """Rising triumphant chord — reached the drop-off."""
+    notes = [523.25, 659.25, 783.99, 1046.5, 1318.51]   # C5 E5 G5 C6 E6
+    segs  = []
+    for i, freq in enumerate(notes):
+        dur  = 0.10 + i * 0.018
+        t    = _t(dur)
+        blip = np.sin(_2PI * freq * t) * 0.52
+        blip += np.sin(_2PI * freq * 2 * t) * 0.14
+        blip  = _adsr(blip, 0.001, 0.02, 0.72, 0.08)
+        segs.append(blip)
+        segs.append(np.zeros(int(SAMPLE_RATE * max(0.005, 0.022 - i * 0.003))))
+    return _to_sound(np.concatenate(segs).clip(-1.0, 1.0))
+
+
 def jump_ready_charge() -> pygame.mixer.Sound:
     """Rising capacitor charge — signals the jump window is open."""
     dur = 1.10
