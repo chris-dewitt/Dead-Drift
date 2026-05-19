@@ -26,7 +26,7 @@ ROTATION_SPEED    = 200.0         # degrees/s
 STEER_RCS_DEG     = 90.0          # deg/s velocity redirect toward facing when thrusting (post-integrate)
 
 # --- Ship ---
-HULL_MAX          = 100.0
+HULL_MAX          = 200.0
 THRUSTER_FORCE    = 205.0         # Newtons (gameplay units)
 SHIP_MASS         = 1.0
 
@@ -38,9 +38,9 @@ GUN_MALFUNCTION_CHANCE = 0.07     # probability per shot of fizzle
 GUN_JAM_DURATION      = 2.2       # seconds gun is out after malfunction
 
 # --- HUD Glitch Thresholds ---
-HUD_FLICKER_HP    = 60.0          # below this: HUD flickers
-HUD_DESATURATE_HP = 40.0          # below this: color drains
-HUD_SCRAMBLE_HP   = 20.0          # below this: vector tracking scrambles
+HUD_FLICKER_HP    = 120.0         # below this: HUD flickers  (60% of 200)
+HUD_DESATURATE_HP = 80.0          # below this: color drains  (40%)
+HUD_SCRAMBLE_HP   = 40.0          # below this: vector tracking scrambles (20%)
 
 # --- Terminal ---
 TERMINAL_COLS     = 80
@@ -65,7 +65,7 @@ DEBRIS_COUNT      = 4
 CANISTER_COUNT    = 3
 SATELLITE_COUNT   = 4
 CANISTER_PICKUP_R = 28.0
-DEBRIS_DAMAGE     = 9.0
+DEBRIS_DAMAGE     = 8.0
 
 # --- Mid-flight Events ---
 EVENT_INTERVAL_MIN = 35.0         # min seconds between random flight events

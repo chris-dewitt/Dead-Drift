@@ -73,7 +73,7 @@ class AudioManager:
 
         self._master      = 0.70
         self._in_terminal = False
-        self._lick_cd     = random.uniform(18.0, 38.0)
+        self._lick_cd     = random.uniform(3.0, 7.0)  # hear a lick early every sector
 
         # Bax voice timer — fires blips for the duration of a Bax line
         self._bax_speaking   = False
@@ -188,9 +188,9 @@ class AudioManager:
         self._lick_cd -= dt
         if self._lick_cd <= 0.0 and not self._lick_ch.get_busy():
             lick = random.choice(self._licks)
-            self._lick_ch.set_volume(self._master * 0.88)
+            self._lick_ch.set_volume(self._master * 1.0)
             self._lick_ch.play(lick)
-            self._lick_cd = random.uniform(22.0, 55.0)
+            self._lick_cd = random.uniform(8.0, 18.0)
 
     def _tick_bax_voice(self, dt: float):
         if not self._bax_speaking:

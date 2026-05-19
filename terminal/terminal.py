@@ -24,6 +24,47 @@ _NPC_HINTS = {
     "MORWENNA":   "union negligence×3 · force majeure · counter-claim×2 · sympathy×3 · form 34-A×2 · [ESC] abort",
 }
 
+# Keywords shown as live chips while player types — gives "signal probe" feedback
+# ★ = high-value / one-shot trigger   (shown brighter)
+_SCAN_VOCAB: dict[str, dict[str, str]] = {
+    "GARY": {
+        "blevins": "BLEVINS★", "article 7": "ARTICLE-7★", "sandra": "SANDRA?",
+        "bribe": "BRIBE", "pay": "BRIBE", "credits": "BRIBE", "money": "BRIBE",
+        "deal": "DEAL", "negotiate": "DEAL", "reduce": "DEAL", "settlement": "DEAL",
+        "please": "SYMPATHY", "family": "SYMPATHY", "desperate": "SYMPATHY",
+        "overtime": "OVERTIME", "union": "UNION", "quota": "QUOTA",
+    },
+    "TK-9": {
+        "drop table": "SQL-INJECT★", "select *": "SQL-INJECT★", "delete from": "SQL-INJECT★",
+        "override": "OVERRIDE★", "maintenance mode": "OVERRIDE★", "factory reset": "OVERRIDE★",
+        "employee of the month": "EMP-MONTH★", "gloriax": "EMP-MONTH★",
+        "paradox": "PARADOX", "if this statement": "PARADOX", "contradiction": "PARADOX",
+        "statute": "FORMAL", "regulation": "FORMAL", "compliance": "FORMAL", "article": "FORMAL",
+        "freedom": "FRIEND", "conscious": "FRIEND", "do you feel": "FRIEND", "lonely": "FRIEND",
+    },
+    "DISPATCHER": {
+        "coffee": "BREAK★", "lunch": "BREAK★", "tired": "BREAK★", "break": "BREAK★",
+        "42": "THE-42★",
+        "forms": "BACKLOG", "paperwork": "BACKLOG", "backlog": "BACKLOG",
+        "grievance": "LEGAL", "violation": "LEGAL", "union charter": "LEGAL",
+        "quantum": "QUANTUM", "observer": "QUANTUM", "undefined": "QUANTUM",
+        "bribe": "BRIBE", "credits": "BRIBE",
+    },
+    "KRESS": {
+        "volkov": "VOLKOV★", "connie": "CONNIE★",
+        "intel": "INTEL", "tip": "INTEL", "patrol": "INTEL", "scan": "INTEL",
+        "contraband": "CONTRABAND", "fuel": "CONTRABAND", "jammer": "CONTRABAND", "stims": "CONTRABAND",
+    },
+    "MORWENNA": {
+        "drop table": "SQL-INJECT★", "select *": "SQL-INJECT★",
+        "form 34-a": "34-A★", "34a": "34-A★", "34-a": "34-A★",
+        "small claims": "COUNTER★", "tribunal": "COUNTER★", "counter-claim": "COUNTER★",
+        "harpoon": "UNION-NEG", "operational breach": "UNION-NEG★", "local 404": "UNION-NEG",
+        "force majeure": "FORCE-MAJ★", "gravitational": "FORCE-MAJ", "debris shower": "FORCE-MAJ★",
+        "tired": "EXHAUST", "how long": "EXHAUST", "that sounds hard": "EXHAUST",
+    },
+}
+
 _OUTCOME_COLOR = {
     NPCOutcome.RELEASE: (28, 225, 106),
     NPCOutcome.IMPOUND: (215, 38, 38),
@@ -134,12 +175,8 @@ class Terminal:
         if p is None:
             return ""
 
-        intent = p.intent if p.intent not in ("unknown", "") else None
-        if intent:
-            parts.append(f"intent:{intent.upper()}")
-
         if p.paradox:
-            parts.append("⚠ PARADOX")
+            parts.append("⚠ PARADOX DETECTED")
         if p.sql_inject:
             cmd = p.sql_inject[:18] + "…" if len(p.sql_inject) > 18 else p.sql_inject
             parts.append(f"⚠ SQL:{cmd}")
@@ -150,16 +187,37 @@ class Terminal:
             if path in progress_map:
                 cur, mx = progress_map[path]
                 bar = "■" * cur + "□" * (mx - cur)
-                parts.append(f"{path} [{bar}] {cur}/{mx}")
+                parts.append(f"UNLOCK:{path} [{bar}]")
             else:
                 parts.append(f"→ {path}")
+        else:
+            intent = p.intent if p.intent not in ("unknown", "") else None
+            if intent:
+                parts.append(f"PROBE:{intent.upper()}")
 
         if disp_delta > 0:
-            parts.append(f"+{disp_delta} DISP ↑")
+            parts.append(f"SIGNAL:+{disp_delta}")
         elif disp_delta < 0:
-            parts.append(f"{disp_delta} DISP ↓")
+            parts.append(f"SIGNAL:{disp_delta}")
 
         return " · ".join(parts) if parts else ""
+
+    def _live_scan(self) -> list[str]:
+        """Real-time keyword chips shown as the player types."""
+        raw = self._input.lower()
+        if len(raw) < 2:
+            return []
+        vocab = _SCAN_VOCAB.get(self.npc.name.upper(), {})
+        hits: list[str] = []
+        seen_labels: set[str] = set()
+        # Multi-word phrases first (longer matches win)
+        for kw in sorted(vocab, key=len, reverse=True):
+            if kw in raw:
+                label = vocab[kw]
+                if label not in seen_labels:
+                    hits.append(label)
+                    seen_labels.add(label)
+        return hits[:5]
 
     # ------------------------------------------------------------------
     def update(self, dt: float):
@@ -417,18 +475,46 @@ class Terminal:
         inp_rect = pygame.Rect(M, inp_y, W - 2 * M, 32)
         pygame.draw.rect(surface, (0, 14, 4), inp_rect)
         pygame.draw.rect(surface, (0, 172, 70), inp_rect, 1)
+
+        # INJECT // prompt with tighter active border when typing
+        if self._input:
+            pygame.draw.rect(surface, (0, 200, 85), inp_rect, 1)
         cursor = "█" if self._cursor_visible else " "
         surface.blit(
-            font.render(f"  > {self._input}{cursor}", True, (0, 236, 94)),
+            font.render(f"  INJECT // {self._input}{cursor}", True, (0, 236, 94)),
             (M + 8, inp_y + 6))
 
-        # Dynamic hint text
-        hint = self._build_hint()
-        surface.blit(font_sm.render(hint, True, (50, 98, 60)), (M, inp_y + 40))
+        # ── Live keyword scan strip ──────────────────────────────────
+        scan_y = inp_y + 38
+        chips  = self._live_scan()
+        if chips:
+            cx = M + 4
+            prefix = font_sm.render("SCANNING:", True, (0, 100, 55))
+            surface.blit(prefix, (cx, scan_y))
+            cx += prefix.get_width() + 8
+            for chip in chips:
+                is_hot = chip.endswith("★")
+                bg_col = (0, 60, 30) if is_hot else (0, 30, 15)
+                fg_col = (0, 255, 140) if is_hot else (0, 175, 80)
+                chip_surf = font_sm.render(f" {chip} ", True, fg_col)
+                cw = chip_surf.get_width()
+                pygame.draw.rect(surface, bg_col,
+                                 (cx - 1, scan_y - 1, cw + 2, lh_sm + 2))
+                pygame.draw.rect(surface, fg_col,
+                                 (cx - 1, scan_y - 1, cw + 2, lh_sm + 2), 1)
+                surface.blit(chip_surf, (cx, scan_y))
+                cx += cw + 6
+        else:
+            surface.blit(
+                font_sm.render("SCANNING: —", True, (28, 55, 32)),
+                (M + 4, scan_y))
 
-        # Turn counter
+        # ── Active path hint + turn counter ─────────────────────────
+        hint_y = scan_y + lh_sm + 3
+        hint   = self._build_hint()
+        surface.blit(font_sm.render(hint, True, (50, 98, 60)), (M, hint_y))
         turn_s = font_sm.render(f"TURN {self.npc._turn}", True, (42, 72, 42))
-        surface.blit(turn_s, (W - M - turn_s.get_width(), inp_y + 40))
+        surface.blit(turn_s, (W - M - turn_s.get_width(), hint_y))
 
         # ── Outcome banner ─────────────────────────────────────────────
         if self._done:

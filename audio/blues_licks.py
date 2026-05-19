@@ -17,7 +17,7 @@ _NOTES = {
 }
 
 
-def _harp_note(freq: float, duration: float, amp: float = 0.55,
+def _harp_note(freq: float, duration: float, amp: float = 0.82,
                bend: float = 0.0) -> np.ndarray:
     """Single harmonica note — reedy timbre, slight vibrato, breathiness."""
     tv = _t(duration)
