@@ -61,7 +61,8 @@ class Gary(BaseNPC):
         "five grand", "ten grand", "twenty grand",
     ]
 
-    def __init__(self, cargo_ch1_active: bool = False, intercepted: bool = False):
+    def __init__(self, cargo_ch1_active: bool = False, intercepted: bool = False,
+                 run_context: dict | None = None):
         super().__init__("Gary", patience=9)
         self._therapy_mode     = cargo_ch1_active
         self._intercepted      = intercepted
@@ -71,6 +72,8 @@ class Gary(BaseNPC):
         self._sympathy_turns   = 0
         self._management_turns = 0
         self._article7_hit     = False
+        self._sandra_turns     = 0
+        self._ctx              = run_context or {}
 
     def _intro_line(self) -> str:
         if self._intercepted:
@@ -85,6 +88,26 @@ class Gary(BaseNPC):
                 "Gary Pruitt, repo an' recovery. I got you on radar. "
                 "I'm twenty seconds from your hull. Outstanding fees. "
                 "Power down NOW or this gets much worse for both of us.",
+            ])
+        hull_pct = self._ctx.get("hull_pct", 1.0)
+        sector   = self._ctx.get("sector_index", 0)
+        if hull_pct < 0.30:
+            return random.choice([
+                "Gary Pruitt, Local 404. Blimey — what 'appened to your 'ull, mate? "
+                "You look like you've 'ad a rough one. Outstanding fees, mind. "
+                "But also... you alright?",
+                "Gary Pruitt. I got your vessel on scanner and... yeah, that 'ull reading's "
+                "not great, is it. Outstanding fees. Wanna talk about it? "
+                "No? Right. Power down.",
+            ])
+        if sector >= 7:
+            return random.choice([
+                "Gary Pruitt, Local 404. You've made it far, I'll give you that. "
+                "Most don't get past sector five with these fees outstanding. "
+                "Doesn't change anything. Power down.",
+                "Gary Pruitt. I've been trackin' you since sector two. "
+                "Outstanding fees. I 'onestly 'oped you'd make it further. "
+                "Don't make this weird, yeah?",
             ])
         return (
             "Gary Pruitt, Local 404. You got outstanding fees on three "
@@ -322,6 +345,29 @@ class Gary(BaseNPC):
                 "Right. Addin' that to the file. You're welcome.",
             ])
 
+        # SANDRA — hidden path, never shown in dossier
+        if "sandra" in raw:
+            self._sandra_turns += 1
+            self._current_path  = "SANDRA"
+            self.disposition   += 2
+            if self._sandra_turns >= 2:
+                bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="sympathy")
+                return NPCOutcome.RELEASE, random.choice([
+                    "*long silence* ...She's got the Meridian route now. Perfect impound rate. "
+                    "Never missed a quota in fourteen years. "
+                    "*quieter* I don't know why you brought her up but... "
+                    "go on. Just. Go on. I'll mark it 'unverified vessel'.",
+                    "*very quiet* ...Yeah. I know Sandra. "
+                    "She's better at this than me. Always was. "
+                    "...You know what, I'm gonna pretend I didn't see you. "
+                    "Don't tell Blevins.",
+                ])
+            return NPCOutcome.CONTINUE, random.choice([
+                "*pause* ...Sandra. Where did you — 'ow do you know that name?",
+                "*quiet* ...Don't. Don't bring 'er into this. "
+                "She's got nothing to do with your fees.",
+            ])
+
         # DEFAULT — changes tone based on progress
         return NPCOutcome.CONTINUE, self._gary_filler()
 
@@ -367,6 +413,32 @@ class Gary(BaseNPC):
                 "Any of those would 'onestly be a nice change of pace.",
             ])
 
+        # Cross-NPC callbacks mixed in with filler
+        if self._turn == 3 and random.random() < 0.3:
+            return random.choice([
+                "You know a bloke called Kress? Russian fella, sells... things. "
+                "Not my department. But 'e's in this corridor a lot. "
+                "If you've been dealin' wiv 'im, that's a separate file. Power down.",
+                "They sent one of them TK units on our route for a week once. "
+                "Talked to itself the whole time. Filed a 'loyalty subroutine error' "
+                "on its own shift. We asked it to leave. "
+                "Anyway. Your fees. Power down.",
+                "Claims division rang me this mornin'. Apparently they denied your "
+                "last three damage reports. Morwenna's department. "
+                "That's between you an' 'er. Your fees are still my department. Power down.",
+            ])
+
+        hull_pct = self._ctx.get("hull_pct", 1.0)
+        if hull_pct < 0.50 and random.random() < 0.25:
+            return random.choice([
+                "Your 'ull readings look rough, mate. "
+                "Not my problem professionally, but... you been in a scrap?",
+                "*glances scanner* That's a lot of structural damage for a courier run. "
+                "What sector 'ave you been in? Power down, we'll talk.",
+                "I've seen better 'ull readings on scrap barges. "
+                "Seriously, what 'appened to you? ...Never mind. Power down.",
+            ])
+
         return random.choice([
             "Look, I got a quota. Just power down.",
             "I don't make the rules. Well, the union makes some of 'em. Power down.",
@@ -383,8 +455,6 @@ class Gary(BaseNPC):
             "The union 'as a dental plan now. Still not worth it, if I'm 'onest.",
             "I got a bad knee from a tow-barge incident in Sector Four. "
             "I don't want to talk about it.",
-            "Me ex-wife said I'd never amount to anyfing. "
-            "I said Sandra, I am a LICENSED REPO AGENT. She still left.",
             "Me mum still owes on 'er fourth body. "
             "Clone fluid fees don't stop just cos you're seventy. Power down.",
             "Blevins gets a bonus for every successful impound. "
@@ -394,4 +464,22 @@ class Gary(BaseNPC):
             "You know what they call it in the charter? "
             "'Asset reclamation.' Not repo. Not debt collection. "
             "'Asset reclamation.' You're the asset. Power down.",
+            "I've done seventeen 'undred impounds. Not one of 'em felt good. "
+            "Not one. Power down so I can add you to the list.",
+            "There's a pub back at depot. The Docking Ring. "
+            "I'm missin' quiz night for this. Power. Down.",
+            "My therapist says I 'struggle to disengage from work.' "
+            "I said Dave, I AM at work. I AM in a barge. Power down.",
+            "Union wellness initiative says I should take three deep breaths "
+            "before each impound. I've done fifteen. Still stressed. Power down.",
+            "You know 'ow many times I've 'eard 'it wasn't my fault'? "
+            "Every single time. It's never anyone's fault. Power down.",
+            "I 'ad a trainee last month. Lovely kid. Quit after two weeks. "
+            "Said the moral weight was unbearable. "
+            "I said welcome to Tuesday, son. Power down.",
+            "The union 'as a pension. I checked. It's 'theoretical.' Their word. Power down.",
+            "Last pilot I let go called me a good man. "
+            "That was three years ago and I still fink about it. Power down.",
+            "I know you think there's a way out of this. "
+            "That's good. 'Old onto that. Now power down.",
         ])

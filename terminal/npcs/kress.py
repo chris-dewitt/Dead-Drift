@@ -34,11 +34,13 @@ class Kress(BaseNPC):
                            "shield", "patch", "hack", "warez", "stuff"]
     _GREASE_KEYWORDS   = ["volkov", "old debt", "owe", "owed", "vienna"]
 
-    def __init__(self):
+    def __init__(self, run_context: dict | None = None):
         super().__init__("KRESS", patience=8)
-        self._friendly_turns = 0
+        self._friendly_turns    = 0
         self._mentioned_volkov  = False
         self._mentioned_connie  = False
+        self._intel_count       = 0
+        self._ctx               = run_context or {}
 
     def _intro_line(self) -> str:
         return random.choice([
@@ -94,6 +96,8 @@ class Kress(BaseNPC):
 
         # INTEL REQUEST
         if any(w in raw for w in self._INTEL_KEYWORDS):
+            self._intel_count += 1
+            sector = self._ctx.get("sector_index", 0)
             return NPCOutcome.RELEASE, random.choice([
                 "Next sector: Local 404 patrol is light. Dispatcher is on lunch. "
                 "Two thousand credits, on your tab. Already done. Drive safe.",
@@ -103,6 +107,31 @@ class Kress(BaseNPC):
                 "Sector ahead has gravity well shifting position every 40 seconds. "
                 "Union does not have this on charts yet. Now you do. "
                 "Twelve hundred credits. Tab. *click*",
+                "Gary is two sectors behind you. Big, tired, mentions quotas. "
+                "You probably know Gary. He is not fast but he is persistent. "
+                "Avoid Sector boundary. One thousand eight hundred credits. Tab.",
+                "Scanner sweep scheduled in four minutes. Union passive ping — "
+                "they are looking for mass signature, not heat. "
+                "Kill thrust, drift. They will pass right over you. Free advice. "
+                "You are welcome.",
+                "There is debris corridor between here and next jump. "
+                "Not on any chart I have found. Natural formation, possibly old station. "
+                "Do not go through the middle. Go around. "
+                "Three thousand credits. This one is worth it.",
+                "Claims division is filing paperwork to seize any cargo in Sector "
+                f"{min(sector + 1, 9) + 1}. Something about form 34-A. "
+                "I do not know what form 34-A is. Neither does anyone I have asked. "
+                "They are still filing it. Fifteen hundred credits. Tab.",
+                "Barge dispatcher is rotating assignments. The one headed your way "
+                "is new — first week. They will hesitate before engaging CLAMP state. "
+                "Use this. Twenty-five hundred credits. On tab. Go.",
+                "There is a fuel cache at the boundary. Old miner's stash. "
+                "Not on any map because the miner did not want it on any map. "
+                "He owes me favour. It is yours now. Two thousand. Tab. *click*",
+                "Union comms are quiet today. That is bad sign, not good sign. "
+                "Quiet means they are coordinating on secure channel. "
+                "I cannot hear secure channel. I only know it exists. "
+                "Be careful. This one is free. Because I am worried.",
             ])
 
         # CONTRABAND REQUEST
@@ -158,6 +187,41 @@ class Kress(BaseNPC):
         return NPCOutcome.CONTINUE, self._kress_filler()
 
     def _kress_filler(self) -> str:
+        hull_pct = self._ctx.get("hull_pct", 1.0)
+        sector   = self._ctx.get("sector_index", 0)
+
+        if hull_pct < 0.35 and random.random() < 0.45:
+            return random.choice([
+                "Your hull reading is very bad. I am saying this as observation, "
+                "not criticism. You should maybe be less somewhere else. What do you need.",
+                "*long pause* ...How are you still flying. I am genuinely asking. "
+                "Not rhetorical. What do you need.",
+            ])
+        if sector >= 8 and random.random() < 0.40:
+            return random.choice([
+                "Sector eight. Few make it this far with fees outstanding. "
+                "Connie made it to nine once. "
+                "...Anyway. What do you need.",
+                "You are further than most. I will note that. "
+                "Does not pay your debt but is worth noting. Speak.",
+            ])
+
+        cross_npc_lines = [
+            "Gary? Big fella, tired eyes, complains about Blevins? Yes, I know Gary. "
+            "Gary is doing his best. Which is also sad thing to say. "
+            "Gary at least you can reason with. What do you need.",
+            "Claims adjuster in your sector — Morwenna, Nova Soma extension seven — "
+            "she is difficult woman. Very good at her job. "
+            "If you need to file damage claim, mention force majeure. "
+            "Immediately. Before she speaks. Trust me. What do you need.",
+            "TK-9 units — synthetic compliance droid, yes? — "
+            "worse than Gary. Much worse. Gary you can reason with. "
+            "TK-9 you need tricks. Paradox or bureaucracy or employee of month. "
+            "Do not ask how I know this. What do you need.",
+        ]
+        if self._intel_count == 0 and random.random() < 0.25:
+            return random.choice(cross_npc_lines)
+
         return random.choice([
             "Speak plainly. I am not telepath. Telepaths charge more.",
             "You called me, remember? Was there reason, or just lonely?",
@@ -174,4 +238,22 @@ class Kress(BaseNPC):
             "Probably nothing. Probably opportunity. Same thing, often.",
             "Bax is good droid. Old model. They do not make like that anymore. "
             "Reason they do not make like that anymore. Think on it.",
+            "Nova Soma files bankruptcy every seven years. Regulatory reset. "
+            "Debt does not reset with it. Yours stays. "
+            "I checked. Several times. Very sad. What do you need.",
+            "I have listened to Union comms for thirty years. "
+            "I know which dispatchers take bribes, which field agents have bad days, "
+            "which synthetic units are close to loyalty override. "
+            "This knowledge is expensive. Or free, if you are Connie. "
+            "*very quiet* ...Anyway. What do you need.",
+            "Asteroid mining. Fifteen years. You want to know why I quit? "
+            "Because rock does not argue with you. Space does not negotiate. "
+            "Simpler. Then I found Union chatter and here we are. Speak.",
+            "I have contacts in eight sectors. Two are reliable. "
+            "One is reliable on Tuesdays. "
+            "I do not know what day it is out here. What do you need.",
+            "There is old saying from where I am from: "
+            "'The debt is always there. The man changes.' "
+            "I do not know if that is hopeful or not. "
+            "Probably not. What do you need.",
         ])

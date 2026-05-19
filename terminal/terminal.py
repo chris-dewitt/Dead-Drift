@@ -13,6 +13,7 @@ _NPC_DOSSIER_TITLE = {
     "TK-9":       "VULNERABILITY SCAN",
     "DISPATCHER": "PATH ANALYSIS",
     "KRESS":      "INTEL DOSSIER",
+    "MORWENNA":   "CLAIMS ANALYSIS",
 }
 
 _NPC_HINTS = {
@@ -20,6 +21,7 @@ _NPC_HINTS = {
     "TK-9":       "paradox×2 · drop table · statute×3 · override · friendship×3 · emp.month · [ESC] abort",
     "DISPATCHER": "coffee/break/tired · forms×3 · say '42' · grievance×3 · quantum+legal · bribe ≥10k · [ESC] abort",
     "KRESS":      "intel · contraband · volkov · connie · be friendly×3 · [ESC] abort",
+    "MORWENNA":   "union negligence×3 · force majeure · counter-claim×2 · sympathy×3 · form 34-A×2 · [ESC] abort",
 }
 
 _OUTCOME_COLOR = {

@@ -3,6 +3,7 @@ from terminal.npcs.gary import Gary
 from terminal.npcs.synthetic_droid import SyntheticDroid
 from terminal.npcs.union_dispatcher import UnionDispatcher
 from terminal.npcs.kress import Kress
+from terminal.npcs.insurance_adjuster import InsuranceAdjuster
 from terminal.npcs.base_npc import BaseNPC
 
 
@@ -13,6 +14,7 @@ def make_npc(npc_type: str, **kwargs) -> BaseNPC:
         "synthetic_droid":    SyntheticDroid,
         "union_dispatcher":   UnionDispatcher,
         "kress":              Kress,
+        "insurance_adjuster": InsuranceAdjuster,
     }
     cls = registry.get(npc_type)
     if cls is None:

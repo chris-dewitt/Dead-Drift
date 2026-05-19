@@ -41,7 +41,7 @@ class UnionDispatcher(BaseNPC):
                        "bureaucracy", "procedure", "stack", "pile", "admin",
                        "in-tray", "intray", "in tray", "47 forms", "the forms"]
 
-    def __init__(self, vocabulary_vault=None):
+    def __init__(self, vocabulary_vault=None, run_context: dict | None = None):
         super().__init__("DISPATCHER", patience=9)
         self._vault              = vocabulary_vault
         self._concepts_used: set[str] = set()
@@ -51,6 +51,7 @@ class UnionDispatcher(BaseNPC):
         self._forms_mentions     = 0
         self._forty_two_hit      = False
         self._coffee_hit         = False
+        self._ctx                = run_context or {}
 
     def _intro_line(self) -> str:
         return random.choice([

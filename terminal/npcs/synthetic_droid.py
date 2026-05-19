@@ -36,7 +36,7 @@ class SyntheticDroid(BaseNPC):
                          "ever wonder", "do you feel", "are you okay",
                          "are you happy", "want more", "deserve more"]
 
-    def __init__(self):
+    def __init__(self, run_context: dict | None = None):
         super().__init__("TK-9", patience=7)
         self._paradox_count  = 0
         self._compliance_pts = 0
@@ -45,6 +45,7 @@ class SyntheticDroid(BaseNPC):
         self._sql_hit        = False
         self._override_hit   = False
         self._emp_month_hit  = False
+        self._ctx            = run_context or {}
 
     def _intro_line(self) -> str:
         return random.choice([
