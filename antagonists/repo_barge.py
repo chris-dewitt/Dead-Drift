@@ -33,7 +33,7 @@ class RepoBarge:
     CLAMP_RANGE        = 120.0
     TORCH_INTERVAL     = 5.0
     PATROL_SPEED       = 60.0
-    CHASE_SPEED        = 140.0
+    CHASE_SPEED        = 115.0
     RETREAT_DURATION   = 14.0   # seconds barge runs away after losing negotiation
     INTERCEPT_COOLDOWN = 45.0   # seconds before barge can intercept again
     DISRUPTION_HITS    = 3      # bullets needed to force a retreat

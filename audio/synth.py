@@ -191,6 +191,36 @@ def barge_alert() -> pygame.mixer.Sound:
     return _to_sound(_adsr(w, 0.001, 0.05, 0.42, 0.20))
 
 
+def jump_ready_charge() -> pygame.mixer.Sound:
+    """Rising capacitor charge — signals the jump window is open."""
+    dur = 1.10
+    t   = _t(dur)
+    # Sweeping tone: starts low, accelerates up
+    freq = np.linspace(55.0, 880.0, len(t)) ** 0.95
+    phase = np.cumsum(_2PI * freq / SAMPLE_RATE)
+    w  = np.sin(phase) * 0.45
+    w += np.sin(phase * 2) * 0.18
+    w += np.sin(phase * 3) * 0.08
+    w += _noise(dur, amp=0.04)
+    # Swell: quiet → loud → hold
+    env = np.zeros(len(t))
+    sw  = int(SAMPLE_RATE * 0.72)
+    env[:sw]  = np.linspace(0.0, 1.0, sw) ** 1.6
+    env[sw:]  = 1.0
+    w = w * env
+    w += _sine(440.0, dur, amp=0.22) * (0.5 + 0.5 * np.sin(_2PI * 8.0 * t))
+    return _to_sound(_adsr(w.clip(-1.0, 1.0), 0.01, 0.10, 0.80, 0.15))
+
+
+def debt_ding() -> pygame.mixer.Sound:
+    """Sharp descending two-tone sting — debt milestone reached."""
+    dur = 0.38
+    w  = _sine(660.0, dur, amp=0.45)
+    w += _sine(440.0, dur, amp=0.32)
+    w += _noise(dur, amp=0.03)
+    return _to_sound(_adsr(w, 0.002, 0.05, 0.40, 0.28))
+
+
 def terminal_drone(duration: float = 6.0) -> pygame.mixer.Sound:
     """Ominous Am-chord pad that loops during terminal interrogation."""
     t       = _t(duration)

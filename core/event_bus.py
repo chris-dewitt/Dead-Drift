@@ -55,3 +55,5 @@ EVT_SATELLITE_HIT   = "satellite_hit"   # player ship hit a satellite
 EVT_ALIEN_SIGHTING  = "alien_sighting"  # alien ship passed through sector
 EVT_TORCH_ACTIVE    = "torch_active"    # barge entered TORCH state; payload: barge
 EVT_DEMO_NOTICE     = "demo_notice"     # galactic infrastructure demolition notice
+EVT_JUMP_READY      = "jump_ready"      # sector timer complete — jump window open
+EVT_DEBT_DING       = "debt_ding"       # debt crossed another 1000cr milestone

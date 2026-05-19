@@ -73,12 +73,12 @@ class Terminal:
     # ------------------------------------------------------------------
     def _get_font(self) -> pygame.font.Font:
         if self._font is None:
-            self._font = pygame.font.SysFont("monospace", 19)
+            self._font = pygame.font.SysFont("monospace", 17)
         return self._font
 
     def _get_font_sm(self) -> pygame.font.Font:
         if self._font_sm is None:
-            self._font_sm = pygame.font.SysFont("monospace", 15)
+            self._font_sm = pygame.font.SysFont("monospace", 13)
         return self._font_sm
 
     # ------------------------------------------------------------------
@@ -183,12 +183,12 @@ class Terminal:
         t    = pygame.time.get_ticks() / 1000.0
 
         # ── Layout constants ─────────────────────────────────────────
-        M      = 14
-        HDR_H  = 60
-        BTM_H  = 84
-        PNL_W  = 308    # left panel total width
-        PORT_H = 255    # portrait height within left panel
-        GAP    = 10
+        M      = 12
+        HDR_H  = 56
+        BTM_H  = 98
+        PNL_W  = 300    # left panel total width
+        PORT_H = 248    # portrait height within left panel
+        GAP    = 8
 
         font    = self._get_font()
         font_sm = self._get_font_sm()
@@ -212,7 +212,7 @@ class Terminal:
         ROW_Y = HDR_H // 2   # vertical centre of header = 30
 
         # NPC name (left)
-        fn_title = pygame.font.SysFont("monospace", 20, bold=True)
+        fn_title = pygame.font.SysFont("monospace", 17, bold=True)
         nm = fn_title.render(self.npc.name.upper(), True, (255, 186, 34))
         surface.blit(nm, (M, ROW_Y - nm.get_height() // 2))
 
@@ -327,10 +327,11 @@ class Terminal:
         DIAG_Y1  = H - BTM_H
         char_w   = max(1, font.size("A")[0])
         char_w_sm = max(1, font_sm.size("A")[0])
-        wrap_cols    = max(30, dl_w // char_w)
-        wrap_cols_sm = max(36, (dl_w + 60) // char_w_sm)
+        # Subtract indent (4 spaces) so rendered text never overflows right edge
+        wrap_cols    = max(30, (dl_w - 4 * char_w) // char_w)
+        wrap_cols_sm = max(36, (dl_w - 4 * char_w_sm) // char_w_sm)
 
-        fn_sp = pygame.font.SysFont("monospace", 17, bold=True)
+        fn_sp = pygame.font.SysFont("monospace", 14, bold=True)
 
         blocks: list[tuple[str, bool, bool, bool, list[str]]] = []
         for i, (speaker, text) in enumerate(self._history):
@@ -410,22 +411,22 @@ class Terminal:
         pygame.draw.line(surface, (0, 138, 56), (0, H - BTM_H), (W, H - BTM_H), 1)
 
         # ── Input box ──────────────────────────────────────────────────
-        inp_y    = H - BTM_H + 10
-        inp_rect = pygame.Rect(M, inp_y, W - 2 * M, 36)
+        inp_y    = H - BTM_H + 8
+        inp_rect = pygame.Rect(M, inp_y, W - 2 * M, 32)
         pygame.draw.rect(surface, (0, 14, 4), inp_rect)
         pygame.draw.rect(surface, (0, 172, 70), inp_rect, 1)
         cursor = "█" if self._cursor_visible else " "
         surface.blit(
             font.render(f"  > {self._input}{cursor}", True, (0, 236, 94)),
-            (M + 8, inp_y + 8))
+            (M + 8, inp_y + 6))
 
         # Dynamic hint text
         hint = self._build_hint()
-        surface.blit(font_sm.render(hint, True, (50, 98, 60)), (M, inp_y + 50))
+        surface.blit(font_sm.render(hint, True, (50, 98, 60)), (M, inp_y + 40))
 
         # Turn counter
         turn_s = font_sm.render(f"TURN {self.npc._turn}", True, (42, 72, 42))
-        surface.blit(turn_s, (W - M - turn_s.get_width(), inp_y + 50))
+        surface.blit(turn_s, (W - M - turn_s.get_width(), inp_y + 40))
 
         # ── Outcome banner ─────────────────────────────────────────────
         if self._done:
@@ -509,7 +510,7 @@ class Terminal:
                 aura.fill((*ocol, int(60 * pulse * max(0, 1.0 - age / 3.0))))
                 surface.blit(aura, (0, 0))
 
-        ofont = pygame.font.SysFont("monospace", 22, bold=True)
+        ofont = pygame.font.SysFont("monospace", 19, bold=True)
         osurf = ofont.render(olbl, True, ocol)
         ox = W // 2 - osurf.get_width() // 2
         oy = H // 2 - osurf.get_height() // 2

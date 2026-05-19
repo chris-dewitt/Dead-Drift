@@ -15,7 +15,8 @@ from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
                              EVT_SLINGSHOT, EVT_BARGE_NEARBY, EVT_CANISTER_GRAB,
                              EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING,
                              EVT_COMMS_SPEAK, EVT_TETHER_SNAP, EVT_BAX_SPEAK,
-                             EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_DEMO_NOTICE)
+                             EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_DEMO_NOTICE,
+                             EVT_JUMP_READY)
 from config import settings as S
 
 
@@ -157,6 +158,7 @@ class RunManager:
         self._collector_cd     = random.uniform(S.COLLECTOR_INTERVAL_MIN, S.COLLECTOR_INTERVAL_MAX)
 
         self._pending_advance  = False
+        self._jump_ready_fired = False   # prevents duplicate jump-ready sound per sector
         self._run_debt_reduced = 0   # credits recovered this run (shown in HUD)
 
         # Per-sector stat tracking for the between-sector flash card
@@ -184,6 +186,7 @@ class RunManager:
         self._active_terminal    = None
         self._intercepting_barge = None
         self._pending_advance    = False
+        self._jump_ready_fired   = False
         self._kress_called_this_sector = False
         self._run_debt_reduced   = 0
         self._sector_slingshots  = 0
@@ -222,6 +225,10 @@ class RunManager:
         self._sling_cd      = max(0.0, self._sling_cd - dt)
         self._prox_cd       = max(0.0, self._prox_cd  - dt)
         self._flash_t       = max(0.0, self._flash_t  - dt)
+
+        if not self._jump_ready_fired and self._sector_timer >= self._sector_dur:
+            self._jump_ready_fired = True
+            bus.emit(EVT_JUMP_READY)
 
         self._sector.gravity.apply_all(self._ship.body)
 
@@ -511,6 +518,7 @@ class RunManager:
 
         self._sector       = generate_sector(self._sector_index, self._difficulty())
         self._sector_timer = 0.0
+        self._jump_ready_fired = False
         self._barges.clear()
         self._sling_well_t.clear()
         self._kress_called_this_sector = False

@@ -5,7 +5,7 @@ import pygame
 
 from config import settings as S
 from core.state_manager import StateManager, GameState
-from core.event_bus import bus, EVT_SHIP_DESTROYED, EVT_RUN_END, EVT_TORCH_ACTIVE
+from core.event_bus import bus, EVT_SHIP_DESTROYED, EVT_RUN_END, EVT_TORCH_ACTIVE, EVT_DEBT_DING
 from roguelite.meta_progression import MetaProgression
 from roguelite.run_manager import RunManager
 from ship.ship import PlayerShip
@@ -43,6 +43,7 @@ class Game:
         self._dt                  = 0.016
         self._run_just_completed  = False
         self._torch_warn_t        = 0.0   # seconds remaining until next module loss
+        self._last_debt_milestone = 0     # last 1000cr milestone we dinged
 
         self._wire_events()
 
@@ -247,6 +248,10 @@ class Game:
         interest_per_sec = max(0.01, self.meta.debt * S.DEBT_INTEREST_RATE)
         session_accrued  = t * interest_per_sec
         displayed_debt   = int(self.meta.debt + session_accrued)
+        milestone = (displayed_debt // 1000) * 1000
+        if milestone > self._last_debt_milestone and milestone > 0:
+            self._last_debt_milestone = milestone
+            bus.emit(EVT_DEBT_DING)
         blink = int(t * 1.6) % 2 == 0
         ticker_col = (110, 50, 50) if not blink else (160, 60, 60)
         debt_txt = font.render(
