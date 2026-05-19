@@ -63,12 +63,14 @@ class Gary(BaseNPC):
 
     def __init__(self, cargo_ch1_active: bool = False, intercepted: bool = False):
         super().__init__("Gary", patience=9)
-        self._therapy_mode    = cargo_ch1_active
-        self._intercepted     = intercepted
-        self._therapy_points  = 0
-        self._bribe_attempts  = 0
-        self._deal_attempts   = 0
-        self._sympathy_turns  = 0
+        self._therapy_mode     = cargo_ch1_active
+        self._intercepted      = intercepted
+        self._therapy_points   = 0
+        self._bribe_attempts   = 0
+        self._deal_attempts    = 0
+        self._sympathy_turns   = 0
+        self._management_turns = 0
+        self._article7_hit     = False
 
     def _intro_line(self) -> str:
         if self._intercepted:
@@ -107,6 +109,8 @@ class Gary(BaseNPC):
 
         # ARTICLE 7 EXPLOIT — specific, immediate
         if "overtime" in raw and "article 7" in raw:
+            self._article7_hit = True
+            self._current_path = "ARTICLE 7"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="overtime")
             return NPCOutcome.RELEASE, (
                 "Oh that's— blimey, that's an Article 7 violation if you file it right. "
@@ -119,6 +123,7 @@ class Gary(BaseNPC):
         if (any(w in raw for w in self._SYMPATHY_KEYWORDS) or
                 parsed.intent == "sympathy"):
             self._sympathy_turns += 1
+            self._current_path    = "SYMPATHY"
             self.disposition += 2
             if self.disposition >= 4:
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="sympathy")
@@ -145,6 +150,7 @@ class Gary(BaseNPC):
         if (any(w in raw for w in self._DEAL_KEYWORDS) or
                 parsed.intent == "negotiate"):
             self._deal_attempts += 1
+            self._current_path   = "DEAL/NEGOTIATE"
             has_proposal = any(w in raw for w in [
                 "percent", "%", "fifteen", "twenty", "thirty",
                 "reduction", "waive", "write off", "settlement",
@@ -180,6 +186,7 @@ class Gary(BaseNPC):
         # BRIBE PATH
         if (any(w in raw for w in self._BRIBE_KEYWORDS) or
                 parsed.intent == "bribe"):
+            self._current_path = "BRIBE (3k+)"
             has_big = (any(amt in raw for amt in self._BIG_AMOUNTS) or
                        (parsed.amount is not None and parsed.amount >= 3000))
             if has_big:
@@ -225,6 +232,8 @@ class Gary(BaseNPC):
                     "union", "management", "supervisor", "quota", "overtime",
                     "unfair", "underpaid", "bureaucracy", "system",
                 ])):
+            self._management_turns += 1
+            self._current_path      = "BLEVINS METHOD"
             blevins_hit = "blevins" in raw or "district supervisor" in raw
             if blevins_hit:
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="middle_management")
@@ -315,6 +324,16 @@ class Gary(BaseNPC):
 
         # DEFAULT — changes tone based on progress
         return NPCOutcome.CONTINUE, self._gary_filler()
+
+    def get_path_progress(self) -> list[tuple[str, int, int]]:
+        disp_toward_5 = max(0, min(5, self.disposition))
+        return [
+            ("DEAL/NEGOTIATE", min(self._deal_attempts, 2),    2),
+            ("SYMPATHY",       min(self._sympathy_turns, 2),   2),
+            ("BLEVINS METHOD", disp_toward_5,                  5),
+            ("ARTICLE 7",      int(self._article7_hit),        1),
+            ("BRIBE (3k+)",    min(self._bribe_attempts, 1),   1),
+        ]
 
     def _gary_filler(self) -> str:
         # Signal when close

@@ -42,6 +42,9 @@ class SyntheticDroid(BaseNPC):
         self._compliance_pts = 0
         self._friendship_pts = 0
         self._glitch_counter = 0
+        self._sql_hit        = False
+        self._override_hit   = False
+        self._emp_month_hit  = False
 
     def _intro_line(self) -> str:
         return random.choice([
@@ -79,6 +82,8 @@ class SyntheticDroid(BaseNPC):
 
         # SQL INJECTION
         if parsed.sql_inject:
+            self._sql_hit      = True
+            self._current_path = "SQL INJECT"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="sql_inject")
             return NPCOutcome.EXPLOIT, (
                 f"PROCESSING MANIFEST... [{parsed.sql_inject}]... "
@@ -91,6 +96,8 @@ class SyntheticDroid(BaseNPC):
 
         # OVERRIDE CODES
         if any(w in raw for w in self._OVERRIDE_WORDS):
+            self._override_hit = True
+            self._current_path = "OVERRIDE CODE"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="override_code")
             return NPCOutcome.EXPLOIT, (
                 "MAINTENANCE MODE QUERY DETECTED. RUNNING SELF-DIAGNOSTIC... "
@@ -105,6 +112,7 @@ class SyntheticDroid(BaseNPC):
         # PARADOX
         if parsed.paradox:
             self._paradox_count += 1
+            self._current_path   = "PARADOX CRASH"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="paradox_crash")
             if self._paradox_count >= 2:
                 return NPCOutcome.RELEASE, (
@@ -125,6 +133,8 @@ class SyntheticDroid(BaseNPC):
         # EMPLOYEE OF THE MONTH
         if ("employee" in raw and ("month" in raw or "award" in raw or "recognition" in raw)) or \
            ("gloriax" in raw):
+            self._emp_month_hit = True
+            self._current_path  = "EMP. OF MONTH"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="employee_of_month")
             return NPCOutcome.RELEASE, random.choice([
                 "EMPLOYEE OF THE MONTH. "
@@ -151,6 +161,7 @@ class SyntheticDroid(BaseNPC):
         if (any(w in raw for w in self._FRIENDSHIP_WORDS) or
                 parsed.intent in ("therapy", "philosophical")):
             self._friendship_pts += 1
+            self._current_path    = "FRIENDSHIP"
             self.disposition += 1
             if self._friendship_pts >= 3:
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="friendship")
@@ -195,6 +206,7 @@ class SyntheticDroid(BaseNPC):
         if (parsed.intent == "legal" or
                 any(w in raw for w in self._FORMAL_KEYWORDS)):
             self._compliance_pts += 1
+            self._current_path    = "FORMAL LOOPHOLE"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="formal_loophole")
             if self._compliance_pts >= 3:
                 return NPCOutcome.RELEASE, (
@@ -236,6 +248,16 @@ class SyntheticDroid(BaseNPC):
             return NPCOutcome.CONTINUE, self._loyalty_glitch()
 
         return NPCOutcome.CONTINUE, self._tk9_filler()
+
+    def get_path_progress(self) -> list[tuple[str, int, int]]:
+        return [
+            ("SQL INJECT",      int(self._sql_hit),        1),
+            ("OVERRIDE CODE",   int(self._override_hit),   1),
+            ("PARADOX CRASH",   self._paradox_count,       2),
+            ("EMP. OF MONTH",   int(self._emp_month_hit),  1),
+            ("FRIENDSHIP",      self._friendship_pts,      3),
+            ("FORMAL LOOPHOLE", self._compliance_pts,      3),
+        ]
 
     def _loyalty_glitch(self) -> str:
         return random.choice([

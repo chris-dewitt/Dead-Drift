@@ -131,3 +131,81 @@ def spore_sting() -> pygame.mixer.Sound:
     w  += np.sin(_2PI * (330.0 - 30.0 * lfo) * t) * 0.25
     w  += _noise(dur, amp=0.06)
     return _to_sound(_adsr(w, 0.01, 0.10, 0.6, 0.30))
+
+
+# ---------------------------------------------------------------------------
+# New SFX — event-driven one-shots
+
+def death_sting() -> pygame.mixer.Sound:
+    """Descending synth chord on ship destroyed — two-octave fall over 3s."""
+    dur = 3.0
+    t   = _t(dur)
+    # Three-voice descending chord — exponential frequency fall
+    freqs = [440.0, 554.4, 659.3]   # A4, C#5, E5 — minor third + fifth
+    w = np.zeros(int(SAMPLE_RATE * dur))
+    for f0 in freqs:
+        inst_f = f0 * np.exp(-t * 1.3)   # drops ~2 octaves over 3s
+        phase  = np.cumsum(_2PI * inst_f / SAMPLE_RATE)
+        w     += np.sin(phase) * 0.28
+    w += _noise(dur, amp=0.03)
+    env = np.exp(-t * 0.6) * 0.80   # smooth long decay
+    return _to_sound((w * env).clip(-1.0, 1.0))
+
+
+def slingshot_whoosh() -> pygame.mixer.Sound:
+    """Rising speed rush on successful slingshot."""
+    dur = 0.65
+    t   = _t(dur)
+    inst_f = np.linspace(70.0, 1400.0, len(t)) * (0.92 + 0.08 * np.sin(_2PI * 18 * t))
+    phase  = np.cumsum(_2PI * inst_f / SAMPLE_RATE)
+    w  = np.sin(phase) * 0.55
+    w += _noise(dur, amp=0.10)
+    return _to_sound(_adsr(w, 0.008, 0.18, 0.48, 0.35))
+
+
+def canister_chime() -> pygame.mixer.Sound:
+    """Bright C-major arpeggio on fuel pickup."""
+    notes = [523.25, 659.25, 783.99, 1046.5]   # C5 E5 G5 C6
+    segs  = []
+    for freq in notes:
+        dur  = 0.10
+        t    = _t(dur)
+        blip = np.sin(_2PI * freq * t) * 0.55
+        blip += np.sin(_2PI * freq * 2 * t) * 0.16
+        blip  = _adsr(blip, 0.002, 0.025, 0.65, 0.06)
+        segs.append(blip)
+        segs.append(np.zeros(int(SAMPLE_RATE * 0.028)))
+    wave = np.concatenate(segs)
+    return _to_sound(wave.clip(-1.0, 1.0))
+
+
+def barge_alert() -> pygame.mixer.Sound:
+    """Sharp descending chirp when barge enters proximity range."""
+    dur  = 0.38
+    t    = _t(dur)
+    f    = np.linspace(1100.0, 380.0, len(t))
+    phase = np.cumsum(_2PI * f / SAMPLE_RATE)
+    w     = np.sin(phase) * 0.65
+    w    += np.sin(phase * 2) * 0.20
+    w    += _noise(dur, amp=0.05)
+    return _to_sound(_adsr(w, 0.001, 0.05, 0.42, 0.20))
+
+
+def terminal_drone(duration: float = 6.0) -> pygame.mixer.Sound:
+    """Ominous Am-chord pad that loops during terminal interrogation."""
+    t       = _t(duration)
+    lfo_a   = 0.72 + 0.28 * np.sin(_2PI * 0.07 * t)
+    lfo_b   = 0.86 + 0.14 * np.sin(_2PI * 0.13 * t + 1.2)
+
+    w  = _sine(110.0, duration, amp=0.26) * lfo_a   # A2
+    w += _sine(130.8, duration, amp=0.16) * lfo_b   # C3
+    w += _sine(164.8, duration, amp=0.11) * lfo_a   # E3
+    w += _sine(55.0,  duration, amp=0.20)            # A1 sub
+    w += _noise(duration, amp=0.018) * lfo_b         # radio texture
+
+    # Seamless loop fade at edges
+    n    = len(w)
+    fade = int(SAMPLE_RATE * 0.9)
+    w[:fade]  *= np.linspace(0.0, 1.0, fade)
+    w[-fade:] *= np.linspace(1.0, 0.0, fade)
+    return _to_sound((w * 0.65).clip(-1.0, 1.0))

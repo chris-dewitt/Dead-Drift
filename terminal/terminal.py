@@ -4,15 +4,21 @@ import pygame
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import NLPParser
 from terminal.npc_portraits import draw_portrait
-from core.event_bus import bus, EVT_TERMINAL_OPEN, EVT_TERMINAL_CLOSE
+from core.event_bus import bus, EVT_TERMINAL_OPEN, EVT_TERMINAL_CLOSE, EVT_VOICE_CHAR
 from config import settings as S
 
 
-# NPC-specific hint tables — shown at bottom of terminal
+_NPC_DOSSIER_TITLE = {
+    "GARY":       "FIELD PROFILE",
+    "TK-9":       "VULNERABILITY SCAN",
+    "DISPATCHER": "PATH ANALYSIS",
+    "KRESS":      "INTEL DOSSIER",
+}
+
 _NPC_HINTS = {
-    "GARY":       "deal · bribe ≥3k · sympathy · blevins · article 7 · [ESC] abort",
-    "TK-9":       "paradox×2 · sql inject · formal statute · override · friendship · emp.month · [ESC] abort",
-    "DISPATCHER": "coffee/break · forms×3 · 42 · quantum+legal · grievance×3 · bribe ≥10k · [ESC] abort",
+    "GARY":       "deal×2 · bribe ≥3k · sympathy×2 · blevins · overtime+article7 · [ESC] abort",
+    "TK-9":       "paradox×2 · drop table · statute×3 · override · friendship×3 · emp.month · [ESC] abort",
+    "DISPATCHER": "coffee/break/tired · forms×3 · say '42' · grievance×3 · quantum+legal · bribe ≥10k · [ESC] abort",
     "KRESS":      "intel · contraband · volkov · connie · be friendly×3 · [ESC] abort",
 }
 
@@ -30,14 +36,16 @@ _OUTCOME_LABEL = {
 
 class Terminal:
     """
-    NLP terminal — left panel portrait, right panel dialogue, bottom input.
+    NLP terminal — portrait + dossier panel left, dialogue right, input bottom.
 
-    Visual features:
-    - Disposition delta flash (+N / -N) appears at the bar when disposition changes
-    - Patience pips go red when 2 or fewer remain
-    - EXPLOIT outcome gets a special cyan banner vs green for RELEASE
-    - NPC-specific hint text in the input strip
-    - "MOMENTUM POSITIVE" label when disposition ≥ 3
+    Features:
+    - System analysis line after each player turn shows what was detected:
+      intent, active path with progress bar, disposition change.
+    - Left panel: portrait (top) + path progress bars (bottom) so players
+      can see exactly how far they are on each escape route.
+    - Dynamic hint text highlights in-progress paths.
+    - Disposition delta floats up from the bar.
+    - EXPLOIT outcome gets cyan aura; RELEASE gets gold.
     """
 
     def __init__(self, npc: BaseNPC):
@@ -50,19 +58,14 @@ class Terminal:
         self._cursor_visible = True
         self._cursor_timer   = 0.0
 
-        # Typewriter
         self._tw_pos   = -1
         self._tw_chars = 0.0
 
-        # Disposition delta flash
-        self._disp_flash: tuple[int, float] | None = None   # (delta, timestamp)
-
-        # Exploit flash (timestamp or None)
+        self._disp_flash: tuple[int, float] | None = None
         self._exploit_flash: float | None = None
 
         self._font:    pygame.font.Font | None = None
         self._font_sm: pygame.font.Font | None = None
-        self._font_hd: pygame.font.Font | None = None
 
         bus.emit(EVT_TERMINAL_OPEN, npc=npc)
         self._push(npc.name.upper(), npc.intro())
@@ -77,11 +80,6 @@ class Terminal:
         if self._font_sm is None:
             self._font_sm = pygame.font.SysFont("monospace", 15)
         return self._font_sm
-
-    def _get_font_hd(self) -> pygame.font.Font:
-        if self._font_hd is None:
-            self._font_hd = pygame.font.SysFont("monospace", 17, bold=True)
-        return self._font_hd
 
     # ------------------------------------------------------------------
     def handle_key(self, event: pygame.event.Event):
@@ -111,8 +109,11 @@ class Terminal:
 
         delta = disp_after - disp_before
         if delta != 0:
-            now = pygame.time.get_ticks() / 1000.0
-            self._disp_flash = (delta, now)
+            self._disp_flash = (delta, pygame.time.get_ticks() / 1000.0)
+
+        analysis = self._make_analysis(delta)
+        if analysis:
+            self._push("ANALYSIS", analysis)
 
         if outcome in (NPCOutcome.EXPLOIT, NPCOutcome.RELEASE):
             self._exploit_flash = pygame.time.get_ticks() / 1000.0
@@ -124,6 +125,40 @@ class Terminal:
             self._done = True
             bus.emit(EVT_TERMINAL_CLOSE, outcome=outcome)
 
+    def _make_analysis(self, disp_delta: int) -> str:
+        """Build a compact analysis string from the last parsed input + NPC state."""
+        parts = []
+        p = self.npc.last_parsed
+        if p is None:
+            return ""
+
+        intent = p.intent if p.intent not in ("unknown", "") else None
+        if intent:
+            parts.append(f"intent:{intent.upper()}")
+
+        if p.paradox:
+            parts.append("⚠ PARADOX")
+        if p.sql_inject:
+            cmd = p.sql_inject[:18] + "…" if len(p.sql_inject) > 18 else p.sql_inject
+            parts.append(f"⚠ SQL:{cmd}")
+
+        path = getattr(self.npc, '_current_path', '')
+        if path:
+            progress_map = {n: (c, m) for n, c, m in self.npc.get_path_progress()}
+            if path in progress_map:
+                cur, mx = progress_map[path]
+                bar = "■" * cur + "□" * (mx - cur)
+                parts.append(f"{path} [{bar}] {cur}/{mx}")
+            else:
+                parts.append(f"→ {path}")
+
+        if disp_delta > 0:
+            parts.append(f"+{disp_delta} DISP ↑")
+        elif disp_delta < 0:
+            parts.append(f"{disp_delta} DISP ↓")
+
+        return " · ".join(parts) if parts else ""
+
     # ------------------------------------------------------------------
     def update(self, dt: float):
         self._cursor_timer += dt
@@ -132,26 +167,35 @@ class Terminal:
             self._cursor_timer   = 0.0
 
         if 0 <= self._tw_pos < len(self._history):
-            _, text = self._history[self._tw_pos]
+            speaker, text = self._history[self._tw_pos]
+            prev_n = int(self._tw_chars)
             self._tw_chars = min(float(len(text)),
                                  self._tw_chars + S.TYPEWRITER_SPEED * dt)
+            new_n  = int(self._tw_chars)
+            # Emit a voice blip every 3 newly revealed characters (NPC lines only)
+            if (new_n > prev_n and new_n % 3 == 0
+                    and speaker not in ("YOU", "SYSTEM", "ANALYSIS")):
+                bus.emit(EVT_VOICE_CHAR, speaker=speaker)
 
     # ------------------------------------------------------------------
     def draw(self, surface: pygame.Surface):
         W, H = surface.get_size()
         t    = pygame.time.get_ticks() / 1000.0
-        M    = 18
-        HDR_H = 74        # taller header for delta-flash row
-        BTM_H = 108
-        PNL_W = 290
-        GAP   = 12
+
+        # ── Layout constants ─────────────────────────────────────────
+        M      = 14
+        HDR_H  = 60
+        BTM_H  = 84
+        PNL_W  = 308    # left panel total width
+        PORT_H = 255    # portrait height within left panel
+        GAP    = 10
 
         font    = self._get_font()
         font_sm = self._get_font_sm()
-        font_hd = self._get_font_hd()
-        lh = font.get_linesize()
+        lh      = font.get_linesize()
+        lh_sm   = font_sm.get_linesize()
 
-        # Scanline overlay
+        # Scanline overlay (cached)
         if not hasattr(self, '_scan_surf') or self._scan_surf.get_size() != (W, H):
             self._scan_surf = pygame.Surface((W, H), pygame.SRCALPHA)
             for sy in range(0, H, 3):
@@ -165,23 +209,22 @@ class Terminal:
         pygame.draw.rect(surface, (4, 20, 7), (0, 0, W, HDR_H))
         pygame.draw.line(surface, (0, 140, 58), (0, HDR_H), (W, HDR_H), 1)
 
-        # Header has two rows: top = name/disposition/patience, bottom = delta/warnings
-        ROW1_Y = 18
-        ROW2_Y = 50
+        ROW_Y = HDR_H // 2   # vertical centre of header = 30
 
-        fn_title = pygame.font.SysFont("monospace", 19, bold=True)
+        # NPC name (left)
+        fn_title = pygame.font.SysFont("monospace", 20, bold=True)
         nm = fn_title.render(self.npc.name.upper(), True, (255, 186, 34))
-        surface.blit(nm, (M, ROW1_Y - nm.get_height() // 2 + 7))
+        surface.blit(nm, (M, ROW_Y - nm.get_height() // 2))
 
         # ── Disposition bar (centred) ─────────────────────────────────
         disp  = self.npc.disposition
         d_lbl = font_sm.render("DISP", True, (72, 105, 72))
-        bw, bh2 = 130, 12
-        bar_total_w = d_lbl.get_width() + 8 + bw
+        bw, bh2 = 140, 14
+        bar_total_w = d_lbl.get_width() + 10 + bw
         bar_left = (W - bar_total_w) // 2
-        surface.blit(d_lbl, (bar_left, ROW1_Y - 8))
-        bx = bar_left + d_lbl.get_width() + 8
-        by = ROW1_Y - bh2 // 2
+        surface.blit(d_lbl, (bar_left, ROW_Y - d_lbl.get_height() // 2))
+        bx = bar_left + d_lbl.get_width() + 10
+        by = ROW_Y - bh2 // 2
 
         pygame.draw.rect(surface, (14, 26, 14), (bx, by, bw, bh2))
         dpct = max(0.0, min(1.0, (disp + 10) / 20.0))
@@ -199,9 +242,29 @@ class Terminal:
 
         pygame.draw.rect(surface, dcol, (bx, by, int(bw * dpct), bh2))
         pygame.draw.rect(surface, (48, 76, 48), (bx, by, bw, bh2), 1)
-        # Centre tick
         cx_tick = bx + bw // 2
         pygame.draw.line(surface, (90, 110, 90), (cx_tick, by - 2), (cx_tick, by + bh2 + 2), 1)
+
+        # MOMENTUM label when high
+        if disp >= 3:
+            pulse   = int(200 + 55 * math.sin(t * 3.0))
+            mom_col = (0, pulse, int(pulse * 0.4))
+            mom     = font_sm.render("MOMENTUM+", True, mom_col)
+            surface.blit(mom, (bx + bw + 14, ROW_Y - mom.get_height() // 2))
+
+        # Disposition delta floats upward from bar
+        if self._disp_flash is not None:
+            delta, flash_t = self._disp_flash
+            age = t - flash_t
+            if age < 1.8:
+                sign = "+" if delta > 0 else ""
+                col  = (0, 230, 100) if delta > 0 else (230, 60, 60)
+                fs   = pygame.font.SysFont("monospace", 14, bold=True)
+                ds   = fs.render(f"{sign}{delta} DISP", True, col)
+                surface.blit(ds, (bx + bw // 2 - ds.get_width() // 2,
+                                  by - 18 - int(age * 14)))
+            else:
+                self._disp_flash = None
 
         # ── Patience pips (right) ─────────────────────────────────────
         total_p = self.npc.patience
@@ -210,58 +273,32 @@ class Terminal:
         pip_w, pip_gap = 10, 3
         pip_block_w = total_p * (pip_w + pip_gap) - pip_gap
         right_x = W - M - pip_block_w - p_lbl.get_width() - 12
-        surface.blit(p_lbl, (right_x, ROW1_Y - 8))
+        surface.blit(p_lbl, (right_x, ROW_Y - p_lbl.get_height() // 2))
         px0 = right_x + p_lbl.get_width() + 10
         for i in range(total_p):
             active = i < curr_p
             if active:
                 if curr_p <= 2:
                     pulse = int(180 + 75 * math.sin(t * 4.0))
-                    col = (pulse, max(0, pulse - 140), 0)
+                    col   = (pulse, max(0, pulse - 140), 0)
                 else:
                     col = (255, 145, 0)
             else:
                 col = (22, 34, 22)
             rx = px0 + i * (pip_w + pip_gap)
-            pygame.draw.rect(surface, col, (rx, ROW1_Y - 6, pip_w, 12))
-            pygame.draw.rect(surface, (50, 76, 50), (rx, ROW1_Y - 6, pip_w, 12), 1)
+            pygame.draw.rect(surface, col,       (rx, ROW_Y - 6, pip_w, 12))
+            pygame.draw.rect(surface, (50,76,50), (rx, ROW_Y - 6, pip_w, 12), 1)
 
-        # ── ROW 2 — momentum / delta / patience warning ───────────────
-        # MOMENTUM (left of disp bar)
-        if disp >= 3:
-            pulse = int(200 + 55 * math.sin(t * 3.0))
-            mom_col = (0, pulse, int(pulse * 0.4))
-            mom = font_sm.render("MOMENTUM +", True, mom_col)
-            surface.blit(mom, (bar_left + bar_total_w + 12, ROW1_Y - 7))
-
-        # Disposition delta flash — in row 2, directly under bar
-        if self._disp_flash is not None:
-            delta, flash_t = self._disp_flash
-            age = t - flash_t
-            if age < 1.8:
-                sign = "+" if delta > 0 else ""
-                col  = (0, 230, 100) if delta > 0 else (230, 60, 60)
-                fs   = pygame.font.SysFont("monospace", 16, bold=True)
-                ds   = fs.render(f"{sign}{delta} DISP", True, col)
-                drift_y = int(age * 14)
-                surface.blit(ds, (bx + bw // 2 - ds.get_width() // 2,
-                                  ROW2_Y - 4 - drift_y))
-            else:
-                self._disp_flash = None
-
-        # Low patience warning — under patience pips
+        # Low patience warning
         if 0 < curr_p <= 2:
-            warn = font_sm.render(
-                f"!! {curr_p} TURN{'S' if curr_p > 1 else ''} LEFT !!",
-                True, (220, 60, 60))
-            surface.blit(warn, (right_x + (pip_block_w + p_lbl.get_width() + 10 - warn.get_width()) // 2,
-                                ROW2_Y - 6))
+            warn = font_sm.render(f"!! {curr_p} LEFT !!", True, (220, 60, 60))
+            surface.blit(warn, (px0 - warn.get_width() - 8,
+                                ROW_Y - warn.get_height() // 2))
 
         # ── Portrait panel ────────────────────────────────────────────
-        p_rect = pygame.Rect(M, HDR_H + 4, PNL_W - M - 4, H - BTM_H - HDR_H - 8)
+        p_rect = pygame.Rect(M, HDR_H + 4, PNL_W - M - 4, PORT_H)
         pygame.draw.rect(surface, (4, 12, 4), p_rect)
         pygame.draw.rect(surface, (0, 80, 34), p_rect, 1)
-
         draw_portrait(surface, self.npc.name, p_rect, self.npc.disposition, t)
 
         if not hasattr(self, '_p_scan') or self._p_scan.get_size() != (p_rect.w, p_rect.h):
@@ -270,55 +307,71 @@ class Terminal:
                 pygame.draw.line(self._p_scan, (0, 0, 0, 50), (0, sy), (p_rect.w, sy))
         surface.blit(self._p_scan, p_rect.topleft)
 
-        sig_col = (50, 90, 50) if int(t * 2) % 3 != 0 else (80, 130, 80)
-        sig_surf = font_sm.render("COMM  ·  SIGNAL: DEGRADED", True, sig_col)
-        surface.blit(sig_surf, (p_rect.left + 4, p_rect.bottom - sig_surf.get_height() - 4))
+        # ── Dossier / Path Progress panel ────────────────────────────
+        doss_y = HDR_H + 4 + PORT_H + 4
+        doss_h = H - BTM_H - 4 - doss_y
+        doss_rect = pygame.Rect(M, doss_y, PNL_W - M - 4, doss_h)
+        pygame.draw.rect(surface, (3, 8, 3), doss_rect)
+        pygame.draw.rect(surface, (0, 60, 28), doss_rect, 1)
+        self._draw_dossier(surface, doss_rect, t, font_sm, lh_sm)
 
-        # ── Vertical divider ──────────────────────────────────────────
+        # ── Vertical divider ─────────────────────────────────────────
         div_x = PNL_W + 2
-        pygame.draw.line(surface, (0, 100, 42), (div_x, HDR_H + 2), (div_x, H - BTM_H - 2), 1)
+        pygame.draw.line(surface, (0, 100, 42),
+                         (div_x, HDR_H + 2), (div_x, H - BTM_H - 2), 1)
 
-        # ── Dialogue panel ────────────────────────────────────────────
-        dl_x  = PNL_W + 10
-        dl_w  = W - dl_x - M
-        DIAG_Y0 = HDR_H + 8
-        DIAG_Y1 = H - BTM_H
-        char_w    = max(1, font.size("A")[0])
-        wrap_cols = max(30, dl_w // char_w)
+        # ── Dialogue panel ───────────────────────────────────────────
+        dl_x     = PNL_W + 10
+        dl_w     = W - dl_x - M
+        DIAG_Y0  = HDR_H + 8
+        DIAG_Y1  = H - BTM_H
+        char_w   = max(1, font.size("A")[0])
+        char_w_sm = max(1, font_sm.size("A")[0])
+        wrap_cols    = max(30, dl_w // char_w)
+        wrap_cols_sm = max(36, (dl_w + 60) // char_w_sm)
 
         fn_sp = pygame.font.SysFont("monospace", 17, bold=True)
 
-        blocks: list[tuple[str, bool, bool, list[str]]] = []
+        blocks: list[tuple[str, bool, bool, bool, list[str]]] = []
         for i, (speaker, text) in enumerate(self._history):
-            disp_text = text[:int(self._tw_chars)] if i == self._tw_pos else text
-            is_npc = speaker not in ("YOU", "SYSTEM")
-            is_sys = speaker == "SYSTEM"
-            blocks.append((speaker, is_npc, is_sys, self._wrap(disp_text, wrap_cols)))
+            disp_text  = text[:int(self._tw_chars)] if i == self._tw_pos else text
+            is_npc     = speaker not in ("YOU", "SYSTEM", "ANALYSIS")
+            is_sys     = speaker == "SYSTEM"
+            is_analysis = speaker == "ANALYSIS"
+            wc = wrap_cols_sm if is_analysis else wrap_cols
+            blocks.append((speaker, is_npc, is_sys, is_analysis,
+                           self._wrap(disp_text, wc)))
 
         def _block_h(bl: tuple) -> int:
-            _, _, is_sys, wrapped = bl
+            _, _, is_sys, is_analysis, wrapped = bl
+            if is_analysis:
+                return len(wrapped) * lh_sm + GAP // 2
             return (0 if is_sys else lh) + len(wrapped) * lh + GAP
 
         total_px = sum(_block_h(bl) for bl in blocks)
         avail    = DIAG_Y1 - DIAG_Y0 - 10
-        # Anchor newest messages to BOTTOM. When content overflows, start y
-        # negative so oldest messages clip off the top.
-        y = DIAG_Y0 + 6 + (avail - total_px)
+        y        = DIAG_Y0 + 6 + (avail - total_px)
 
-        # Set up clip rect so blocks crossing the top edge don't draw above
         prev_clip = surface.get_clip()
-        clip_rect = pygame.Rect(0, DIAG_Y0, W, DIAG_Y1 - DIAG_Y0)
-        surface.set_clip(clip_rect)
+        surface.set_clip(pygame.Rect(0, DIAG_Y0, W, DIAG_Y1 - DIAG_Y0))
 
-        for speaker, is_npc, is_sys, wrapped in blocks:
-            b_h = _block_h((speaker, is_npc, is_sys, wrapped))
+        for speaker, is_npc, is_sys, is_analysis, wrapped in blocks:
+            b_h = _block_h((speaker, is_npc, is_sys, is_analysis, wrapped))
             if y + b_h < DIAG_Y0:
                 y += b_h
                 continue
             if y >= DIAG_Y1:
                 break
 
-            if is_npc:
+            if is_analysis:
+                for line in wrapped:
+                    surface.blit(
+                        font_sm.render(f"  ⊙ {line}", True, (0, 165, 155)),
+                        (dl_x + 4, y))
+                    y += lh_sm
+                y += GAP // 2
+
+            elif is_npc:
                 bar_end = y + b_h - GAP - 2
                 pygame.draw.line(surface, (195, 122, 0),
                                  (dl_x, y), (dl_x, bar_end), 2)
@@ -330,6 +383,7 @@ class Terminal:
                         font.render(f"    {line}", True, (205, 152, 36)),
                         (dl_x + 6, y))
                     y += lh
+                y += GAP
 
             elif is_sys:
                 for line in wrapped:
@@ -337,6 +391,7 @@ class Terminal:
                         font_sm.render(f"  // {line}", True, (68, 86, 68)),
                         (dl_x, y))
                     y += lh
+                y += GAP
 
             else:  # YOU
                 sp = fn_sp.render("[YOU]  »", True, (62, 212, 98))
@@ -347,8 +402,7 @@ class Terminal:
                         font.render(f"    {line}", True, (84, 200, 104)),
                         (dl_x + 48, y))
                     y += lh
-
-            y += GAP
+                y += GAP
 
         surface.set_clip(prev_clip)
 
@@ -365,12 +419,9 @@ class Terminal:
             font.render(f"  > {self._input}{cursor}", True, (0, 236, 94)),
             (M + 8, inp_y + 8))
 
-        # NPC-specific hint
-        hint = _NPC_HINTS.get(self.npc.name.upper(),
-                              "deal · bribe · sympathy · threaten · [ESC] abort")
-        surface.blit(
-            font_sm.render(hint, True, (50, 98, 60)),
-            (M, inp_y + 50))
+        # Dynamic hint text
+        hint = self._build_hint()
+        surface.blit(font_sm.render(hint, True, (50, 98, 60)), (M, inp_y + 50))
 
         # Turn counter
         turn_s = font_sm.render(f"TURN {self.npc._turn}", True, (42, 72, 42))
@@ -383,21 +434,79 @@ class Terminal:
         # ── Global scanlines ───────────────────────────────────────────
         surface.blit(self._scan_surf, (0, 0))
 
+    # ------------------------------------------------------------------
+    def _draw_dossier(self, surface: pygame.Surface, rect: pygame.Rect,
+                      t: float, font_sm: pygame.font.Font, lh_sm: int):
+        x = rect.left + 6
+        y = rect.top + 6
+
+        title = _NPC_DOSSIER_TITLE.get(self.npc.name.upper(), "PATH ANALYSIS")
+        t_surf = font_sm.render(f"── {title} ──", True, (0, 115, 65))
+        surface.blit(t_surf, (x, y))
+        y += lh_sm + 5
+
+        paths = self.npc.get_path_progress()
+        if not paths:
+            # Fallback: plain hint lines
+            for chunk in _NPC_HINTS.get(self.npc.name.upper(), "").split(" · "):
+                if y + lh_sm > rect.bottom - lh_sm - 6:
+                    break
+                surface.blit(font_sm.render(f"  {chunk}", True, (40, 80, 40)), (x, y))
+                y += lh_sm
+        else:
+            bar_w = rect.width - 14
+            bar_h = 8
+            for name, cur, mx in paths:
+                if y + lh_sm + bar_h + 8 > rect.bottom - lh_sm - 8:
+                    break
+                completed = mx > 0 and cur >= mx
+                name_col  = (0, 220, 100) if completed else (80, 145, 80)
+                fill_col  = (0, 200, 85) if completed else (0, 130, 55)
+
+                # Name + counter on same line
+                lbl = font_sm.render(name, True, name_col)
+                ctr = font_sm.render("DONE" if completed else f"{cur}/{mx}",
+                                     True, name_col if completed else (60, 100, 60))
+                surface.blit(lbl, (x, y))
+                surface.blit(ctr, (x + bar_w - ctr.get_width(), y))
+                y += lh_sm
+
+                # Progress bar
+                br = pygame.Rect(x, y, bar_w, bar_h)
+                pygame.draw.rect(surface, (8, 18, 8), br)
+                if mx > 0 and cur > 0:
+                    fw = int(bar_w * min(1.0, cur / mx))
+                    pygame.draw.rect(surface, fill_col, (x, y, fw, bar_h))
+                pygame.draw.rect(surface, (0, 55, 28), br, 1)
+                y += bar_h + 7
+
+        # COMM label at bottom of dossier panel
+        sig_col = (50, 90, 50) if int(t * 2) % 3 != 0 else (80, 130, 80)
+        sig     = font_sm.render("COMM  ·  SIGNAL: DEGRADED", True, sig_col)
+        surface.blit(sig, (x, rect.bottom - lh_sm - 4))
+
+    def _build_hint(self) -> str:
+        paths = self.npc.get_path_progress()
+        if paths:
+            in_progress = [(n, c, m) for n, c, m in paths if 0 < c < m]
+            if in_progress:
+                tips = [f"{n}({c}/{m})" for n, c, m in in_progress[:3]]
+                return "ACTIVE: " + " · ".join(tips) + " · [ESC] abort"
+        return _NPC_HINTS.get(self.npc.name.upper(),
+                              "deal · bribe · sympathy · threaten · [ESC] abort")
+
+    # ------------------------------------------------------------------
     def _draw_outcome_banner(self, surface: pygame.Surface, W: int, H: int, t: float):
         ocol = _OUTCOME_COLOR.get(self._outcome, S.AMBER_TERM)
         olbl = _OUTCOME_LABEL.get(self._outcome, "[ DISCONNECTED ]")
-
-        # For EXPLOIT and RELEASE, add a flash aura
         is_win = self._outcome in (NPCOutcome.RELEASE, NPCOutcome.EXPLOIT)
 
         if is_win and self._exploit_flash is not None:
             age = t - self._exploit_flash
             if age < 3.0:
-                # Expanding glow rect
                 pulse = abs(math.sin(t * 6.0))
-                aura = pygame.Surface((W, H), pygame.SRCALPHA)
-                a = int(60 * pulse * max(0, 1.0 - age / 3.0))
-                aura.fill((*ocol, a))
+                aura  = pygame.Surface((W, H), pygame.SRCALPHA)
+                aura.fill((*ocol, int(60 * pulse * max(0, 1.0 - age / 3.0))))
                 surface.blit(aura, (0, 0))
 
         ofont = pygame.font.SysFont("monospace", 22, bold=True)
@@ -405,28 +514,24 @@ class Terminal:
         ox = W // 2 - osurf.get_width() // 2
         oy = H // 2 - osurf.get_height() // 2
 
-        # Dark backing with colored border
-        pad = 16
+        pad     = 16
         bg_rect = pygame.Rect(ox - pad, oy - pad // 2,
                               osurf.get_width() + pad * 2, osurf.get_height() + pad)
         pygame.draw.rect(surface, (0, 0, 0), bg_rect)
         pygame.draw.rect(surface, ocol, bg_rect, 2)
 
-        # Pulsing second border for wins
         if is_win:
-            pulse_a = int(180 + 75 * math.sin(t * 5.0))
-            inner_col = tuple(min(255, int(c * 0.6)) for c in ocol)
-            pygame.draw.rect(surface, inner_col,
-                             bg_rect.inflate(-4, -4), 1)
+            inner = tuple(min(255, int(c * 0.6)) for c in ocol)
+            pygame.draw.rect(surface, inner, bg_rect.inflate(-4, -4), 1)
 
         surface.blit(osurf, (ox, oy))
 
-        # Sub-label
         sub_font = pygame.font.SysFont("monospace", 14)
-        sub_lbl = "[ press any key ]" if is_win else "[ IMPOUND PROCEEDING — ESC TO VIEW FEES ]"
-        sub_col = (int(ocol[0] * 0.7), int(ocol[1] * 0.7), int(ocol[2] * 0.7))
-        sub = sub_font.render(sub_lbl, True, sub_col)
-        surface.blit(sub, (W // 2 - sub.get_width() // 2, oy + osurf.get_height() + 8))
+        sub_lbl  = "[ press any key ]" if is_win else "[ IMPOUND PROCEEDING — ESC TO VIEW FEES ]"
+        sub_col  = tuple(int(c * 0.7) for c in ocol)
+        sub      = sub_font.render(sub_lbl, True, sub_col)
+        surface.blit(sub, (W // 2 - sub.get_width() // 2,
+                           oy + osurf.get_height() + 8))
 
     # ------------------------------------------------------------------
     def _push(self, speaker: str, text: str):
