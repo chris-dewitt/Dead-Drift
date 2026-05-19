@@ -9,6 +9,7 @@ class GameState(Enum):
     DECANTING      = auto()   # clone-vat death screen
     SECTOR_JUMP    = auto()   # transition between sectors
     GAME_OVER      = auto()   # debt cleared or permanent death
+    DELIVERY       = auto()   # end-of-run delivery sequence
 
 
 class StateManager:

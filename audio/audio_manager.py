@@ -7,13 +7,15 @@ from core.event_bus import (
     EVT_GUN_FIRE, EVT_TERMINAL_OPEN, EVT_TERMINAL_CLOSE,
     EVT_SPORE_INVERTED, EVT_SHIP_DESTROYED, EVT_SLINGSHOT,
     EVT_CANISTER_GRAB, EVT_BARGE_NEARBY, EVT_BAX_SPEAK,
-    EVT_VOICE_CHAR,
+    EVT_VOICE_CHAR, EVT_JUMP_READY, EVT_DEBT_DING,
+    EVT_DELIVERY_STEP, EVT_DELIVERY_HIT, EVT_DELIVERY_DONE,
 )
 from audio.synth import (
     engine_drone, ambient_static, gun_shot, hull_impact,
     tether_clang, tether_snap, terminal_beep, spore_sting,
     death_sting, slingshot_whoosh, canister_chime,
-    barge_alert, terminal_drone,
+    barge_alert, terminal_drone, jump_ready_charge, debt_ding,
+    delivery_footstep, delivery_hit_sting, delivery_door_chime,
 )
 from audio.blues_licks import prebuild_all
 from audio.voices import prebuild_voices
@@ -102,6 +104,11 @@ class AudioManager:
         self._sfx["canister"]  = canister_chime()
         self._sfx["barge"]     = barge_alert()
         self._sfx["drone"]     = terminal_drone()
+        self._sfx["jump"]         = jump_ready_charge()
+        self._sfx["debt_ding"]    = debt_ding()
+        self._sfx["d_step"]       = delivery_footstep()
+        self._sfx["d_hit"]        = delivery_hit_sting()
+        self._sfx["d_door"]       = delivery_door_chime()
 
         print("[audio] generating blues licks…", flush=True)
         self._licks = prebuild_all()
@@ -141,6 +148,11 @@ class AudioManager:
         bus.subscribe(EVT_BARGE_NEARBY,   self._on_barge_nearby)
         bus.subscribe(EVT_BAX_SPEAK,      self._on_bax_speak)
         bus.subscribe(EVT_VOICE_CHAR,     self._on_voice_char)
+        bus.subscribe(EVT_JUMP_READY,     self._on_jump_ready)
+        bus.subscribe(EVT_DEBT_DING,      self._on_debt_ding)
+        bus.subscribe(EVT_DELIVERY_STEP,  self._on_d_step)
+        bus.subscribe(EVT_DELIVERY_HIT,   self._on_d_hit)
+        bus.subscribe(EVT_DELIVERY_DONE,  self._on_d_done)
 
     # ------------------------------------------------------------------
     def update(self, speed: float, dt: float = 0.016):
@@ -176,7 +188,7 @@ class AudioManager:
         self._lick_cd -= dt
         if self._lick_cd <= 0.0 and not self._lick_ch.get_busy():
             lick = random.choice(self._licks)
-            self._lick_ch.set_volume(self._master * 0.55)
+            self._lick_ch.set_volume(self._master * 0.88)
             self._lick_ch.play(lick)
             self._lick_cd = random.uniform(22.0, 55.0)
 
@@ -246,6 +258,16 @@ class AudioManager:
 
     def _on_voice_char(self, speaker: str = "", **_):
         self._play_voice_blip(speaker, self._npc_v_ch)
+
+    def _on_jump_ready(self, **_):
+        self._play_sfx("jump", 0.82)
+
+    def _on_debt_ding(self, **_):
+        self._play_sfx("debt_ding", 0.55)
+
+    def _on_d_step(self, **_):  self._play_sfx("d_step",  0.42)
+    def _on_d_hit(self,  **_):  self._play_sfx("d_hit",   0.78)
+    def _on_d_done(self, **_):  self._play_sfx("d_door",  0.85)
 
     def _on_term_open(self, **_):
         self._in_terminal = True

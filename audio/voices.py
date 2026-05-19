@@ -41,35 +41,40 @@ def _bandpass(wave: np.ndarray, low: float, high: float) -> np.ndarray:
 #                  decay and release are fractions of total duration
 
 _VOICES: dict[str, tuple] = {
+    # BAX — warm android mid-range buzz, slight wobble, Cockney robot
     "bax": (
-        52, 380, 260, 920, 0.07,
-        [1.0, 0.48, 0.20, 0.07],
-        (0.005, 0.28, 0.38, 0.42),
+        72, 390, 240, 880, 0.05,
+        [1.0, 0.55, 0.28, 0.10, 0.04],
+        (0.004, 0.22, 0.45, 0.38),
     ),
+    # GARY — breathy organic human, nasal, tired; higher noise, wide formant
     "gary": (
-        68, 310, 280, 1180, 0.18,
-        [1.0, 0.55, 0.28, 0.10],
-        (0.010, 0.32, 0.52, 0.38),
+        95, 250, 220, 1400, 0.32,
+        [1.0, 0.62, 0.38, 0.14],
+        (0.012, 0.35, 0.55, 0.42),
     ),
+    # TK-9 — crisp digital buzz, very high pitch, robotic precision; near-zero noise
     "tk-9": (
-        28, 1200, 680, 2800, 0.02,
-        [1.0, 0.72, 0.52, 0.33, 0.18],
-        (0.001, 0.14, 0.12, 0.72),
+        32, 1600, 900, 3600, 0.008,
+        [1.0, 0.80, 0.62, 0.44, 0.28, 0.14],
+        (0.001, 0.10, 0.08, 0.78),
     ),
+    # DISPATCHER — flat nasal bureaucratic drone, low-mid, very narrow bandpass
     "dispatcher": (
-        62, 268, 195, 610, 0.04,
-        [1.0, 0.38, 0.14, 0.04],
-        (0.005, 0.22, 0.62, 0.34),
+        78, 210, 160, 520, 0.02,
+        [1.0, 0.30, 0.08, 0.02],
+        (0.003, 0.18, 0.68, 0.28),
     ),
+    # KRESS — deep crackly comm-link, heavy static, sub-bass fundamental
     "kress": (
-        80, 168, 88, 445, 0.26,
-        [1.0, 0.42, 0.18, 0.06],
-        (0.008, 0.16, 0.52, 0.42),
+        105, 130, 70, 360, 0.42,
+        [1.0, 0.35, 0.12, 0.04],
+        (0.010, 0.14, 0.48, 0.48),
     ),
 }
 _DEFAULT = (
-    58, 440, 300, 1200, 0.12,
-    [1.0, 0.50, 0.20],
+    65, 440, 280, 1100, 0.14,
+    [1.0, 0.52, 0.22],
     (0.006, 0.26, 0.42, 0.40),
 )
 

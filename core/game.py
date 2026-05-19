@@ -5,7 +5,7 @@ import pygame
 
 from config import settings as S
 from core.state_manager import StateManager, GameState
-from core.event_bus import bus, EVT_SHIP_DESTROYED, EVT_RUN_END, EVT_TORCH_ACTIVE
+from core.event_bus import bus, EVT_SHIP_DESTROYED, EVT_RUN_END, EVT_TORCH_ACTIVE, EVT_DEBT_DING
 from roguelite.meta_progression import MetaProgression
 from roguelite.run_manager import RunManager
 from ship.ship import PlayerShip
@@ -15,6 +15,7 @@ from renderer.hud_renderer import HUDRenderer
 from renderer.terminal_renderer import TerminalRenderer
 from renderer.cockpit_renderer import CockpitRenderer
 from audio.audio_manager import AudioManager
+from delivery.delivery_sequence import DeliverySequence
 
 
 class Game:
@@ -43,6 +44,8 @@ class Game:
         self._dt                  = 0.016
         self._run_just_completed  = False
         self._torch_warn_t        = 0.0   # seconds remaining until next module loss
+        self._last_debt_milestone = 0     # last 1000cr milestone we dinged
+        self._delivery: DeliverySequence | None = None
 
         self._wire_events()
 
@@ -62,9 +65,12 @@ class Game:
     def _on_run_end(self, success, **_):
         if success:
             self.meta.clear_debt_chunk()
-        self.meta.save()
-        self._run_just_completed = success
-        self.states.transition(GameState.MAIN_MENU)
+            self._delivery = DeliverySequence(self.meta)
+            self.states.transition(GameState.DELIVERY)
+        else:
+            self.meta.save()
+            self._run_just_completed = False
+            self.states.transition(GameState.MAIN_MENU)
 
     # ------------------------------------------------------------------
     def run(self, start_state: GameState = None, start_sector: int = 0):
@@ -116,6 +122,9 @@ class Game:
                 self.running = False
             elif event.type == pygame.KEYDOWN:
                 self._route_keydown(event)
+            elif event.type == pygame.KEYUP:
+                if self.states.state == GameState.DELIVERY and self._delivery:
+                    self._delivery.handle_keyup(event)
 
     def _route_keydown(self, event: pygame.event.Event):
         state = self.states.state
@@ -127,6 +136,9 @@ class Game:
                 self.run_mgr.active_terminal.handle_key(event)
         elif state == GameState.LOADOUT_DRAFT:
             self.run_mgr.draft.handle_key(event)
+        elif state == GameState.DELIVERY:
+            if self._delivery is not None:
+                self._delivery.handle_key(event)
         elif state in (GameState.DECANTING, GameState.MAIN_MENU):
             if event.key == pygame.K_RETURN:
                 self.run_mgr.start_run(self.ship)
@@ -170,6 +182,14 @@ class Game:
                 self.run_mgr.apply_draft(self.ship)
                 self.states.transition(GameState.FLIGHT)
 
+        elif state == GameState.DELIVERY:
+            if self._delivery is not None:
+                self._delivery.update(self._dt)
+                if self._delivery.is_done:
+                    self._run_just_completed = True
+                    self._delivery = None
+                    self.states.transition(GameState.MAIN_MENU)
+
         elif state == GameState.DECANTING:
             pass
 
@@ -194,6 +214,10 @@ class Game:
 
         elif state == GameState.LOADOUT_DRAFT:
             self.run_mgr.draft.render(self.screen)
+
+        elif state == GameState.DELIVERY:
+            if self._delivery is not None:
+                self._delivery.draw(self.screen)
 
         elif state == GameState.DECANTING:
             self._render_decanting()
@@ -247,6 +271,10 @@ class Game:
         interest_per_sec = max(0.01, self.meta.debt * S.DEBT_INTEREST_RATE)
         session_accrued  = t * interest_per_sec
         displayed_debt   = int(self.meta.debt + session_accrued)
+        milestone = (displayed_debt // 1000) * 1000
+        if milestone > self._last_debt_milestone and milestone > 0:
+            self._last_debt_milestone = milestone
+            bus.emit(EVT_DEBT_DING)
         blink = int(t * 1.6) % 2 == 0
         ticker_col = (110, 50, 50) if not blink else (160, 60, 60)
         debt_txt = font.render(

@@ -320,6 +320,7 @@ class UnionDispatcher(BaseNPC):
 
     def _dispatcher_filler(self) -> str:
         return random.choice([
+            # Classic 47-forms energy
             "I am forty-seven forms behind. This conversation is making it forty-eight. "
             "Please surrender your vessel so I can get back to the forms.",
 
@@ -353,11 +354,71 @@ class UnionDispatcher(BaseNPC):
             "It didn't work. But I remember it fondly. "
             "Mostly because it delayed the forms.",
 
+            # Blevins escalation
             "Nova Soma sends us productivity metrics every quarter. "
             "Last quarter I processed 312 collections. "
             "Blevins processed 318. "
             "I don't want to talk about Blevins. "
             "I have a form about Blevins. I file it monthly.",
+
+            "Blevins doesn't follow procedure. Blevins 'eyeballs it'. "
+            "Blevins has never once been forty-seven forms behind. "
+            "I find this morally suspicious. "
+            "I have filed a concern. The concern is itself a form. "
+            "I am now forty-eight forms behind because of Blevins.",
+
+            "Every pilot I've collected from gets entered into the system under a primary code. "
+            "Your code is RUNNER-CHRONIC. "
+            "I did not invent that code. Blevins invented that code. "
+            "Of course Blevins did. Of course.",
+
+            # The job is getting to him
+            "I joined this department because I believed in the orderly transfer of assets. "
+            "Twenty-two years later I am arguing with courier ships about ontology. "
+            "This was not on the job description. "
+            "I checked. I still have the job description. Filed under HR-12-MISC.",
+
+            "The Union Debt Collection Office handles 9,400 cases per quarter. "
+            "I handle 312. Blevins handles 318. "
+            "The remaining 8,770 are in my in-tray. "
+            "MY in-tray. Not Blevins'. Mine. "
+            "Nobody talks about this.",
+
+            "Form 22-F requires a countersignature from a Grade 4 supervisor. "
+            "We have not had a Grade 4 supervisor since the incident of '42. "
+            "Every form I file requires a 22-F. "
+            "I have devised a workaround that I am not supposed to tell you about. "
+            "It involves Form 22-G, which doesn't exist. "
+            "I made it. It works. DON'T TELL ANYONE.",
+
+            # Pure bureaucratic nightmare fuel
+            "The outstanding debt on your account has been referred to seven departments. "
+            "Three of those departments were merged in the restructure. "
+            "Into one department that doesn't technically exist on the org chart. "
+            "I have emailed them. They have not responded. "
+            "I have sent seventeen follow-up emails. "
+            "They have not responded to those either. "
+            "I am the follow-up department now.",
+
+            "You have the right to request a full itemised breakdown of your debt. "
+            "The breakdown is forty-seven pages. "
+            "It is also, itself, a form. "
+            "Filing the request generates a new form acknowledging the request. "
+            "I will not be doing that today.",
+
+            "Last Tuesday I processed a collection on a vessel that was simultaneously "
+            "registered in three jurisdictions under two different hull IDs and "
+            "a third identity that legally belonged to a man who died in '38. "
+            "I filed the appropriate forms. "
+            "There are now forty-three new forms about that situation. "
+            "They live in my in-tray. Next to yours.",
+
+            "The system flags your case as PRIORITY ALPHA. "
+            "Every case is flagged PRIORITY ALPHA. "
+            "This was a decision made in '39 to improve response times. "
+            "It has not improved response times. "
+            "I have filed a concern. The concern was filed PRIORITY ALPHA. "
+            "It is in a queue. The queue is very long.",
         ])
 
     def _debt_deleted_monologue(self) -> str:

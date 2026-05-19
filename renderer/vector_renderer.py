@@ -39,6 +39,7 @@ class VectorRenderer:
         self._nebulae    = self._gen_nebulae()
         self._dust       = self._gen_dust()
         self._planets    = self._gen_planets()
+        self._stations   = self._gen_stations()
         self._flash_t    = 0.0
         self._flash_col  = (180, 220, 255)
         self._scan_pings: list[tuple[int, int, float]] = []
@@ -97,6 +98,7 @@ class VectorRenderer:
         self._draw_nebulae(t)
         self._draw_dust(t)
         self._draw_planets(t)
+        self._draw_stations(t)
         self._draw_stars(t)
         self._update_shooting_stars(dt, t)
         self._draw_shooting_stars(t)
@@ -138,6 +140,7 @@ class VectorRenderer:
         self._draw_nebulae(t)
         self._draw_dust(t)
         self._draw_planets(t)
+        self._draw_stations(t)
         self._draw_stars(t)
         # Single decorative well centred behind the title
         class _FW:
@@ -177,11 +180,15 @@ class VectorRenderer:
     def _gen_planets(self) -> list:
         rng = random.Random(self._STAR_SEED + 311)
         out = []
-        # 1-2 distant planets in screen corners
+        # Two distant planets in different corners
+        all_corners = [0, 1, 2, 3]
+        rng.shuffle(all_corners)
         configs = [
             # (corner: 0=TL, 1=TR, 2=BL, 3=BR), radius, hue, sat, has_ring, ring_tilt
-            (rng.choice([0, 1, 2, 3]), rng.randint(80, 130), rng.random(),
+            (all_corners[0], rng.randint(80, 130), rng.random(),
              rng.uniform(0.55, 0.85), rng.random() < 0.5, rng.uniform(0.2, 0.6)),
+            (all_corners[1], rng.randint(38, 68), rng.random(),
+             rng.uniform(0.45, 0.80), False, 0.0),
         ]
         for corner, r, hue, sat, has_ring, ring_tilt in configs:
             if corner == 0:
@@ -192,7 +199,6 @@ class VectorRenderer:
                 cx, cy = -int(r * 0.35), S.FLIGHT_H + int(r * 0.35)
             else:
                 cx, cy = S.SCREEN_W + int(r * 0.35), S.FLIGHT_H + int(r * 0.35)
-            # Atmosphere band offset (continent-ish)
             band_seed = rng.random()
             out.append((cx, cy, r, hue, sat, has_ring, ring_tilt, band_seed))
         return out
@@ -264,6 +270,103 @@ class VectorRenderer:
                                     0, math.pi, 2)
                 self.surface.blit(ring_surf, (cx - r * 3 // 2,
                                               cy - ring_surf.get_height() // 2))
+
+    # ------------------------------------------------------------------  SPACE STATIONS (distant silhouettes)
+    def _gen_stations(self) -> list:
+        """Generate 2-3 distant station silhouettes at mid-field positions."""
+        rng = random.Random(self._STAR_SEED + 503)
+        out = []
+        count = rng.randint(2, 3)
+        types = ["ring", "cross", "tower"]
+        for i in range(count):
+            x = int(S.SCREEN_W * (0.15 + i * 0.30 + rng.uniform(-0.08, 0.08)))
+            y = int(S.FLIGHT_H * rng.uniform(0.10, 0.75))
+            kind = rng.choice(types)
+            scale = rng.uniform(0.55, 1.0)      # 1.0 = full template size
+            spin_rate = rng.uniform(-0.04, 0.04) # rad/s, slow parallax spin
+            spin_phase = rng.random() * math.tau
+            # dim amber/grey palette index
+            hue = rng.uniform(0.08, 0.14)
+            out.append((x, y, kind, scale, spin_rate, spin_phase, hue))
+        return out
+
+    def _draw_stations(self, t: float):
+        surf = pygame.Surface((S.SCREEN_W, S.FLIGHT_H), pygame.SRCALPHA)
+        for x, y, kind, scale, spin_rate, spin_phase, hue in self._stations:
+            angle = spin_phase + spin_rate * t
+            # Dim amber silhouette
+            col = _hsv(hue, 0.55, 0.28)
+            lit = _hsv(hue, 0.40, 0.52)   # lit window dots
+            s = scale
+
+            if kind == "ring":
+                # Torus station: outer ring, inner ring, 4 spokes, hub
+                ro = int(38 * s)
+                ri = int(22 * s)
+                spoke_len = int(20 * s)
+                for r_px, w in ((ro, 2), (ri, 1)):
+                    pygame.draw.circle(surf, (*col, 180), (x, y), r_px, w)
+                for a in (0, math.pi / 2, math.pi, 3 * math.pi / 2):
+                    a2 = a + angle
+                    sx = x + int(math.cos(a2) * spoke_len)
+                    sy = y + int(math.sin(a2) * spoke_len)
+                    pygame.draw.line(surf, (*col, 160), (x, y), (sx, sy), 1)
+                pygame.draw.circle(surf, (*col, 200), (x, y), int(6 * s))
+                # Blinking windows around the outer ring
+                for i in range(8):
+                    wa = angle + i * math.tau / 8
+                    wx = x + int(math.cos(wa) * ro)
+                    wy = y + int(math.sin(wa) * ro)
+                    blink = 0.5 + 0.5 * math.sin(t * 1.1 + i * 1.3)
+                    if blink > 0.6:
+                        surf.set_at((wx, wy), (*lit, 255))
+
+            elif kind == "cross":
+                # Cross-shaped station: 4 arms + hab module squares at tips
+                arm_len = int(44 * s)
+                arm_w   = int(6 * s)
+                for a in (0.0, math.pi / 2):
+                    a2 = a + angle
+                    ex = x + int(math.cos(a2) * arm_len)
+                    ey = y + int(math.sin(a2) * arm_len)
+                    pygame.draw.line(surf, (*col, 180),
+                                     (x - int(math.cos(a2) * arm_len),
+                                      y - int(math.sin(a2) * arm_len)),
+                                     (ex, ey), arm_w)
+                    # Hab box at tip
+                    hw = int(9 * s)
+                    pygame.draw.rect(surf, (*col, 200),
+                                     (ex - hw, ey - hw, hw * 2, hw * 2))
+                # Central hub ring
+                pygame.draw.circle(surf, (*col, 210), (x, y), int(11 * s), 2)
+                # Running light blink
+                blink = 0.5 + 0.5 * math.sin(t * 0.8)
+                if blink > 0.55:
+                    surf.set_at((x, y), (*lit, 255))
+
+            else:  # tower
+                # Vertical tower: thin mast, 3 horizontal decks, antenna
+                mast_h  = int(70 * s)
+                deck_w  = [int(w * s) for w in (28, 20, 12)]
+                deck_ys = [-int(mast_h * f) for f in (0.2, 0.5, 0.78)]
+                ax = x + int(math.cos(angle) * 0)  # tower doesn't spin visibly — slight drift
+                # Mast
+                pygame.draw.line(surf, (*col, 170),
+                                 (x, y), (x, y - mast_h), 1)
+                # Decks
+                for dw, dy_off in zip(deck_w, deck_ys):
+                    dh = int(4 * s)
+                    pygame.draw.rect(surf, (*col, 185),
+                                     (x - dw, y + dy_off - dh, dw * 2, dh * 2))
+                # Antenna tip blink
+                tip_y = y - mast_h - int(8 * s)
+                pygame.draw.line(surf, (*col, 140),
+                                 (x, y - mast_h), (x, tip_y), 1)
+                blink = 0.5 + 0.5 * math.sin(t * 2.3)
+                if blink > 0.5:
+                    surf.set_at((x, tip_y), (255, 60, 60, 220))  # red beacon
+
+        self.surface.blit(surf, (0, 0))
 
     # ------------------------------------------------------------------  SHOOTING STARS
     def _update_shooting_stars(self, dt: float, t: float):
