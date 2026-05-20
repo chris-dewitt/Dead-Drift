@@ -64,4 +64,5 @@ class SchrodingerVIP(BaseCargo):
         return "ALIVE" if self.alive_state else "DECEASED"
 
     def terminal_climax(self) -> str:
-        return "union_dispatcher"
+        # Ch.4 — insurance adjuster Morwenna gets to decide if the passenger ever existed
+        return "insurance_adjuster"

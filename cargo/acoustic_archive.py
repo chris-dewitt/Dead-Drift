@@ -30,4 +30,5 @@ class AcousticArchive(BaseCargo):
         bus.emit(EVT_CARGO_DAMAGED, cargo=self, severity=self.sorrow_level)
 
     def terminal_climax(self) -> str:
+        # Ch.1 — therapy session with Gary, the repo man who used to play sax
         return "gary"

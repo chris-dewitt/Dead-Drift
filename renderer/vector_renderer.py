@@ -60,8 +60,9 @@ class VectorRenderer:
         # Screen shake state: trauma decays exponentially; offset is random per frame
         self._shake_trauma = 0.0   # 0.0 (none) → 1.0 (huge)
 
-        # Per-sector background palette shift
+        # Per-sector background palette shift + intensity ramp
         self._sector_hue_shift = 0.0
+        self._sector_intensity = 0.0   # 0.0 sector 1 → 1.0 sector SECTORS_PER_RUN
 
         # Warp streak effect
         self._warp_t = 0.0
@@ -115,6 +116,8 @@ class VectorRenderer:
 
     def _on_sector_clear(self, sector_num=0, **_):
         self._sector_hue_shift = (sector_num * 0.11) % 1.0
+        # Intensity ramps with sector — escalates background density + brightness
+        self._sector_intensity = min(1.0, sector_num / max(1, S.SECTORS_PER_RUN - 1))
 
     # ------------------------------------------------------------------
     def draw(self, run_mgr, ship, dt: float = 0.016):
@@ -323,10 +326,14 @@ class VectorRenderer:
 
     def _draw_nebulae(self, t: float):
         surf = pygame.Surface((S.SCREEN_W, S.SCREEN_H), pygame.SRCALPHA)
+        # Nebulae get more saturated and brighter as the run progresses
+        intensity_boost = 1.0 + self._sector_intensity * 0.55
+        val_boost = 0.14 + self._sector_intensity * 0.10
         for x, y, r, base_hue, sat in self._nebulae:
             hue = (base_hue + self._sector_hue_shift + t * 0.0035) % 1.0
-            col = _hsv(hue, sat * 0.60, 0.14)
-            for scale, alpha in ((1.0, 20), (0.68, 32), (0.40, 44)):
+            col = _hsv(hue, sat * 0.60 * intensity_boost, val_boost)
+            for scale, alpha_base in ((1.0, 20), (0.68, 32), (0.40, 44)):
+                alpha = int(alpha_base * (1.0 + self._sector_intensity * 0.5))
                 pygame.draw.circle(surf, (*col, alpha), (x, y), int(r * scale))
         self.surface.blit(surf, (0, 0))
 
@@ -618,11 +625,17 @@ class VectorRenderer:
 
     def _draw_dust(self, t: float):
         surf = self.surface
-        for ox, oy, hue, freq, phase, rad in self._dust:
+        # Late-game sectors render more dust particles (every-other → every) and brighter
+        skip = 1 if self._sector_intensity > 0.5 else 2
+        bright_boost = 1.0 + self._sector_intensity * 0.6
+        for i, (ox, oy, hue, freq, phase, rad) in enumerate(self._dust):
+            if i % skip != 0:
+                continue
             x = int((ox + math.cos(t * freq + phase) * rad) % S.SCREEN_W)
             y = int((oy + math.sin(t * freq * 0.7 + phase) * rad * 0.6) % S.SCREEN_H)
-            brightness = 0.10 + 0.08 * abs(math.sin(t * freq * 1.3 + phase))
-            col = _hsv((hue + t * 0.015) % 1.0, 0.65, brightness)
+            brightness = (0.10 + 0.08 * abs(math.sin(t * freq * 1.3 + phase))) * bright_boost
+            col = _hsv((hue + t * 0.015 + self._sector_hue_shift * 0.4) % 1.0,
+                       0.65, min(0.95, brightness))
             surf.set_at((x, y), col)
 
     # ------------------------------------------------------------------  STARS
@@ -779,6 +792,25 @@ class VectorRenderer:
                     int(220 * lens_pulse))
         pygame.draw.circle(self.surface, lens_col, (cx, cy),
                            core_r + 9, 1)
+
+        # Sector escalation: jagged distortion arcs around the event horizon
+        # at high sectors — well looks angrier as the run progresses
+        if self._sector_intensity > 0.25:
+            n_arcs   = int(4 + self._sector_intensity * 8)
+            arc_r    = core_r + 14 + int(self._sector_intensity * 8)
+            arc_col  = _hsv((drift + 0.55) % 1.0,
+                            0.85, 0.55 + 0.35 * self._sector_intensity)
+            for i in range(n_arcs):
+                base_ang = (i / n_arcs) * math.tau + t * 1.7
+                # Random per-arc jitter scaled by intensity
+                jitter   = math.sin(t * 8.0 + i * 0.7) * self._sector_intensity * 6
+                r1 = arc_r + jitter
+                r2 = arc_r + jitter + 3 + self._sector_intensity * 5
+                x1 = cx + int(math.cos(base_ang) * r1)
+                y1 = cy + int(math.sin(base_ang) * r1)
+                x2 = cx + int(math.cos(base_ang) * r2)
+                y2 = cy + int(math.sin(base_ang) * r2)
+                pygame.draw.line(self.surface, arc_col, (x1, y1), (x2, y2), 1)
 
     # ------------------------------------------------------------------  DEBRIS
     def _draw_debris(self, run_mgr, t: float):

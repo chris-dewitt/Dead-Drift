@@ -62,4 +62,5 @@ class EpistemologicalShrooms(BaseCargo):
         bus.emit(EVT_CARGO_DAMAGED, cargo=self, severity=self.spore_level)
 
     def terminal_climax(self) -> str:
+        # Ch.2 — exploit a TK-9 droid still seeing the universe sideways
         return "synthetic_droid"

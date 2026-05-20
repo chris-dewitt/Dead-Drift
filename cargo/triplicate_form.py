@@ -51,7 +51,7 @@ class TriplicateForm(BaseCargo):
             self.popup_fraction  = max(0.0, self.popup_timer / S.FORM_TIMEOUT)
             if self.popup_timer <= 0.0:
                 self.popup_active = False
-                ship.take_damage(14.0)
+                ship.take_damage(14.0, source="form_missed")
                 bus.emit(EVT_BAX_SPEAK, line=random.choice(_MISSED_BAX))
                 self._next_trigger = random.uniform(
                     S.FORM_TRIGGER_MIN * 0.5, S.FORM_TRIGGER_MAX * 0.5)

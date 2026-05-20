@@ -416,7 +416,7 @@ class Game:
                 True, col)
             self.screen.blit(warn, (8, 3))
 
-    # Bax clone wake-up quips — shown on decanting screen
+    # Bax clone wake-up quips — generic fallback when death cause is unknown
     _DECANT_BAX = [
         "BAX: '...sensor re-initialised. Right. You're dead again. "
         "Clone number {n}. Still owe 'em everything. Welcome back.'",
@@ -429,6 +429,43 @@ class Game:
         "BAX: 'Systems online. Pilot confirmed: not dead. Technically. "
         "Clone {n}. I'll warm up the thrusters. Try not to die again.'",
     ]
+
+    # Death-cause-specific Bax reactions — keyed by ship.last_damage_source
+    _DECANT_BAX_BY_SOURCE = {
+        "debris": [
+            "BAX: 'Cause of death: a ROCK. An ordinary, un-aimed rock. "
+            "Clone {n} respectfully suggests we look where we're flying.'",
+            "BAX: 'You were killed by debris. Inanimate debris. "
+            "I'm not going to lecture you. Much. Clone {n}, by the way.'",
+            "BAX: 'Forensic report: rock-shaped indentation, pilot-shaped pilot. "
+            "Match confirmed. Clone {n} is online.'",
+        ],
+        "debris_shower": [
+            "BAX: 'Asteroid scatter, mate. Caught the worst of it. "
+            "Clone {n}'s here. Maybe duck next time. Or weave. Either works.'",
+            "BAX: 'You went TOWARD the debris shower. I noticed. "
+            "Clone {n} has noticed. We've both noticed.'",
+        ],
+        "satellite": [
+            "BAX: 'Killed by a satellite. A DERELICT satellite. "
+            "Nova Soma's debris bill is shameful. Clone {n} online.'",
+            "BAX: 'You hit an old comm relay at full speed. It was already broken. "
+            "Now you're broken too. Clone {n} is fresh.'",
+        ],
+        "form_missed": [
+            "BAX: 'Cause of death: BUREAUCRACY. You missed Form 27-B. "
+            "Hull integrity penalty proved fatal. Clone {n} reports for duty.'",
+            "BAX: 'The Union killed you with paperwork. They actually did it. "
+            "I've seen everything now. Clone {n} is decanted.'",
+            "BAX: 'Death by triplicate form. Subsection 9. "
+            "I'll let that one sink in. Clone {n} online.'",
+        ],
+        "tether": [
+            "BAX: 'Local 404 finally caught us. Tether did the rest. "
+            "Clone {n} is up. Drift HARDER next time.'",
+            "BAX: 'Repo Union 1, Pilot 0. Clone {n} ready for the rematch.'",
+        ],
+    }
 
     def _render_decanting(self):
         import random as _rnd
@@ -483,8 +520,10 @@ class Game:
             self.screen.blit(surf, (S.SCREEN_W // 2 - surf.get_width() // 2, y))
             y += f.get_linesize() + 2
 
-        # Bax wake-up line
-        bax_line = _rnd.choice(self._DECANT_BAX).format(n=self.meta.clone_count)
+        # Bax wake-up line — pick from death-cause-specific pool if available
+        src = getattr(self.ship, "last_damage_source", "unknown")
+        pool = self._DECANT_BAX_BY_SOURCE.get(src, self._DECANT_BAX)
+        bax_line = _rnd.choice(pool).format(n=self.meta.clone_count)
         font_bax = pygame.font.SysFont("monospace", 12)
         bax_surf = font_bax.render(bax_line, True, (100, 130, 100))
         self.screen.blit(bax_surf,

@@ -267,7 +267,7 @@ class RunManager:
         for rock in self._debris:
             rock.update(dt)
             if rock.collides(self._ship.pos):
-                self._ship.take_damage(S.DEBRIS_DAMAGE)
+                self._ship.take_damage(S.DEBRIS_DAMAGE, source="debris")
                 rock.hit()
 
         for can in self._canisters:
@@ -280,7 +280,7 @@ class RunManager:
                 self._satellites.remove(sat)
                 continue
             if sat.collides(self._ship.pos):
-                self._ship.take_damage(sat.HULL_DAMAGE)
+                self._ship.take_damage(sat.HULL_DAMAGE, source="satellite")
                 sat.hit()
                 bus.emit(EVT_SATELLITE_HIT)
 
@@ -300,7 +300,7 @@ class RunManager:
             for rock in self._shower_rocks:
                 rock.update(dt)
                 if rock.collides(self._ship.pos):
-                    self._ship.take_damage(S.DEBRIS_DAMAGE)
+                    self._ship.take_damage(S.DEBRIS_DAMAGE, source="debris_shower")
                     rock.hit()
             if self._shower_t <= 0:
                 self._shower_rocks.clear()
@@ -486,11 +486,21 @@ class RunManager:
         return self.open_terminal("gary", intercepted=True)
 
     def _open_jump_terminal(self):
-        pool = ["gary", "synthetic_droid", "union_dispatcher"]
-        # Insurance adjuster from sector 3 onward — she's claims, not enforcement
-        if self._sector_index >= 3:
-            pool.append("insurance_adjuster")
-        npc_type = random.choice(pool)
+        # Final sector: chapter climax — face the NPC tied to the cargo
+        is_final = self._sector_index == S.SECTORS_PER_RUN - 1
+        if is_final and self._ship is not None and self._ship.cargo is not None:
+            npc_type = self._ship.cargo.terminal_climax()
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "Final negotiation. Chapter climax. Make this one COUNT.",
+                "Last terminal of the run. Cargo-specific contact incoming. Be sharp.",
+                "Right — final exit interview. The whole chapter hinges on this.",
+            ]))
+        else:
+            pool = ["gary", "synthetic_droid", "union_dispatcher"]
+            # Insurance adjuster from sector 3 onward — she's claims, not enforcement
+            if self._sector_index >= 3:
+                pool.append("insurance_adjuster")
+            npc_type = random.choice(pool)
         self.open_terminal(npc_type)
         self._pending_advance = True
 
