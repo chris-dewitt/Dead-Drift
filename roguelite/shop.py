@@ -35,16 +35,30 @@ class _ShopItem:
             for barge in getattr(run_mgr, "_barges", []):
                 barge._intercept_cd = max(barge._intercept_cd, S.JAMMER_COOLDOWN)
         elif self.tag == "intel":
-            # Reveal a random NLP exploit key via bax
             from core.event_bus import bus, EVT_BAX_SPEAK
             bus.emit(EVT_BAX_SPEAK, line=random.choice([
                 "Intel package uploaded. I've flagged their weak spots in the terminal.",
                 "Black market intel drop. Their comms use the word 'Blevins' as a back door.",
                 "Encrypted manifest. Their dispatch code is 'article 7'. Use it.",
             ]))
+        elif self.tag == "repair_drone":
+            ship.hull = min(S.HULL_MAX, ship.hull + 110.0)
+        elif self.tag == "cargo_stabilizer":
+            if ship.cargo is not None:
+                ship.cargo.integrity = min(100.0, ship.cargo.integrity + 60.0)
+                ship.cargo.is_damaged = ship.cargo.integrity < 70.0
+                if hasattr(ship.cargo, "sorrow_level"):
+                    ship.cargo.sorrow_level = max(0.0, ship.cargo.sorrow_level - 0.5)
+                if hasattr(ship.cargo, "spore_level"):
+                    ship.cargo.spore_level  = max(0.0, ship.cargo.spore_level - 0.5)
+        elif self.tag == "scrap_bullets":
+            if hasattr(ship, "gun"):
+                ship.gun._cooldown      = 0.0
+                ship.gun.is_jammed      = False
+                ship.gun._jam_t         = 0.0
 
 
-_POOL: list[_ShopItem] = [
+_POOL_ALL: list[_ShopItem] = [
     _ShopItem(
         "Hull Patch Pack",
         "+50 hull integrity",
@@ -69,7 +83,67 @@ _POOL: list[_ShopItem] = [
         "Stolen repo dispatch logs. One-use. May be outdated.",
         600, "intel",
     ),
+    _ShopItem(
+        "Auto-Repair Drone",
+        "+110 hull integrity",
+        "Salvaged MediCorp drone. Refurbished. Mostly.",
+        2200, "repair_drone",
+    ),
+    _ShopItem(
+        "Cargo Stabilizer",
+        "Restore cargo integrity, suppress effects",
+        "Calms the cargo. Briefly. We hope.",
+        1100, "cargo_stabilizer",
+    ),
+    _ShopItem(
+        "Scrap Ammo Clip",
+        "Resets gun cooldown / clears jams",
+        "Loose rounds from a Union sergeant's locker. Don't ask.",
+        500, "scrap_bullets",
+    ),
 ]
+
+
+def _pick_stock(run_mgr, ship) -> list[_ShopItem]:
+    """Pick 4 items based on run context — gives the shop dynamic flavour."""
+    hull_pct      = ship.hull / S.HULL_MAX if ship is not None else 1.0
+    tether_hits   = getattr(run_mgr, "_run_tether_hits", 0)
+    cargo_damaged = (ship is not None and ship.cargo is not None
+                     and getattr(ship.cargo, "is_damaged", False))
+    gun_jammed    = (ship is not None and hasattr(ship, "gun")
+                     and getattr(ship.gun, "is_jammed", False))
+    sector_idx    = getattr(run_mgr, "_sector_index", 0)
+
+    by_tag = {it.tag: it for it in _POOL_ALL}
+    picks: list[_ShopItem] = []
+
+    # Context-driven priority picks
+    if hull_pct < 0.45:
+        picks.append(by_tag["repair_drone"])
+    if tether_hits >= 2:
+        picks.append(by_tag["jammer"])
+    if cargo_damaged:
+        picks.append(by_tag["cargo_stabilizer"])
+    if gun_jammed:
+        picks.append(by_tag["scrap_bullets"])
+
+    # Sector-based rotation for the rest of the stock
+    fillers = ["hull_patch", "thrust_boost", "intel"]
+    # Bias toward thrust catalyst in later sectors when speed matters
+    if sector_idx >= 2:
+        fillers = ["thrust_boost", "hull_patch", "intel"]
+    for tag in fillers:
+        if by_tag[tag] not in picks:
+            picks.append(by_tag[tag])
+
+    # Always offer hull patch + intel as a baseline if we have room
+    for tag in ("hull_patch", "intel", "jammer"):
+        if len(picks) >= 4:
+            break
+        if by_tag[tag] not in picks:
+            picks.append(by_tag[tag])
+
+    return picks[:4]
 
 
 class ShopScreen:
@@ -84,7 +158,7 @@ class ShopScreen:
         self.ship     = ship
         self.is_done  = False
         self._cursor  = 0
-        self._items   = list(_POOL)
+        self._items   = _pick_stock(run_mgr, ship)
         # Track which items are bought this visit (can't re-buy in same shop)
         self._bought: set[int] = set()
         self._msg     = ""

@@ -83,6 +83,57 @@ def ambient_static(duration: float = 4.0) -> pygame.mixer.Sound:
     return _to_sound(w * swell)
 
 
+def sector_pad(sector_idx: int, duration: float = 8.0) -> pygame.mixer.Sound:
+    """
+    Slow ambient music pad — one per sector. Each sector picks a different
+    minor-key root + chord voicing for a fresh mood without changing genre.
+
+    Loops cleanly. Designed to sit BEHIND the engine drone + blues licks.
+    """
+    # Minor-pentatonic-friendly roots, dropping by tritone every other sector
+    roots = [65.4, 73.4, 87.3, 77.8, 82.4, 92.5, 98.0, 110.0, 87.3, 73.4]
+    root  = roots[sector_idx % len(roots)]
+
+    # Chord voicing — minor 7th adds blues tension
+    voicings = [
+        (1.0, 1.2, 1.5, 1.78),   # m7 voicing
+        (1.0, 1.19, 1.5, 2.0),   # m + octave
+        (1.0, 1.2, 1.78, 2.4),   # m7 + 9
+        (1.0, 1.5, 1.78, 2.0),   # 5 + b7
+    ]
+    voicing = voicings[sector_idx % len(voicings)]
+
+    t = _t(duration)
+    # Slow LFO breathes the chord
+    lfo = 0.55 + 0.45 * np.sin(_2PI * (0.07 + 0.01 * (sector_idx % 4)) * t)
+
+    w = np.zeros_like(t)
+    for i, mult in enumerate(voicing):
+        # Detune slightly per voice for organic shimmer
+        det = 1.0 + 0.0028 * ((i * 7) % 5 - 2)
+        amp = 0.10 + 0.06 * ((sector_idx + i) % 3) / 2.0
+        w += np.sin(_2PI * root * mult * det * t) * amp * (0.7 + 0.3 * lfo)
+
+    # Add a sub-bass moan an octave below the root
+    w += np.sin(_2PI * root * 0.5 * t) * 0.08 * lfo
+
+    # Gentle low-pass-ish smoothing via cumulative mean (cheap & cheerful)
+    w = (w + np.roll(w, 1) + np.roll(w, 2)) / 3.0
+
+    # Cross-fade ends so the loop has no click
+    n     = len(w)
+    fade  = int(SAMPLE_RATE * 0.5)
+    env   = np.ones(n)
+    env[:fade]      = np.linspace(0.0, 1.0, fade)
+    env[-fade:]     = np.linspace(1.0, 0.0, fade)
+    w = w * env
+
+    peak = np.max(np.abs(w))
+    if peak > 0:
+        w = w / peak * 0.55
+    return _to_sound(w)
+
+
 # ---------------------------------------------------------------------------
 # One-shot SFX
 

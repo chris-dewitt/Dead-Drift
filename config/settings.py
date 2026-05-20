@@ -61,19 +61,19 @@ WRECKAGE_TOW_FEE  = 8000
 DEBT_INTEREST_RATE = 0.00004      # fraction of debt accruing per second (display only)
 
 # --- Debris / Canisters / Satellites ---
-DEBRIS_COUNT      = 4
+DEBRIS_COUNT      = 3
 CANISTER_COUNT    = 3
-SATELLITE_COUNT   = 4
+SATELLITE_COUNT   = 3
 CANISTER_PICKUP_R = 28.0
 DEBRIS_DAMAGE     = 8.0
 
 # --- Mid-flight Events ---
-EVENT_INTERVAL_MIN = 35.0         # min seconds between random flight events
-EVENT_INTERVAL_MAX = 75.0         # max seconds between random flight events
-KRESS_INTERVAL_MIN = 50.0         # min seconds between KRESS transmissions
-KRESS_INTERVAL_MAX = 90.0
-COLLECTOR_INTERVAL_MIN = 70.0
-COLLECTOR_INTERVAL_MAX = 130.0
+EVENT_INTERVAL_MIN = 55.0         # min seconds between random flight events
+EVENT_INTERVAL_MAX = 110.0        # max seconds between random flight events
+KRESS_INTERVAL_MIN = 80.0         # min seconds between KRESS transmissions
+KRESS_INTERVAL_MAX = 140.0
+COLLECTOR_INTERVAL_MIN = 110.0
+COLLECTOR_INTERVAL_MAX = 200.0
 
 # --- Slingshot ---
 SLINGSHOT_SPEED   = 220.0    # px/s needed to count

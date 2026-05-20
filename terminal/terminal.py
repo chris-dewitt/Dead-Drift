@@ -65,6 +65,77 @@ _SCAN_VOCAB: dict[str, dict[str, str]] = {
     },
 }
 
+_COURIER_QUIPS_KW: dict[str, list[str]] = {
+    "bribe":     ["this is going to bankrupt me twice over.",
+                  "spending the rent money. Worth it. Probably.",
+                  "I don't even have this much, who am I kidding."],
+    "credits":   ["digging through my pockets for change.",
+                  "the math on this is not flattering."],
+    "pay":       ["with what money. WHAT money.",
+                  "IOUs are basically currency, right?"],
+    "please":    ["begging now. Real dignified.",
+                  "mother would be so proud.",
+                  "rock bottom, here I come."],
+    "family":    ["invoking imaginary family. Bold move.",
+                  "don't actually have any family but they don't know that."],
+    "sorry":     ["apologising to a repo man. New low.",
+                  "remorse: performative, but free."],
+    "kill":      ["I haven't even won a fistfight before.",
+                  "overcommitting again. Classic."],
+    "threaten":  ["I have no follow-through and they probably know that.",
+                  "sounded harder in my head."],
+    "drop table":["I have no idea what I'm typing.",
+                  "this either works or destroys the universe.",
+                  "hacking. Allegedly. Probably."],
+    "override":  ["pretending to know what I'm doing.",
+                  "if this is wrong I look so stupid."],
+    "blevins":   ["just dropped that name like I know him.",
+                  "weaponising office gossip. New low."],
+    "sandra":    ["invoking Sandra. The legend. The myth.",
+                  "Sandra has never lost. We're trying her energy."],
+    "union":     ["yes, the Union. The Union. They love the Union.",
+                  "appealing to the institution. Surely THAT'll work."],
+    "deal":      ["negotiating from a position of profound weakness.",
+                  "let's make a deal, said the broke man to the armed man."],
+    "form":      ["paperwork is my native tongue, apparently.",
+                  "going full bureaucrat. They won't see it coming."],
+    "paradox":   ["weaponising philosophy. Risky.",
+                  "this is the part where I sound clever."],
+    "42":        ["I have no idea why I just said that.",
+                  "trust the bit. Trust the bit."],
+    "love":      ["going for the emotional angle. Sure. Why not.",
+                  "this is either profound or pathetic. No middle ground."],
+    "tired":     ["it's not a lie, but it's not a strategy either.",
+                  "honest fatigue, my one untrained skill."],
+}
+
+_COURIER_GENERIC = [
+    "typing furiously, looking confident.",
+    "making it up as I go.",
+    "praying for poor reading comprehension.",
+    "committed now. No going back.",
+    "this is fine. This is fine.",
+    "channeling a confidence I do not possess.",
+    "if this doesn't work I'm out of plans.",
+    "definitely not panicking.",
+    "every plan is bad until one of them works.",
+    "Bax would have a comment. Bax always has a comment.",
+    "five seconds ago I had no idea I'd say this.",
+    "the words just keep coming.",
+    "going with my gut. My gut is uninformed.",
+]
+
+
+def _pick_courier_quip(text: str) -> str:
+    import random as _r
+    raw = text.lower()
+    # Phrase matches first (longer keys win)
+    for kw in sorted(_COURIER_QUIPS_KW, key=len, reverse=True):
+        if kw in raw:
+            return _r.choice(_COURIER_QUIPS_KW[kw])
+    return _r.choice(_COURIER_GENERIC)
+
+
 _OUTCOME_COLOR = {
     NPCOutcome.RELEASE: (28, 225, 106),
     NPCOutcome.IMPOUND: (215, 38, 38),
@@ -144,6 +215,8 @@ class Terminal:
     def _submit(self):
         player_text = self._input.strip()
         self._push("YOU", player_text)
+        # Courier inner-monologue mutter — meta-commentary on what they just typed
+        self._push("MUTTER", _pick_courier_quip(player_text))
         self._input = ""
 
         disp_before = self.npc.disposition
@@ -234,7 +307,7 @@ class Terminal:
             new_n  = int(self._tw_chars)
             # Emit a voice blip every 3 newly revealed characters (NPC lines only)
             if (new_n > prev_n and new_n % 3 == 0
-                    and speaker not in ("YOU", "SYSTEM", "ANALYSIS")):
+                    and speaker not in ("YOU", "SYSTEM", "ANALYSIS", "MUTTER")):
                 bus.emit(EVT_VOICE_CHAR, speaker=speaker)
 
     # ------------------------------------------------------------------
@@ -393,19 +466,22 @@ class Terminal:
 
         fn_sp = pygame.font.SysFont("monospace", 14, bold=True)
 
-        blocks: list[tuple[str, bool, bool, bool, list[str]]] = []
+        blocks: list[tuple[str, bool, bool, bool, bool, list[str]]] = []
         for i, (speaker, text) in enumerate(self._history):
-            disp_text  = text[:int(self._tw_chars)] if i == self._tw_pos else text
-            is_npc     = speaker not in ("YOU", "SYSTEM", "ANALYSIS")
-            is_sys     = speaker == "SYSTEM"
+            disp_text   = text[:int(self._tw_chars)] if i == self._tw_pos else text
+            is_npc      = speaker not in ("YOU", "SYSTEM", "ANALYSIS", "MUTTER")
+            is_sys      = speaker == "SYSTEM"
             is_analysis = speaker == "ANALYSIS"
-            wc = wrap_cols_sm if is_analysis else wrap_cols
-            blocks.append((speaker, is_npc, is_sys, is_analysis,
+            is_mutter   = speaker == "MUTTER"
+            wc = wrap_cols_sm if (is_analysis or is_mutter) else wrap_cols
+            blocks.append((speaker, is_npc, is_sys, is_analysis, is_mutter,
                            self._wrap(disp_text, wc)))
 
         def _block_h(bl: tuple) -> int:
-            _, _, is_sys, is_analysis, wrapped = bl
+            _, _, is_sys, is_analysis, is_mutter, wrapped = bl
             if is_analysis:
+                return len(wrapped) * lh_sm + GAP // 2
+            if is_mutter:
                 return len(wrapped) * lh_sm + GAP // 2
             return (0 if is_sys else lh) + len(wrapped) * lh + GAP
 
@@ -416,8 +492,8 @@ class Terminal:
         prev_clip = surface.get_clip()
         surface.set_clip(pygame.Rect(0, DIAG_Y0, W, DIAG_Y1 - DIAG_Y0))
 
-        for speaker, is_npc, is_sys, is_analysis, wrapped in blocks:
-            b_h = _block_h((speaker, is_npc, is_sys, is_analysis, wrapped))
+        for speaker, is_npc, is_sys, is_analysis, is_mutter, wrapped in blocks:
+            b_h = _block_h((speaker, is_npc, is_sys, is_analysis, is_mutter, wrapped))
             if y + b_h < DIAG_Y0:
                 y += b_h
                 continue
@@ -429,6 +505,14 @@ class Terminal:
                     surface.blit(
                         font_sm.render(f"  ⊙ {line}", True, (0, 165, 155)),
                         (dl_x + 4, y))
+                    y += lh_sm
+                y += GAP // 2
+
+            elif is_mutter:
+                # Inner-monologue mutter — right-aligned, dim grey-green, italic prefix
+                for line in wrapped:
+                    surf = font_sm.render(f"(me, internally)  {line}", True, (78, 122, 88))
+                    surface.blit(surf, (W - M - surf.get_width(), y))
                     y += lh_sm
                 y += GAP // 2
 

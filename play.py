@@ -32,9 +32,12 @@ from physics.gravity import GravityWell, ThreeBodySystem
 from ship.ship import PlayerShip
 from ship.hud import HUD
 from renderer.vector_renderer import VectorRenderer
+from renderer.cockpit_renderer import CockpitRenderer
 from antagonists.repo_barge import RepoBarge
 from antagonists.debris import DebrisRock
 from antagonists.fuel_canister import FuelCanister
+from bax.bax import Bax
+from roguelite.meta_progression import MetaProgression
 
 
 class _DemoSector:
@@ -88,6 +91,9 @@ def main():
     run_mgr      = _DemoRunMgr(gravity, ship)
     vec_renderer = VectorRenderer(screen)
     hud          = HUD(ship)
+    meta         = MetaProgression()
+    bax          = Bax(ship, meta)
+    cockpit      = CockpitRenderer(screen, ship=ship, run_mgr=run_mgr, meta=meta)
 
     print("[demo] Dead Drift flight demo running. Fly safe out there, courier.")
 
@@ -123,6 +129,8 @@ def main():
         for can in run_mgr.canisters:
             can.update(dt, ship.pos)
         hud.update(dt)
+        bax.update(dt)
+        cockpit.update(dt)
 
         # Gravity well collision = instant heavy damage
         well = gravity.check_collisions(ship.body)
@@ -136,6 +144,7 @@ def main():
         screen.fill(S.VOID)
         vec_renderer.draw(run_mgr, ship, dt)
         hud.draw(screen)
+        cockpit.draw(pygame.time.get_ticks() / 1000.0)
         _draw_help(screen, font)
 
         # Show "DESTROYED" overlay if hull is gone

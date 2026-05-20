@@ -21,7 +21,17 @@ class GravityWell:
         if dist_sq < 1.0:
             return   # prevent singularity
 
-        force_mag = S.GRAVITY_CONSTANT * self.mass * body.mass / dist_sq
+        # Softening: inside 1.4x well radius, treat distance as that radius.
+        # Uniform-sphere approximation — prevents the player getting trapped
+        # in a force singularity when they overshoot a slingshot.
+        soft_r    = self.radius * 1.4
+        soft_sq   = soft_r * soft_r
+        eff_sq    = max(dist_sq, soft_sq)
+
+        force_mag = S.GRAVITY_CONSTANT * self.mass * body.mass / eff_sq
+        # Cap force at 80% of thrust so a directed burn can always pull free.
+        force_mag = min(force_mag, S.THRUSTER_FORCE * 0.8)
+
         force     = delta.normalized() * force_mag
         body.apply_force(force)
 

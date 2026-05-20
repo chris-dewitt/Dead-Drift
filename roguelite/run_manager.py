@@ -4,6 +4,7 @@ import pygame
 from roguelite.procedural import generate_sector, SectorLayout
 from roguelite.loadout_draft import LoadoutDraft
 from roguelite.meta_progression import MetaProgression
+from roguelite.tutorial import TutorialManager
 from antagonists.repo_barge import RepoBarge
 from antagonists.debris import DebrisRock
 from antagonists.fuel_canister import FuelCanister
@@ -167,6 +168,11 @@ class RunManager:
         # Populated by _spawn_sector_objects(), drained in update()
         self._spawn_queue: list[tuple[float, str]] = []
 
+        # Tutorial — first-run only
+        self._tutorial: TutorialManager | None = (
+            TutorialManager() if meta.clone_count == 1 else None
+        )
+
         # Per-sector stat tracking for the between-sector flash card
         self._sector_slingshots = 0
         self._sector_snaps      = 0
@@ -255,6 +261,9 @@ class RunManager:
 
         self._sector.gravity.apply_all(self._ship.body)
 
+        if self._tutorial is not None:
+            self._tutorial.update(dt, self)
+
         cargo = self._ship.cargo
         if cargo is not None and hasattr(cargo, "update"):
             cargo.update(dt, self._ship)
@@ -267,7 +276,7 @@ class RunManager:
         for rock in self._debris:
             rock.update(dt)
             if rock.collides(self._ship.pos):
-                self._ship.take_damage(S.DEBRIS_DAMAGE)
+                self._ship.take_damage(S.DEBRIS_DAMAGE, source="debris")
                 rock.hit()
 
         for can in self._canisters:
@@ -280,7 +289,7 @@ class RunManager:
                 self._satellites.remove(sat)
                 continue
             if sat.collides(self._ship.pos):
-                self._ship.take_damage(sat.HULL_DAMAGE)
+                self._ship.take_damage(sat.HULL_DAMAGE, source="satellite")
                 sat.hit()
                 bus.emit(EVT_SATELLITE_HIT)
 
@@ -300,7 +309,7 @@ class RunManager:
             for rock in self._shower_rocks:
                 rock.update(dt)
                 if rock.collides(self._ship.pos):
-                    self._ship.take_damage(S.DEBRIS_DAMAGE)
+                    self._ship.take_damage(S.DEBRIS_DAMAGE, source="debris_shower")
                     rock.hit()
             if self._shower_t <= 0:
                 self._shower_rocks.clear()
@@ -486,11 +495,21 @@ class RunManager:
         return self.open_terminal("gary", intercepted=True)
 
     def _open_jump_terminal(self):
-        pool = ["gary", "synthetic_droid", "union_dispatcher"]
-        # Insurance adjuster from sector 3 onward — she's claims, not enforcement
-        if self._sector_index >= 3:
-            pool.append("insurance_adjuster")
-        npc_type = random.choice(pool)
+        # Final sector: chapter climax — face the NPC tied to the cargo
+        is_final = self._sector_index == S.SECTORS_PER_RUN - 1
+        if is_final and self._ship is not None and self._ship.cargo is not None:
+            npc_type = self._ship.cargo.terminal_climax()
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "Final negotiation. Chapter climax. Make this one COUNT.",
+                "Last terminal of the run. Cargo-specific contact incoming. Be sharp.",
+                "Right — final exit interview. The whole chapter hinges on this.",
+            ]))
+        else:
+            pool = ["gary", "synthetic_droid", "union_dispatcher"]
+            # Insurance adjuster from sector 3 onward — she's claims, not enforcement
+            if self._sector_index >= 3:
+                pool.append("insurance_adjuster")
+            npc_type = random.choice(pool)
         self.open_terminal(npc_type)
         self._pending_advance = True
 
@@ -613,8 +632,8 @@ class RunManager:
         self._alien       = None
         self._alien_spoken = False
 
-        # 35% chance of alien flythrough per sector
-        if random.random() < 0.35:
+        # 22% chance of alien flythrough per sector
+        if random.random() < 0.22:
             self._alien = AlienShip()
 
         # Barge spawn ramp — sector 1-2 are intro, then escalate.
@@ -629,14 +648,14 @@ class RunManager:
         for i in range(barge_count):
             self._spawn_queue.append((barge_delay + i * 6.0, "barge"))
 
-        # Final sector: queue a second deferred barge and extra debris
+        # Final sector: queue a second deferred barge and one extra debris.
+        # The gauntlet stays intense via the two barges, not via debris spam.
         if idx == S.SECTORS_PER_RUN - 1:
             self._spawn_queue.append((barge_delay + 3.0, "barge"))
-            for i in range(3):   # extra debris rocks
-                self._spawn_queue.append((2.0 + i * 2.0, "debris"))
+            self._spawn_queue.append((3.0, "debris"))
 
-        # Demolition notice — 35% chance from sector 2 onward
-        if idx >= 1 and random.random() < 0.35:
+        # Demolition notice — 22% chance from sector 2 onward
+        if idx >= 1 and random.random() < 0.22:
             speaker, line = random.choice(_DEMO_NOTICES)
             bus.emit(EVT_DEMO_NOTICE)
             bus.emit(EVT_COMMS_SPEAK, speaker=speaker, line=line)

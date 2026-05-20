@@ -28,6 +28,7 @@ class PlayerShip:
         self._thruster       = Thruster(tier="salvage")
         self._life_sup       = LifeSupport()
         self.controls_inverted = False
+        self.last_damage_source = "unknown"
         self.chain.install(self._life_sup, 0)
         self.chain.install(self._thruster, 1)
 
@@ -92,16 +93,17 @@ class PlayerShip:
         elif pos.y > S.SCREEN_H: pos.y = 0
 
     # ------------------------------------------------------------------
-    def take_damage(self, amount: float):
+    def take_damage(self, amount: float, source: str = "unknown"):
         self.hull = max(0.0, self.hull - amount)
-        bus.emit(EVT_HULL_DAMAGE, amount=amount)
+        self.last_damage_source = source
+        bus.emit(EVT_HULL_DAMAGE, amount=amount, source=source)
         if self.cargo is not None:
             self.cargo.take_damage(amount * 0.4)
         if self.hull <= S.HUD_SCRAMBLE_HP:
             bus.emit(EVT_HULL_CRITICAL, hp=self.hull)
         if self.hull <= 0.0 and not self._destroyed:
             self._destroyed = True
-            bus.emit(EVT_SHIP_DESTROYED)
+            bus.emit(EVT_SHIP_DESTROYED, source=source)
 
     def repair(self, amount: float):
         self.hull = min(S.HULL_MAX, self.hull + amount)
