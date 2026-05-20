@@ -4,6 +4,7 @@ import pygame
 from roguelite.procedural import generate_sector, SectorLayout
 from roguelite.loadout_draft import LoadoutDraft
 from roguelite.meta_progression import MetaProgression
+from roguelite.tutorial import TutorialManager
 from antagonists.repo_barge import RepoBarge
 from antagonists.debris import DebrisRock
 from antagonists.fuel_canister import FuelCanister
@@ -167,6 +168,11 @@ class RunManager:
         # Populated by _spawn_sector_objects(), drained in update()
         self._spawn_queue: list[tuple[float, str]] = []
 
+        # Tutorial — first-run only
+        self._tutorial: TutorialManager | None = (
+            TutorialManager() if meta.clone_count == 1 else None
+        )
+
         # Per-sector stat tracking for the between-sector flash card
         self._sector_slingshots = 0
         self._sector_snaps      = 0
@@ -254,6 +260,9 @@ class RunManager:
             bus.emit(EVT_JUMP_READY)
 
         self._sector.gravity.apply_all(self._ship.body)
+
+        if self._tutorial is not None:
+            self._tutorial.update(dt, self)
 
         cargo = self._ship.cargo
         if cargo is not None and hasattr(cargo, "update"):
