@@ -16,6 +16,7 @@ from renderer.terminal_renderer import TerminalRenderer
 from renderer.cockpit_renderer import CockpitRenderer
 from audio.audio_manager import AudioManager
 from delivery.delivery_sequence import DeliverySequence
+from roguelite.shop import ShopScreen
 
 
 class Game:
@@ -46,6 +47,7 @@ class Game:
         self._torch_warn_t        = 0.0   # seconds remaining until next module loss
         self._last_debt_milestone = 0     # last 1000cr milestone we dinged
         self._delivery: DeliverySequence | None = None
+        self._shop: ShopScreen | None = None
 
         self._wire_events()
 
@@ -139,6 +141,9 @@ class Game:
         elif state == GameState.DELIVERY:
             if self._delivery is not None:
                 self._delivery.handle_key(event)
+        elif state == GameState.SHOP:
+            if self._shop is not None:
+                self._shop.handle_key(event)
         elif state in (GameState.DECANTING, GameState.MAIN_MENU):
             if event.key == pygame.K_RETURN:
                 self.run_mgr.start_run(self.ship)
@@ -156,9 +161,21 @@ class Game:
             self.bax.update(dt)
             self.cockpit_renderer.update(dt)
             self.audio.update(self.ship.body.speed(), dt)
+            # Shop stop between sectors
+            if self.run_mgr._shop_pending:
+                self._shop = ShopScreen(self.run_mgr, self.ship)
+                self.states.transition(GameState.SHOP)
             # Terminal opened by jump key — transition immediately
-            if self.run_mgr.active_terminal is not None:
+            elif self.run_mgr.active_terminal is not None:
                 self.states.transition(GameState.TERMINAL)
+
+        elif state == GameState.SHOP:
+            if self._shop is not None:
+                self._shop.update(dt)
+                if self._shop.is_done:
+                    self._shop = None
+                    self.run_mgr._load_next_sector()
+                    self.states.transition(GameState.FLIGHT)
 
         elif state == GameState.TERMINAL:
             terminal = self.run_mgr.active_terminal
@@ -221,6 +238,10 @@ class Game:
 
         elif state == GameState.DECANTING:
             self._render_decanting()
+
+        elif state == GameState.SHOP:
+            if self._shop is not None:
+                self._shop.draw(self.screen, pygame.time.get_ticks() / 1000.0)
 
         elif state == GameState.MAIN_MENU:
             self._render_main_menu()
@@ -395,7 +416,22 @@ class Game:
                 True, col)
             self.screen.blit(warn, (8, 3))
 
+    # Bax clone wake-up quips — shown on decanting screen
+    _DECANT_BAX = [
+        "BAX: '...sensor re-initialised. Right. You're dead again. "
+        "Clone number {n}. Still owe 'em everything. Welcome back.'",
+        "BAX: 'New body smells like the old one, just cleaner. "
+        "That won't last. Clone {n}. Let's get moving.'",
+        "BAX: 'Sensors nominal. You're back. Debt's worse. "
+        "Clone {n}. Same as before, only more indebted. Hello.'",
+        "BAX: 'Ah. Clone {n}. They kept your ears this time, which is nice. "
+        "Same debt. Same ship. Same droid. Sorry about that last one.'",
+        "BAX: 'Systems online. Pilot confirmed: not dead. Technically. "
+        "Clone {n}. I'll warm up the thrusters. Try not to die again.'",
+    ]
+
     def _render_decanting(self):
+        import random as _rnd
         t = pygame.time.get_ticks() / 1000.0
         font_sm  = pygame.font.SysFont("monospace", 13)
         font     = pygame.font.SysFont("monospace", 17)
@@ -446,6 +482,16 @@ class Game:
             surf = f.render(text, True, col)
             self.screen.blit(surf, (S.SCREEN_W // 2 - surf.get_width() // 2, y))
             y += f.get_linesize() + 2
+
+        # Bax wake-up line
+        bax_line = _rnd.choice(self._DECANT_BAX).format(n=self.meta.clone_count)
+        font_bax = pygame.font.SysFont("monospace", 12)
+        bax_surf = font_bax.render(bax_line, True, (100, 130, 100))
+        self.screen.blit(bax_surf,
+                         (S.SCREEN_W // 2 - bax_surf.get_width() // 2,
+                          S.SCREEN_H - 52))
+        pygame.draw.line(self.screen, (40, 60, 40),
+                         (80, S.SCREEN_H - 62), (S.SCREEN_W - 80, S.SCREEN_H - 62), 1)
 
     def _render_main_menu(self):
         t  = pygame.time.get_ticks() / 1000.0
@@ -651,7 +697,7 @@ class Game:
         # Bottom label strip
         font_s = pygame.font.SysFont("monospace", 9)
         s1 = font_s.render(f"ROT  {ry:5.2f} rad", True, (90, 120, 160))
-        s2 = font_s.render("MASS  1.0t  //  HULL 100", True, (90, 120, 160))
+        s2 = font_s.render(f"MASS  1.0t  //  HULL {int(S.HULL_MAX)}", True, (90, 120, 160))
         self.screen.blit(s1, (panel.left + 8, panel.bottom - 24))
         self.screen.blit(s2, (panel.left + 8, panel.bottom - 12))
 

@@ -16,7 +16,8 @@ from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
                              EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING,
                              EVT_COMMS_SPEAK, EVT_TETHER_SNAP, EVT_BAX_SPEAK,
                              EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_DEMO_NOTICE,
-                             EVT_JUMP_READY)
+                             EVT_JUMP_READY, EVT_WARP_JUMP, EVT_FINAL_SECTOR,
+                             EVT_RUN_START, EVT_SHOP_ENTER)
 from config import settings as S
 
 
@@ -160,6 +161,11 @@ class RunManager:
         self._pending_advance  = False
         self._jump_ready_fired = False   # prevents duplicate jump-ready sound per sector
         self._run_debt_reduced = 0   # credits recovered this run (shown in HUD)
+        self._shop_pending     = False   # True when a shop stop should open
+
+        # Deferred object spawn queue — (trigger_time, kind) pairs
+        # Populated by _spawn_sector_objects(), drained in update()
+        self._spawn_queue: list[tuple[float, str]] = []
 
         # Per-sector stat tracking for the between-sector flash card
         self._sector_slingshots = 0
@@ -175,6 +181,7 @@ class RunManager:
 
     # ------------------------------------------------------------------
     def start_run(self, ship):
+        bus.emit(EVT_RUN_START)
         self._sector_index = 0
         self._barges.clear()
         self._debris.clear()
@@ -189,12 +196,14 @@ class RunManager:
         self._jump_ready_fired   = False
         self._kress_called_this_sector = False
         self._run_debt_reduced   = 0
+        self._shop_pending       = False
         self._sector_slingshots  = 0
         self._sector_snaps       = 0
         self._sector_credits     = 0
         self._sector_start_hull  = ship.hull if ship else S.HULL_MAX
         self._flash_t            = 0.0
         self._last_stats         = None
+        self._spawn_queue.clear()
         self._ship = ship
         self.draft = LoadoutDraft(chapter=self._current_chapter())
         self._kress_cd    = random.uniform(S.KRESS_INTERVAL_MIN, S.KRESS_INTERVAL_MAX)
@@ -225,6 +234,20 @@ class RunManager:
         self._sling_cd      = max(0.0, self._sling_cd - dt)
         self._prox_cd       = max(0.0, self._prox_cd  - dt)
         self._flash_t       = max(0.0, self._flash_t  - dt)
+
+        # Drain deferred spawns
+        due = [item for item in self._spawn_queue
+               if item[0] <= self._sector_timer]
+        for _, kind in due:
+            if kind == "debris":
+                self._debris.append(DebrisRock())
+            elif kind == "satellite":
+                self._satellites.append(SpinningSatellite())
+            elif kind == "barge":
+                self._spawn_barge()
+        if due:
+            self._spawn_queue = [item for item in self._spawn_queue
+                                 if item[0] > self._sector_timer]
 
         if not self._jump_ready_fired and self._sector_timer >= self._sector_dur:
             self._jump_ready_fired = True
@@ -291,6 +314,11 @@ class RunManager:
         self._check_comms(dt)
 
     def handle_key(self, event: pygame.event.Event):
+        # Route to cargo's key handler first (e.g. TriplicateForm popup)
+        if self._ship is not None and self._ship.cargo is not None:
+            if hasattr(self._ship.cargo, "handle_key"):
+                if self._ship.cargo.handle_key(event):
+                    return
         if event.key == pygame.K_j and self._sector_timer >= self._sector_dur:
             self._open_jump_terminal()
         elif event.key == pygame.K_k and not self._kress_called_this_sector:
@@ -437,7 +465,17 @@ class RunManager:
                 mod.inject_fuel_mix(1.5, 8.0)
 
     # ------------------------------------------------------------------
+    def _build_run_context(self) -> dict:
+        ctx: dict = {"sector_index": self._sector_index,
+                     "run_credits":  self._run_debt_reduced}
+        if self._ship is not None:
+            ctx["hull_pct"] = self._ship.hull / S.HULL_MAX
+        if hasattr(self, "meta"):
+            ctx["debt"] = self.meta.debt
+        return ctx
+
     def open_terminal(self, npc_type: str, **npc_kwargs) -> Terminal:
+        npc_kwargs.setdefault("run_context", self._build_run_context())
         npc = make_npc(npc_type, **npc_kwargs)
         self._active_terminal = Terminal(npc)
         return self._active_terminal
@@ -448,7 +486,11 @@ class RunManager:
         return self.open_terminal("gary", intercepted=True)
 
     def _open_jump_terminal(self):
-        npc_type = random.choice(["gary", "synthetic_droid", "union_dispatcher"])
+        pool = ["gary", "synthetic_droid", "union_dispatcher"]
+        # Insurance adjuster from sector 3 onward — she's claims, not enforcement
+        if self._sector_index >= 3:
+            pool.append("insurance_adjuster")
+        npc_type = random.choice(pool)
         self.open_terminal(npc_type)
         self._pending_advance = True
 
@@ -486,6 +528,7 @@ class RunManager:
             self._advance_sector()
 
     def _advance_sector(self):
+        bus.emit(EVT_WARP_JUMP)
         sector_bonus = 4500
         self.meta.pay_off(sector_bonus)
         self._run_debt_reduced += sector_bonus
@@ -509,6 +552,7 @@ class RunManager:
         self._sector_credits    = 0
         self._sector_start_hull = hull_now
 
+        completed_sector = self._sector_index
         self._sector_index += 1
         bus.emit(EVT_SECTOR_CLEAR, sector_num=self._sector_index)
 
@@ -516,22 +560,56 @@ class RunManager:
             bus.emit(EVT_RUN_END, success=True)
             return
 
+        # Shop stop — signal game.py to open the shop before next sector loads
+        if completed_sector in S.SHOP_SECTORS:
+            self._shop_pending = True
+            bus.emit(EVT_SHOP_ENTER)
+            return
+
+        self._load_next_sector()
+
+    def _load_next_sector(self):
         self._sector       = generate_sector(self._sector_index, self._difficulty())
         self._sector_timer = 0.0
         self._jump_ready_fired = False
         self._barges.clear()
+        self._spawn_queue.clear()
         self._sling_well_t.clear()
         self._kress_called_this_sector = False
+        self._shop_pending = False
         self._spawn_sector_objects()
+
+        # Final sector: announce to bax + extra immediate barge
+        if self._sector_index == S.SECTORS_PER_RUN - 1:
+            bus.emit(EVT_FINAL_SECTOR)
+            self._spawn_barge(immediate_chase=True)
 
         # Ambush: spawn an additional barge that's already hunting
         if self._sector.is_ambush:
             self._spawn_barge(immediate_chase=True)
 
     def _spawn_sector_objects(self):
-        self._debris      = [DebrisRock() for _ in range(S.DEBRIS_COUNT)]
-        self._canisters   = [FuelCanister() for _ in range(S.CANISTER_COUNT)]
-        self._satellites  = [SpinningSatellite() for _ in range(S.SATELLITE_COUNT)]
+        self._spawn_queue.clear()
+        idx = self._sector_index
+
+        # Debris: 1 rock immediately, rest drip in every 4-6s.
+        # Sector 1 gets 1 immediate; later sectors get up to DEBRIS_COUNT total.
+        immediate_debris = 1
+        self._debris = [DebrisRock() for _ in range(immediate_debris)]
+        for i in range(S.DEBRIS_COUNT - immediate_debris):
+            t = 4.0 + i * random.uniform(3.5, 5.5)
+            self._spawn_queue.append((t, "debris"))
+
+        # Canisters spawn immediately — they're rewards, not threats
+        self._canisters = [FuelCanister() for _ in range(S.CANISTER_COUNT)]
+
+        # Satellites: none until 9s in on early sectors, 5s on late sectors.
+        self._satellites = []
+        sat_delay_base = max(5.0, 11.0 - idx * 0.6)
+        for i in range(S.SATELLITE_COUNT):
+            t = sat_delay_base + i * random.uniform(2.5, 4.0)
+            self._spawn_queue.append((t, "satellite"))
+
         self._alien       = None
         self._alien_spoken = False
 
@@ -539,15 +617,23 @@ class RunManager:
         if random.random() < 0.35:
             self._alien = AlienShip()
 
-        # Barge spawn ramp — sector 1-2 are intro, then escalate
-        idx = self._sector_index
+        # Barge spawn ramp — sector 1-2 are intro, then escalate.
+        # Barges also deferred: first barge at 8s so player can orient.
+        # Final sector gets heavier: handled by _load_next_sector spawning one immediately.
         barge_count = 0
         if idx >= 2:
             barge_count = 1
         if idx >= 6:
             barge_count = 2
-        for _ in range(barge_count):
-            self._spawn_barge()
+        barge_delay = max(4.0, 9.0 - idx * 0.5)
+        for i in range(barge_count):
+            self._spawn_queue.append((barge_delay + i * 6.0, "barge"))
+
+        # Final sector: queue a second deferred barge and extra debris
+        if idx == S.SECTORS_PER_RUN - 1:
+            self._spawn_queue.append((barge_delay + 3.0, "barge"))
+            for i in range(3):   # extra debris rocks
+                self._spawn_queue.append((2.0 + i * 2.0, "debris"))
 
         # Demolition notice — 35% chance from sector 2 onward
         if idx >= 1 and random.random() < 0.35:

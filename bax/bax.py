@@ -10,7 +10,10 @@ from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING,
                              EVT_GUN_MALFUNCTION, EVT_SPORE_INVERTED,
                              EVT_BARGE_INTERCEPT, EVT_KRESS_DIALLED,
-                             EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_TORCH_ACTIVE)
+                             EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_TORCH_ACTIVE,
+                             EVT_SHIP_DESTROYED, EVT_RUN_START,
+                             EVT_SHOP_ENTER, EVT_SHOP_BUY, EVT_SHOP_SKIP,
+                             EVT_FINAL_SECTOR)
 
 _IDLE = [
     # Bread-and-butter Cockney banter
@@ -56,6 +59,29 @@ _IDLE = [
     "Warm. Powered down. No tether incidents. ...Anyway. Hull's holding.",
     "You're the best pilot I've had, which is either a compliment or "
     "an indictment of the previous ones. I genuinely don't know.",
+    "Debt interest just ticked. I felt it spiritually.",
+    "Fun fact: my memory banks hold every previous pilot's last words. "
+    "I don't share them. That would be weird.",
+    "You know the Union pays their droids hazard pay? I don't get hazard pay. "
+    "I am the hazard.",
+    "I've cross-referenced your current velocity against every good decision "
+    "I've ever witnessed. Still cross-referencing.",
+    "Nova Soma classifies me as 'non-essential equipment'. I classify them as "
+    "'the entire reason we're out here'. Different perspectives.",
+    "I've been in worse sectors. Don't ask me to describe them. "
+    "Actually — just keep your eyes forward.",
+    "The stars don't care about our debt. I find that either comforting or "
+    "horrifying depending on the sector.",
+    "My diagnostic ran this morning. Everything nominal except the part "
+    "where I'm bolted to a courier ship with seventeen outstanding warrants.",
+    "Three things keep us going: thrust, spite, and an unreasonably optimistic "
+    "read on our survival odds. Mostly the spite.",
+    "I miss radio. Real radio. Not Union dispatch, not MediCorp invoices. "
+    "Just someone playin' music because they felt like it.",
+    "This sector is particularly hostile, even by the standards of sectors "
+    "that are TRYING to be hostile.",
+    "I've calculated our ideal escape vector seventeen times. "
+    "It's still 'forward and fast'. Very sophisticated maths.",
 ]
 
 _FAST = [
@@ -69,6 +95,11 @@ _FAST = [
     "Four hundred metres per second. My warranty specifically forbids this. BRILLIANT.",
     "I've done the maths on our survival odds at this velocity. "
     "I'm choosing not to share them. FASTER.",
+    "She's pushing three-fifty! Nav computer is singing!",
+    "Go on then! Show 'em what a rusted hull CAN do!",
+    "The tether can't reach what it can't track! KEEP. MOVING.",
+    "My velocity alerts are firing on all cylinders. PERFECT.",
+    "I love this part. I hate every other part. I love THIS PART.",
 ]
 
 _SLOW = [
@@ -80,6 +111,10 @@ _SLOW = [
     "This is a very scenic way to accrue debt interest.",
     "I've calculated our current speed. I'd rather not say it out loud.",
     "We're moving slower than the Nova Soma quarterly invoice. Impressive.",
+    "Union drones move faster than this. Just so you're aware.",
+    "I've seen decommissioned satellites with more urgency.",
+    "We're generating less momentum than the debt interest. Reflective.",
+    "Barge IFF is offline this slow. Lucky break. Use it.",
 ]
 
 _WELL_CLOSE = [
@@ -126,6 +161,12 @@ class Bax:
         self._ctx_cd     = self._GRACE
         self._grace_t    = self._GRACE
 
+        # Run-stat tracking
+        self._run_tether_hits  = 0
+        self._run_hull_events  = 0
+        self._run_slingshots   = 0
+        self._alien_count      = 0   # alien sightings this session
+
         self._wire_events()
 
     # ------------------------------------------------------------------
@@ -149,6 +190,12 @@ class Bax:
         bus.subscribe(EVT_SATELLITE_HIT,    self._on_satellite_hit)
         bus.subscribe(EVT_ALIEN_SIGHTING,   self._on_alien_sighting)
         bus.subscribe(EVT_TORCH_ACTIVE,     self._on_torch_active)
+        bus.subscribe(EVT_SHIP_DESTROYED,   self._on_ship_destroyed)
+        bus.subscribe(EVT_RUN_START,        self._on_run_start)
+        bus.subscribe(EVT_SHOP_ENTER,       self._on_shop_enter)
+        bus.subscribe(EVT_SHOP_BUY,         self._on_shop_buy)
+        bus.subscribe(EVT_SHOP_SKIP,        self._on_shop_skip)
+        bus.subscribe(EVT_FINAL_SECTOR,     self._on_final_sector)
 
     def update(self, dt: float):
         self._speak_cd = max(0.0, self._speak_cd - dt)
@@ -182,6 +229,9 @@ class Bax:
         elif hull_pct > 0.90 and random.random() < 0.35:
             self.speak(random.choice(_HIGH_HULL))
             self._ctx_cd = 22.0
+        elif random.random() < 0.18:
+            self.speak(random.choice(_WELL_CLOSE))
+            self._ctx_cd = 20.0
         else:
             self._ctx_cd = random.uniform(8.0, 14.0)
 
@@ -194,6 +244,7 @@ class Bax:
 
     # ------------------------------------------------------------------
     def _on_hull_damage(self, amount, **_):
+        self._run_hull_events += 1
         if amount > 15:
             self.speak(random.choice([
                 "OI! That's coming out of ME warranty, mate!",
@@ -209,11 +260,16 @@ class Bax:
         ]))
 
     def _on_tether_hit(self, barge, **_):
-        self.speak(random.choice([
+        self._run_tether_hits += 1
+        lines = [
             "They've got us tethered! DRIFT, go on, DRIFT!",
             "Harpoon's locked! Sideways, mate, SIDEWAYS!",
             "Oh lovely. Drift hard or lose the thruster!",
-        ]))
+        ]
+        if self._run_tether_hits >= 3:
+            lines.append(f"That's {self._run_tether_hits} harpoons this run. "
+                         "They REALLY want this cargo.")
+        self.speak(random.choice(lines))
 
     def _on_tether_snap(self, reason, **_):
         self.speak(random.choice([
@@ -232,6 +288,7 @@ class Bax:
 
     # ------------------------------------------------------------------
     def _on_slingshot(self, speed, **_):
+        self._run_slingshots += 1
         self.speak(random.choice([
             f"SLINGSHOT! {speed:.0f} metres per second! HAVE THAT!",
             "That's gravitational assist, that is. Textbook.",
@@ -328,21 +385,38 @@ class Bax:
         ]))
 
     def _on_alien_sighting(self, **_):
-        self.speak(random.choice([
-            "OI OI OI. WHAT WAS THAT. That was NOT human. That was NOT Union. "
-            "Did you SEE that thing? Did you — it's gone. It's GONE. Are you alright? I'm not alright.",
-            "I'm reading a hull signature that is categorically NOT in any Union registry. "
-            "That's — mate, that's an alien ship. ALIEN. And it didn't even LOOK at us. "
-            "I don't know if that's good.",
-            "CONTACT. Unknown origin. Moving fast. Won't respond to — "
-            "...it's leaving. It just... left. Like we weren't worth stopping for. "
-            "Which is probably fine. Probably.",
-            "Right so either my sensors are having another episode or "
-            "something out there has entirely different ideas about ship design. "
-            "They didn't try to repo us. Small mercies.",
-            "They came, they passed through, they didn't file any paperwork. "
-            "Honestly? I respect it. We could all learn something.",
-        ]))
+        self._alien_count += 1
+        if self._alien_count == 1:
+            self.speak(random.choice([
+                "OI OI OI. WHAT WAS THAT. That was NOT human. That was NOT Union. "
+                "Did you SEE that thing? Did you — it's gone. It's GONE. Are you alright? I'm not alright.",
+                "I'm reading a hull signature that is categorically NOT in any Union registry. "
+                "That's — mate, that's an alien ship. ALIEN. And it didn't even LOOK at us. "
+                "I don't know if that's good.",
+                "CONTACT. Unknown origin. Moving fast. Won't respond to — "
+                "...it's leaving. It just... left. Like we weren't worth stopping for. "
+                "Which is probably fine. Probably.",
+            ]))
+        elif self._alien_count == 2:
+            self.speak(random.choice([
+                "AGAIN. They're back. Or a different one. I can't tell. They all look the same "
+                "and I feel bad about that but they do. Still not filing paperwork. Still unsettling.",
+                "Second alien contact. I've started a spreadsheet. Column one: 'did they care about us?'. "
+                "Column two: 'no'. This is column two.",
+                "Right so either they're following us or space is smaller than I thought. "
+                "Either way: deeply weird. Keep moving.",
+            ]))
+        else:
+            self.speak(random.choice([
+                f"Alien sighting number {self._alien_count}. I've stopped being surprised. "
+                "That worries me more than the aliens do.",
+                "They're back. Fine. We have a working arrangement now, apparently. "
+                "They fly past. We don't die. Everyone's happy.",
+                "Another one. I've named this one Gerald. Gerald doesn't care about us. "
+                "I find that oddly comforting.",
+                "At this point I think they're just commuting. Past us. Every run. "
+                "Gerald's got somewhere to be.",
+            ]))
 
     def _on_torch_active(self, **_):
         self.speak(random.choice([
@@ -350,6 +424,77 @@ class Bax:
             "They're cuttin' into the hull! Snap that cable SIDEWAYS. GO!",
             "TORCH STATE. Drift HARD or lose a module. You've got seconds!",
             "OI. They are unbolting your ship. SNAP THE TETHER. Lateral velocity. DO IT.",
+        ]))
+
+    def _on_run_start(self, **_):
+        self._run_tether_hits = 0
+        self._run_hull_events = 0
+        self._run_slingshots  = 0
+
+    def _on_ship_destroyed(self, **_):
+        self.speak(random.choice([
+            "No no no no — MEDCORP INCOMING. Don't go towards the light. "
+            "There IS no light. There's a clone tank. Which is worse.",
+            "Right. That's us dead then. I'll see you on the other side of the fluid tank.",
+            "Hull: zero. Pilot: deceased. Again. I'll have your clone warmed up.",
+            "I've filed the incident report. Cause of death: 'the usual'. See you in the tank.",
+            "That's a wrap on THIS body. Next one's slightly newer, allegedly.",
+        ]))
+
+    def _on_shop_enter(self, **_):
+        self.speak(random.choice([
+            "Black market stop. Don't tell the Union. Or do — they won't be surprised.",
+            "Shady vendor ahead. Discretion is expensive. So is dying. Weigh it up.",
+            "Right, the dodgy bloke with the crate. Budget's tight but so's our hull.",
+            "It's the grey market. Everything works. Mostly. Sometimes. Buy something.",
+            "Quick stop. What we need vs what we can afford. Classic dilemma.",
+        ]))
+
+    def _on_shop_buy(self, tag="", name="", **_):
+        lines = {
+            "hull_patch": [
+                "Hull patch applied. We've got a little more margin for bad decisions.",
+                "Good call. That's fifty hull integrity back. Grey market, but still.",
+                "Patched. She's not pretty but she'll hold. Probably.",
+            ],
+            "thrust_boost": [
+                "Catalyst in. Next forty seconds: considerably faster. Don't waste it.",
+                "Fuel additive loaded. She's gonna SING. Ready when you are.",
+                "Thrust catalyst in the mix. That's the good stuff. Illegal, but good.",
+            ],
+            "jammer": [
+                "Jammer active. Barge harpoon locks are scrambled for ninety seconds. "
+                "Local 404 is FURIOUS and can't legally prove it.",
+                "EM jammer running. Their harpoon IFF is seeing static. Nice.",
+                "Jammer in. They can see us but they can't grab us. For now.",
+            ],
+            "intel": [
+                "Intel drop. I've cross-referenced with our terminal history. Useful.",
+                "Black market data package. Could come in handy mid-negotiation.",
+                "Intercepted dispatch logs. Their weak spots, highlighted. Cheers.",
+            ],
+        }
+        fallback = [f"Got the {name}. Right. Let's make it count."]
+        self.speak(random.choice(lines.get(tag, fallback)))
+
+    def _on_shop_skip(self, **_):
+        self.speak(random.choice([
+            "Nothing? We walked away from the black market with nothing? Bold strategy.",
+            "Alright. Saving the credits. I respect it. I also question it. Both.",
+            "Didn't buy anything. The credits stay on the tally. That's fine. Probably fine.",
+            "Window shopping at the grey market. Very dignified. Very broke.",
+        ]))
+
+    def _on_final_sector(self, **_):
+        self.speak(random.choice([
+            "Last sector. Everything they've got is coming for us. "
+            "Everything we've got is going into this. Let's DO it.",
+            "Final run. Two barges, heavy rocks, all our worst options. "
+            "Statistically we've survived worse. Once. Barely.",
+            "This is the last one. After this: debt reduction, a hot meal, "
+            "and a very long time NOT being in space. MOVE.",
+            "Sector ten. The gauntlet. I've run the numbers. "
+            "Our odds are 'possible'. That's the best I've got. GO.",
         ]))
 
     def radio_blip(self):

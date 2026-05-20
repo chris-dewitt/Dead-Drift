@@ -17,7 +17,7 @@ _NOTES = {
 }
 
 
-def _harp_note(freq: float, duration: float, amp: float = 0.55,
+def _harp_note(freq: float, duration: float, amp: float = 0.82,
                bend: float = 0.0) -> np.ndarray:
     """Single harmonica note — reedy timbre, slight vibrato, breathiness."""
     tv = _t(duration)
@@ -68,6 +68,25 @@ _LICK_PATTERNS = [
      ('C3', 0.12, 0.0,  0.0), ('D3', 0.08, 0.0,  0.0),
      ('Eb3', 0.06, 0.0, 0.0), ('D3', 0.16, 0.06, 0.0),
      ('A2', 0.24, 0.0,  0.0)],
+
+    # Chicago shuffle — syncopated up-tempo bounce
+    [('A2', 0.07, 0.02, 0.0), ('C3', 0.07, 0.01, 0.0), ('D3', 0.07, 0.02, 0.0),
+     ('A2', 0.07, 0.01, 0.0), ('C3', 0.07, 0.01, 0.0), ('E3', 0.11, 0.04, 0.0),
+     ('D3', 0.07, 0.01, 0.0), ('C3', 0.07, 0.0,  0.0), ('A2', 0.22, 0.0,  0.0)],
+
+    # Slow lonesome wail — long breathy bends
+    [('A2', 0.36, 0.06, 0.03), ('G2', 0.26, 0.04, 0.0),
+     ('A2', 0.44, 0.08, 0.05), ('E2', 0.54, 0.0,  0.0)],
+
+    # Minor-3rd hammers — quick punch pairs
+    [('C3', 0.05, 0.0,  0.0), ('Eb3', 0.14, 0.06, 0.0),
+     ('D3', 0.05, 0.0,  0.0), ('E3',  0.18, 0.04, 0.0),
+     ('D3', 0.05, 0.0,  0.0), ('C3',  0.22, 0.06, 0.0),
+     ('A2', 0.30, 0.0,  0.0)],
+
+    # High register sundown run — quick descending from A3
+    [('A3', 0.09, 0.01, 0.0), ('G3', 0.09, 0.01, 0.0), ('E3', 0.09, 0.01, 0.0),
+     ('D3', 0.14, 0.04, 0.0), ('C3', 0.09, 0.01, 0.0), ('A2', 0.28, 0.0,  0.0)],
 ]
 
 

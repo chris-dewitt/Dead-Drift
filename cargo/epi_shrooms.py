@@ -21,12 +21,18 @@ class EpistemologicalShrooms(BaseCargo):
 
     # ------------------------------------------------------------------
     def update(self, dt: float, ship) -> None:
+        # Spore pressure builds gradually — drives pre-warning vignette in renderer
+        self.spore_level = min(1.0, self.spore_level + dt * 0.018)
+
         if self._invert_active:
             self._invert_t -= dt
             if self._invert_t <= 0.0:
                 self._invert_active    = False
                 ship.controls_inverted = False
                 bus.emit(EVT_SPORE_INVERTED, active=False)
+                self.spore_level       = max(0.0, self.spore_level - 0.35)
+                interval = random.uniform(S.SPORE_INTERVAL_MIN, S.SPORE_INTERVAL_MAX)
+                self._next_cd = interval * max(0.4, 1.0 - self.spore_level * 0.5)
             return
 
         self._next_cd -= dt
