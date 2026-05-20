@@ -402,7 +402,11 @@ class DeliverySequence:
         stars = self._run_stars
         self._bonus   = _DELIVERY_BONUS.get(stars, 0)
         self._fee_cut = _DELIVERY_FEE_CUT.get(stars, 0)
-        self.meta.debt = max(0, self.meta.debt - self._bonus + self._fee_cut)
+        net_reduction = self._bonus - self._fee_cut
+        if net_reduction > 0:
+            self.meta.pay_off(net_reduction)
+        elif net_reduction < 0:
+            self.meta.add_debt(-net_reduction)
         self.meta.save()
 
     def _draw_result(self, surface: pygame.Surface, W: int, H: int):
