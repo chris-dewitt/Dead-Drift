@@ -613,8 +613,8 @@ class RunManager:
         self._alien       = None
         self._alien_spoken = False
 
-        # 35% chance of alien flythrough per sector
-        if random.random() < 0.35:
+        # 22% chance of alien flythrough per sector
+        if random.random() < 0.22:
             self._alien = AlienShip()
 
         # Barge spawn ramp — sector 1-2 are intro, then escalate.
@@ -629,14 +629,14 @@ class RunManager:
         for i in range(barge_count):
             self._spawn_queue.append((barge_delay + i * 6.0, "barge"))
 
-        # Final sector: queue a second deferred barge and extra debris
+        # Final sector: queue a second deferred barge and one extra debris.
+        # The gauntlet stays intense via the two barges, not via debris spam.
         if idx == S.SECTORS_PER_RUN - 1:
             self._spawn_queue.append((barge_delay + 3.0, "barge"))
-            for i in range(3):   # extra debris rocks
-                self._spawn_queue.append((2.0 + i * 2.0, "debris"))
+            self._spawn_queue.append((3.0, "debris"))
 
-        # Demolition notice — 35% chance from sector 2 onward
-        if idx >= 1 and random.random() < 0.35:
+        # Demolition notice — 22% chance from sector 2 onward
+        if idx >= 1 and random.random() < 0.22:
             speaker, line = random.choice(_DEMO_NOTICES)
             bus.emit(EVT_DEMO_NOTICE)
             bus.emit(EVT_COMMS_SPEAK, speaker=speaker, line=line)
