@@ -416,7 +416,22 @@ class Game:
                 True, col)
             self.screen.blit(warn, (8, 3))
 
+    # Bax clone wake-up quips — shown on decanting screen
+    _DECANT_BAX = [
+        "BAX: '...sensor re-initialised. Right. You're dead again. "
+        "Clone number {n}. Still owe 'em everything. Welcome back.'",
+        "BAX: 'New body smells like the old one, just cleaner. "
+        "That won't last. Clone {n}. Let's get moving.'",
+        "BAX: 'Sensors nominal. You're back. Debt's worse. "
+        "Clone {n}. Same as before, only more indebted. Hello.'",
+        "BAX: 'Ah. Clone {n}. They kept your ears this time, which is nice. "
+        "Same debt. Same ship. Same droid. Sorry about that last one.'",
+        "BAX: 'Systems online. Pilot confirmed: not dead. Technically. "
+        "Clone {n}. I'll warm up the thrusters. Try not to die again.'",
+    ]
+
     def _render_decanting(self):
+        import random as _rnd
         t = pygame.time.get_ticks() / 1000.0
         font_sm  = pygame.font.SysFont("monospace", 13)
         font     = pygame.font.SysFont("monospace", 17)
@@ -467,6 +482,16 @@ class Game:
             surf = f.render(text, True, col)
             self.screen.blit(surf, (S.SCREEN_W // 2 - surf.get_width() // 2, y))
             y += f.get_linesize() + 2
+
+        # Bax wake-up line
+        bax_line = _rnd.choice(self._DECANT_BAX).format(n=self.meta.clone_count)
+        font_bax = pygame.font.SysFont("monospace", 12)
+        bax_surf = font_bax.render(bax_line, True, (100, 130, 100))
+        self.screen.blit(bax_surf,
+                         (S.SCREEN_W // 2 - bax_surf.get_width() // 2,
+                          S.SCREEN_H - 52))
+        pygame.draw.line(self.screen, (40, 60, 40),
+                         (80, S.SCREEN_H - 62), (S.SCREEN_W - 80, S.SCREEN_H - 62), 1)
 
     def _render_main_menu(self):
         t  = pygame.time.get_ticks() / 1000.0

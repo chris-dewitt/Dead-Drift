@@ -32,18 +32,18 @@ _MISSED_BAX = [
 ]
 
 
-class SentientPaperwork(BaseCargo):
+class TriplicateForm(BaseCargo):
     """Ch.3: Cursed bureaucratic documents — random HUD popup form interrupts."""
 
     def __init__(self):
-        super().__init__("SENTIENT TELEPATHIC PAPERWORK")
-        self.popup_active    = False
-        self.popup_key: int | None = None
-        self.popup_key_name  = ""
-        self.popup_timer     = 0.0
-        self.popup_fraction  = 0.0   # 1.0→0.0, used by renderer countdown bar
-        self._next_trigger   = random.uniform(S.FORM_TRIGGER_MIN, S.FORM_TRIGGER_MAX)
-        self._forms_filed    = 0
+        super().__init__("FORM 27-B (TRIPLICATE)")
+        self.popup_active   = False
+        self.popup_key:  int | None = None
+        self.popup_key_name = ""
+        self.popup_timer    = 0.0
+        self.popup_fraction = 0.0   # 1.0→0.0 as timer winds down (used by renderer)
+        self._next_trigger  = random.uniform(S.FORM_TRIGGER_MIN, S.FORM_TRIGGER_MAX)
+        self._forms_filed   = 0
 
     def update(self, dt: float, ship) -> None:
         if self.popup_active:
@@ -69,6 +69,7 @@ class SentientPaperwork(BaseCargo):
                  line=random.choice(_POPUP_BAX).format(k=self.popup_key_name))
 
     def handle_key(self, event: pygame.event.Event) -> bool:
+        """Call from run_manager.handle_key. Returns True if popup was resolved."""
         if not self.popup_active or self.popup_key is None:
             return False
         if event.key == self.popup_key:
@@ -84,4 +85,4 @@ class SentientPaperwork(BaseCargo):
             self._next_trigger = max(3.0, self._next_trigger - 8.0)
 
     def terminal_climax(self) -> str:
-        return "union_dispatcher"
+        return "gary"

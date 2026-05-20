@@ -84,6 +84,11 @@ SLINGSHOT_BONUS   = 5.0      # seconds shaved off jump timer
 SHOP_SECTORS          = {3, 6}            # 0-based sector indices that trigger shop
 JAMMER_COOLDOWN       = 90.0             # seconds barge intercept suppressed after buying jammer
 
+# --- TriplicateForm (Ch.3 cargo) ---
+FORM_TRIGGER_MIN = 18.0          # seconds between form popup triggers
+FORM_TRIGGER_MAX = 38.0
+FORM_TIMEOUT     = 6.0           # seconds to respond before penalty
+
 # --- Tether ---
 TETHER_FORCE      = 1200.0        # spring constant for EM harpoon
 TETHER_MAX_LENGTH = 350.0         # px before it snaps on its own

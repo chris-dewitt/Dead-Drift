@@ -112,6 +112,9 @@ class ShopScreen:
         elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
             self._try_purchase()
         elif event.key in (pygame.K_ESCAPE, pygame.K_j):
+            from core.event_bus import bus, EVT_SHOP_SKIP
+            if not self._bought:
+                bus.emit(EVT_SHOP_SKIP)
             self.is_done = True
 
     def _try_purchase(self):
@@ -128,6 +131,8 @@ class ShopScreen:
         self._bought.add(self._cursor)
         item.apply(self.ship, self.run_mgr)
         self._flash(f"Purchased: {item.name}.")
+        from core.event_bus import bus, EVT_SHOP_BUY
+        bus.emit(EVT_SHOP_BUY, tag=item.tag, name=item.name)
 
     def _flash(self, msg: str):
         self._msg   = msg

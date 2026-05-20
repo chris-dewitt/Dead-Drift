@@ -8,7 +8,7 @@ from antagonists.alien_ship import HULL_PTS as _ALIEN_HULL, INNER_PTS as _ALIEN_
 from core.event_bus import (bus, EVT_SLINGSHOT, EVT_SCAN_PING,
                              EVT_TETHER_HIT, EVT_TETHER_SNAP,
                              EVT_MODULE_UNBOLTED, EVT_HULL_DAMAGE,
-                             EVT_HULL_CRITICAL)
+                             EVT_HULL_CRITICAL, EVT_WARP_JUMP, EVT_SECTOR_CLEAR)
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +60,12 @@ class VectorRenderer:
         # Screen shake state: trauma decays exponentially; offset is random per frame
         self._shake_trauma = 0.0   # 0.0 (none) → 1.0 (huge)
 
+        # Per-sector background palette shift
+        self._sector_hue_shift = 0.0
+
+        # Warp streak effect
+        self._warp_t = 0.0
+
         bus.subscribe(EVT_SLINGSHOT,        self._on_slingshot)
         bus.subscribe(EVT_SCAN_PING,        self._on_scan_ping)
         bus.subscribe(EVT_TETHER_HIT,       self._on_tether_hit)
@@ -67,6 +73,8 @@ class VectorRenderer:
         bus.subscribe(EVT_MODULE_UNBOLTED,  self._on_module_unbolted)
         bus.subscribe(EVT_HULL_DAMAGE,      self._on_hull_damage)
         bus.subscribe(EVT_HULL_CRITICAL,    self._on_hull_critical)
+        bus.subscribe(EVT_WARP_JUMP,        self._on_warp_jump)
+        bus.subscribe(EVT_SECTOR_CLEAR,     self._on_sector_clear)
 
     def _on_slingshot(self, **_):
         self._flash_t   = 0.45
@@ -99,6 +107,14 @@ class VectorRenderer:
 
     def _on_hull_critical(self, **_):
         self._shake_trauma = min(1.0, self._shake_trauma + 0.4)
+
+    def _on_warp_jump(self, **_):
+        self._warp_t    = 0.55
+        self._flash_t   = 0.35
+        self._flash_col = (200, 220, 255)
+
+    def _on_sector_clear(self, sector_num=0, **_):
+        self._sector_hue_shift = (sector_num * 0.11) % 1.0
 
     # ------------------------------------------------------------------
     def draw(self, run_mgr, ship, dt: float = 0.016):
@@ -138,7 +154,127 @@ class VectorRenderer:
         self._draw_proximity_alarm(run_mgr, ship, t)
         self._draw_flash(dt)
         self._draw_spore_effect(ship, t)
+        self._draw_cargo_overlays(ship, t)
+        self._draw_warp_streak(dt)
         self._apply_screen_shake(dt)
+
+    # ------------------------------------------------------------------  WARP STREAK
+    def _draw_warp_streak(self, dt: float):
+        if self._warp_t <= 0:
+            return
+        W, H  = S.SCREEN_W, S.FLIGHT_H
+        cx, cy = W // 2, H // 2
+        frac   = self._warp_t / 0.55   # 1.0 → 0.0
+        surf   = pygame.Surface((W, H), pygame.SRCALPHA)
+        n_lines = 48
+        for i in range(n_lines):
+            ang   = math.tau * i / n_lines
+            # Streaks grow outward as warp intensifies
+            inner = int(frac * 30)
+            outer = int(40 + (1.0 - frac) * 420)
+            x1 = int(cx + math.cos(ang) * inner)
+            y1 = int(cy + math.sin(ang) * inner)
+            x2 = int(cx + math.cos(ang) * outer)
+            y2 = int(cy + math.sin(ang) * outer)
+            alpha = int(frac * 180)
+            hue   = (0.58 + i / n_lines * 0.25) % 1.0
+            col   = _hsv(hue, 0.7, 1.0)
+            pygame.draw.line(surf, (*col, alpha), (x1, y1), (x2, y2), 1)
+        # Bright core flash
+        core_a = int(frac * 220)
+        pygame.draw.circle(surf, (200, 220, 255, core_a), (cx, cy), int(frac * 55))
+        self.surface.blit(surf, (0, 0))
+        self._warp_t = max(0.0, self._warp_t - dt)
+
+    # ------------------------------------------------------------------  CARGO OVERLAYS
+    def _draw_cargo_overlays(self, ship, t: float):
+        cargo = getattr(ship, "cargo", None)
+        if cargo is None:
+            return
+        ctype = type(cargo).__name__
+        if ctype == "AcousticArchive":
+            self._draw_acoustic_static(cargo, t)
+        elif ctype in ("SentientPaperwork", "TriplicateForm"):
+            self._draw_form_popup(cargo, t)
+
+    def _draw_acoustic_static(self, cargo, t: float):
+        sl = cargo.sorrow_level
+        if sl < 0.05:
+            return
+        W, H = S.SCREEN_W, S.FLIGHT_H
+        surf  = pygame.Surface((W, H), pygame.SRCALPHA)
+        n_pixels = int(sl * 900)
+        for _ in range(n_pixels):
+            px = random.randint(0, W - 1)
+            py = random.randint(0, H - 1)
+            brightness = random.randint(60, 180)
+            a = int(sl * 200)
+            surf.set_at((px, py), (brightness, brightness, brightness, a))
+        # Desaturation vignette
+        desat_a = int(sl * 55)
+        pygame.draw.rect(surf, (0, 0, 0, desat_a), (0, 0, W, H))
+        # Edge noise strips (scanline density increase near edges)
+        for y in range(0, H, 2):
+            if random.random() < sl * 0.18:
+                alpha = int(sl * 90 * random.random())
+                pygame.draw.line(surf, (80, 80, 80, alpha), (0, y), (W, y), 1)
+        self.surface.blit(surf, (0, 0))
+        # Sorrow meter HUD element
+        font_xs = pygame.font.SysFont("monospace", 12)
+        bars  = int(sl * 8)
+        label = font_xs.render(
+            f"SIGNAL  {'|' * bars}{'·' * (8 - bars)}",
+            True, (int(160 * sl), int(80 * sl), int(30 * sl)))
+        self.surface.blit(label, (8, H - 22))
+
+    def _draw_form_popup(self, cargo, t: float):
+        if not cargo.popup_active:
+            return
+        W, H  = S.SCREEN_W, S.FLIGHT_H
+        frac  = cargo.popup_fraction   # 1.0→0.0 countdown
+        pulse = 0.6 + 0.4 * abs(math.sin(t * 6.0))
+        urgent = frac < 0.35
+
+        # Popup box centred in upper-third of screen
+        bw, bh = 460, 120
+        bx     = (W - bw) // 2
+        by     = H // 4 - bh // 2
+
+        border_col = (220, 40, 40) if urgent else (200, 160, 0)
+        bg_col     = (14, 8, 0) if urgent else (8, 12, 4)
+
+        pygame.draw.rect(self.surface, bg_col,    (bx, by, bw, bh))
+        pygame.draw.rect(self.surface, border_col, (bx, by, bw, bh), 2)
+        if urgent:
+            pulse_col = (int(220 * pulse), int(40 * pulse), 0)
+            pygame.draw.rect(self.surface, pulse_col, (bx - 2, by - 2, bw + 4, bh + 4), 1)
+
+        font_lg = pygame.font.SysFont("monospace", 16, bold=True)
+        font_sm = pygame.font.SysFont("monospace", 13)
+
+        title = font_lg.render("UNION FORM 27-B — IMMEDIATE COMPLIANCE REQUIRED",
+                               True, (220, 160, 0) if not urgent else (255, 80, 80))
+        self.surface.blit(title, (bx + 12, by + 10))
+
+        key_col = (0, 220, 100) if not urgent else (255, 200, 50)
+        key_s   = font_lg.render(f"[ PRESS  {cargo.popup_key_name} ]", True, key_col)
+        self.surface.blit(key_s, (bx + bw // 2 - key_s.get_width() // 2, by + 36))
+
+        # Countdown bar
+        bar_w = bw - 24
+        filled = int(bar_w * frac)
+        bar_col = (180, 40, 40) if urgent else (180, 140, 0)
+        pygame.draw.rect(self.surface, (20, 14, 4), (bx + 12, by + 72, bar_w, 12))
+        pygame.draw.rect(self.surface, bar_col,     (bx + 12, by + 72, filled, 12))
+        pygame.draw.rect(self.surface, border_col,  (bx + 12, by + 72, bar_w, 12), 1)
+
+        secs = cargo.popup_timer
+        timer_s = font_sm.render(f"{secs:.1f}s", True, (160, 130, 60))
+        self.surface.blit(timer_s, (bx + bw - timer_s.get_width() - 12, by + 90))
+
+        sub = font_sm.render("Penalty: hull damage.  Subsection 9, Union Charter.  Non-negotiable.",
+                             True, (80, 70, 50))
+        self.surface.blit(sub, (bx + 12, by + 92))
 
     def _apply_screen_shake(self, dt: float):
         if self._shake_trauma <= 0.01:
@@ -188,7 +324,7 @@ class VectorRenderer:
     def _draw_nebulae(self, t: float):
         surf = pygame.Surface((S.SCREEN_W, S.SCREEN_H), pygame.SRCALPHA)
         for x, y, r, base_hue, sat in self._nebulae:
-            hue = (base_hue + t * 0.0035) % 1.0
+            hue = (base_hue + self._sector_hue_shift + t * 0.0035) % 1.0
             col = _hsv(hue, sat * 0.60, 0.14)
             for scale, alpha in ((1.0, 20), (0.68, 32), (0.40, 44)):
                 pygame.draw.circle(surf, (*col, alpha), (x, y), int(r * scale))
@@ -519,8 +655,8 @@ class VectorRenderer:
                 pygame.draw.circle(surf, (br - 10, br - 10, br),
                                    (x, y), 2 if twinkle > 0.85 else 1)
             else:
-                neon = [(0, 230, 255), (230, 0, 255), (255, 190, 0),
-                        (0, 255, 128), (255, 60, 120)][int(hue * 5) % 5]
+                shifted_hue = (hue + self._sector_hue_shift) % 1.0
+                neon = _hsv(shifted_hue, 0.9, 1.0)
                 r = 2 if twinkle > 0.7 else 1
                 pygame.draw.circle(surf, neon, (x, y), r)
                 if twinkle > 0.88:

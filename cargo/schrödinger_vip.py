@@ -3,7 +3,7 @@ import random
 from cargo.cargo_base import BaseCargo
 from core.event_bus import bus, EVT_BAX_SPEAK
 
-_ALIVE_ODDS = [True, True, False]   # 2:1 alive bias
+_ALIVE_ODDS = [True, True, False]   # 2:1 alive bias until observed
 
 _BAX_UNOBSERVED = [
     "Don't open the box. I mean it. Actually, maybe open the box.",
@@ -28,7 +28,7 @@ class SchrodingerVIP(BaseCargo):
     """Ch.4: Passenger in quantum superposition — observation collapses state."""
 
     def __init__(self):
-        super().__init__("THE SCHRÖDINGER VIP")
+        super().__init__("SCHRÖDINGER VIP")
         self.alive_state: bool | None = None
         self._high_speed_t = 0.0
         self._comment_cd   = random.uniform(22.0, 38.0)
@@ -58,10 +58,5 @@ class SchrodingerVIP(BaseCargo):
         if self.alive_state is None and random.random() < 0.45:
             self.alive_state = random.choice(_ALIVE_ODDS)
 
-    def observe(self) -> str:
-        if self.alive_state is None:
-            self.alive_state = random.choice(_ALIVE_ODDS)
-        return "ALIVE" if self.alive_state else "DECEASED"
-
     def terminal_climax(self) -> str:
-        return "union_dispatcher"
+        return "gary"

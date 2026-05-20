@@ -16,7 +16,8 @@ from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
                              EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING,
                              EVT_COMMS_SPEAK, EVT_TETHER_SNAP, EVT_BAX_SPEAK,
                              EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_DEMO_NOTICE,
-                             EVT_JUMP_READY)
+                             EVT_JUMP_READY, EVT_WARP_JUMP, EVT_FINAL_SECTOR,
+                             EVT_RUN_START, EVT_SHOP_ENTER)
 from config import settings as S
 
 
@@ -180,6 +181,7 @@ class RunManager:
 
     # ------------------------------------------------------------------
     def start_run(self, ship):
+        bus.emit(EVT_RUN_START)
         self._sector_index = 0
         self._barges.clear()
         self._debris.clear()
@@ -312,6 +314,11 @@ class RunManager:
         self._check_comms(dt)
 
     def handle_key(self, event: pygame.event.Event):
+        # Route to cargo's key handler first (e.g. TriplicateForm popup)
+        if self._ship is not None and self._ship.cargo is not None:
+            if hasattr(self._ship.cargo, "handle_key"):
+                if self._ship.cargo.handle_key(event):
+                    return
         if event.key == pygame.K_j and self._sector_timer >= self._sector_dur:
             self._open_jump_terminal()
         elif event.key == pygame.K_k and not self._kress_called_this_sector:
@@ -521,6 +528,7 @@ class RunManager:
             self._advance_sector()
 
     def _advance_sector(self):
+        bus.emit(EVT_WARP_JUMP)
         sector_bonus = 4500
         self.meta.pay_off(sector_bonus)
         self._run_debt_reduced += sector_bonus
@@ -555,6 +563,7 @@ class RunManager:
         # Shop stop — signal game.py to open the shop before next sector loads
         if completed_sector in S.SHOP_SECTORS:
             self._shop_pending = True
+            bus.emit(EVT_SHOP_ENTER)
             return
 
         self._load_next_sector()
@@ -569,6 +578,11 @@ class RunManager:
         self._kress_called_this_sector = False
         self._shop_pending = False
         self._spawn_sector_objects()
+
+        # Final sector: announce to bax + extra immediate barge
+        if self._sector_index == S.SECTORS_PER_RUN - 1:
+            bus.emit(EVT_FINAL_SECTOR)
+            self._spawn_barge(immediate_chase=True)
 
         # Ambush: spawn an additional barge that's already hunting
         if self._sector.is_ambush:
@@ -605,6 +619,7 @@ class RunManager:
 
         # Barge spawn ramp — sector 1-2 are intro, then escalate.
         # Barges also deferred: first barge at 8s so player can orient.
+        # Final sector gets heavier: handled by _load_next_sector spawning one immediately.
         barge_count = 0
         if idx >= 2:
             barge_count = 1
@@ -613,6 +628,12 @@ class RunManager:
         barge_delay = max(4.0, 9.0 - idx * 0.5)
         for i in range(barge_count):
             self._spawn_queue.append((barge_delay + i * 6.0, "barge"))
+
+        # Final sector: queue a second deferred barge and extra debris
+        if idx == S.SECTORS_PER_RUN - 1:
+            self._spawn_queue.append((barge_delay + 3.0, "barge"))
+            for i in range(3):   # extra debris rocks
+                self._spawn_queue.append((2.0 + i * 2.0, "debris"))
 
         # Demolition notice — 35% chance from sector 2 onward
         if idx >= 1 and random.random() < 0.35:
