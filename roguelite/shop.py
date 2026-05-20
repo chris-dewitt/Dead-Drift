@@ -201,7 +201,7 @@ class ShopScreen:
             return
         # Deduct from run_debt_reduced and restore to meta.debt
         self.run_mgr._run_debt_reduced -= item.cost
-        self.run_mgr.meta.debt         += item.cost
+        self.run_mgr.meta.add_debt(item.cost)
         self._bought.add(self._cursor)
         item.apply(self.ship, self.run_mgr)
         self._flash(f"Purchased: {item.name}.")

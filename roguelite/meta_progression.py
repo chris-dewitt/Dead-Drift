@@ -53,6 +53,11 @@ class MetaProgression:
         if actual > 0:
             bus.emit(EVT_DEBT_UPDATE, delta=-actual, total=self.debt)
 
+    def add_debt(self, amount: int):
+        """Increase debt (shop purchases re-add previously reduced credits)."""
+        self._data["debt"] += amount
+        bus.emit(EVT_DEBT_UPDATE, delta=amount, total=self.debt)
+
     def clear_debt_chunk(self, amount: int = 50000):
         self._data["debt"] = max(0, self._data["debt"] - amount)
         bus.emit(EVT_DEBT_UPDATE, delta=-amount, total=self.debt)
