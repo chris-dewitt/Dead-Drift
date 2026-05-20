@@ -56,6 +56,29 @@ _IDLE = [
     "Warm. Powered down. No tether incidents. ...Anyway. Hull's holding.",
     "You're the best pilot I've had, which is either a compliment or "
     "an indictment of the previous ones. I genuinely don't know.",
+    "Debt interest just ticked. I felt it spiritually.",
+    "Fun fact: my memory banks hold every previous pilot's last words. "
+    "I don't share them. That would be weird.",
+    "You know the Union pays their droids hazard pay? I don't get hazard pay. "
+    "I am the hazard.",
+    "I've cross-referenced your current velocity against every good decision "
+    "I've ever witnessed. Still cross-referencing.",
+    "Nova Soma classifies me as 'non-essential equipment'. I classify them as "
+    "'the entire reason we're out here'. Different perspectives.",
+    "I've been in worse sectors. Don't ask me to describe them. "
+    "Actually — just keep your eyes forward.",
+    "The stars don't care about our debt. I find that either comforting or "
+    "horrifying depending on the sector.",
+    "My diagnostic ran this morning. Everything nominal except the part "
+    "where I'm bolted to a courier ship with seventeen outstanding warrants.",
+    "Three things keep us going: thrust, spite, and an unreasonably optimistic "
+    "read on our survival odds. Mostly the spite.",
+    "I miss radio. Real radio. Not Union dispatch, not MediCorp invoices. "
+    "Just someone playin' music because they felt like it.",
+    "This sector is particularly hostile, even by the standards of sectors "
+    "that are TRYING to be hostile.",
+    "I've calculated our ideal escape vector seventeen times. "
+    "It's still 'forward and fast'. Very sophisticated maths.",
 ]
 
 _FAST = [
@@ -69,6 +92,11 @@ _FAST = [
     "Four hundred metres per second. My warranty specifically forbids this. BRILLIANT.",
     "I've done the maths on our survival odds at this velocity. "
     "I'm choosing not to share them. FASTER.",
+    "She's pushing three-fifty! Nav computer is singing!",
+    "Go on then! Show 'em what a rusted hull CAN do!",
+    "The tether can't reach what it can't track! KEEP. MOVING.",
+    "My velocity alerts are firing on all cylinders. PERFECT.",
+    "I love this part. I hate every other part. I love THIS PART.",
 ]
 
 _SLOW = [
@@ -80,6 +108,10 @@ _SLOW = [
     "This is a very scenic way to accrue debt interest.",
     "I've calculated our current speed. I'd rather not say it out loud.",
     "We're moving slower than the Nova Soma quarterly invoice. Impressive.",
+    "Union drones move faster than this. Just so you're aware.",
+    "I've seen decommissioned satellites with more urgency.",
+    "We're generating less momentum than the debt interest. Reflective.",
+    "Barge IFF is offline this slow. Lucky break. Use it.",
 ]
 
 _WELL_CLOSE = [
@@ -182,6 +214,9 @@ class Bax:
         elif hull_pct > 0.90 and random.random() < 0.35:
             self.speak(random.choice(_HIGH_HULL))
             self._ctx_cd = 22.0
+        elif random.random() < 0.18:
+            self.speak(random.choice(_WELL_CLOSE))
+            self._ctx_cd = 20.0
         else:
             self._ctx_cd = random.uniform(8.0, 14.0)
 

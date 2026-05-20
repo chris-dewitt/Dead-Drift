@@ -80,6 +80,10 @@ SLINGSHOT_SPEED   = 220.0    # px/s needed to count
 SLINGSHOT_RANGE   = 190.0    # px — must have been this close to a well
 SLINGSHOT_BONUS   = 5.0      # seconds shaved off jump timer
 
+# --- Shop ---
+SHOP_SECTORS          = {3, 6}            # 0-based sector indices that trigger shop
+JAMMER_COOLDOWN       = 90.0             # seconds barge intercept suppressed after buying jammer
+
 # --- Tether ---
 TETHER_FORCE      = 1200.0        # spring constant for EM harpoon
 TETHER_MAX_LENGTH = 350.0         # px before it snaps on its own

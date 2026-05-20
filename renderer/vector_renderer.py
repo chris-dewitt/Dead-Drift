@@ -51,6 +51,12 @@ class VectorRenderer:
         # Ember particles trailing exhaust — (x, y, vx, vy, age, lifetime, hue)
         self._embers: list[list[float]] = []
 
+        # Explosion/hit particle system — [x, y, vx, vy, age, lifetime, hue, size]
+        self._explosions: list[list[float]] = []
+        self._was_alive = True
+        self._last_ship_x = 640.0
+        self._last_ship_y = 320.0
+
         # Screen shake state: trauma decays exponentially; offset is random per frame
         self._shake_trauma = 0.0   # 0.0 (none) → 1.0 (huge)
 
@@ -86,8 +92,10 @@ class VectorRenderer:
         self._flash_col = (255, 60, 20)
 
     def _on_hull_damage(self, amount=0.0, **_):
-        # Tiny shake on small hits, big shake on hard hits
         self._shake_trauma = min(1.0, self._shake_trauma + min(0.45, amount * 0.04))
+        if amount >= 5.0:
+            n = max(4, int(amount * 0.8))
+            self._spawn_explosion(self._last_ship_x, self._last_ship_y, n, 0.28)
 
     def _on_hull_critical(self, **_):
         self._shake_trauma = min(1.0, self._shake_trauma + 0.4)
@@ -95,6 +103,14 @@ class VectorRenderer:
     # ------------------------------------------------------------------
     def draw(self, run_mgr, ship, dt: float = 0.016):
         t = pygame.time.get_ticks() / 1000.0
+        # Track ship position for effects; detect ship death
+        self._last_ship_x = ship.pos.x
+        self._last_ship_y = ship.pos.y
+        if self._was_alive and not ship.is_alive:
+            self._spawn_explosion(self._last_ship_x, self._last_ship_y, 32, 1.4)
+            self._flash_t   = 0.9
+            self._flash_col = (255, 160, 40)
+        self._was_alive = ship.is_alive
         self._draw_nebulae(t)
         self._draw_dust(t)
         self._draw_planets(t)
@@ -115,6 +131,8 @@ class VectorRenderer:
         self._draw_velocity_indicator(ship)
         self._update_embers(dt)
         self._draw_embers()
+        self._update_explosions(dt)
+        self._draw_explosions()
         self._draw_ship(ship, t)
         self._draw_exhaust(ship, t)
         self._draw_proximity_alarm(run_mgr, ship, t)
@@ -1172,6 +1190,20 @@ class VectorRenderer:
                 pygame.draw.line(self.surface, (255, 200, 100),
                                  (pcx, pcy), (pcx - 10, pcy), 1)
 
+        # Plasma torch arcs when actively cutting hull
+        if state == BargeState.TORCH and ship is not None:
+            sx_t = int(ship.pos.x)
+            sy_t = int(ship.pos.y)
+            torch_pulse = 0.5 + 0.5 * abs(math.sin(t * 14.0))
+            for arc_i in range(3):
+                ang_off = t * 7.0 + arc_i * math.tau / 3
+                arc_len = int(22 + 12 * math.sin(t * 5.0 + arc_i))
+                ax = int(bx + math.cos(ang_off) * arc_len)
+                ay = int(by + math.sin(ang_off) * arc_len)
+                arc_col = (int(255 * torch_pulse), int(120 * torch_pulse), 0)
+                pygame.draw.line(self.surface, arc_col, (bx, by), (ax, ay), 2)
+                pygame.draw.circle(self.surface, (255, 200, 50), (ax, ay), 2)
+
         # Forward sensor dome — eye-like, glows red when hunting
         dome_col_outer = (60, 14, 14) if state in ("chase", "clamp", "torch") else (30, 30, 50)
         dome_col_iris  = (220, 50, 30) if state in ("chase", "clamp", "torch") else (80, 80, 120)
@@ -1204,23 +1236,93 @@ class VectorRenderer:
         self.surface.blit(surface_404, (bx - surface_404.get_width() // 2,
                                         by - surface_404.get_height() // 2))
 
-        # Tether — jagged lightning polyline
+        # Tether — double-layered crackling EM beam
         tether = getattr(barge, "_tether", None)
         if tether and tether.is_active and ship and ship.is_alive:
             sx, sy  = int(ship.pos.x), int(ship.pos.y)
-            stretch = min(1.0, math.hypot(sx-bx, sy-by) / S.TETHER_MAX_LENGTH)
-            tr = int(40  + 195 * stretch)
-            tg = int(200 - 165 * stretch)
-            pts = [(bx, by)]
-            for k in range(1, 7):
-                frac = k / 7
-                mx   = int(bx + (sx-bx) * frac)
-                my   = int(by + (sy-by) * frac)
-                jit  = int((1 - abs(frac - 0.5) * 2) * 6 * stretch)
-                pts.append((mx + random.randint(-jit, jit),
-                            my + random.randint(-jit, jit)))
-            pts.append((sx, sy))
-            pygame.draw.lines(self.surface, (min(255,tr), max(0,tg), 40), False, pts, 2)
+            dist    = math.hypot(sx - bx, sy - by)
+            stretch = min(1.0, dist / S.TETHER_MAX_LENGTH)
+            # Color shifts orange → red as stretch increases
+            tr = int(40  + 215 * stretch)
+            tg = int(180 - 150 * stretch)
+            jitter_max = int((1 - abs(0.5 - 0.5) * 2) * 10 * (0.4 + stretch))
+
+            # Glow pass (thick, dim)
+            glow_pts = [(bx, by)]
+            for k in range(1, 9):
+                frac = k / 9
+                mx = int(bx + (sx - bx) * frac)
+                my = int(by + (sy - by) * frac)
+                jit = int((1 - abs(frac - 0.5) * 2) * 8 * (0.4 + stretch))
+                glow_pts.append((mx + random.randint(-jit, jit),
+                                 my + random.randint(-jit, jit)))
+            glow_pts.append((sx, sy))
+            glow_col = (min(255, tr // 2), max(0, tg // 3), 0)
+            if len(glow_pts) >= 2:
+                pygame.draw.lines(self.surface, glow_col, False, glow_pts, 5)
+
+            # Core pass (thin, bright, fresh jitter)
+            core_pts = [(bx, by)]
+            for k in range(1, 9):
+                frac = k / 9
+                mx = int(bx + (sx - bx) * frac)
+                my = int(by + (sy - by) * frac)
+                jit = int((1 - abs(frac - 0.5) * 2) * 5 * stretch)
+                core_pts.append((mx + random.randint(-jit, jit),
+                                 my + random.randint(-jit, jit)))
+            core_pts.append((sx, sy))
+            core_col = (min(255, tr), max(0, tg), 60)
+            if len(core_pts) >= 2:
+                pygame.draw.lines(self.surface, core_col, False, core_pts, 2)
+
+            # Crackle spark nodes
+            for k in range(1, 4):
+                frac = k / 4
+                nx = int(bx + (sx - bx) * frac + random.randint(-4, 4))
+                ny = int(by + (sy - by) * frac + random.randint(-4, 4))
+                pygame.draw.circle(self.surface, (255, min(255, tg + 80), 80), (nx, ny), 2)
+
+    # ------------------------------------------------------------------  EXPLOSIONS
+    def _spawn_explosion(self, cx: float, cy: float, n: int, intensity: float):
+        """Burst of n particles from (cx, cy).  intensity scales lifetime+size."""
+        import math as _math
+        for _ in range(n):
+            ang  = random.uniform(0.0, _math.tau)
+            spd  = random.uniform(18.0, 140.0) * intensity
+            life = random.uniform(0.35, 0.9) * intensity
+            hue  = random.uniform(0.02, 0.14)  # orange/yellow/red range
+            size = random.uniform(1.5, 4.5) * intensity
+            self._explosions.append([
+                cx, cy,
+                _math.cos(ang) * spd, _math.sin(ang) * spd,
+                0.0, life, hue, size
+            ])
+
+    def _update_explosions(self, dt: float):
+        for p in self._explosions:
+            p[0] += p[2] * dt   # x
+            p[1] += p[3] * dt   # y
+            p[4] += dt           # age
+            p[3] += 12.0 * dt   # slight gravity pull downward
+            p[2] *= 0.92         # drag
+        self._explosions = [p for p in self._explosions if p[4] < p[5]]
+
+    def _draw_explosions(self):
+        for x, y, _, __, age, life, hue, size in self._explosions:
+            if not (0 <= int(x) < S.SCREEN_W and 0 <= int(y) < S.FLIGHT_H + S.COCKPIT_H):
+                continue
+            frac = 1.0 - age / life          # 1→0 as it dies
+            # Shift hue orange→yellow→white as it cools
+            draw_hue = (hue + (1 - frac) * 0.06) % 1.0
+            bright   = max(0.0, frac)
+            sat      = max(0.0, frac * 0.8)
+            col = _hsv(draw_hue, sat, bright)
+            r = max(1, int(size * frac))
+            pygame.draw.circle(self.surface, col, (int(x), int(y)), r)
+            # Glow halo on fresh particles
+            if frac > 0.6:
+                glow_col = _hsv(draw_hue, sat * 0.4, bright * 0.4)
+                pygame.draw.circle(self.surface, glow_col, (int(x), int(y)), r + 2)
 
     # ------------------------------------------------------------------  EFFECTS
     def _draw_proximity_alarm(self, run_mgr, ship, t: float):

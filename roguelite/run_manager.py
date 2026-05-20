@@ -160,6 +160,7 @@ class RunManager:
         self._pending_advance  = False
         self._jump_ready_fired = False   # prevents duplicate jump-ready sound per sector
         self._run_debt_reduced = 0   # credits recovered this run (shown in HUD)
+        self._shop_pending     = False   # True when a shop stop should open
 
         # Deferred object spawn queue — (trigger_time, kind) pairs
         # Populated by _spawn_sector_objects(), drained in update()
@@ -193,6 +194,7 @@ class RunManager:
         self._jump_ready_fired   = False
         self._kress_called_this_sector = False
         self._run_debt_reduced   = 0
+        self._shop_pending       = False
         self._sector_slingshots  = 0
         self._sector_snaps       = 0
         self._sector_credits     = 0
@@ -542,6 +544,7 @@ class RunManager:
         self._sector_credits    = 0
         self._sector_start_hull = hull_now
 
+        completed_sector = self._sector_index
         self._sector_index += 1
         bus.emit(EVT_SECTOR_CLEAR, sector_num=self._sector_index)
 
@@ -549,6 +552,14 @@ class RunManager:
             bus.emit(EVT_RUN_END, success=True)
             return
 
+        # Shop stop — signal game.py to open the shop before next sector loads
+        if completed_sector in S.SHOP_SECTORS:
+            self._shop_pending = True
+            return
+
+        self._load_next_sector()
+
+    def _load_next_sector(self):
         self._sector       = generate_sector(self._sector_index, self._difficulty())
         self._sector_timer = 0.0
         self._jump_ready_fired = False
@@ -556,6 +567,7 @@ class RunManager:
         self._spawn_queue.clear()
         self._sling_well_t.clear()
         self._kress_called_this_sector = False
+        self._shop_pending = False
         self._spawn_sector_objects()
 
         # Ambush: spawn an additional barge that's already hunting

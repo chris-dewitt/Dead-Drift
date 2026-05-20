@@ -10,6 +10,7 @@ class GameState(Enum):
     SECTOR_JUMP    = auto()   # transition between sectors
     GAME_OVER      = auto()   # debt cleared or permanent death
     DELIVERY       = auto()   # end-of-run delivery sequence
+    SHOP           = auto()   # mid-run black market between sectors
 
 
 class StateManager:
