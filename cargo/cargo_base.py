@@ -24,5 +24,9 @@ class BaseCargo(ABC):
         """Return the NPC type string for the chapter's terminal showdown."""
         ...
 
+    def state_for_terminal(self) -> str | None:
+        """Optional: state descriptor passed to the climax NPC's run_context."""
+        return None
+
     def __str__(self) -> str:
         return self.name

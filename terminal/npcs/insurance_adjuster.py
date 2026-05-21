@@ -96,6 +96,50 @@ class InsuranceAdjuster(BaseNPC):
 
     # ------------------------------------------------------------------
     def _intro_line(self) -> str:
+        cargo_state = self._ctx.get("cargo_state")
+
+        # VIP-specific openings — Morwenna reacts to the passenger's quantum state
+        if cargo_state == "deceased":
+            return (
+                "*click* — Claims Division, Morwenna speaking. "
+                "Reference number? *typing* "
+                "...Yes. VIP passenger manifest. "
+                "Status on arrival: DECEASED. "
+                "*more typing* "
+                "Noting cause of death as 'observation collapse', "
+                "category seven, non-covered under standard transit policy. "
+                "There is a clause. Clause 14-Q. Quantum-state cargo. "
+                "I am aware that is a niche clause. We have niche clauses. "
+                "Claim denied. Was there anything else? "
+                "...Oh. You want to discuss it. *pause* Fine."
+            )
+        if cargo_state == "alive":
+            return (
+                "*click* — Claims Division, Morwenna speaking. "
+                "Reference number? *typing* "
+                "...Yes. VIP passenger arrived intact. "
+                "*pause* "
+                "That does not mean the claim is approved. "
+                "The passenger has already filed seven complaints en route. "
+                "Each complaint generates a counter-charge against your delivery fee. "
+                "Net result: claim under review, charges applied. "
+                "Was there anything else? "
+                "...Oh. You want to discuss it. *pause* Fine."
+            )
+        if cargo_state == "unobserved":
+            return (
+                "*click* — Claims Division, Morwenna speaking. "
+                "Reference number? *typing* "
+                "...Yes. VIP passenger status: indeterminate. "
+                "The manifest reads 'in superposition'. "
+                "Nova Soma does not insure quantum-state cargo. "
+                "Specifically. There is a clause. Clause 14-Q. "
+                "Claim is denied pending direct observation, "
+                "which we will not be performing. That is your problem. "
+                "Was there anything else? "
+                "...Oh. You want to discuss it. *pause* Fine."
+            )
+
         hull_pct = self._ctx.get("hull_pct", 1.0)
         if hull_pct < 0.35:
             return (

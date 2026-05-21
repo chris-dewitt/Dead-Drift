@@ -2,7 +2,7 @@ from __future__ import annotations
 import math
 import pygame
 from config import settings as S
-from core.event_bus import bus, EVT_BAX_SPEAK, EVT_COMMS_SPEAK
+from core.event_bus import bus, EVT_BAX_SPEAK, EVT_COMMS_SPEAK, EVT_DEBT_UPDATE
 
 _STRIP_TOP = S.SCREEN_H - S.COCKPIT_H   # y=640
 _INFO_W    = 162                          # left info panel width
@@ -64,19 +64,31 @@ class CockpitRenderer:
         self._state   = "idle"     # "typing" | "holding" | "idle"
         self._queue: list[tuple[str, str]] = []
 
+        # Floating debt-delta numbers — each entry is [amount, age, lifetime]
+        self._debt_floats: list[list[float]] = []
+
         bus.subscribe(EVT_BAX_SPEAK,   self._on_bax_speak)
         bus.subscribe(EVT_COMMS_SPEAK, self._on_comms_speak)
+        bus.subscribe(EVT_DEBT_UPDATE, self._on_debt_update)
 
     # ------------------------------------------------------------------
-    def _on_bax_speak(self, line: str, **_):
-        self._enqueue("BAX", line)
+    def _on_bax_speak(self, line: str, priority: bool = False, **_):
+        self._enqueue("BAX", line, priority)
 
     def _on_comms_speak(self, speaker: str, line: str, **_):
         self._enqueue(speaker, line)
 
-    def _enqueue(self, speaker: str, line: str):
+    def _on_debt_update(self, delta: int, total: int, **_):
+        if delta == 0:
+            return
+        self._debt_floats.append([float(delta), 0.0, 1.8])
+
+    def _enqueue(self, speaker: str, line: str, priority: bool = False):
         if self._state == "idle":
             self._start(speaker, line)
+        elif priority:
+            # Tutorial / urgent lines jump the queue but never interrupt mid-line
+            self._queue.insert(0, (speaker, line))
         else:
             self._queue.append((speaker, line))
 
@@ -112,6 +124,11 @@ class CockpitRenderer:
                     spk, line = self._queue.pop(0)
                     self._start(spk, line)
 
+        # Age debt floats and drop expired
+        for f in self._debt_floats:
+            f[1] += dt
+        self._debt_floats = [f for f in self._debt_floats if f[1] < f[2]]
+
     def draw(self, t: float):
         self._draw_strip()
         self._draw_info_panel()
@@ -143,7 +160,20 @@ class CockpitRenderer:
         # Debt
         debt = self._meta.debt if self._meta else 0
         debt_col = (255, 55, 55) if debt > 40000 else S.AMBER_TERM
-        surf.blit(font.render(f"DEBT  {debt:>9,} cr", True, debt_col), (x, y))
+        debt_surf = font.render(f"DEBT  {debt:>9,} cr", True, debt_col)
+        surf.blit(debt_surf, (x, y))
+
+        # Floating delta numbers — drift upward and fade
+        for i, (amt, age, lifetime) in enumerate(self._debt_floats):
+            t_norm = age / lifetime
+            alpha  = max(0, int(235 * (1.0 - t_norm)))
+            y_off  = int(-14 * t_norm) - i * 2
+            sign   = "+" if amt > 0 else "-"
+            col    = (220, 80, 80) if amt > 0 else (80, 220, 110)
+            f_surf = font.render(f"{sign}{abs(int(amt)):,}", True, col)
+            f_surf.set_alpha(alpha)
+            surf.blit(f_surf, (x + debt_surf.get_width() + 6, y + y_off))
+
         y += lh + 1
 
         # Clone count
