@@ -265,8 +265,12 @@ class RunManager:
             self._tutorial.update(dt, self)
 
         cargo = self._ship.cargo
-        if cargo is not None and hasattr(cargo, "update"):
-            cargo.update(dt, self._ship)
+        if cargo is not None:
+            if hasattr(cargo, "set_nearest_barge") and self._barges:
+                nearest = min((b.pos - self._ship.pos).length() for b in self._barges)
+                cargo.set_nearest_barge(nearest)
+            if hasattr(cargo, "update"):
+                cargo.update(dt, self._ship)
 
         for barge in self._barges[:]:
             barge.update(dt)
@@ -479,6 +483,9 @@ class RunManager:
                      "run_credits":  self._run_debt_reduced}
         if self._ship is not None:
             ctx["hull_pct"] = self._ship.hull / S.HULL_MAX
+            cargo = self._ship.cargo
+            if cargo is not None and hasattr(cargo, "state_for_terminal"):
+                ctx["cargo_state"] = cargo.state_for_terminal()
         if hasattr(self, "meta"):
             ctx["debt"] = self.meta.debt
         return ctx

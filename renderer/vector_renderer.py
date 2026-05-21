@@ -197,7 +197,7 @@ class VectorRenderer:
         ctype = type(cargo).__name__
         if ctype == "AcousticArchive":
             self._draw_acoustic_static(cargo, t)
-        elif ctype in ("SentientPaperwork", "TriplicateForm"):
+        elif ctype == "SentientPaperwork":
             self._draw_form_popup(cargo, t)
 
     def _draw_acoustic_static(self, cargo, t: float):

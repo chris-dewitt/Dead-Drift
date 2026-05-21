@@ -51,7 +51,7 @@ class TutorialManager:
 
         ready = [e for e in self._queue if e[0] <= self._t]
         for entry in ready:
-            bus.emit(EVT_BAX_SPEAK, line=entry[1])
+            bus.emit(EVT_BAX_SPEAK, priority=True, line=entry[1])
             self._queue.remove(entry)
 
         # Proactive well tip — fires when ship first drifts close to a gravity well
@@ -68,7 +68,7 @@ class TutorialManager:
         if beat_id in self._seen:
             return
         self._seen.add(beat_id)
-        bus.emit(EVT_BAX_SPEAK, line=line)
+        bus.emit(EVT_BAX_SPEAK, priority=True, line=line)
 
     def _on_run_start(self, **_) -> None:
         t = self._t
