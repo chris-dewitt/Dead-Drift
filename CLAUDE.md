@@ -134,11 +134,12 @@ The HUD degrades as hull integrity drops.
 ## PART 2 — ROGUELITE STRUCTURE
 
 ### Run Structure
-- 10 sectors per run (`SECTORS_PER_RUN = 10`)
+- 5 sectors per run (`SECTORS_PER_RUN = 5`)
 - Each sector: 20s minimum flight timer, then `J` to jump
 - Sector difficulty scales: `1.0 + (sector_index / SECTORS_PER_RUN)`
 - Ambush sectors spawn a barge immediately on entry
-- Completing all 10 sectors = run success → `meta.clear_debt_chunk()`
+- Shop stops at sector indices `{1, 3}` (after sectors 2 and 4)
+- Completing all 5 sectors = run success → delivery sequence → `meta.clear_debt_chunk()`
 
 ### Meta-Progression (JSON-persisted in `save/meta.json`)
 - `debt` — running total owed to clone corp
@@ -316,7 +317,7 @@ dead-drift/
 | `EVT_BARGE_NEARBY` | barge within 320px |
 | `EVT_CANISTER_GRAB` | fuel canister picked up |
 | `EVT_SECTOR_CLEAR` | J-jump confirmed |
-| `EVT_RUN_END` | 10 sectors cleared or aborted |
+| `EVT_RUN_END` | 5 sectors cleared or aborted |
 
 ### Controls
 | Key | Action |
@@ -343,7 +344,7 @@ dead-drift/
 ### Working
 - ✅ Flight physics — thrust, gravity wells, wrapping, tether snap
 - ✅ Loadout draft → FLIGHT state transition
-- ✅ Sector timer HUD + J-to-jump (10 sectors)
+- ✅ Sector timer HUD + J-to-jump (5 sectors)
 - ✅ Psychedelic vector renderer: hue-cycling wells, chromatic trail, exhaust plume
 - ✅ Starfield with neon accent tier
 - ✅ Debris field (7 tumbling rocks, collision damage)

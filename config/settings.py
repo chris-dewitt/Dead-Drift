@@ -32,9 +32,9 @@ SHIP_MASS         = 1.0
 
 # --- Guns ---
 BULLET_SPEED          = 860.0     # px/s
-BULLET_LIFETIME       = 0.52      # seconds before bullet expires
+BULLET_LIFETIME       = 0.68      # seconds before bullet expires
 GUN_COOLDOWN          = 0.17      # seconds between shots
-GUN_MALFUNCTION_CHANCE = 0.07     # probability per shot of fizzle
+GUN_MALFUNCTION_CHANCE = 0.04     # probability per shot of fizzle
 GUN_JAM_DURATION      = 2.2       # seconds gun is out after malfunction
 
 # --- HUD Glitch Thresholds ---
@@ -81,7 +81,7 @@ SLINGSHOT_RANGE   = 190.0    # px — must have been this close to a well
 SLINGSHOT_BONUS   = 5.0      # seconds shaved off jump timer
 
 # --- Shop ---
-SHOP_SECTORS          = {3, 6}            # 0-based sector indices that trigger shop
+SHOP_SECTORS          = {1, 3}            # 0-based sector indices that trigger shop (after sector 2 and 4)
 JAMMER_COOLDOWN       = 90.0             # seconds barge intercept suppressed after buying jammer
 
 # --- TriplicateForm (Ch.3 cargo) ---
@@ -90,9 +90,9 @@ FORM_TRIGGER_MAX = 38.0
 FORM_TIMEOUT     = 6.0           # seconds to respond before penalty
 
 # --- Tether ---
-TETHER_FORCE      = 1200.0        # spring constant for EM harpoon
+TETHER_FORCE      = 780.0         # spring constant for EM harpoon
 TETHER_MAX_LENGTH = 350.0         # px before it snaps on its own
-SNAP_VELOCITY     = 500.0         # drift speed needed to snap tether
+SNAP_VELOCITY     = 200.0         # lateral drift speed needed to snap tether
 
 # --- Paths ---
 DATA_DIR          = "data"

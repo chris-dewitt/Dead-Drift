@@ -489,11 +489,11 @@ class Bax:
         self.speak(random.choice([
             "Last sector. Everything they've got is coming for us. "
             "Everything we've got is going into this. Let's DO it.",
-            "Final run. Two barges, heavy rocks, all our worst options. "
+            "Final sector. Two barges, heavy rocks, all our worst options. "
             "Statistically we've survived worse. Once. Barely.",
-            "This is the last one. After this: debt reduction, a hot meal, "
-            "and a very long time NOT being in space. MOVE.",
-            "Sector ten. The gauntlet. I've run the numbers. "
+            "This is sector five. Last one. After this: debt reduction, "
+            "drop-off confirmed, and a very long time NOT being in space. MOVE.",
+            "Sector five. The gauntlet. I've run the numbers. "
             "Our odds are 'possible'. That's the best I've got. GO.",
         ]))
 

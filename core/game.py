@@ -260,19 +260,36 @@ class Game:
             f"SECTOR  {min(rm.sector_num, S.SECTORS_PER_RUN)} / {S.SECTORS_PER_RUN}",
             True, S.GREY_DEAD,
         )
-        self.screen.blit(sec_txt, (sec_w // 2 - sec_txt.get_width() // 2, 20))
+        self.screen.blit(sec_txt, (sec_w // 2 - sec_txt.get_width() // 2, 12))
 
-        # Sector name + "formerly" — the corporate rebrand
-        sector = rm.sector
-        if sector is not None and getattr(sector, "name", ""):
-            name_surf = font_hd.render(sector.name, True, (170, 170, 110))
-            self.screen.blit(name_surf,
-                             (sec_w // 2 - name_surf.get_width() // 2, 74))
-            if sector.formerly:
-                fm_surf = font_sm.render(
-                    f"(formerly: {sector.formerly})", True, (95, 95, 95))
-                self.screen.blit(fm_surf,
-                                 (sec_w // 2 - fm_surf.get_width() // 2, 92))
+        # 5-pip run progress bar
+        pip_w, pip_h, pip_gap = 14, 8, 4
+        total_pip_w = S.SECTORS_PER_RUN * pip_w + (S.SECTORS_PER_RUN - 1) * pip_gap
+        pip_x0 = sec_w // 2 - total_pip_w // 2
+        pip_y  = 30
+        pulse  = 0.55 + 0.45 * math.sin(t * 4.0)
+        for i in range(S.SECTORS_PER_RUN):
+            px = pip_x0 + i * (pip_w + pip_gap)
+            if i + 1 < rm.sector_num:          # completed
+                col = (180, 120, 0)
+            elif i + 1 == rm.sector_num:        # current
+                col = (int(0 + 200 * pulse), int(200 * pulse), int(50 * pulse))
+            else:                               # upcoming
+                col = (30, 30, 35)
+            pygame.draw.rect(self.screen, col, (px, pip_y, pip_w, pip_h))
+            pygame.draw.rect(self.screen, (60, 50, 20), (px, pip_y, pip_w, pip_h), 1)
+
+        # Label upcoming shop stops and the delivery
+        pip_label_font = pygame.font.SysFont("monospace", 9)
+        for i in range(S.SECTORS_PER_RUN):
+            px = pip_x0 + i * (pip_w + pip_gap)
+            if i in S.SHOP_SECTORS:
+                lbl = pip_label_font.render("S", True, (140, 100, 0))
+                self.screen.blit(lbl, (px + pip_w // 2 - lbl.get_width() // 2, pip_y - 10))
+        # Delivery indicator after the last pip
+        del_x = pip_x0 + S.SECTORS_PER_RUN * (pip_w + pip_gap)
+        dlbl = pip_label_font.render("DROP", True, (0, 160, 90))
+        self.screen.blit(dlbl, (del_x, pip_y))
 
         if rm.jump_ready:
             jump_txt = font.render("[ J ]  JUMP READY", True, S.GREEN_TERM)
@@ -280,13 +297,25 @@ class Game:
             jump_txt = font.render(
                 f"JUMP IN  {rm.jump_cooldown:>4.0f}s", True, S.GREY_DEAD,
             )
-        self.screen.blit(jump_txt, (sec_w // 2 - jump_txt.get_width() // 2, 38))
+        self.screen.blit(jump_txt, (sec_w // 2 - jump_txt.get_width() // 2, 48))
 
         # Speed readout
         speed     = self.ship.body.speed()
         speed_col = (255, 120, 0) if speed > 500 else S.GREY_DEAD
         spd_txt   = font.render(f"{speed:>5.0f} m/s", True, speed_col)
-        self.screen.blit(spd_txt, (sec_w // 2 - spd_txt.get_width() // 2, 56))
+        self.screen.blit(spd_txt, (sec_w // 2 - spd_txt.get_width() // 2, 64))
+
+        # Sector name + "formerly" — the corporate rebrand
+        sector = rm.sector
+        if sector is not None and getattr(sector, "name", ""):
+            name_surf = font_hd.render(sector.name, True, (170, 170, 110))
+            self.screen.blit(name_surf,
+                             (sec_w // 2 - name_surf.get_width() // 2, 84))
+            if sector.formerly:
+                fm_surf = font_sm.render(
+                    f"(formerly: {sector.formerly})", True, (95, 95, 95))
+                self.screen.blit(fm_surf,
+                                 (sec_w // 2 - fm_surf.get_width() // 2, 102))
 
         # Debt ticker — bottom-left
         interest_per_sec = max(0.01, self.meta.debt * S.DEBT_INTEREST_RATE)
@@ -389,7 +418,11 @@ class Game:
 
         # Footer
         pygame.draw.line(panel, (0, 130, 60, a), (24, H - 38), (W - 24, H - 38), 1)
-        foot = font_sm.render("// JUMPING TO NEXT SECTOR //", True, (90, 200, 110))
+        is_final = stats['sector'] >= S.SECTORS_PER_RUN
+        foot_str = "// DELIVERY RUN — CARGO DROP-OFF NEXT //" if is_final \
+            else f"// SECTOR {stats['sector'] + 1} OF {S.SECTORS_PER_RUN} LOADING //"
+        foot_col = (100, 255, 160) if is_final else (90, 200, 110)
+        foot = font_sm.render(foot_str, True, foot_col)
         foot.set_alpha(a)
         panel.blit(foot, (W // 2 - foot.get_width() // 2, H - 28))
 
@@ -616,7 +649,7 @@ class Game:
         font_lore = pygame.font.SysFont("monospace", 13)
         lore_lines = [
             "Union of Repo Men, Local 404. They will come for what you carry.",
-            "Fly fast.  Drift hard.  Snap the tether.  Don't die again.",
+            "5 sectors → cargo drop-off → debt reduction.  Snap the tether.  Don't die again.",
         ]
         for i, line in enumerate(lore_lines):
             s = font_lore.render(line, True, (75, 75, 95))
@@ -679,10 +712,12 @@ class Game:
         hdr = font_h.render("PILOT MANIFEST", True, (120, 200, 255))
         self.screen.blit(hdr, (panel.left + 12, panel.top + 8))
 
+        delivery_status = "UNLOCKED" if self.meta.chapters_completed else "COMPLETE A RUN"
         rows = [
-            ("STATUS", "ALIVE-ISH" if self.meta.clone_count > 0 else "ROOKIE"),
-            ("DEBT TIER", "CRUSHING" if self.meta.debt > 50000 else "MANAGEABLE"),
-            ("LICENCE", "PROVISIONAL // L-404"),
+            ("STATUS",   "ALIVE-ISH" if self.meta.clone_count > 0 else "ROOKIE"),
+            ("DEBT",     "CRUSHING"  if self.meta.debt > 50000 else "MANAGEABLE"),
+            ("DELIVERY", delivery_status),
+            ("LICENCE",  "PROVISIONAL // L-404"),
         ]
         for i, (k, v) in enumerate(rows):
             ks = font_v.render(f"{k:<10}", True, (90, 140, 180))
