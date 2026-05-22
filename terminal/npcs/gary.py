@@ -89,6 +89,19 @@ class Gary(BaseNPC):
                 "I'm twenty seconds from your hull. Outstanding fees. "
                 "Power down NOW or this gets much worse for both of us.",
             ])
+        run_snaps = self._ctx.get("run_snaps", 0)
+        if run_snaps >= 2:
+            return random.choice([
+                f"Gary Pruitt, Local 404. You've snapped {run_snaps} of our harpoon "
+                "cables this run. That's a property damage report on top of "
+                "outstanding fees. Claims are already filing. Power down.",
+                f"Gary Pruitt. I've been watchin' you on sector feed. "
+                f"{run_snaps} harpoon snaps. Our tech team is LIVID. "
+                "Outstanding fees, plus cable replacement costs. Power down.",
+                f"Gary Pruitt, Local 404. Those harpoon cables aren't free. "
+                f"{run_snaps} of 'em, written off this run. Neither is your debt. "
+                "Power down and we'll talk about the damages.",
+            ])
         hull_pct = self._ctx.get("hull_pct", 1.0)
         sector   = self._ctx.get("sector_index", 0)
         if hull_pct < 0.30:
@@ -411,6 +424,16 @@ class Gary(BaseNPC):
                 "...You know, most people just offer credits. Or they apologize. "
                 "Or they mention their kids. "
                 "Any of those would 'onestly be a nice change of pace.",
+            ])
+
+        # Run history callbacks — slingshots show Gary you know what you're doing
+        run_slingshots = self._ctx.get("run_slingshots", 0)
+        if run_slingshots >= 2 and self._turn <= 2 and random.random() < 0.30:
+            return random.choice([
+                f"You've been slingin' round them gravity wells like a professional. "
+                "Proper navigation. Doesn't waive the fees, mind. Power down.",
+                f"Two gravity assists at least. You know your way round a sector. "
+                "Shame about the outstanding debt. Power down.",
             ])
 
         # Cross-NPC callbacks mixed in with filler

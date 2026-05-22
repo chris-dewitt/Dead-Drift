@@ -5,7 +5,7 @@ import pygame
 
 from config import settings as S
 from core.state_manager import StateManager, GameState
-from core.event_bus import bus, EVT_SHIP_DESTROYED, EVT_RUN_END, EVT_TORCH_ACTIVE, EVT_DEBT_DING
+from core.event_bus import bus, EVT_SHIP_DESTROYED, EVT_RUN_END, EVT_TORCH_ACTIVE, EVT_DEBT_DING, EVT_BAX_SPEAK
 from roguelite.meta_progression import MetaProgression
 from roguelite.run_manager import RunManager
 from ship.ship import PlayerShip
@@ -48,6 +48,8 @@ class Game:
         self._last_debt_milestone = 0     # last 1000cr milestone we dinged
         self._delivery: DeliverySequence | None = None
         self._shop: ShopScreen | None = None
+        self._delivery_pending    = False  # waiting for Bax delivery line to finish
+        self._delivery_delay_t    = 0.0
 
         self._wire_events()
 
@@ -67,8 +69,18 @@ class Game:
     def _on_run_end(self, success, **_):
         if success:
             self.meta.clear_debt_chunk()
-            self._delivery = DeliverySequence(self.meta)
-            self.states.transition(GameState.DELIVERY)
+            bus.emit(EVT_BAX_SPEAK, priority=True, line=random.choice([
+                "Five sectors. FIVE. And we're still breathin'. "
+                "Drop-off confirmed. Station on approach. Don't crash now.",
+                "That's all five sectors cleared. Cargo intact, pilot in one piece — "
+                "mostly. Delivery window's open. Let's not blow it.",
+                "Run complete. COMPLETE. I cannot believe we pulled that off. "
+                "Drop-off point's on screen. Easy does it from 'ere.",
+                "All five sectors. We did the gauntlet. "
+                "Station's in range. Land this thing like we know what we're doin'.",
+            ]))
+            self._delivery_pending = True
+            self._delivery_delay_t = 2.4
         else:
             self.meta.save()
             self._run_just_completed = False
@@ -155,19 +167,29 @@ class Game:
         state = self.states.state
 
         if state == GameState.FLIGHT:
-            self._torch_warn_t = max(0.0, self._torch_warn_t - dt)
-            self.run_mgr.update(dt)
-            self.ship.update(dt)
-            self.bax.update(dt)
-            self.cockpit_renderer.update(dt)
-            self.audio.update(self.ship.body.speed(), dt)
-            # Shop stop between sectors
-            if self.run_mgr._shop_pending:
-                self._shop = ShopScreen(self.run_mgr, self.ship)
-                self.states.transition(GameState.SHOP)
-            # Terminal opened by jump key — transition immediately
-            elif self.run_mgr.active_terminal is not None:
-                self.states.transition(GameState.TERMINAL)
+            if self._delivery_pending:
+                # Hold in FLIGHT so Bax's "we did it" line plays in the cockpit strip
+                self._delivery_delay_t -= dt
+                self.bax.update(dt)
+                self.cockpit_renderer.update(dt)
+                if self._delivery_delay_t <= 0:
+                    self._delivery_pending = False
+                    self._delivery = DeliverySequence(self.meta)
+                    self.states.transition(GameState.DELIVERY)
+            else:
+                self._torch_warn_t = max(0.0, self._torch_warn_t - dt)
+                self.run_mgr.update(dt)
+                self.ship.update(dt)
+                self.bax.update(dt)
+                self.cockpit_renderer.update(dt)
+                self.audio.update(self.ship.body.speed(), dt)
+                # Shop stop between sectors
+                if self.run_mgr._shop_pending:
+                    self._shop = ShopScreen(self.run_mgr, self.ship)
+                    self.states.transition(GameState.SHOP)
+                # Terminal opened by jump key — transition immediately
+                elif self.run_mgr.active_terminal is not None:
+                    self.states.transition(GameState.TERMINAL)
 
         elif state == GameState.SHOP:
             if self._shop is not None:

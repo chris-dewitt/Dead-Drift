@@ -257,6 +257,7 @@ class Bax:
 
     def __init__(self, ship, meta):
         self.ship        = ship
+        self._meta       = meta
         self.vault       = VocabularyVault()
         self.mixologist  = Mixologist()
         self._speak_cd   = 0.0
@@ -544,6 +545,22 @@ class Bax:
         self._run_tether_hits = 0
         self._run_hull_events = 0
         self._run_slingshots  = 0
+        n = getattr(self._meta, "clone_count", 0)
+        if n > 1:
+            line = random.choice([
+                f"Clone {n}. Same debt. Same ship. Same me, unfortunately. "
+                "Let's try not to repeat last time.",
+                f"Right. {n} bodies in. Good news: they kept your instincts. "
+                "Bad news: same debt. Let's go.",
+                f"Clone {n} reporting. Hull's fresh, wallet isn't. "
+                "One more shot. Make it count.",
+                f"That's {n} clones now. Each one slightly more annoyed to be 'ere. "
+                "Use it.",
+                f"Back again. Clone {n}. The debt grew while you were gone. "
+                "Course it did. Thrusters are warm — let's move.",
+            ])
+            bus.emit(EVT_BAX_SPEAK, line=line)
+            self._speak_cd = 3.2
 
     def _on_ship_destroyed(self, **_):
         self.speak(random.choice([
@@ -617,7 +634,8 @@ class Bax:
             line = random.choice(pool).format(n=sector_num)
         else:
             line = random.choice(_SECTOR_START_GENERIC)
-        self.speak(line)
+        bus.emit(EVT_BAX_SPEAK, line=line)
+        self._speak_cd = 3.2
 
     def radio_blip(self):
         if self._radio_cd <= 0:
