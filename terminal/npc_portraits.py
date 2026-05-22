@@ -13,17 +13,169 @@ _NAME_TO_KEY = {
     "TK-9":       "synthetic_droid",
     "DISPATCHER": "union_dispatcher",
     "KRESS":      "kress",
+    "MORWENNA":   "insurance_adjuster",
+    "SANDRA":     "sandra",
+    "KRELLBORN":  "pirate",
+    "MARROW":     "underground_dj",
 }
 
 
 def draw_portrait(surface: pygame.Surface, npc_name: str,
                   rect: pygame.Rect, disposition: int = 0, t: float = 0.0):
-    key = _NAME_TO_KEY.get(npc_name.upper(), "unknown")
-    fn  = _DISPATCH.get(key, _unknown)
-    cx  = rect.centerx
-    cy  = rect.top + int(rect.height * 0.40)
-    scale = min(rect.width, rect.height * 0.65) / 200.0
+    """
+    Renders a CRT video-call portrait inside `rect`.
+
+    Layers (back to front):
+      1. CRT bezel hardware + signal strip
+      2. Scene backdrop (environment behind the NPC)
+      3. NPC vector portrait
+      4. Disposition-driven glitch overlay
+    """
+    key   = _NAME_TO_KEY.get(npc_name.upper(), "unknown")
+    inner = _draw_crt_bezel(surface, rect, npc_name, t, disposition)
+
+    backdrop = _BACKDROPS.get(key)
+    if backdrop is not None:
+        prev_clip = surface.get_clip()
+        surface.set_clip(inner)
+        backdrop(surface, inner, t)
+        surface.set_clip(prev_clip)
+
+    fn    = _DISPATCH.get(key, _unknown)
+    cx    = inner.centerx
+    cy    = inner.top + int(inner.height * 0.46)
+    scale = min(inner.width, inner.height * 0.65) / 200.0
     fn(surface, cx, cy, scale, disposition, t)
+
+    _draw_signal_overlay(surface, inner, t, disposition)
+
+
+# ---------------------------------------------------------------------------
+# CRT bezel + signal overlay (universal hardware framing)
+# ---------------------------------------------------------------------------
+
+def _draw_crt_bezel(surface: pygame.Surface, rect: pygame.Rect,
+                    npc_name: str, t: float, disposition: int) -> pygame.Rect:
+    """Draws a chunky CRT bezel around `rect`, returns the inner usable area."""
+    # Outer plastic frame
+    pygame.draw.rect(surface, (12, 9, 4), rect)
+    # Recessed bezel ring
+    pygame.draw.rect(surface, (38, 26, 6), rect, 2)
+
+    # Inner CRT face
+    bezel = 6
+    crt_outer = rect.inflate(-bezel*2, -bezel*2)
+    pygame.draw.rect(surface, (2, 1, 0), crt_outer)
+    pygame.draw.rect(surface, (140, 92, 0), crt_outer, 1)
+    # Subtle curvature highlight
+    pygame.draw.line(surface, (78, 52, 10),
+                     (crt_outer.left+1, crt_outer.top+1),
+                     (crt_outer.right-1, crt_outer.top+1), 1)
+
+    # Corner screws — four of 'em, with a slot mark
+    sc = (110, 84, 30)
+    sd = (52, 38, 12)
+    screw_pos = [(rect.left+5,  rect.top+5),
+                 (rect.right-6, rect.top+5),
+                 (rect.left+5,  rect.bottom-6),
+                 (rect.right-6, rect.bottom-6)]
+    for sx, sy in screw_pos:
+        pygame.draw.circle(surface, sc, (sx, sy), 3)
+        pygame.draw.circle(surface, sd, (sx, sy), 3, 1)
+        pygame.draw.line(surface, sd, (sx-2, sy), (sx+2, sy), 1)
+
+    # ── Top label strip — "LIVE COMM" + blinking record dot + callsign ──
+    label_h = 14
+    label_rect = pygame.Rect(crt_outer.left+1, crt_outer.top+1,
+                             crt_outer.width-2, label_h)
+    pygame.draw.rect(surface, (10, 7, 0), label_rect)
+    pygame.draw.line(surface, (100, 64, 0),
+                     (label_rect.left, label_rect.bottom),
+                     (label_rect.right, label_rect.bottom), 1)
+    font = pygame.font.SysFont("monospace", 8, bold=True)
+    blink = (int(t * 2) % 2 == 0)
+    dot_col = (230, 60, 30) if blink else (70, 20, 10)
+    pygame.draw.circle(surface, dot_col,
+                       (label_rect.left+8, label_rect.centery), 3)
+    lbl = font.render("LIVE COMM // NOVA SOMA RELAY 7-B", True, (190, 130, 24))
+    surface.blit(lbl, (label_rect.left+16,
+                       label_rect.centery - lbl.get_height()//2))
+    cs = font.render(npc_name.upper(), True, (255, 180, 44))
+    surface.blit(cs, (label_rect.right - cs.get_width() - 6,
+                      label_rect.centery - cs.get_height()//2))
+
+    # ── Bottom hardware strip — signal bars + timecode ──
+    bot_h = 12
+    bot_rect = pygame.Rect(crt_outer.left+1, crt_outer.bottom - bot_h - 1,
+                           crt_outer.width-2, bot_h)
+    pygame.draw.rect(surface, (10, 7, 0), bot_rect)
+    pygame.draw.line(surface, (100, 64, 0),
+                     (bot_rect.left, bot_rect.top),
+                     (bot_rect.right, bot_rect.top), 1)
+    # Signal bars — degrade as disposition turns hostile
+    if disposition >= 0:
+        sig = 5
+    elif disposition >= -3:
+        sig = 4
+    elif disposition >= -6:
+        sig = 3
+    else:
+        sig = 1 + (int(t * 4) % 2)   # flickering between 1 and 2
+    bw, bg = 4, 2
+    sx0 = bot_rect.left + 8
+    sy0 = bot_rect.centery
+    for i in range(5):
+        h = 3 + i * 2
+        col = (40, 160, 40) if i < sig else (40, 30, 10)
+        pygame.draw.rect(surface, col, (sx0 + i*(bw+bg), sy0 - h//2 + 1, bw, h))
+    sig_lbl = font.render("SIG", True, (110, 74, 18))
+    surface.blit(sig_lbl, (sx0 + 5*(bw+bg) + 4,
+                           sy0 - sig_lbl.get_height()//2))
+    tc = font.render(f"T+{int(t*10):05d}", True, (130, 92, 24))
+    surface.blit(tc, (bot_rect.right - tc.get_width() - 6,
+                      sy0 - tc.get_height()//2))
+
+    return pygame.Rect(crt_outer.left+1, crt_outer.top + label_h + 3,
+                       crt_outer.width-2,
+                       crt_outer.height - label_h - bot_h - 6)
+
+
+def _draw_signal_overlay(surface: pygame.Surface, inner: pygame.Rect,
+                         t: float, disposition: int):
+    """Disposition-tied glitch effect — clean when calm, broken when angry."""
+    if disposition >= 0:
+        return  # clean signal
+
+    overlay = pygame.Surface((inner.w, inner.h), pygame.SRCALPHA)
+    rng = random.Random(int(t * 6))
+
+    if disposition <= -6:
+        # Severe: rolling glitch bars + chromatic split
+        for _ in range(3):
+            sy = rng.randint(0, inner.h - 1)
+            sh = rng.randint(2, 5)
+            pygame.draw.rect(overlay, (255, 40, 40, 95),
+                             (0, sy, inner.w, sh))
+        # Static speckle
+        for _ in range(40):
+            spx = rng.randint(0, inner.w - 1)
+            spy = rng.randint(0, inner.h - 1)
+            pygame.draw.line(overlay, (180, 60, 60, 110),
+                             (spx, spy), (spx+1, spy), 1)
+    elif disposition <= -3:
+        # Moderate: occasional horizontal interference
+        for _ in range(2):
+            sy = rng.randint(0, inner.h - 1)
+            sh = rng.randint(1, 3)
+            pygame.draw.rect(overlay, (220, 90, 50, 70),
+                             (0, sy, inner.w, sh))
+    else:
+        # Mild
+        sy = rng.randint(0, inner.h - 1)
+        pygame.draw.rect(overlay, (200, 130, 60, 40),
+                         (0, sy, inner.w, 1))
+
+    surface.blit(overlay, inner.topleft)
 
 
 # ---------------------------------------------------------------------------
@@ -466,9 +618,803 @@ def _unknown(surface, cx, cy, s, disposition, t):
 
 
 _DISPATCH = {
-    "gary":             _gary,
-    "synthetic_droid":  _synthetic_droid,
-    "union_dispatcher": _union_dispatcher,
-    "kress":            _kress,
-    "unknown":          _unknown,
+    "gary":               _gary,
+    "synthetic_droid":    _synthetic_droid,
+    "union_dispatcher":   _union_dispatcher,
+    "kress":              _kress,
+    "insurance_adjuster": None,   # set after definition below
+    "sandra":             None,
+    "pirate":             None,
+    "underground_dj":     None,
+    "unknown":            _unknown,
 }
+
+
+# ---------------------------------------------------------------------------
+# Scene backdrops — one per NPC, drawn behind the bust
+# ---------------------------------------------------------------------------
+
+def _backdrop_gary(surface, inner, t):
+    # Barge cockpit interior: pulsing amber hazard light + control panel
+    # silhouette + a manifest binder against the wall
+    cx = inner.centerx
+    cy = inner.centery
+    # Hazard pulse — top corners
+    pulse = 0.5 + 0.5 * math.sin(t * 3.0)
+    amb_col = (int(80 + 100 * pulse), int(50 + 60 * pulse), 0)
+    pygame.draw.circle(surface, amb_col, (inner.left + 22, inner.top + 22), 6)
+    pygame.draw.circle(surface, amb_col, (inner.right - 22, inner.top + 22), 6)
+    # Side wall: vertical ribs
+    for i in range(4):
+        x = inner.left + 14 + i * 6
+        pygame.draw.line(surface, (28, 18, 4), (x, inner.top + 38),
+                         (x, inner.bottom - 18), 1)
+    for i in range(4):
+        x = inner.right - 14 - i * 6
+        pygame.draw.line(surface, (28, 18, 4), (x, inner.top + 38),
+                         (x, inner.bottom - 18), 1)
+    # Control panel silhouette at the bottom
+    panel = pygame.Rect(inner.left + 4, inner.bottom - 30,
+                        inner.width - 8, 22)
+    pygame.draw.rect(surface, (14, 10, 0), panel)
+    pygame.draw.line(surface, (50, 32, 6),
+                     (panel.left, panel.top), (panel.right, panel.top), 1)
+    # Panel switches/lights
+    for i in range(8):
+        bx = panel.left + 10 + i * 22
+        lit = (int(t * 0.7) + i) % 4 == 0
+        col = (200, 120, 0) if lit else (40, 26, 4)
+        pygame.draw.rect(surface, col, (bx, panel.top + 7, 6, 4))
+    # Manifest binder on left
+    binder = pygame.Rect(inner.left + 8, inner.top + 40, 18, 26)
+    pygame.draw.rect(surface, (90, 30, 20), binder)
+    pygame.draw.rect(surface, (30, 10, 5), binder, 1)
+    font = pygame.font.SysFont("monospace", 6, bold=True)
+    bf = font.render("404", True, (220, 180, 80))
+    surface.blit(bf, (binder.centerx - bf.get_width()//2, binder.top + 4))
+
+
+def _backdrop_synthetic_droid(surface, inner, t):
+    # Server room: vertical green LED columns + cable trays
+    for i in range(7):
+        x = inner.left + 12 + i * (inner.width - 24) // 6
+        for j in range(6):
+            y = inner.top + 22 + j * 12
+            phase = (i * 3 + j * 7 + int(t * 8)) % 12
+            lit = phase < 4
+            col = (0, 200, 90) if lit else (0, 40, 12)
+            pygame.draw.rect(surface, col, (x - 1, y, 3, 4))
+    # Cable trays overhead
+    for k in range(3):
+        cy = inner.top + 14 + k * 4
+        pygame.draw.line(surface, (16, 24, 16),
+                         (inner.left + 4, cy), (inner.right - 4, cy), 1)
+
+
+def _backdrop_union_dispatcher(surface, inner, t):
+    # Paper-flooded office: stacked forms + fluorescent flicker + in-tray
+    # Fluorescent flicker — slight vignette pulse at top
+    flick = 0.85 + 0.15 * (math.sin(t * 6.5) > 0.6)
+    glow = pygame.Surface((inner.w, 28), pygame.SRCALPHA)
+    pygame.draw.rect(glow, (220, 215, 130, int(38 * flick)),
+                     (0, 0, inner.w, 28))
+    surface.blit(glow, (inner.left, inner.top))
+
+    # Stacks of paper on left wall
+    pstack_x = inner.left + 8
+    for i in range(7):
+        y = inner.bottom - 22 - i * 5
+        off = ((i * 7) % 5) - 2
+        pygame.draw.rect(surface, (60, 56, 28),
+                         (pstack_x + off, y, 26, 4))
+        pygame.draw.rect(surface, (110, 100, 50),
+                         (pstack_x + off, y, 26, 4), 1)
+    # Stacks on right
+    pstack_x = inner.right - 34
+    for i in range(9):
+        y = inner.bottom - 22 - i * 4
+        off = ((i * 11) % 6) - 3
+        pygame.draw.rect(surface, (60, 56, 28),
+                         (pstack_x + off, y, 26, 3))
+        pygame.draw.rect(surface, (110, 100, 50),
+                         (pstack_x + off, y, 26, 3), 1)
+    # IN-TRAY label
+    font = pygame.font.SysFont("monospace", 7, bold=True)
+    tag = font.render("47 FORMS BEHIND", True, (180, 50, 50))
+    surface.blit(tag, (inner.left + 6, inner.top + 4))
+
+
+def _backdrop_kress(surface, inner, t):
+    # Back-alley dock: corrugated metal + neon sign flicker + faint fog
+    # Corrugated wall — vertical zigzag stripes
+    for i in range(0, inner.width, 8):
+        x = inner.left + i
+        col = (28, 26, 32) if (i // 8) % 2 == 0 else (18, 18, 24)
+        pygame.draw.line(surface, col,
+                         (x, inner.top + 28), (x, inner.bottom - 8), 1)
+    # Neon sign — random flicker
+    flicker = (int(t * 12) % 11) != 0   # mostly on
+    sign = pygame.Rect(inner.right - 60, inner.top + 22, 50, 14)
+    pygame.draw.rect(surface, (10, 8, 16), sign)
+    pygame.draw.rect(surface, (180, 0, 220) if flicker else (40, 0, 60),
+                     sign, 1)
+    font = pygame.font.SysFont("monospace", 7, bold=True)
+    nf = font.render("DOCK-7", True, (220, 60, 220) if flicker else (60, 20, 50))
+    surface.blit(nf, (sign.centerx - nf.get_width()//2,
+                      sign.centery - nf.get_height()//2))
+    # Fog wisps at bottom
+    for k in range(3):
+        fy = inner.bottom - 14 + k * 3
+        for fx in range(inner.left + 4, inner.right - 4, 6):
+            wob = int(2 * math.sin(t * 0.8 + fx * 0.1 + k))
+            pygame.draw.line(surface, (40, 40, 48),
+                             (fx, fy + wob), (fx + 4, fy + wob), 1)
+
+
+def _backdrop_insurance_adjuster(surface, inner, t):
+    # Corporate office: Nova Soma logo + ceiling tile grid + corner plant
+    # Ceiling tile grid (top portion)
+    for x in range(inner.left + 4, inner.right - 4, 22):
+        pygame.draw.line(surface, (20, 22, 24),
+                         (x, inner.top + 4), (x, inner.top + 32), 1)
+    for y in range(inner.top + 4, inner.top + 32, 16):
+        pygame.draw.line(surface, (20, 22, 24),
+                         (inner.left + 4, y), (inner.right - 4, y), 1)
+    # Nova Soma logo on the back wall
+    cx = inner.centerx
+    logo_y = inner.top + 38
+    pygame.draw.rect(surface, (12, 8, 0), (cx - 36, logo_y, 72, 18))
+    pygame.draw.rect(surface, (110, 84, 18), (cx - 36, logo_y, 72, 18), 1)
+    font = pygame.font.SysFont("monospace", 8, bold=True)
+    logo = font.render("NOVA SOMA", True, (220, 160, 30))
+    surface.blit(logo, (cx - logo.get_width()//2,
+                        logo_y + 9 - logo.get_height()//2))
+    # Potted plant in corner — sad, drooping
+    px, py = inner.right - 24, inner.bottom - 28
+    pot = pygame.Rect(px - 8, py + 8, 16, 10)
+    pygame.draw.rect(surface, (60, 30, 8), pot)
+    pygame.draw.rect(surface, (30, 14, 0), pot, 1)
+    # Drooping leaves
+    pygame.draw.line(surface, (40, 80, 30), (px - 4, py + 8), (px - 12, py + 16), 2)
+    pygame.draw.line(surface, (40, 80, 30), (px + 4, py + 8), (px + 12, py + 16), 2)
+    pygame.draw.line(surface, (50, 90, 40), (px, py + 8), (px, py + 2), 2)
+
+
+def _backdrop_sandra(surface, inner, t):
+    # Dispatch center: multiple screens + Vega Curve quota chart
+    # Three small screens at the top
+    for i in range(3):
+        sw, sh = 36, 22
+        sx = inner.left + 10 + i * (sw + 6)
+        sy = inner.top + 6
+        pygame.draw.rect(surface, (4, 18, 4), (sx, sy, sw, sh))
+        pygame.draw.rect(surface, (40, 130, 50), (sx, sy, sw, sh), 1)
+        # Route map: small connected nodes
+        nodes = [(sx + 6, sy + 6 + i * 2),
+                 (sx + 18, sy + 14),
+                 (sx + 28, sy + 8 + i)]
+        pygame.draw.lines(surface, (60, 180, 80), False, nodes, 1)
+        for n in nodes:
+            pygame.draw.circle(surface, (120, 220, 130), n, 1)
+    # Accolade plaque
+    plaque = pygame.Rect(inner.right - 70, inner.top + 38, 62, 20)
+    pygame.draw.rect(surface, (60, 50, 12), plaque)
+    pygame.draw.rect(surface, (200, 160, 40), plaque, 1)
+    font = pygame.font.SysFont("monospace", 6, bold=True)
+    p1 = font.render("VEGA CURVE", True, (240, 200, 80))
+    surface.blit(p1, (plaque.centerx - p1.get_width()//2, plaque.top + 4))
+    p2 = font.render("BASELINE: 312", True, (220, 180, 60))
+    surface.blit(p2, (plaque.centerx - p2.get_width()//2, plaque.top + 11))
+    # Quota chart — ascending bar pattern on the lower wall
+    chart_y0 = inner.bottom - 12
+    bar_x = inner.left + 8
+    for i in range(11):
+        h = 4 + i * 1
+        col = (40, 150, 60) if i < 9 else (240, 180, 50)
+        pygame.draw.rect(surface, col, (bar_x + i * 5, chart_y0 - h, 3, h))
+
+
+def _backdrop_pirate(surface, inner, t):
+    # Pirate ship interior: exposed wiring + scavenged panels + defaced flag
+    # Exposed wiring — sagging cables across the back
+    for i in range(3):
+        y0 = inner.top + 14 + i * 8
+        ax = inner.left + 6
+        bx = inner.right - 6
+        col = (140, 60, 0) if i == 0 else (60, 80, 90) if i == 1 else (20, 30, 30)
+        sag = 6
+        mid = ((ax + bx) // 2, y0 + sag)
+        pygame.draw.lines(surface, col, False, [(ax, y0), mid, (bx, y0)], 2)
+    # Scavenged metal panels — irregular plates riveted on
+    plates = [
+        (inner.left + 6,  inner.top + 40, 38, 24),
+        (inner.left + 46, inner.top + 56, 28, 18),
+        (inner.right - 42, inner.top + 42, 30, 22),
+        (inner.right - 64, inner.bottom - 24, 24, 14),
+    ]
+    for px, py, pw, ph in plates:
+        pygame.draw.rect(surface, (38, 38, 44), (px, py, pw, ph))
+        pygame.draw.rect(surface, (90, 70, 50), (px, py, pw, ph), 1)
+        # Rivets
+        for rx in (px+3, px+pw-4):
+            for ry in (py+3, py+ph-4):
+                pygame.draw.circle(surface, (140, 110, 60), (rx, ry), 1)
+    # Defaced Union flag — black bar through the 404 emblem
+    flag = pygame.Rect(inner.left + 8, inner.bottom - 30, 26, 18)
+    pygame.draw.rect(surface, (16, 8, 0), flag)
+    pygame.draw.rect(surface, (100, 60, 0), flag, 1)
+    font = pygame.font.SysFont("monospace", 6, bold=True)
+    ff = font.render("404", True, (160, 120, 30))
+    surface.blit(ff, (flag.centerx - ff.get_width()//2, flag.centery - ff.get_height()//2))
+    # X through it
+    pygame.draw.line(surface, (230, 30, 30),
+                     (flag.left, flag.top), (flag.right, flag.bottom), 2)
+    pygame.draw.line(surface, (230, 30, 30),
+                     (flag.left, flag.bottom), (flag.right, flag.top), 2)
+
+
+def _backdrop_underground_dj(surface, inner, t):
+    # Radio studio: turntables + ON-AIR sign + soundwave
+    # ON AIR sign — chunky red glow
+    sign = pygame.Rect(inner.left + 8, inner.top + 6, 56, 16)
+    glow_pulse = 0.6 + 0.4 * math.sin(t * 2.0)
+    pygame.draw.rect(surface, (12, 0, 0), sign)
+    pygame.draw.rect(surface,
+                     (int(220 * glow_pulse + 35), 30, 30), sign, 1)
+    font = pygame.font.SysFont("monospace", 9, bold=True)
+    oa = font.render("ON AIR", True, (255, 60, 40))
+    surface.blit(oa, (sign.centerx - oa.get_width()//2,
+                      sign.centery - oa.get_height()//2))
+    # Soundwave visualization across the middle
+    wave_y = inner.top + 36
+    last_pt = None
+    for x in range(inner.left + 6, inner.right - 6, 3):
+        amp = 4 + 3 * math.sin(t * 6.0 + x * 0.2) + 2 * math.sin(t * 11.0 + x * 0.07)
+        pt = (x, wave_y + int(amp))
+        if last_pt is not None:
+            pygame.draw.line(surface, (40, 200, 230), last_pt, pt, 1)
+        last_pt = pt
+    # Two turntables at the bottom (just the discs)
+    for cx_off in (inner.left + 26, inner.right - 26):
+        cy = inner.bottom - 22
+        pygame.draw.circle(surface, (16, 16, 20), (cx_off, cy), 14)
+        pygame.draw.circle(surface, (80, 80, 90), (cx_off, cy), 14, 1)
+        # Grooves
+        for gr in (4, 7, 10, 13):
+            pygame.draw.circle(surface, (32, 32, 38), (cx_off, cy), gr, 1)
+        # Centre label
+        pygame.draw.circle(surface, (200, 100, 30), (cx_off, cy), 3)
+        # Stylus arm
+        ax = cx_off + 10
+        ay = cy - 10
+        pygame.draw.line(surface, (140, 140, 150),
+                         (ax, ay), (cx_off + 3, cy - 1), 1)
+        pygame.draw.circle(surface, (190, 50, 50), (cx_off + 3, cy - 1), 1)
+
+
+_BACKDROPS = {
+    "gary":               _backdrop_gary,
+    "synthetic_droid":    _backdrop_synthetic_droid,
+    "union_dispatcher":   _backdrop_union_dispatcher,
+    "kress":              _backdrop_kress,
+    "insurance_adjuster": _backdrop_insurance_adjuster,
+    "sandra":             _backdrop_sandra,
+    "pirate":             _backdrop_pirate,
+    "underground_dj":     _backdrop_underground_dj,
+}
+
+
+# ---------------------------------------------------------------------------
+# New portrait functions for the four NPCs that don't have one yet
+# ---------------------------------------------------------------------------
+
+def _insurance_adjuster(surface, cx, cy, s, disposition, t):
+    """
+    Morwenna — Nova Soma claims adjuster. Pinned-back hair, blazer,
+    permanent thin-lipped smile that's actually annoyance.
+    """
+    # Color palette — corporate amber
+    amb = (240, 195, 70)
+    dim = (110, 78, 16)
+    skin_l = (220, 180, 130)
+    skin_d = (100, 70, 40)
+    suit = (60, 50, 80)
+    hair = (60, 40, 20)
+
+    # Hair silhouette behind head — bun
+    pygame.draw.circle(surface, hair, (int(cx + 26 * s), int(cy - 18 * s)), int(12 * s))
+    pygame.draw.circle(surface, (28, 18, 6), (int(cx + 26 * s), int(cy - 18 * s)), int(12 * s), 1)
+
+    # Neck
+    neck = [(int(cx - 14 * s), int(cy + 26 * s)),
+            (int(cx + 14 * s), int(cy + 26 * s)),
+            (int(cx + 16 * s), int(cy + 46 * s)),
+            (int(cx - 16 * s), int(cy + 46 * s))]
+    pygame.draw.polygon(surface, skin_d, neck)
+    pygame.draw.polygon(surface, dim, neck, 1)
+
+    # Head
+    head_pts = [
+        (int(cx - 36 * s), int(cy - 12 * s)),
+        (int(cx - 30 * s), int(cy - 30 * s)),
+        (int(cx - 10 * s), int(cy - 38 * s)),
+        (int(cx + 16 * s), int(cy - 36 * s)),
+        (int(cx + 30 * s), int(cy - 24 * s)),
+        (int(cx + 32 * s), int(cy - 4 * s)),
+        (int(cx + 22 * s), int(cy + 18 * s)),
+        (int(cx + 8 * s),  int(cy + 28 * s)),
+        (int(cx - 12 * s), int(cy + 26 * s)),
+        (int(cx - 28 * s), int(cy + 12 * s)),
+        (int(cx - 36 * s), int(cy - 2 * s)),
+    ]
+    pygame.draw.polygon(surface, skin_l, head_pts)
+    pygame.draw.polygon(surface, dim, head_pts, 1)
+    # Hair on top
+    hair_pts = [
+        (int(cx - 30 * s), int(cy - 24 * s)),
+        (int(cx - 10 * s), int(cy - 38 * s)),
+        (int(cx + 16 * s), int(cy - 36 * s)),
+        (int(cx + 30 * s), int(cy - 24 * s)),
+        (int(cx + 22 * s), int(cy - 16 * s)),
+        (int(cx - 18 * s), int(cy - 18 * s)),
+    ]
+    pygame.draw.polygon(surface, hair, hair_pts)
+    pygame.draw.polygon(surface, (28, 18, 6), hair_pts, 1)
+    # Hair part line
+    pygame.draw.line(surface, (28, 18, 6),
+                     (int(cx + 4 * s), int(cy - 36 * s)),
+                     (int(cx + 16 * s), int(cy - 20 * s)), 1)
+
+    # Eyes — narrow, calculating
+    eye_y = int(cy - 8 * s)
+    blink = (int(t * 0.5) % 7 == 0)
+    if blink:
+        pygame.draw.line(surface, dim,
+                         (int(cx - 16 * s), eye_y),
+                         (int(cx - 6 * s), eye_y), 1)
+        pygame.draw.line(surface, dim,
+                         (int(cx + 6 * s), eye_y),
+                         (int(cx + 16 * s), eye_y), 1)
+    else:
+        # Expression: wary/angry narrows the eyes further
+        narrow = 1 if disposition < -2 else 0
+        pygame.draw.ellipse(surface, (40, 28, 4),
+                            (int(cx - 16 * s), eye_y - 2 + narrow,
+                             int(10 * s), 3 - narrow))
+        pygame.draw.ellipse(surface, (40, 28, 4),
+                            (int(cx + 6 * s), eye_y - 2 + narrow,
+                             int(10 * s), 3 - narrow))
+        # Pupils
+        pygame.draw.circle(surface, (8, 4, 0),
+                           (int(cx - 11 * s), eye_y), 1)
+        pygame.draw.circle(surface, (8, 4, 0),
+                           (int(cx + 11 * s), eye_y), 1)
+
+    # Brows — angled down inward when wary/angry
+    brow_y = int(cy - 14 * s)
+    brow_tilt = max(0, -disposition) // 2
+    pygame.draw.line(surface, hair,
+                     (int(cx - 18 * s), brow_y),
+                     (int(cx - 4 * s), brow_y + brow_tilt), 2)
+    pygame.draw.line(surface, hair,
+                     (int(cx + 4 * s), brow_y + brow_tilt),
+                     (int(cx + 18 * s), brow_y), 2)
+
+    # Nose
+    pygame.draw.line(surface, dim,
+                     (int(cx + 1 * s), int(cy - 6 * s)),
+                     (int(cx - 2 * s), int(cy + 4 * s)), 1)
+
+    # Mouth — thin pursed line, twists into a smirk
+    mx0 = int(cx - 8 * s)
+    mx1 = int(cx + 8 * s)
+    my = int(cy + 14 * s)
+    if disposition > 2:
+        # Faint smile (still corporate)
+        pygame.draw.line(surface, dim, (mx0, my + 1), (mx1, my + 1), 1)
+    elif disposition < -3:
+        # Tight, downturned
+        pygame.draw.line(surface, dim, (mx0, my + 2), (mx1, my + 2), 1)
+    else:
+        pygame.draw.line(surface, dim, (mx0, my), (mx1, my), 1)
+
+    # Blazer collar
+    collar_pts = [
+        (int(cx - 28 * s), int(cy + 46 * s)),
+        (int(cx - 16 * s), int(cy + 36 * s)),
+        (int(cx + 16 * s), int(cy + 36 * s)),
+        (int(cx + 28 * s), int(cy + 46 * s)),
+        (int(cx + 36 * s), int(cy + 70 * s)),
+        (int(cx - 36 * s), int(cy + 70 * s)),
+    ]
+    pygame.draw.polygon(surface, suit, collar_pts)
+    pygame.draw.polygon(surface, (140, 110, 30), collar_pts, 1)
+    # Nova Soma lapel pin
+    pygame.draw.circle(surface, amb,
+                       (int(cx + 18 * s), int(cy + 50 * s)), int(2 * s) + 1)
+
+
+def _sandra(surface, cx, cy, s, disposition, t):
+    """
+    Sandra Vega-Marsh — sharp jaw, courier jumpsuit, helmet hair,
+    permanent half-smirk.
+    """
+    skin_l = (210, 175, 130)
+    skin_d = (110, 70, 30)
+    suit   = (40, 50, 100)
+    accent = (210, 70, 60)
+    hair   = (40, 28, 18)
+    dim    = (100, 76, 24)
+
+    # Helmet collar at neck
+    helmet = [
+        (int(cx - 28 * s), int(cy + 30 * s)),
+        (int(cx + 28 * s), int(cy + 30 * s)),
+        (int(cx + 22 * s), int(cy + 24 * s)),
+        (int(cx - 22 * s), int(cy + 24 * s)),
+    ]
+    pygame.draw.polygon(surface, suit, helmet)
+    pygame.draw.polygon(surface, (90, 100, 150), helmet, 1)
+
+    # Neck
+    neck = [(int(cx - 12 * s), int(cy + 22 * s)),
+            (int(cx + 12 * s), int(cy + 22 * s)),
+            (int(cx + 14 * s), int(cy + 32 * s)),
+            (int(cx - 14 * s), int(cy + 32 * s))]
+    pygame.draw.polygon(surface, skin_d, neck)
+
+    # Head — angular, sharp jaw
+    head_pts = [
+        (int(cx - 30 * s), int(cy - 18 * s)),
+        (int(cx - 16 * s), int(cy - 34 * s)),
+        (int(cx + 12 * s), int(cy - 36 * s)),
+        (int(cx + 28 * s), int(cy - 22 * s)),
+        (int(cx + 30 * s), int(cy - 2 * s)),
+        (int(cx + 18 * s), int(cy + 18 * s)),
+        (int(cx + 4 * s),  int(cy + 24 * s)),
+        (int(cx - 12 * s), int(cy + 22 * s)),
+        (int(cx - 24 * s), int(cy + 10 * s)),
+        (int(cx - 30 * s), int(cy - 4 * s)),
+    ]
+    pygame.draw.polygon(surface, skin_l, head_pts)
+    pygame.draw.polygon(surface, dim, head_pts, 1)
+
+    # Helmet hair — slicked back, severe
+    hair_pts = [
+        (int(cx - 26 * s), int(cy - 22 * s)),
+        (int(cx - 16 * s), int(cy - 34 * s)),
+        (int(cx + 12 * s), int(cy - 36 * s)),
+        (int(cx + 28 * s), int(cy - 22 * s)),
+        (int(cx + 22 * s), int(cy - 14 * s)),
+        (int(cx - 18 * s), int(cy - 12 * s)),
+    ]
+    pygame.draw.polygon(surface, hair, hair_pts)
+    pygame.draw.polygon(surface, (12, 8, 0), hair_pts, 1)
+    # Slick lines
+    for i in range(3):
+        pygame.draw.line(surface, (28, 18, 6),
+                         (int(cx - 14 * s + i * 8), int(cy - 32 * s)),
+                         (int(cx - 8 * s + i * 8), int(cy - 16 * s)), 1)
+
+    # Eyes — judgemental, half-lidded
+    eye_y = int(cy - 4 * s)
+    pygame.draw.ellipse(surface, (40, 28, 4),
+                        (int(cx - 16 * s), eye_y - 1, int(10 * s), 3))
+    pygame.draw.ellipse(surface, (40, 28, 4),
+                        (int(cx + 6 * s), eye_y - 1, int(10 * s), 3))
+    # Pupils — slightly off-centre (looking past you)
+    pygame.draw.circle(surface, (4, 4, 0),
+                       (int(cx - 9 * s), eye_y), 1)
+    pygame.draw.circle(surface, (4, 4, 0),
+                       (int(cx + 13 * s), eye_y), 1)
+
+    # Brows — perfectly arched
+    brow_y = int(cy - 12 * s)
+    arch = max(0, -disposition) // 2
+    pygame.draw.line(surface, hair,
+                     (int(cx - 18 * s), brow_y + 2),
+                     (int(cx - 6 * s), brow_y - 1 - arch), 2)
+    pygame.draw.line(surface, hair,
+                     (int(cx + 6 * s), brow_y - 1 - arch),
+                     (int(cx + 18 * s), brow_y + 2), 2)
+
+    # Nose — pointed
+    pygame.draw.line(surface, dim,
+                     (int(cx + 1 * s), int(cy - 2 * s)),
+                     (int(cx - 1 * s), int(cy + 10 * s)), 1)
+
+    # Mouth — half-smirk (right side higher)
+    if disposition < -2:
+        # Frown
+        pygame.draw.arc(surface, dim,
+                        (int(cx - 10 * s), int(cy + 12 * s),
+                         int(20 * s), int(10 * s)),
+                        math.pi, 2 * math.pi, 1)
+    else:
+        # Smirk
+        m_l = (int(cx - 10 * s), int(cy + 16 * s))
+        m_r = (int(cx + 10 * s), int(cy + 12 * s))
+        pygame.draw.line(surface, dim, m_l, m_r, 1)
+        # Right corner upturn
+        pygame.draw.line(surface, dim, m_r, (int(cx + 12 * s), int(cy + 10 * s)), 1)
+
+    # Suit shoulders
+    sh_pts = [
+        (int(cx - 36 * s), int(cy + 32 * s)),
+        (int(cx + 36 * s), int(cy + 32 * s)),
+        (int(cx + 42 * s), int(cy + 70 * s)),
+        (int(cx - 42 * s), int(cy + 70 * s)),
+    ]
+    pygame.draw.polygon(surface, suit, sh_pts)
+    pygame.draw.polygon(surface, (90, 100, 150), sh_pts, 1)
+    # Courier patch on shoulder
+    patch_x, patch_y = int(cx - 28 * s), int(cy + 40 * s)
+    pygame.draw.rect(surface, accent,
+                     (patch_x, patch_y, int(14 * s), int(8 * s)))
+    pygame.draw.rect(surface, (40, 8, 8),
+                     (patch_x, patch_y, int(14 * s), int(8 * s)), 1)
+
+
+def _pirate(surface, cx, cy, s, disposition, t):
+    """
+    "Krellborn" pirate — scarred face, breathing mask, wrapped scarf.
+    Posture and silhouette read as a threat.
+    """
+    skin   = (170, 130, 90)
+    skin_d = (90, 60, 30)
+    scarf  = (60, 30, 30)
+    mask   = (30, 30, 36)
+    metal  = (170, 130, 50)
+    accent = (220, 50, 30)
+    dim    = (110, 70, 30)
+
+    # Wrapped scarf around neck — irregular polygon
+    scarf_pts = [
+        (int(cx - 36 * s), int(cy + 16 * s)),
+        (int(cx - 20 * s), int(cy + 10 * s)),
+        (int(cx + 20 * s), int(cy + 10 * s)),
+        (int(cx + 38 * s), int(cy + 18 * s)),
+        (int(cx + 42 * s), int(cy + 38 * s)),
+        (int(cx - 42 * s), int(cy + 38 * s)),
+    ]
+    pygame.draw.polygon(surface, scarf, scarf_pts)
+    pygame.draw.polygon(surface, (24, 8, 8), scarf_pts, 1)
+    # Frayed scarf edges
+    for ex in (-32, -18, 4, 22, 36):
+        pygame.draw.line(surface, (40, 20, 20),
+                         (int(cx + ex * s), int(cy + 20 * s)),
+                         (int(cx + ex * s + 2), int(cy + 28 * s)), 1)
+
+    # Head silhouette
+    head_pts = [
+        (int(cx - 32 * s), int(cy - 16 * s)),
+        (int(cx - 20 * s), int(cy - 36 * s)),
+        (int(cx + 16 * s), int(cy - 38 * s)),
+        (int(cx + 30 * s), int(cy - 24 * s)),
+        (int(cx + 34 * s), int(cy - 4 * s)),
+        (int(cx + 22 * s), int(cy + 14 * s)),
+        (int(cx - 18 * s), int(cy + 12 * s)),
+        (int(cx - 30 * s), int(cy - 2 * s)),
+    ]
+    pygame.draw.polygon(surface, skin, head_pts)
+    pygame.draw.polygon(surface, dim, head_pts, 1)
+
+    # Scar across left cheek
+    pygame.draw.line(surface, (90, 30, 30),
+                     (int(cx - 22 * s), int(cy - 18 * s)),
+                     (int(cx - 10 * s), int(cy + 6 * s)), 2)
+    pygame.draw.line(surface, (160, 80, 80),
+                     (int(cx - 22 * s), int(cy - 18 * s)),
+                     (int(cx - 10 * s), int(cy + 6 * s)), 1)
+
+    # Breathing mask covering nose+mouth
+    mask_pts = [
+        (int(cx - 18 * s), int(cy - 2 * s)),
+        (int(cx + 18 * s), int(cy - 2 * s)),
+        (int(cx + 22 * s), int(cy + 14 * s)),
+        (int(cx - 22 * s), int(cy + 14 * s)),
+    ]
+    pygame.draw.polygon(surface, mask, mask_pts)
+    pygame.draw.polygon(surface, metal, mask_pts, 1)
+    # Mask filters — two metal cylinders on the sides
+    for fx_off in (-20, 18):
+        pygame.draw.circle(surface, metal,
+                           (int(cx + fx_off * s), int(cy + 6 * s)), int(3 * s) + 1)
+        pygame.draw.circle(surface, (60, 40, 10),
+                           (int(cx + fx_off * s), int(cy + 6 * s)), int(3 * s) + 1, 1)
+    # Mask grid
+    for gx in range(-10, 11, 4):
+        pygame.draw.line(surface, (15, 15, 20),
+                         (int(cx + gx * s), int(cy + 2 * s)),
+                         (int(cx + gx * s), int(cy + 12 * s)), 1)
+
+    # Eyes — only visible part of face
+    eye_y = int(cy - 14 * s)
+    eye_l = (int(cx - 12 * s), eye_y)
+    eye_r = (int(cx + 10 * s), eye_y)
+    # Pupil pulse — wider when hostile (intimidating stare)
+    pupil_r = 2 if disposition >= 0 else 3
+    pygame.draw.circle(surface, accent, eye_l, pupil_r + 1)
+    pygame.draw.circle(surface, (255, 220, 200), eye_l, pupil_r)
+    pygame.draw.circle(surface, (10, 0, 0), eye_l, 1)
+    pygame.draw.circle(surface, accent, eye_r, pupil_r + 1)
+    pygame.draw.circle(surface, (255, 220, 200), eye_r, pupil_r)
+    pygame.draw.circle(surface, (10, 0, 0), eye_r, 1)
+
+    # Brows — heavy, low — get heavier with hostility
+    brow_y = int(cy - 22 * s)
+    brow_drop = max(0, -disposition)
+    pygame.draw.line(surface, (40, 20, 0),
+                     (int(cx - 18 * s), brow_y + brow_drop),
+                     (int(cx - 4 * s),  brow_y + 2 + brow_drop), 3)
+    pygame.draw.line(surface, (40, 20, 0),
+                     (int(cx + 4 * s),  brow_y + 2 + brow_drop),
+                     (int(cx + 18 * s), brow_y + brow_drop), 3)
+
+    # Hood / hair wrap on top
+    hood_pts = [
+        (int(cx - 34 * s), int(cy - 18 * s)),
+        (int(cx - 20 * s), int(cy - 38 * s)),
+        (int(cx + 16 * s), int(cy - 40 * s)),
+        (int(cx + 32 * s), int(cy - 24 * s)),
+        (int(cx + 24 * s), int(cy - 16 * s)),
+        (int(cx - 26 * s), int(cy - 14 * s)),
+    ]
+    pygame.draw.polygon(surface, (32, 24, 16), hood_pts)
+    pygame.draw.polygon(surface, (90, 60, 30), hood_pts, 1)
+
+    # Shoulder armour — riveted plates
+    shoulder_pts = [
+        (int(cx - 42 * s), int(cy + 38 * s)),
+        (int(cx + 42 * s), int(cy + 38 * s)),
+        (int(cx + 50 * s), int(cy + 70 * s)),
+        (int(cx - 50 * s), int(cy + 70 * s)),
+    ]
+    pygame.draw.polygon(surface, (44, 44, 50), shoulder_pts)
+    pygame.draw.polygon(surface, metal, shoulder_pts, 1)
+    # Rivets
+    for rx_off in (-34, -10, 10, 34):
+        pygame.draw.circle(surface, metal,
+                           (int(cx + rx_off * s), int(cy + 50 * s)), 2)
+
+
+def _underground_dj(surface, cx, cy, s, disposition, t):
+    """
+    Marrow — radio DJ. Beanie, headphones, kind eyes.
+    Mouth animates when "broadcasting" (high disposition triggers
+    a brief mic gesture).
+    """
+    skin_l = (200, 160, 110)
+    skin_d = (90, 60, 30)
+    beanie = (60, 40, 80)
+    accent = (40, 200, 230)
+    head_p = (40, 40, 50)
+    dim    = (100, 76, 24)
+
+    # Headphone strap behind head
+    pygame.draw.arc(surface, head_p,
+                    (int(cx - 38 * s), int(cy - 50 * s),
+                     int(76 * s), int(40 * s)),
+                    0, math.pi, 3)
+
+    # Beanie
+    beanie_pts = [
+        (int(cx - 32 * s), int(cy - 22 * s)),
+        (int(cx - 28 * s), int(cy - 38 * s)),
+        (int(cx - 8 * s),  int(cy - 46 * s)),
+        (int(cx + 18 * s), int(cy - 44 * s)),
+        (int(cx + 30 * s), int(cy - 32 * s)),
+        (int(cx + 32 * s), int(cy - 18 * s)),
+    ]
+    pygame.draw.polygon(surface, beanie, beanie_pts)
+    pygame.draw.polygon(surface, (24, 14, 38), beanie_pts, 1)
+    # Beanie ribs
+    for rx in range(-22, 25, 8):
+        pygame.draw.line(surface, (40, 22, 60),
+                         (int(cx + rx * s), int(cy - 40 * s)),
+                         (int(cx + rx * s), int(cy - 18 * s)), 1)
+    # Beanie pom
+    pygame.draw.circle(surface, accent,
+                       (int(cx - 12 * s), int(cy - 46 * s)), int(4 * s) + 1)
+    pygame.draw.circle(surface, (10, 90, 110),
+                       (int(cx - 12 * s), int(cy - 46 * s)), int(4 * s) + 1, 1)
+
+    # Head silhouette
+    head_pts = [
+        (int(cx - 32 * s), int(cy - 18 * s)),
+        (int(cx - 22 * s), int(cy - 30 * s)),
+        (int(cx + 22 * s), int(cy - 30 * s)),
+        (int(cx + 32 * s), int(cy - 16 * s)),
+        (int(cx + 30 * s), int(cy + 4 * s)),
+        (int(cx + 18 * s), int(cy + 22 * s)),
+        (int(cx - 16 * s), int(cy + 24 * s)),
+        (int(cx - 30 * s), int(cy + 4 * s)),
+    ]
+    pygame.draw.polygon(surface, skin_l, head_pts)
+    pygame.draw.polygon(surface, dim, head_pts, 1)
+
+    # Sideburns
+    pygame.draw.line(surface, (60, 40, 24),
+                     (int(cx - 28 * s), int(cy - 14 * s)),
+                     (int(cx - 26 * s), int(cy - 2 * s)), 2)
+    pygame.draw.line(surface, (60, 40, 24),
+                     (int(cx + 28 * s), int(cy - 14 * s)),
+                     (int(cx + 26 * s), int(cy - 2 * s)), 2)
+
+    # Headphone cups — bracket the head
+    for cup_x_off in (-32, 32):
+        cup_x = int(cx + cup_x_off * s)
+        cup_y = int(cy - 10 * s)
+        pygame.draw.ellipse(surface, head_p,
+                            (cup_x - int(8 * s), cup_y - int(8 * s),
+                             int(16 * s), int(16 * s)))
+        pygame.draw.ellipse(surface, accent,
+                            (cup_x - int(8 * s), cup_y - int(8 * s),
+                             int(16 * s), int(16 * s)), 1)
+        pygame.draw.circle(surface, (15, 110, 130), (cup_x, cup_y), int(4 * s))
+
+    # Eyes — warm, attentive
+    eye_y = int(cy - 6 * s)
+    pygame.draw.circle(surface, (245, 245, 245),
+                       (int(cx - 10 * s), eye_y), 3)
+    pygame.draw.circle(surface, (245, 245, 245),
+                       (int(cx + 10 * s), eye_y), 3)
+    pygame.draw.circle(surface, (40, 80, 30),
+                       (int(cx - 10 * s), eye_y), 2)
+    pygame.draw.circle(surface, (40, 80, 30),
+                       (int(cx + 10 * s), eye_y), 2)
+    pygame.draw.circle(surface, (10, 20, 10),
+                       (int(cx - 10 * s), eye_y), 1)
+    pygame.draw.circle(surface, (10, 20, 10),
+                       (int(cx + 10 * s), eye_y), 1)
+
+    # Brows — friendly, relaxed
+    pygame.draw.line(surface, (60, 40, 24),
+                     (int(cx - 16 * s), int(cy - 14 * s)),
+                     (int(cx - 4 * s),  int(cy - 16 * s)), 2)
+    pygame.draw.line(surface, (60, 40, 24),
+                     (int(cx + 4 * s),  int(cy - 16 * s)),
+                     (int(cx + 16 * s), int(cy - 14 * s)), 2)
+
+    # Nose
+    pygame.draw.line(surface, dim,
+                     (int(cx + 1 * s), int(cy - 4 * s)),
+                     (int(cx - 1 * s), int(cy + 8 * s)), 1)
+
+    # Mouth — animates when broadcasting (disp >= 1 = engaged)
+    speaking = disposition >= 1
+    if speaking:
+        m_open = int(2 + 2 * abs(math.sin(t * 12.0)))
+        pygame.draw.ellipse(surface, (60, 20, 20),
+                            (int(cx - 6 * s), int(cy + 12 * s),
+                             int(12 * s), m_open))
+    else:
+        pygame.draw.line(surface, dim,
+                         (int(cx - 8 * s), int(cy + 14 * s)),
+                         (int(cx + 8 * s), int(cy + 14 * s)), 1)
+
+    # Microphone arm — boom from right cup to mouth
+    pygame.draw.line(surface, head_p,
+                     (int(cx + 32 * s), int(cy - 6 * s)),
+                     (int(cx + 18 * s), int(cy + 14 * s)), 2)
+    pygame.draw.circle(surface, accent,
+                       (int(cx + 18 * s), int(cy + 14 * s)), 3)
+    pygame.draw.circle(surface, (10, 80, 90),
+                       (int(cx + 18 * s), int(cy + 14 * s)), 3, 1)
+
+    # Shoulders + casual jacket
+    sh_pts = [
+        (int(cx - 36 * s), int(cy + 30 * s)),
+        (int(cx + 36 * s), int(cy + 30 * s)),
+        (int(cx + 42 * s), int(cy + 70 * s)),
+        (int(cx - 42 * s), int(cy + 70 * s)),
+    ]
+    pygame.draw.polygon(surface, (50, 60, 70), sh_pts)
+    pygame.draw.polygon(surface, (90, 110, 130), sh_pts, 1)
+
+
+# Patch the dispatch table now that the new functions exist
+_DISPATCH["insurance_adjuster"] = _insurance_adjuster
+_DISPATCH["sandra"]             = _sandra
+_DISPATCH["pirate"]             = _pirate
+_DISPATCH["underground_dj"]     = _underground_dj
