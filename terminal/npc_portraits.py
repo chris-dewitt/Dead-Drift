@@ -1353,115 +1353,391 @@ def _backdrop_insurance_adjuster(surface, inner, t):
 
 
 def _backdrop_sandra(surface, inner, t):
-    # Dispatch center: multiple screens + Vega Curve quota chart
-    # Three small screens at the top
-    for i in range(3):
-        sw, sh = 36, 22
-        sx = inner.left + 10 + i * (sw + 6)
-        sy = inner.top + 6
-        pygame.draw.rect(surface, (4, 18, 4), (sx, sy, sw, sh))
-        pygame.draw.rect(surface, (40, 130, 50), (sx, sy, sw, sh), 1)
-        # Route map: small connected nodes
-        nodes = [(sx + 6, sy + 6 + i * 2),
-                 (sx + 18, sy + 14),
-                 (sx + 28, sy + 8 + i)]
-        pygame.draw.lines(surface, (60, 180, 80), False, nodes, 1)
-        for n in nodes:
-            pygame.draw.circle(surface, (120, 220, 130), n, 1)
-    # Accolade plaque
-    plaque = pygame.Rect(inner.right - 70, inner.top + 38, 62, 20)
-    pygame.draw.rect(surface, (60, 50, 12), plaque)
-    pygame.draw.rect(surface, (200, 160, 40), plaque, 1)
-    font = pygame.font.SysFont("monospace", 6, bold=True)
-    p1 = font.render("VEGA CURVE", True, (240, 200, 80))
-    surface.blit(p1, (plaque.centerx - p1.get_width()//2, plaque.top + 4))
-    p2 = font.render("BASELINE: 312", True, (220, 180, 60))
-    surface.blit(p2, (plaque.centerx - p2.get_width()//2, plaque.top + 11))
-    # Quota chart — ascending bar pattern on the lower wall
-    chart_y0 = inner.bottom - 12
-    bar_x = inner.left + 8
-    for i in range(11):
-        h = 4 + i * 1
-        col = (40, 150, 60) if i < 9 else (240, 180, 50)
-        pygame.draw.rect(surface, col, (bar_x + i * 5, chart_y0 - h, 3, h))
+    """High-spec courier cockpit — clean, green, perfect. Annoyingly good."""
+    cx = inner.centerx
+    font6 = pygame.font.SysFont("monospace", 6, bold=True)
+    font7 = pygame.font.SysFont("monospace", 7)
+
+    # ── Clean hull panelling — tight seams ────────────────────────────────────
+    for i in range(4):
+        y = inner.top + 8 + i * 12
+        pygame.draw.line(surface, (20, 24, 18), (inner.left, y), (inner.right, y), 1)
+    for x_off in (20, 40, inner.width - 40, inner.width - 20):
+        pygame.draw.line(surface, (16, 20, 14), (inner.left + x_off, inner.top),
+                         (inner.left + x_off, inner.bottom), 1)
+
+    # ── Clean viewport — bright clean stars ───────────────────────────────────
+    vp = pygame.Rect(cx - 40, inner.top + 4, 80, 44)
+    pygame.draw.rect(surface, (3, 5, 8), vp)
+    pygame.draw.rect(surface, (55, 110, 65), vp, 2)
+    # Frame cross-bars (clean lines, green tint)
+    pygame.draw.line(surface, (35, 75, 45), (vp.left, vp.centery), (vp.right, vp.centery), 1)
+    pygame.draw.line(surface, (35, 75, 45), (vp.centerx, vp.top), (vp.centerx, vp.bottom), 1)
+    rng_s = random.Random(55)
+    for _ in range(20):
+        sx = rng_s.randint(vp.left + 3, vp.right - 3)
+        sy = rng_s.randint(vp.top + 3, vp.bottom - 3)
+        sc = rng_s.choice([(100, 140, 120), (80, 120, 100), (140, 180, 150)])
+        pygame.draw.circle(surface, sc, (sx, sy), 1)
+    # A distant clean waypoint marker in view
+    pygame.draw.rect(surface, (40, 200, 80), (vp.centerx + 8, vp.centery - 5, 6, 6), 1)
+    pygame.draw.line(surface, (40, 200, 80),
+                     (vp.centerx + 12, vp.centery - 9), (vp.centerx + 12, vp.centery - 14), 1)
+
+    # ── Multiple HUD monitor panels — all showing green (nominal) ─────────────
+    screen_defs = [
+        (inner.left + 4,  inner.top + 52, 44, 28, "NAV",    True),
+        (inner.left + 52, inner.top + 52, 44, 28, "HULL",   True),
+        (cx - 18,         inner.top + 52, 44, 28, "THRUST", True),
+        (inner.right - 48, inner.top + 52, 44, 28, "COMMS",  True),
+    ]
+    for mx, my, mw, mh, label, nominal in screen_defs:
+        pygame.draw.rect(surface, (4, 14, 5), (mx, my, mw, mh))
+        pygame.draw.rect(surface, (40, 130, 52), (mx, my, mw, mh), 1)
+        for sl in range(my + 2, my + mh - 1, 3):
+            pygame.draw.line(surface, (6, 18, 7), (mx+1, sl), (mx+mw-2, sl), 1)
+        # Header strip
+        pygame.draw.rect(surface, (8, 30, 12), (mx, my, mw, 8))
+        lbl = font6.render(label, True, (55, 190, 75))
+        surface.blit(lbl, (mx + mw//2 - lbl.get_width()//2, my + 1))
+        # Green bar — all full (nominal)
+        pygame.draw.rect(surface, (0, 190, 65), (mx + 3, my + 10, mw - 6, 4))
+        # "OK" or metric
+        ok_lbl = font6.render("100%  OK", True, (0, 200, 70))
+        surface.blit(ok_lbl, (mx + mw//2 - ok_lbl.get_width()//2, my + 18))
+
+    # ── VEGA-MARSH callsign — bright amber ────────────────────────────────────
+    cs_lbl = font7.render("VEGA-MARSH", True, (255, 176, 0))
+    surface.blit(cs_lbl, (cx - cs_lbl.get_width()//2, inner.top + 84))
+
+    # ── Trophy/plaque on right wall ───────────────────────────────────────────
+    plaque = pygame.Rect(inner.right - 54, inner.top + 4, 50, 44)
+    pygame.draw.rect(surface, (55, 46, 12), plaque)
+    pygame.draw.rect(surface, (210, 170, 42), plaque, 2)
+    # Trophy chevron shape
+    tphx = plaque.centerx
+    tphy = plaque.top + 10
+    trophy_pts = [(tphx - 8, tphy + 18), (tphx - 5, tphy + 8), (tphx, tphy + 2),
+                  (tphx + 5, tphy + 8), (tphx + 8, tphy + 18)]
+    pygame.draw.lines(surface, (220, 180, 50), False, trophy_pts, 2)
+    pygame.draw.line(surface, (210, 170, 42), (tphx - 5, tphy + 18), (tphx + 5, tphy + 18), 2)
+    # Plaque text
+    p1 = font6.render("ELITE COURIER", True, (220, 175, 40))
+    surface.blit(p1, (plaque.centerx - p1.get_width()//2, plaque.top + 30))
+    p2 = font6.render("ZERO FAILS", True, (180, 140, 28))
+    surface.blit(p2, (plaque.centerx - p2.get_width()//2, plaque.top + 38))
+
+    # ── Run statistics panel ──────────────────────────────────────────────────
+    stat_x, stat_y = inner.left + 4, inner.top + 4
+    stat_w, stat_h = 58, 44
+    pygame.draw.rect(surface, (5, 18, 8), (stat_x, stat_y, stat_w, stat_h))
+    pygame.draw.rect(surface, (40, 130, 52), (stat_x, stat_y, stat_w, stat_h), 1)
+    stat_hdr = font6.render("RUN STATS", True, (55, 190, 75))
+    surface.blit(stat_hdr, (stat_x + stat_w//2 - stat_hdr.get_width()//2, stat_y + 2))
+    stat_lines = ["SECTORS:5/5", "CARGO:INTACT", "DEBT:CLEAR", "RATING: A+"]
+    for si, sl in enumerate(stat_lines):
+        slbl = font6.render(sl, True, (0, 190, 65))
+        surface.blit(slbl, (stat_x + 4, stat_y + 10 + si * 8))
+
+    # ── Comms array — antennas in corner ──────────────────────────────────────
+    ant_base_x, ant_base_y = inner.right - 12, inner.bottom - 6
+    for i, (adx, ady) in enumerate(((0, -40), (-8, -35), (-16, -28))):
+        pygame.draw.line(surface, (40, 80, 50),
+                         (ant_base_x + adx, ant_base_y),
+                         (ant_base_x + adx, ant_base_y + ady), 1)
+        blink_a = (int(t * (1.4 + i * 0.5) + i) % 2 == 0)
+        pygame.draw.circle(surface, (0, 220, 80) if blink_a else (0, 60, 22),
+                           (ant_base_x + adx, ant_base_y + ady), 2)
+
+    # ── Quota/performance ascending bar chart ─────────────────────────────────
+    chart_y0 = inner.bottom - 8
+    bar_x = inner.left + 4
+    for bi in range(14):
+        bh = 3 + bi
+        bc = (0, 160, 55) if bi < 12 else (240, 190, 50)
+        pygame.draw.rect(surface, bc, (bar_x + bi * 6, chart_y0 - bh, 4, bh))
+    # Chart label
+    ch_lbl = font6.render("DELIVERIES", True, (0, 120, 45))
+    surface.blit(ch_lbl, (bar_x, chart_y0 - 26))
 
 
 def _backdrop_pirate(surface, inner, t):
-    # Pirate ship interior: exposed wiring + scavenged panels + defaced flag
-    # Exposed wiring — sagging cables across the back
-    for i in range(3):
-        y0 = inner.top + 14 + i * 8
-        ax = inner.left + 6
-        bx = inner.right - 6
-        col = (140, 60, 0) if i == 0 else (60, 80, 90) if i == 1 else (20, 30, 30)
-        sag = 6
-        mid = ((ax + bx) // 2, y0 + sag)
-        pygame.draw.lines(surface, col, False, [(ax, y0), mid, (bx, y0)], 2)
-    # Scavenged metal panels — irregular plates riveted on
-    plates = [
-        (inner.left + 6,  inner.top + 40, 38, 24),
-        (inner.left + 46, inner.top + 56, 28, 18),
-        (inner.right - 42, inner.top + 42, 30, 22),
-        (inner.right - 64, inner.bottom - 24, 24, 14),
-    ]
-    for px, py, pw, ph in plates:
-        pygame.draw.rect(surface, (38, 38, 44), (px, py, pw, ph))
-        pygame.draw.rect(surface, (90, 70, 50), (px, py, pw, ph), 1)
-        # Rivets
-        for rx in (px+3, px+pw-4):
-            for ry in (py+3, py+ph-4):
-                pygame.draw.circle(surface, (140, 110, 60), (rx, ry), 1)
-    # Defaced Union flag — black bar through the 404 emblem
-    flag = pygame.Rect(inner.left + 8, inner.bottom - 30, 26, 18)
+    """Battered outer-belt pirate vessel — scavenged, cracked, hostile."""
+    cx = inner.centerx
+    font6 = pygame.font.SysFont("monospace", 6, bold=True)
+    font7 = pygame.font.SysFont("monospace", 7)
+
+    # ── Exposed hull plating — irregular dark metal ───────────────────────────
+    for i in range(0, inner.width, 9):
+        x = inner.left + i
+        col = (32, 30, 36) if (i // 9) % 2 == 0 else (22, 20, 28)
+        pygame.draw.line(surface, col, (x, inner.top), (x, inner.bottom), 1)
+    # Diagonal weld marks
+    for wx in range(inner.left + 10, inner.right - 5, 22):
+        pygame.draw.line(surface, (48, 38, 26), (wx, inner.top + 2), (wx + 8, inner.top + 14), 1)
+
+    # ── Cracked viewport with hand-patched welds ──────────────────────────────
+    vp = pygame.Rect(cx - 36, inner.top + 4, 72, 42)
+    pygame.draw.rect(surface, (3, 4, 7), vp)
+    pygame.draw.rect(surface, (55, 38, 20), vp, 3)
+    # Crack lines on viewport glass
+    crack_pts = [(vp.left + 12, vp.top + 8), (vp.left + 22, vp.top + 20),
+                 (vp.left + 18, vp.top + 36)]
+    pygame.draw.lines(surface, (80, 65, 45), False, crack_pts, 1)
+    crack2 = [(vp.left + 22, vp.top + 20), (vp.left + 35, vp.top + 28)]
+    pygame.draw.lines(surface, (70, 55, 35), False, crack2, 1)
+    # Weld patch over crack — rough blobs
+    for wpx, wpy in ((vp.left + 14, vp.top + 10), (vp.left + 24, vp.top + 22)):
+        pygame.draw.circle(surface, (65, 40, 18), (wpx, wpy), 3)
+        pygame.draw.circle(surface, (90, 58, 24), (wpx, wpy), 3, 1)
+    # Stars through viewport
+    rng_pv = random.Random(77)
+    for _ in range(14):
+        sx = rng_pv.randint(vp.left + 3, vp.right - 3)
+        sy = rng_pv.randint(vp.top + 3, vp.bottom - 3)
+        pygame.draw.circle(surface, (75, 68, 88), (sx, sy), 1)
+    # Outer belt asteroid visible
+    ax_a, ay_a = vp.left + 48, vp.top + 22
+    ast_pts = [(ax_a, ay_a - 5), (ax_a + 7, ay_a - 7), (ax_a + 11, ay_a - 2),
+               (ax_a + 9, ay_a + 5), (ax_a + 2, ay_a + 6), (ax_a - 2, ay_a + 2)]
+    pygame.draw.polygon(surface, (28, 24, 34), ast_pts)
+    pygame.draw.polygon(surface, (58, 48, 64), ast_pts, 1)
+
+    # ── Exposed sagging wiring — multiple cables ──────────────────────────────
+    for i in range(5):
+        y0 = inner.top + 50 + i * 6
+        ax_w = inner.left + 4
+        bx_w = inner.right - 4
+        sag = 4 + (i % 3) * 3
+        col_w = [(140, 55, 0), (55, 75, 85), (18, 28, 28),
+                 (100, 35, 20), (40, 55, 40)][i]
+        mid_w = ((ax_w + bx_w) // 2, y0 + sag)
+        pygame.draw.lines(surface, col_w, False, [(ax_w, y0), mid_w, (bx_w, y0)], 2)
+        # Wire fraying end
+        pygame.draw.circle(surface, col_w, (bx_w, y0), 2)
+
+    # ── Scavenged screen showing corrupt/static data ──────────────────────────
+    scr_x, scr_y = inner.left + 4, inner.top + 54
+    scr_w, scr_h = 52, 32
+    pygame.draw.rect(surface, (8, 6, 8), (scr_x, scr_y, scr_w, scr_h))
+    pygame.draw.rect(surface, (75, 55, 40), (scr_x, scr_y, scr_w, scr_h), 1)
+    # Corrupt/static data lines
+    rng_scr = random.Random(int(t * 3))
+    for row in range(5):
+        line_w = rng_scr.randint(12, scr_w - 8)
+        col_c = (rng_scr.randint(40, 120), rng_scr.randint(10, 50), rng_scr.randint(0, 30))
+        pygame.draw.rect(surface, col_c, (scr_x + 3, scr_y + 4 + row * 5, line_w, 3))
+    # Glitch horizontal bar
+    if (int(t * 4) % 7 == 0):
+        glitch_y = scr_y + rng_scr.randint(2, scr_h - 4)
+        pygame.draw.rect(surface, (200, 100, 40), (scr_x, glitch_y, scr_w, 3))
+    # "NO SIGNAL" flicker
+    if (int(t * 2.5) % 3 == 0):
+        ns_lbl = font6.render("NO SIG", True, (130, 80, 30))
+        surface.blit(ns_lbl, (scr_x + scr_w//2 - ns_lbl.get_width()//2, scr_y + scr_h//2 - 3))
+
+    # ── Weapon rack — abstract tool/weapon shapes ─────────────────────────────
+    rack_x, rack_y = inner.right - 48, inner.top + 50
+    pygame.draw.rect(surface, (30, 26, 20), (rack_x, rack_y, 44, 54))
+    pygame.draw.rect(surface, (68, 52, 32), (rack_x, rack_y, 44, 54), 1)
+    # Hook bar
+    pygame.draw.line(surface, (85, 65, 40), (rack_x + 4, rack_y + 8), (rack_x + 40, rack_y + 8), 1)
+    # Weapon 1: long tube (plasma torch)
+    pygame.draw.rect(surface, (55, 50, 58), (rack_x + 6, rack_y + 12, 32, 5))
+    pygame.draw.circle(surface, (90, 80, 95), (rack_x + 38, rack_y + 14), 3)
+    # Weapon 2: chunky tool
+    wp2_pts = [(rack_x + 8, rack_y + 22), (rack_x + 30, rack_y + 22),
+               (rack_x + 32, rack_y + 28), (rack_x + 8, rack_y + 28)]
+    pygame.draw.polygon(surface, (55, 48, 52), wp2_pts)
+    pygame.draw.polygon(surface, (95, 78, 62), wp2_pts, 1)
+    # Weapon 3: short stocky shape
+    pygame.draw.rect(surface, (46, 42, 48), (rack_x + 10, rack_y + 34, 22, 10))
+    pygame.draw.rect(surface, (80, 68, 55), (rack_x + 10, rack_y + 34, 22, 10), 1)
+
+    # ── Crude skull-and-bones geometric marker (defaced union badge) ──────────
+    skull_x, skull_y = inner.left + 8, inner.bottom - 32
+    # Skull outline: hexagon
+    skpts = [(skull_x + int(10*math.cos(math.pi/3*i)), skull_y + int(8*math.sin(math.pi/3*i)))
+             for i in range(6)]
+    pygame.draw.polygon(surface, (18, 14, 14), skpts)
+    pygame.draw.polygon(surface, (180, 35, 35), skpts, 1)
+    # Eye holes
+    pygame.draw.circle(surface, (180, 35, 35), (skull_x - 3, skull_y - 1), 2)
+    pygame.draw.circle(surface, (180, 35, 35), (skull_x + 3, skull_y - 1), 2)
+    # Cross-bones beneath
+    pygame.draw.line(surface, (160, 28, 28), (skull_x - 8, skull_y + 9), (skull_x + 8, skull_y + 18), 2)
+    pygame.draw.line(surface, (160, 28, 28), (skull_x + 8, skull_y + 9), (skull_x - 8, skull_y + 18), 2)
+
+    # ── Torn/patched hull section left wall ───────────────────────────────────
+    torn_pts = [(inner.left + 2, inner.top + 88),
+                (inner.left + 14, inner.top + 80),
+                (inner.left + 18, inner.top + 92),
+                (inner.left + 10, inner.top + 98),
+                (inner.left + 2, inner.top + 95)]
+    pygame.draw.polygon(surface, (42, 36, 46), torn_pts)
+    pygame.draw.polygon(surface, (80, 60, 35), torn_pts, 1)
+    # Patch
+    pygame.draw.rect(surface, (50, 44, 30), (inner.left + 2, inner.top + 86, 16, 12))
+    pygame.draw.rect(surface, (95, 72, 42), (inner.left + 2, inner.top + 86, 16, 12), 1)
+    # Rivets on patch
+    for rpx, rpy in ((inner.left + 4, inner.top + 88), (inner.left + 16, inner.top + 88),
+                     (inner.left + 4, inner.top + 96), (inner.left + 16, inner.top + 96)):
+        pygame.draw.circle(surface, (130, 105, 60), (rpx, rpy), 1)
+
+    # ── Defaced union flag ────────────────────────────────────────────────────
+    flag = pygame.Rect(cx - 14, inner.bottom - 28, 28, 18)
     pygame.draw.rect(surface, (16, 8, 0), flag)
     pygame.draw.rect(surface, (100, 60, 0), flag, 1)
-    font = pygame.font.SysFont("monospace", 6, bold=True)
-    ff = font.render("404", True, (160, 120, 30))
+    ff = font6.render("404", True, (160, 120, 30))
     surface.blit(ff, (flag.centerx - ff.get_width()//2, flag.centery - ff.get_height()//2))
-    # X through it
-    pygame.draw.line(surface, (230, 30, 30),
-                     (flag.left, flag.top), (flag.right, flag.bottom), 2)
-    pygame.draw.line(surface, (230, 30, 30),
-                     (flag.left, flag.bottom), (flag.right, flag.top), 2)
+    pygame.draw.line(surface, (230, 30, 30), (flag.left, flag.top), (flag.right, flag.bottom), 2)
+    pygame.draw.line(surface, (230, 30, 30), (flag.left, flag.bottom), (flag.right, flag.top), 2)
 
 
 def _backdrop_underground_dj(surface, inner, t):
-    # Radio studio: turntables + ON-AIR sign + soundwave
-    # ON AIR sign — chunky red glow
-    sign = pygame.Rect(inner.left + 8, inner.top + 6, 56, 16)
-    glow_pulse = 0.6 + 0.4 * math.sin(t * 2.0)
-    pygame.draw.rect(surface, (12, 0, 0), sign)
-    pygame.draw.rect(surface,
-                     (int(220 * glow_pulse + 35), 30, 30), sign, 1)
-    font = pygame.font.SysFont("monospace", 9, bold=True)
-    oa = font.render("ON AIR", True, (255, 60, 40))
-    surface.blit(oa, (sign.centerx - oa.get_width()//2,
-                      sign.centery - oa.get_height()//2))
-    # Soundwave visualization across the middle
-    wave_y = inner.top + 36
-    last_pt = None
-    for x in range(inner.left + 6, inner.right - 6, 3):
-        amp = 4 + 3 * math.sin(t * 6.0 + x * 0.2) + 2 * math.sin(t * 11.0 + x * 0.07)
-        pt = (x, wave_y + int(amp))
-        if last_pt is not None:
-            pygame.draw.line(surface, (40, 200, 230), last_pt, pt, 1)
-        last_pt = pt
-    # Two turntables at the bottom (just the discs)
-    for cx_off in (inner.left + 26, inner.right - 26):
-        cy = inner.bottom - 22
-        pygame.draw.circle(surface, (16, 16, 20), (cx_off, cy), 14)
-        pygame.draw.circle(surface, (80, 80, 90), (cx_off, cy), 14, 1)
-        # Grooves
-        for gr in (4, 7, 10, 13):
-            pygame.draw.circle(surface, (32, 32, 38), (cx_off, cy), gr, 1)
-        # Centre label
-        pygame.draw.circle(surface, (200, 100, 30), (cx_off, cy), 3)
-        # Stylus arm
-        ax = cx_off + 10
-        ay = cy - 10
-        pygame.draw.line(surface, (140, 140, 150),
-                         (ax, ay), (cx_off + 3, cy - 1), 1)
-        pygame.draw.circle(surface, (190, 50, 50), (cx_off + 3, cy - 1), 1)
+    """Cramped pirate radio broadcast booth — reel-to-reel, vinyl, contraband freq."""
+    cx = inner.centerx
+    font6 = pygame.font.SysFont("monospace", 6, bold=True)
+    font7 = pygame.font.SysFont("monospace", 7)
+
+    # ── Acoustic foam panels on walls — grid of small squares ────────────────
+    foam_col = (22, 20, 24)
+    foam_edge = (34, 30, 38)
+    for fy in range(inner.top, inner.bottom, 9):
+        for fx in range(inner.left, inner.right, 9):
+            pygame.draw.rect(surface, foam_col, (fx, fy, 8, 8))
+            pygame.draw.rect(surface, foam_edge, (fx, fy, 8, 8), 1)
+
+    # ── ON AIR sign — pulsing red ─────────────────────────────────────────────
+    glow_pulse = 0.55 + 0.45 * math.sin(t * 2.2)
+    sign = pygame.Rect(cx - 30, inner.top + 4, 60, 18)
+    pygame.draw.rect(surface, (18, 0, 0), sign)
+    pygame.draw.rect(surface, (int(230 * glow_pulse + 25), 28, 28), sign, 2)
+    # Glow halo
+    glow_s = pygame.Surface((70, 26), pygame.SRCALPHA)
+    pygame.draw.rect(glow_s, (220, 30, 30, int(50 * glow_pulse)), (0, 0, 70, 26))
+    surface.blit(glow_s, (cx - 35, inner.top + 1))
+    font8b = pygame.font.SysFont("monospace", 9, bold=True)
+    oa = font8b.render("ON AIR", True, (255, 55, 38))
+    surface.blit(oa, (sign.centerx - oa.get_width()//2, sign.centery - oa.get_height()//2))
+
+    # ── BROADCASTING LIVE indicator ────────────────────────────────────────────
+    bl_blink = (int(t * 1.8) % 2 == 0)
+    bl_col = (55, 220, 80) if bl_blink else (12, 55, 18)
+    pygame.draw.circle(surface, bl_col, (cx + 38, inner.top + 13), 3)
+    bl_lbl = font6.render("LIVE TX", True, (45, 185, 68))
+    surface.blit(bl_lbl, (cx + 42, inner.top + 8))
+
+    # ── Waveform display — animated oscilloscope ──────────────────────────────
+    wave_y = inner.top + 28
+    wave_pts = []
+    for x in range(inner.left + 6, inner.right - 6, 2):
+        amp = (5 + 4 * math.sin(t * 6.2 + x * 0.18)
+               + 2 * math.sin(t * 11.4 + x * 0.07)
+               + 1 * math.sin(t * 17.8 + x * 0.03))
+        wave_pts.append((x, wave_y + int(amp)))
+    if len(wave_pts) > 1:
+        pygame.draw.lines(surface, (40, 205, 235), False, wave_pts, 1)
+    # Mirror wave (ghost)
+    ghost_pts = [(x, wave_y + int((wave_y - y) * 0.3 + wave_y * 0.7) - wave_y)
+                 for x, y in wave_pts]
+    ghost_pts2 = [(x, wave_y - int(abs(y - wave_y) * 0.5)) for x, y in wave_pts]
+    if len(ghost_pts2) > 1:
+        pygame.draw.lines(surface, (20, 90, 105), False, ghost_pts2, 1)
+
+    # ── Mixing board — horizontal slider panel ────────────────────────────────
+    mix_x, mix_y = inner.left + 4, inner.top + 44
+    mix_w, mix_h = inner.width - 8, 24
+    pygame.draw.rect(surface, (18, 14, 20), (mix_x, mix_y, mix_w, mix_h))
+    pygame.draw.rect(surface, (70, 55, 80), (mix_x, mix_y, mix_w, mix_h), 1)
+    # Slider channels
+    n_sliders = 10
+    slider_w = (mix_w - 8) // n_sliders
+    for si in range(n_sliders):
+        sx = mix_x + 4 + si * slider_w
+        # Track
+        pygame.draw.line(surface, (40, 32, 48), (sx + slider_w//2, mix_y + 3),
+                         (sx + slider_w//2, mix_y + mix_h - 5), 1)
+        # Fader position (animated)
+        fpos = int(mix_y + 4 + 14 * (0.4 + 0.4 * math.sin(t * 0.8 + si * 0.7)))
+        pygame.draw.rect(surface, (100, 80, 120), (sx + slider_w//2 - 3, fpos, 6, 4))
+        pygame.draw.rect(surface, (160, 130, 180), (sx + slider_w//2 - 3, fpos, 6, 4), 1)
+        # Level LED
+        led_on = (fpos - (mix_y + 4)) < 9
+        pygame.draw.circle(surface, (0, 200, 80) if led_on else (0, 50, 18),
+                           (sx + slider_w//2, mix_y + mix_h - 3), 2)
+
+    # ── Reel-to-reel tape machine ──────────────────────────────────────────────
+    rtr_x, rtr_y = inner.right - 56, inner.top + 44
+    pygame.draw.rect(surface, (20, 16, 24), (rtr_x, rtr_y, 52, 40))
+    pygame.draw.rect(surface, (75, 58, 88), (rtr_x, rtr_y, 52, 40), 1)
+    # Two reels
+    for reel_cx_off, spin_dir in ((rtr_x + 14, 1), (rtr_x + 38, -1)):
+        reel_cy = rtr_y + 18
+        reel_ang = t * spin_dir * 1.8
+        pygame.draw.circle(surface, (35, 28, 42), (reel_cx_off, reel_cy), 10)
+        pygame.draw.circle(surface, (95, 75, 110), (reel_cx_off, reel_cy), 10, 1)
+        pygame.draw.circle(surface, (60, 48, 70), (reel_cx_off, reel_cy), 5)
+        # Reel spokes
+        for sp in range(3):
+            spang = reel_ang + sp * math.tau / 3
+            pygame.draw.line(surface, (80, 62, 92),
+                             (int(reel_cx_off + math.cos(spang) * 3),
+                              int(reel_cy + math.sin(spang) * 3)),
+                             (int(reel_cx_off + math.cos(spang) * 9),
+                              int(reel_cy + math.sin(spang) * 9)), 1)
+    # Tape path between reels
+    pygame.draw.line(surface, (45, 35, 25), (rtr_x + 14, rtr_y + 24), (rtr_x + 38, rtr_y + 24), 1)
+    # PLAY button
+    play_col = (0, 200, 70) if (int(t * 0.5) % 2 == 0) else (0, 100, 35)
+    pygame.draw.polygon(surface, play_col,
+                        [(rtr_x + 18, rtr_y + 30), (rtr_x + 24, rtr_y + 34),
+                         (rtr_x + 18, rtr_y + 38)])
+
+    # ── Stacked vinyl record shapes ────────────────────────────────────────────
+    for vi, vx_off in enumerate((inner.left + 4, inner.left + 20)):
+        vy = inner.bottom - 14 - vi * 4
+        pygame.draw.ellipse(surface, (22, 20, 28), (vx_off, vy - 14, 22, 4))
+        pygame.draw.ellipse(surface, (65, 56, 75), (vx_off, vy - 14, 22, 4), 1)
+        pygame.draw.circle(surface, (180, 100, 40), (vx_off + 11, vy - 12), 3)
+
+    # ── Transmission antenna outside porthole ──────────────────────────────────
+    port_x = inner.left + 14
+    port_y = inner.top + 10
+    pygame.draw.circle(surface, (4, 4, 8), (port_x, port_y), 10)
+    pygame.draw.circle(surface, (70, 55, 80), (port_x, port_y), 10, 2)
+    # Antenna mast
+    pygame.draw.line(surface, (55, 85, 62), (port_x, port_y - 10), (port_x, port_y - 24), 1)
+    for ca in (6, 14, 22):
+        pygame.draw.line(surface, (42, 68, 48), (port_x - 4, port_y - ca), (port_x + 4, port_y - ca), 1)
+    ant_blink2 = (int(t * 1.9) % 2 == 0)
+    pygame.draw.circle(surface, (200, 55, 55) if ant_blink2 else (60, 14, 14),
+                       (port_x, port_y - 24), 2)
+
+    # ── Nova Soma frequency list — pinned paper (crossed out) ──────────────────
+    freq_x, freq_y = inner.right - 44, inner.top + 68
+    pygame.draw.rect(surface, (32, 30, 22), (freq_x, freq_y, 40, 30))
+    pygame.draw.rect(surface, (80, 75, 45), (freq_x, freq_y, 40, 30), 1)
+    # Thumb tack
+    pygame.draw.circle(surface, (180, 50, 50), (freq_x + 20, freq_y), 2)
+    freq_lines = ["107.4 MHz", "98.6 MHz", "112.0 MHz"]
+    for fi, fl in enumerate(freq_lines):
+        fl_lbl = font6.render(fl, True, (95, 90, 52))
+        surface.blit(fl_lbl, (freq_x + 3, freq_y + 4 + fi * 8))
+        # Strike-through all entries
+        ly = freq_y + 4 + fi * 8 + 3
+        pygame.draw.line(surface, (200, 35, 35),
+                         (freq_x + 2, ly), (freq_x + 38, ly), 1)
+
+    # ── Tangled cables at bottom ───────────────────────────────────────────────
+    for ci in range(4):
+        csx = inner.left + 8 + ci * 24
+        csy = inner.bottom - 10
+        cex = csx + 16 + ci * 3
+        cey = inner.bottom - 4
+        mid_c = ((csx + cex) // 2, csy + 6 + ci * 2)
+        pygame.draw.lines(surface, [(80, 40, 80), (40, 60, 80), (80, 80, 40), (40, 80, 60)][ci],
+                          False, [(csx, csy), mid_c, (cex, cey)], 2)
 
 
 _BACKDROPS = {

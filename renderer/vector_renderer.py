@@ -199,6 +199,8 @@ class VectorRenderer:
             self._draw_acoustic_static(cargo, t)
         elif ctype == "SentientPaperwork":
             self._draw_form_popup(cargo, t)
+        elif ctype == "SchrodingerVIP":
+            self._draw_vip_effect(cargo, t)
 
     def _draw_acoustic_static(self, cargo, t: float):
         sl = cargo.sorrow_level
@@ -222,12 +224,68 @@ class VectorRenderer:
                 alpha = int(sl * 90 * random.random())
                 pygame.draw.line(surf, (80, 80, 80, alpha), (0, y), (W, y), 1)
         self.surface.blit(surf, (0, 0))
-        # Sorrow meter HUD element
-        font_xs = pygame.font.SysFont("monospace", 12)
+
+        # ── Persistent audio waveform bar at top of screen ────────────────────
+        wave_h = 20
+        wave_surf = pygame.Surface((W, wave_h), pygame.SRCALPHA)
+        # Background strip
+        bg_a = int(60 + sl * 80)
+        pygame.draw.rect(wave_surf, (4, 4, 8, bg_a), (0, 0, W, wave_h))
+        pygame.draw.line(wave_surf, (80, 50, 20, 120), (0, wave_h - 1), (W, wave_h - 1), 1)
+        # Waveform — sine + harmonics, distortion increases with sorrow
+        wave_pts = []
+        distort = sl * 3.8
+        for wx in range(0, W, 2):
+            phase = wx * 0.04 + t * 5.2
+            base = math.sin(phase)
+            # Add harmonics/noise as sorrow rises
+            harm = (math.sin(phase * 2.3 + 1.1) * 0.45
+                    + math.sin(phase * 5.7 + t * 2.1) * 0.2 * sl
+                    + math.sin(phase * 11.3 + t * 3.7) * 0.15 * sl)
+            noise = (random.random() - 0.5) * distort * 0.4
+            amp = wave_h * 0.4 * (0.6 + 0.4 * sl)
+            wy = int(wave_h / 2 + (base + harm + noise) * amp)
+            wy = max(1, min(wave_h - 2, wy))
+            wave_pts.append((wx, wy))
+        if len(wave_pts) > 1:
+            # Outer glow pass
+            wave_col_glow = (int(200 * sl), int(60 * sl), int(20 * sl), int(sl * 120))
+            pygame.draw.lines(wave_surf, wave_col_glow[:3], False, wave_pts, 3)
+            # Core bright pass
+            wave_col = (int(255 * sl), int(130 * sl), int(40 * sl), int(sl * 220))
+            pygame.draw.lines(wave_surf, wave_col[:3], False, wave_pts, 1)
+        self.surface.blit(wave_surf, (0, 0))
+
+        # ── Ghost note symbols drifting upward (sl > 0.4) ─────────────────────
+        if sl > 0.4:
+            note_rng = random.Random(int(t * 0.5))   # slow seed = stable drift pattern
+            n_notes = int((sl - 0.4) * 10)
+            for ni in range(n_notes):
+                note_x = note_rng.randint(40, W - 40)
+                # Drift upward based on time + index
+                note_y = int(((1.0 - ((t * 18 + ni * 57) % 120) / 120.0)) * (H - 40) + 20)
+                note_a = int((sl - 0.4) / 0.6 * 150 * (1.0 - note_y / H))
+                if note_a < 10:
+                    continue
+                # Draw a small musical note as lines
+                note_col = (int(220 * sl), int(100 * sl), int(30 * sl))
+                # Note head (small rectangle)
+                pygame.draw.rect(self.surface, note_col, (note_x, note_y + 4, 5, 4))
+                # Stem up
+                pygame.draw.line(self.surface, note_col,
+                                 (note_x + 4, note_y + 4), (note_x + 4, note_y - 4), 1)
+                # Flag
+                pygame.draw.line(self.surface, note_col,
+                                 (note_x + 4, note_y - 4), (note_x + 8, note_y - 1), 1)
+
+        # ── Sorrow meter HUD element — bolder ────────────────────────────────
+        font_xs = pygame.font.SysFont("monospace", 13, bold=True)
         bars  = int(sl * 8)
+        col_r = int(160 + sl * 95)
+        col_g = int(80 * (1.0 - sl * 0.5))
         label = font_xs.render(
             f"SIGNAL  {'|' * bars}{'·' * (8 - bars)}",
-            True, (int(160 * sl), int(80 * sl), int(30 * sl)))
+            True, (col_r, col_g, int(30 * sl)))
         self.surface.blit(label, (8, H - 22))
 
     def _draw_form_popup(self, cargo, t: float):
@@ -238,7 +296,41 @@ class VectorRenderer:
         pulse = 0.6 + 0.4 * abs(math.sin(t * 6.0))
         urgent = frac < 0.35
 
-        # Popup box centred in upper-third of screen
+        # ── Floating form fragments behind main popup ─────────────────────────
+        frag_rng = random.Random(42)
+        n_frags = 5
+        for fi in range(n_frags):
+            # Each fragment has a fixed seed position + slow upward drift
+            fbase_x = frag_rng.randint(80, W - 120)
+            fbase_y = frag_rng.randint(H // 5, H * 3 // 4)
+            # Drift upward slowly, cycling with time
+            drift_speed = 12 + fi * 4
+            fy = fbase_y - int((t * drift_speed + fi * 80) % (H - 40))
+            fw, fh = frag_rng.randint(60, 100), frag_rng.randint(40, 65)
+            # Skip if would overlap main popup area
+            popup_bx = (W - 460) // 2
+            popup_by = H // 4 - 60
+            if (popup_bx - fw < fbase_x < popup_bx + 460 + fw and
+                    popup_by - fh < fy < popup_by + 140):
+                continue
+            # Fade by height (fragments higher up are more faded)
+            fade = max(20, int(120 * (1.0 - fy / H)))
+            frag_surf = pygame.Surface((fw, fh), pygame.SRCALPHA)
+            pygame.draw.rect(frag_surf, (28, 24, 10, min(fade, 90)), (0, 0, fw, fh))
+            pygame.draw.rect(frag_surf, (90, 82, 38, fade), (0, 0, fw, fh), 1)
+            # Simulated form fields as grey horizontal lines
+            for line_i in range(0, fh - 6, 8):
+                line_w = int(fw * (0.4 + 0.5 * frag_rng.random()))
+                line_col_a = max(10, fade - 30)
+                pygame.draw.line(frag_surf, (75, 70, 40, line_col_a),
+                                 (5, line_i + 5), (5 + line_w, line_i + 5), 1)
+                # Occasional label stub
+                if frag_rng.random() < 0.4:
+                    pygame.draw.rect(frag_surf, (50, 46, 22, line_col_a),
+                                     (5, line_i + 6, int(fw * 0.25), 3))
+            self.surface.blit(frag_surf, (fbase_x, fy))
+
+        # ── Main popup box ────────────────────────────────────────────────────
         bw, bh = 460, 120
         bx     = (W - bw) // 2
         by     = H // 4 - bh // 2
@@ -278,6 +370,97 @@ class VectorRenderer:
         sub = font_sm.render("Penalty: hull damage.  Subsection 9, Union Charter.  Non-negotiable.",
                              True, (80, 70, 50))
         self.surface.blit(sub, (bx + 12, by + 92))
+
+    def _draw_vip_effect(self, cargo, t: float):
+        """SchrodingerVIP — visual state overlay: alive/deceased/unobserved."""
+        W, H = S.SCREEN_W, S.FLIGHT_H
+        # Determine state string from cargo
+        status = cargo.state_for_terminal()   # "alive", "deceased", or "unobserved"
+
+        font_sm  = pygame.font.SysFont("monospace", 12, bold=True)
+        font_xs  = pygame.font.SysFont("monospace", 10)
+
+        if status == "alive":
+            # ── Gentle green heartbeat pulse on screen edges ─────────────────
+            # Beat: two rapid pulses followed by a long pause — simulating cardiac
+            beat_phase = t % 1.2
+            if beat_phase < 0.12:
+                intensity = math.sin(beat_phase / 0.12 * math.pi)
+            elif beat_phase < 0.28:
+                intensity = math.sin((beat_phase - 0.16) / 0.12 * math.pi) * 0.6
+            else:
+                intensity = 0.0
+            if intensity > 0.01:
+                edge_a = int(intensity * 90)
+                vignette = pygame.Surface((W, H), pygame.SRCALPHA)
+                for i in range(3):
+                    a = max(0, edge_a - i * 25)
+                    pygame.draw.rect(vignette, (0, 200, 80, a),
+                                     pygame.Rect(i*5, i*5, W - i*10, H - i*10), 8)
+                self.surface.blit(vignette, (0, 0))
+            # VIP status label
+            vip_lbl = font_sm.render("VIP STATUS: ALIVE", True, (0, 200, 80))
+            self.surface.blit(vip_lbl, (W - vip_lbl.get_width() - 10, H - 44))
+
+        elif status == "deceased":
+            # ── Red vignette pulse + EKG flatline ────────────────────────────
+            dead_pulse = 0.45 + 0.25 * math.sin(t * 1.1)
+            edge_a = int(dead_pulse * 80)
+            vignette = pygame.Surface((W, H), pygame.SRCALPHA)
+            for i in range(4):
+                a = max(0, edge_a - i * 18)
+                pygame.draw.rect(vignette, (200, 0, 0, a),
+                                 pygame.Rect(i*5, i*5, W - i*10, H - i*10), 8)
+            self.surface.blit(vignette, (0, 0))
+            # EKG flatline at top centre
+            ekl = W // 3
+            eky = 22
+            ekx = W // 2 - ekl // 2
+            pygame.draw.line(self.surface, (200, 30, 30), (ekx, eky), (ekx + ekl, eky), 2)
+            # Single blip (static dead spike at 1/3 of line)
+            blip_x = ekx + ekl // 3
+            pygame.draw.line(self.surface, (220, 50, 50),
+                             (blip_x, eky), (blip_x + 2, eky - 6), 1)
+            pygame.draw.line(self.surface, (220, 50, 50),
+                             (blip_x + 2, eky - 6), (blip_x + 4, eky + 6), 1)
+            pygame.draw.line(self.surface, (220, 50, 50),
+                             (blip_x + 4, eky + 6), (blip_x + 6, eky), 1)
+            # VIP status label
+            vip_lbl = font_sm.render("VIP STATUS: DECEASED", True, (200, 30, 30))
+            self.surface.blit(vip_lbl, (W - vip_lbl.get_width() - 10, H - 44))
+
+        else:
+            # ── Unobserved / superposition: overlapping ghost glow + ? symbols
+            # Green edge glow + red edge glow simultaneously at half alpha
+            sup_pulse = 0.4 + 0.3 * math.sin(t * 2.4)
+            ea = int(sup_pulse * 50)
+            sup_surf = pygame.Surface((W, H), pygame.SRCALPHA)
+            for i in range(3):
+                a = max(0, ea - i * 14)
+                pygame.draw.rect(sup_surf, (0, 180, 70, a),
+                                 pygame.Rect(i*5, i*5, W - i*10, H - i*10), 7)
+                pygame.draw.rect(sup_surf, (180, 0, 0, a),
+                                 pygame.Rect(i*6+2, i*6+2, W - i*12-4, H - i*12-4), 5)
+            self.surface.blit(sup_surf, (0, 0))
+            # Floating ? symbols that slowly rotate/drift
+            q_font = pygame.font.SysFont("monospace", 18, bold=True)
+            q_positions = [(W // 4, H // 3), (3 * W // 4, H // 4),
+                           (W // 2, H * 2 // 3), (W // 5, H * 2 // 3)]
+            for qi, (qx, qy) in enumerate(q_positions):
+                rot_off = math.sin(t * 0.8 + qi * 1.57) * 10
+                q_x = int(qx + rot_off)
+                q_y = int(qy + math.cos(t * 0.6 + qi * 2.1) * 8)
+                q_a = int(80 + 60 * math.sin(t * 1.2 + qi * 0.9))
+                q_surf = pygame.Surface((22, 22), pygame.SRCALPHA)
+                q_lbl = q_font.render("?", True, (200, 200, 50))
+                q_surf.blit(q_lbl, (0, 0))
+                q_surf.set_alpha(q_a)
+                self.surface.blit(q_surf, (q_x - 11, q_y - 11))
+            # VIP status label
+            vip_lbl = font_sm.render("VIP STATUS: ???", True, (200, 180, 40))
+            sub_lbl = font_xs.render("[UNOBSERVED]", True, (140, 120, 28))
+            self.surface.blit(vip_lbl, (W - vip_lbl.get_width() - 10, H - 44))
+            self.surface.blit(sub_lbl, (W - sub_lbl.get_width() - 10, H - 30))
 
     def _apply_screen_shake(self, dt: float):
         if self._shake_trauma <= 0.01:
@@ -1570,6 +1753,43 @@ class VectorRenderer:
         spore_level = getattr(cargo, "spore_level", 0.0)
         W, H = S.SCREEN_W, S.FLIGHT_H
 
+        # ── Mandala background when spore_level > 0.2 (ambient build-up) ─────
+        if spore_level > 0.2:
+            mandala_surf = pygame.Surface((W, H), pygame.SRCALPHA)
+            mcx, mcy = W // 2, H // 2
+            mandala_a = int((spore_level - 0.2) / 0.8 * 90)
+            # Hue cycles over time
+            hue_m = (t * 0.07) % 1.0
+            # Concentric triangles
+            n_tri = int(3 + (spore_level - 0.2) * 8)
+            for ti in range(n_tri):
+                tri_r = 30 + ti * 22
+                tri_ang = t * 0.35 * (1 if ti % 2 == 0 else -1)
+                tri_pts = [
+                    (int(mcx + tri_r * math.cos(tri_ang + math.tau * k / 3)),
+                     int(mcy + tri_r * math.sin(tri_ang + math.tau * k / 3)))
+                    for k in range(3)
+                ]
+                hue_t = (hue_m + ti * 0.08) % 1.0
+                col_m = _hsv(hue_t, 0.9, 0.85)
+                alpha_t = max(10, mandala_a - ti * 8)
+                pygame.draw.polygon(mandala_surf, (*col_m, alpha_t), tri_pts, 1)
+            # Concentric hexagons
+            n_hex = int(2 + (spore_level - 0.2) * 5)
+            for hi in range(n_hex):
+                hex_r = 45 + hi * 30
+                hex_ang = -t * 0.22 * (1 if hi % 2 == 0 else -1)
+                hex_pts = [
+                    (int(mcx + hex_r * math.cos(hex_ang + math.tau * k / 6)),
+                     int(mcy + hex_r * math.sin(hex_ang + math.tau * k / 6)))
+                    for k in range(6)
+                ]
+                hue_h = (hue_m + 0.33 + hi * 0.06) % 1.0
+                col_h = _hsv(hue_h, 0.85, 0.80)
+                alpha_h = max(10, mandala_a - hi * 10)
+                pygame.draw.polygon(mandala_surf, (*col_h, alpha_h), hex_pts, 1)
+            self.surface.blit(mandala_surf, (0, 0))
+
         # Ambient pre-warning: spore meter pulses on screen edge when cargo is agitated
         if spore_level > 0.0 and not cargo.inversion_active:
             pulse = 0.4 + 0.6 * abs(math.sin(t * (2.0 + spore_level * 4.0)))
@@ -1594,6 +1814,22 @@ class VectorRenderer:
 
         pct = cargo.invert_pct          # 1.0→0.0 as inversion wears off
         pulse = abs(math.sin(t * 7.0))
+
+        # ── Radial rainbow spokes from screen centre when fully inverted ────
+        if spore_level >= 0.9:
+            spoke_surf = pygame.Surface((W, H), pygame.SRCALPHA)
+            mcx, mcy = W // 2, H // 2
+            n_spokes = 32
+            for si in range(n_spokes):
+                spoke_ang = math.tau * si / n_spokes + t * 0.5
+                spoke_hue = (t * 0.12 + si / n_spokes) % 1.0
+                scol = _hsv(spoke_hue, 1.0, 1.0)
+                spoke_len = int(math.hypot(W, H) * 0.7)
+                pygame.draw.line(spoke_surf, (*scol, 55),
+                                 (mcx, mcy),
+                                 (int(mcx + math.cos(spoke_ang) * spoke_len),
+                                  int(mcy + math.sin(spoke_ang) * spoke_len)), 2)
+            self.surface.blit(spoke_surf, (0, 0))
 
         # Chromatic split: R left, B right, G centre — gives cheap aberration feel
         shift = int(3 + spore_level * 5)
