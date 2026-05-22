@@ -13,7 +13,7 @@ from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_TORCH_ACTIVE,
                              EVT_SHIP_DESTROYED, EVT_RUN_START,
                              EVT_SHOP_ENTER, EVT_SHOP_BUY, EVT_SHOP_SKIP,
-                             EVT_FINAL_SECTOR)
+                             EVT_FINAL_SECTOR, EVT_SECTOR_START)
 
 _IDLE = [
     # Bread-and-butter Cockney banter
@@ -133,6 +133,110 @@ _HIGH_HULL = [
     "Structural integrity at peak. Enjoy it while it lasts.",
 ]
 
+# Per-cargo idle commentary — drawn during flight when no urgent condition fires
+_CARGO_IDLE: dict[str, list[str]] = {
+    "AcousticArchive": [
+        "That archive's worth a decade of suppressed music. Nova Soma's been buying "
+        "everything — burying it. We might be the only copy left out here.",
+        "Illegal sound library in the hold. The Union's gonna be absolutely incandescent "
+        "about this. Good.",
+        "That archive's got music that predates the creditors. Someone made it because "
+        "they WANTED to. Mad, that. Beautiful.",
+        "I can feel the archive humming through the hull. Old frequencies. "
+        "Whatever's on it, Nova Soma doesn't want anyone to hear it.",
+        "The archive pulses a bit when we hit high speed. "
+        "I didn't know I could miss music until I heard what's in there.",
+        "Carrying the archive feels different from other cargo. "
+        "Like it matters more. Which is embarrassing to say. But there it is.",
+    ],
+    "EpistemologicalShrooms": [
+        "Psychoactive spores in the hold. Completely routine courier work. "
+        "I've filed a pre-emptive incident report with meself.",
+        "The shrooms have opinions. I don't know how I know that. "
+        "Cargo hold reading nominal. Very normal. No concerns whatsoever.",
+        "Mycorrhizal payload intact. I can confirm this because I am still "
+        "experiencing conventional physics. For now.",
+        "I'm detecting trace fungal particles through the ventilation. "
+        "Totally fine. The walls look completely normal.",
+        "The cargo's breathin' a bit. Rhythmically. I'm choosing not to think about that.",
+        "We're carrying spores that rewrite your epistemological framework. "
+        "Staying ahead of the paperwork. Barely.",
+    ],
+    "SentientPaperwork": [
+        "The forms keep reorganizing themselves in the hold. Page order changes "
+        "every time I scan. Normal. Fine. Don't ask.",
+        "Sentient bureaucracy in the hold. The irony of carrying documents "
+        "that file themselves has not escaped me.",
+        "The paperwork is technically classified — even FROM the cargo. "
+        "I genuinely don't know how that works legally.",
+        "The documents are arguing with each other. Quietly. "
+        "I'm choosing not to intervene. Union business.",
+        "Form 27-B has apparently filed a complaint against Form 27-A. "
+        "In triplicate. They're handling it internally.",
+        "The cargo manifest rewrote itself again. Three new clauses. "
+        "I don't know what they say. I don't WANT to know what they say.",
+    ],
+    "SchrodingerVIP": [
+        "Our passenger is simultaneously the best and worst cargo I've ever "
+        "facilitated. The wavefunction will decide which.",
+        "The VIP hasn't been observed in a while. "
+        "I'm choosing to interpret that as 'definitely alive'. Probably.",
+        "Passenger manifest: one (1) person, alive OR deceased, to be confirmed. "
+        "Insurance liability is absolutely someone else's problem.",
+        "Don't look in the back. Whatever state they're in, "
+        "observation locks it in. Keep it ambiguous.",
+        "The VIP requested a blanket earlier. "
+        "I have no way to verify if that request is still relevant. "
+        "I've left the blanket. It's fine.",
+        "Schrödinger was a physicist. The VIP is a person. "
+        "Probably. We'll find out at the drop-off.",
+    ],
+}
+
+# Sector-start briefings — one line when a new sector loads
+_SECTOR_START_GENERIC = [
+    "New sector. Watch the rocks.",
+    "Jump confirmed. Fresh sector, same debt. Let's move.",
+    "We're through. Keep her steady.",
+    "Sector loaded. I'll tell you if something's trying to kill us.",
+    "Clean jump. New sector. Eyes open.",
+    "Through the gate. Stay sharp.",
+]
+
+_SECTOR_START_CARGO: dict[str, list[str]] = {
+    "AcousticArchive": [
+        "Sector {n}. Archive's still in the hold. Union doesn't know what "
+        "they're after. Yet.",
+        "Through the gate. The music's intact. Keep it that way.",
+        "Sector {n}. Still carrying the archive. Still illegal in eight territories. "
+        "Still worth it.",
+        "New sector. The archive survives as long as we do. No pressure.",
+    ],
+    "EpistemologicalShrooms": [
+        "Sector {n}. Spores are stable-ish. Keep the ventilation closed.",
+        "Through the gate. Shrooms haven't done anything weird this sector. Yet.",
+        "New sector. Mycorrhizal cargo intact. I can tell because "
+        "I'm still experiencing conventional physics.",
+        "Sector {n}. Fungal payload aboard. Pilot probably still sober. Let's go.",
+    ],
+    "SentientPaperwork": [
+        "Sector {n}. The forms have reorganized themselves again. "
+        "I'm letting them. They seem to prefer it.",
+        "Through the gate. Papers intact. Still classified. "
+        "We're fine until we're not.",
+        "New sector. The cargo's still filing. Don't engage with it. Just fly.",
+        "Sector {n}. Bureaucratic payload present. The irony hasn't diminished. Moving on.",
+    ],
+    "SchrodingerVIP": [
+        "Sector {n}. Passenger unobserved. That's the ideal state. Keep it that way.",
+        "Through the gate. VIP status: ambiguous. Which is CORRECT. Keep moving.",
+        "New sector. Waveform uncollapsed. Passenger is everywhere and nowhere "
+        "until we land. Textbook.",
+        "Sector {n}. Don't look in the back. I mean it. "
+        "Ambiguity is the only thing keeping the payout intact.",
+    ],
+}
+
 _LOW_HULL = [
     "We're held together with hope and calibration errors. Easy does it.",
     "Hull's taken a pasting. One more hit and I'm using very strong language.",
@@ -196,6 +300,7 @@ class Bax:
         bus.subscribe(EVT_SHOP_BUY,         self._on_shop_buy)
         bus.subscribe(EVT_SHOP_SKIP,        self._on_shop_skip)
         bus.subscribe(EVT_FINAL_SECTOR,     self._on_final_sector)
+        bus.subscribe(EVT_SECTOR_START,     self._on_sector_start)
 
     def update(self, dt: float):
         self._speak_cd = max(0.0, self._speak_cd - dt)
@@ -229,11 +334,20 @@ class Bax:
         elif hull_pct > 0.90 and random.random() < 0.35:
             self.speak(random.choice(_HIGH_HULL))
             self._ctx_cd = 22.0
-        elif random.random() < 0.18:
-            self.speak(random.choice(_WELL_CLOSE))
-            self._ctx_cd = 20.0
         else:
-            self._ctx_cd = random.uniform(8.0, 14.0)
+            # Cargo-aware commentary fires ~30% of the time over gravity-well quips
+            cargo = getattr(self.ship, 'cargo', None)
+            if cargo is not None:
+                pool = _CARGO_IDLE.get(type(cargo).__name__)
+                if pool and random.random() < 0.30:
+                    self.speak(random.choice(pool))
+                    self._ctx_cd = 18.0
+                    return
+            if random.random() < 0.18:
+                self.speak(random.choice(_WELL_CLOSE))
+                self._ctx_cd = 20.0
+            else:
+                self._ctx_cd = random.uniform(8.0, 14.0)
 
     # ------------------------------------------------------------------
     def speak(self, line: str):
@@ -496,6 +610,14 @@ class Bax:
             "Sector five. The gauntlet. I've run the numbers. "
             "Our odds are 'possible'. That's the best I've got. GO.",
         ]))
+
+    def _on_sector_start(self, sector_num=1, cargo_type=None, **_):
+        pool = _SECTOR_START_CARGO.get(cargo_type) if cargo_type else None
+        if pool:
+            line = random.choice(pool).format(n=sector_num)
+        else:
+            line = random.choice(_SECTOR_START_GENERIC)
+        self.speak(line)
 
     def radio_blip(self):
         if self._radio_cd <= 0:
