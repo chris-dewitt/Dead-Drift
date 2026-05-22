@@ -50,6 +50,13 @@ class Game:
         self._shop: ShopScreen | None = None
         self._delivery_pending    = False  # waiting for Bax delivery line to finish
         self._delivery_delay_t    = 0.0
+        self._delivery_chapter    = 1      # chapter being delivered (set at run-end)
+
+        # Interstitial state (between successful delivery and next chapter loadout)
+        self._interstitial_t          = 0.0
+        self._interstitial_completed  = 1
+        self._interstitial_next       = 2
+        self._interstitial_campaign_end = False
 
         self._wire_events()
 
@@ -68,6 +75,7 @@ class Game:
 
     def _on_run_end(self, success, **_):
         if success:
+            self._delivery_chapter = self.run_mgr._current_chapter()
             self.meta.clear_debt_chunk()
             bus.emit(EVT_BAX_SPEAK, priority=True, line=random.choice([
                 "Five sectors. FIVE. And we're still breathin'. "
@@ -161,6 +169,9 @@ class Game:
                 self.run_mgr.start_run(self.ship)
                 self._run_just_completed = False
                 self.states.transition(GameState.LOADOUT_DRAFT)
+        elif state == GameState.INTERSTITIAL:
+            if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                self._exit_interstitial()
 
     # ------------------------------------------------------------------
     def _update(self, dt: float):
@@ -174,7 +185,7 @@ class Game:
                 self.cockpit_renderer.update(dt)
                 if self._delivery_delay_t <= 0:
                     self._delivery_pending = False
-                    self._delivery = DeliverySequence(self.meta)
+                    self._delivery = DeliverySequence(self.meta, chapter=self._delivery_chapter)
                     self.states.transition(GameState.DELIVERY)
             else:
                 self._torch_warn_t = max(0.0, self._torch_warn_t - dt)
@@ -225,9 +236,14 @@ class Game:
             if self._delivery is not None:
                 self._delivery.update(self._dt)
                 if self._delivery.is_done:
-                    self._run_just_completed = True
                     self._delivery = None
-                    self.states.transition(GameState.MAIN_MENU)
+                    self._enter_interstitial()
+
+        elif state == GameState.INTERSTITIAL:
+            self._interstitial_t = max(0.0, self._interstitial_t - dt)
+            self.cockpit_renderer.update(dt)
+            if self._interstitial_t <= 0:
+                self._exit_interstitial()
 
         elif state == GameState.DECANTING:
             pass
@@ -260,6 +276,9 @@ class Game:
 
         elif state == GameState.DECANTING:
             self._render_decanting()
+
+        elif state == GameState.INTERSTITIAL:
+            self._render_interstitial()
 
         elif state == GameState.SHOP:
             if self._shop is not None:
@@ -586,6 +605,217 @@ class Game:
                           S.SCREEN_H - 52))
         pygame.draw.line(self.screen, (40, 60, 40),
                          (80, S.SCREEN_H - 62), (S.SCREEN_W - 80, S.SCREEN_H - 62), 1)
+
+    # ------------------------------------------------------------------
+    # Interstitial — bridge between successful delivery and next chapter
+    # ------------------------------------------------------------------
+    _CHAPTER_NAMES = {
+        1: "ACOUSTIC ARCHIVE",
+        2: "MYCORRHIZAL PAYLOAD",
+        3: "THE PAPERWORK",
+        4: "SCHRÖDINGER VIP",
+    }
+    _CHAPTER_SUBTITLES = {
+        1: "contraband uncompressed audio",
+        2: "weaponized epistemological fungi",
+        3: "telepathic bureaucratic forms",
+        4: "sealed box. alive AND dead.",
+    }
+    _INTERSTITIAL_BAX = {
+        1: ("Archive's in their hands. Don't think too hard about who 'they' are. "
+            "They paid clean. The music's safe. That's what matters. "
+            "Next gig: psychoactive fungus. I'll air the cabin. Probably won't help."),
+        2: ("Shrooms delivered. Cabin still smells funny. The lab signed off and the "
+            "colours stopped. Mostly. Next: telepathic paperwork. I am NOT making that up. "
+            "Get the antacids ready, mate."),
+        3: ("Forms signed and silenced. The Union now has bureaucracy that files itself. "
+            "Whoever runs that office is doomed and doesn't know it yet. "
+            "Next: one passenger, sealed box. Don't open it. ...Fine, open it. I'm curious too."),
+        4: ("All four cargos. All four payouts. Local 404 didn't win. Neither did we. "
+            "We just kept goin'. That's the gig. Rest up. "
+            "We'll be back. We're always back."),
+    }
+
+    def _enter_interstitial(self):
+        # Mark delivery complete in meta_progression handled by DeliverySequence._compute_result
+        completed = self._delivery_chapter
+        next_ch = completed + 1
+        campaign_end = next_ch > 4 or len(self.meta.chapters_completed) >= 4
+        self._interstitial_completed     = completed
+        self._interstitial_next          = next_ch
+        self._interstitial_campaign_end  = campaign_end
+        self._interstitial_t             = 11.0   # auto-advance window
+        self.states.transition(GameState.INTERSTITIAL)
+
+    def _exit_interstitial(self):
+        if self._interstitial_campaign_end:
+            self._run_just_completed = True
+            self.states.transition(GameState.MAIN_MENU)
+        else:
+            # Auto-advance into next chapter's loadout draft
+            self.run_mgr.start_run(self.ship)
+            self._run_just_completed = False
+            self.states.transition(GameState.LOADOUT_DRAFT)
+
+    def _render_interstitial(self):
+        t  = pygame.time.get_ticks() / 1000.0
+        cx = S.SCREEN_W // 2
+        completed = self._interstitial_completed
+        next_ch   = self._interstitial_next
+        is_end    = self._interstitial_campaign_end
+
+        # Background — drifting starfield, dimmed
+        self.vec_renderer.draw_menu_background(t)
+        overlay = pygame.Surface((S.SCREEN_W, S.SCREEN_H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 140))
+        self.screen.blit(overlay, (0, 0))
+
+        # Letterbox bars
+        bar_h = 64
+        pygame.draw.rect(self.screen, (0, 0, 0),
+                         pygame.Rect(0, 0, S.SCREEN_W, bar_h))
+        pygame.draw.rect(self.screen, (0, 0, 0),
+                         pygame.Rect(0, S.SCREEN_H - bar_h, S.SCREEN_W, bar_h))
+        pygame.draw.line(self.screen, (120, 80, 0),
+                         (0, bar_h), (S.SCREEN_W, bar_h), 1)
+        pygame.draw.line(self.screen, (120, 80, 0),
+                         (0, S.SCREEN_H - bar_h), (S.SCREEN_W, S.SCREEN_H - bar_h), 1)
+
+        # --- Completed chapter banner ---
+        f_label = pygame.font.SysFont("monospace", 13, bold=True)
+        f_title = pygame.font.SysFont("monospace", 34, bold=True)
+        f_sub   = pygame.font.SysFont("monospace", 14, italic=True)
+
+        # Stamp
+        label = f_label.render(f"CHAPTER {completed}  ::  DELIVERED",
+                               True, S.GREEN_TERM)
+        self.screen.blit(label, (cx - label.get_width() // 2, bar_h + 22))
+        title_name = self._CHAPTER_NAMES.get(completed, f"CHAPTER {completed}")
+        ts = f_title.render(title_name, True, S.AMBER_TERM)
+        self.screen.blit(ts, (cx - ts.get_width() // 2, bar_h + 44))
+        # Subtitle
+        sub = f_sub.render(self._CHAPTER_SUBTITLES.get(completed, ""),
+                           True, (160, 130, 60))
+        self.screen.blit(sub, (cx - sub.get_width() // 2, bar_h + 86))
+
+        # Separator
+        sep_y = bar_h + 116
+        pygame.draw.line(self.screen, (80, 60, 0),
+                         (160, sep_y), (S.SCREEN_W - 160, sep_y), 1)
+
+        # --- Bax monologue (typewriter) ---
+        monologue = self._INTERSTITIAL_BAX.get(completed, "")
+        elapsed   = max(0.0, 11.0 - self._interstitial_t)
+        # type ~32 chars/sec — full reveal by ~5s into screen
+        reveal_n  = int(elapsed * 38)
+        shown     = monologue[:reveal_n]
+        # Cursor blink
+        cursor = "_" if int(t * 2.4) % 2 == 0 and reveal_n < len(monologue) else " "
+        shown += cursor
+
+        # Wrapped render
+        f_bax = pygame.font.SysFont("monospace", 17)
+        max_w = S.SCREEN_W - 220
+        words = shown.split(" ")
+        lines: list[str] = []
+        cur = ""
+        for w in words:
+            test = (cur + " " + w).strip()
+            if f_bax.size(test)[0] > max_w and cur:
+                lines.append(cur)
+                cur = w
+            else:
+                cur = test
+        if cur:
+            lines.append(cur)
+
+        ly = sep_y + 26
+        # Mini Bax portrait next to text
+        px, py = 130, ly + 22
+        self._draw_bax_mini(px, py, t, speaking=(reveal_n < len(monologue)))
+
+        for line in lines[:6]:
+            ts = f_bax.render(line, True, (235, 215, 130))
+            self.screen.blit(ts, (190, ly))
+            ly += 24
+
+        # --- Next chapter or campaign end card ---
+        next_y = S.SCREEN_H - bar_h - 140
+        if is_end:
+            f_end_l = pygame.font.SysFont("monospace", 12, bold=True)
+            f_end_t = pygame.font.SysFont("monospace", 28, bold=True)
+            f_end_s = pygame.font.SysFont("monospace", 13)
+            pulse = 0.5 + 0.5 * math.sin(t * 1.6)
+            end_col = (int(160 + 80 * pulse), int(220 * pulse + 35), int(40 + 40 * pulse))
+            top_label = f_end_l.render("CAMPAIGN COMPLETE", True, (140, 200, 80))
+            self.screen.blit(top_label, (cx - top_label.get_width() // 2, next_y))
+            big = f_end_t.render("ALL FOUR CARGOS DELIVERED", True, end_col)
+            self.screen.blit(big, (cx - big.get_width() // 2, next_y + 18))
+            stats = (f"DEBT: {self.meta.debt:,} cr   ·   CLONES: {self.meta.clone_count}   ·   "
+                     "ROUTE: CLEAR")
+            ss = f_end_s.render(stats, True, (170, 170, 190))
+            self.screen.blit(ss, (cx - ss.get_width() // 2, next_y + 56))
+        else:
+            f_n_l = pygame.font.SysFont("monospace", 12, bold=True)
+            f_n_t = pygame.font.SysFont("monospace", 26, bold=True)
+            f_n_s = pygame.font.SysFont("monospace", 13, italic=True)
+            next_name = self._CHAPTER_NAMES.get(next_ch, f"CHAPTER {next_ch}")
+            next_sub  = self._CHAPTER_SUBTITLES.get(next_ch, "")
+            label_next = f_n_l.render(f"NEXT  //  CHAPTER {next_ch}", True, (180, 130, 30))
+            self.screen.blit(label_next, (cx - label_next.get_width() // 2, next_y))
+            tn = f_n_t.render(next_name, True, (255, 200, 80))
+            self.screen.blit(tn, (cx - tn.get_width() // 2, next_y + 18))
+            sn = f_n_s.render(next_sub, True, (140, 110, 50))
+            self.screen.blit(sn, (cx - sn.get_width() // 2, next_y + 50))
+
+        # --- Footer: auto-advance bar + ENTER prompt ---
+        bar_w  = 360
+        bar_x  = cx - bar_w // 2
+        bar_y  = S.SCREEN_H - bar_h - 30
+        progress = max(0.0, min(1.0, 1.0 - self._interstitial_t / 11.0))
+        pygame.draw.rect(self.screen, (40, 30, 0),
+                         pygame.Rect(bar_x, bar_y, bar_w, 4))
+        pygame.draw.rect(self.screen, (220, 160, 30),
+                         pygame.Rect(bar_x, bar_y, int(bar_w * progress), 4))
+
+        f_foot = pygame.font.SysFont("monospace", 12)
+        prompt = (f"[ ENTER ]  return to depot"
+                  if is_end else
+                  f"[ ENTER ]  load next chapter   //   auto in {self._interstitial_t:.0f}s")
+        prompt_pulse = 0.55 + 0.45 * math.sin(t * 3.2)
+        col = (int(140 + 100 * prompt_pulse), int(190 + 60 * prompt_pulse), int(100 + 60 * prompt_pulse))
+        ps = f_foot.render(prompt, True, col)
+        self.screen.blit(ps, (cx - ps.get_width() // 2, S.SCREEN_H - bar_h - 14))
+
+    def _draw_bax_mini(self, px: int, py: int, t: float, speaking: bool):
+        """Compact vector Bax portrait for the interstitial."""
+        head = [(px - 20, py - 26), (px + 22, py - 26),
+                (px + 26, py - 4),  (px - 24, py - 4)]
+        pygame.draw.polygon(self.screen, (20, 20, 30), head)
+        pygame.draw.polygon(self.screen, (140, 100, 0), head, 1)
+        # CRT scan lines on head
+        for sy in range(py - 24, py - 4, 3):
+            pygame.draw.line(self.screen, (40, 28, 0),
+                             (px - 18, sy), (px + 20, sy), 1)
+        glow = 0.55 + 0.40 * abs(math.sin(t * (3.0 if speaking else 0.8)))
+        ec = (int(80 + 175 * glow), int(220 * glow), int(255 * glow))
+        pygame.draw.circle(self.screen, ec, (px - 8, py - 16), 4)
+        pygame.draw.circle(self.screen, ec, (px + 8, py - 16), 4)
+        pygame.draw.circle(self.screen, (255, 255, 255), (px - 8, py - 16), 1)
+        pygame.draw.circle(self.screen, (255, 255, 255), (px + 8, py - 16), 1)
+        # Mouth
+        mouth_y = py - 8 + int(2 * math.sin(t * 16.0)) if speaking else py - 8
+        pygame.draw.line(self.screen, (200, 140, 0),
+                         (px - 10, mouth_y), (px + 10, mouth_y), 2)
+        # Antenna
+        pygame.draw.line(self.screen, (140, 100, 0),
+                         (px + 16, py - 26), (px + 22, py - 38), 1)
+        pygame.draw.circle(self.screen, (255, 180, 30), (px + 22, py - 38), 3)
+        # Body
+        body = [(px - 24, py - 4), (px + 26, py - 4),
+                (px + 22, py + 30), (px - 22, py + 30)]
+        pygame.draw.polygon(self.screen, (28, 22, 8), body)
+        pygame.draw.polygon(self.screen, (140, 100, 0), body, 1)
 
     def _render_main_menu(self):
         t  = pygame.time.get_ticks() / 1000.0

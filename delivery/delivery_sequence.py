@@ -55,10 +55,11 @@ class DeliverySequence:
     PHASE_RUN      = "run"
     PHASE_RESULT   = "result"
 
-    def __init__(self, meta):
-        self.meta   = meta
-        self._phase = self.PHASE_APPROACH
-        self._t     = 0.0
+    def __init__(self, meta, chapter: int = 1):
+        self.meta    = meta
+        self.chapter = chapter
+        self._phase  = self.PHASE_APPROACH
+        self._t      = 0.0
 
         # Approach state
         self._ship_screen_x = float(S.SCREEN_W // 4)
@@ -407,6 +408,7 @@ class DeliverySequence:
             self.meta.pay_off(net_reduction)
         elif net_reduction < 0:
             self.meta.add_debt(-net_reduction)
+        self.meta.complete_chapter(self.chapter)
         self.meta.save()
 
     def _draw_result(self, surface: pygame.Surface, W: int, H: int):

@@ -11,6 +11,7 @@ class GameState(Enum):
     GAME_OVER      = auto()   # debt cleared or permanent death
     DELIVERY       = auto()   # end-of-run delivery sequence
     SHOP           = auto()   # mid-run black market between sectors
+    INTERSTITIAL   = auto()   # between successful delivery and next chapter's loadout
 
 
 class StateManager:
