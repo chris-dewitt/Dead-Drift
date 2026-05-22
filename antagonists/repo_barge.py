@@ -29,15 +29,15 @@ class RepoBarge:
     If already retreated recently, skip INTERCEPT and CLAMP immediately.
     """
 
-    DETECT_RANGE       = 400.0
+    DETECT_RANGE       = 360.0
     CLAMP_RANGE        = 120.0
     TORCH_INTERVAL     = 5.0
     PATROL_SPEED       = 60.0
-    CHASE_SPEED        = 115.0
-    RETREAT_DURATION   = 14.0   # seconds barge runs away after losing negotiation
+    CHASE_SPEED        = 100.0
+    RETREAT_DURATION   = 24.0   # seconds barge runs away after losing negotiation
     INTERCEPT_COOLDOWN = 45.0   # seconds before barge can intercept again
-    DISRUPTION_HITS    = 3      # bullets needed to force a retreat
-    DISRUPTION_RETREAT = 11.0   # seconds of retreat after being disrupted
+    DISRUPTION_HITS    = 2      # bullets needed to force a retreat
+    DISRUPTION_RETREAT = 22.0   # seconds of retreat after being disrupted
 
     def __init__(self, x: float, y: float, run_manager):
         self.body       = RigidBody2D(x, y, mass=8.0)

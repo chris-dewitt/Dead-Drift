@@ -18,7 +18,7 @@ from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
                              EVT_COMMS_SPEAK, EVT_TETHER_SNAP, EVT_BAX_SPEAK,
                              EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_DEMO_NOTICE,
                              EVT_JUMP_READY, EVT_WARP_JUMP, EVT_FINAL_SECTOR,
-                             EVT_RUN_START, EVT_SHOP_ENTER)
+                             EVT_RUN_START, EVT_SHOP_ENTER, EVT_SECTOR_START)
 from config import settings as S
 
 
@@ -162,6 +162,8 @@ class RunManager:
         self._pending_advance  = False
         self._jump_ready_fired = False   # prevents duplicate jump-ready sound per sector
         self._run_debt_reduced = 0   # credits recovered this run (shown in HUD)
+        self._run_snaps        = 0   # tether snaps this entire run
+        self._run_slingshots   = 0   # slingshots this entire run
         self._shop_pending     = False   # True when a shop stop should open
 
         # Deferred object spawn queue — (trigger_time, kind) pairs
@@ -202,6 +204,8 @@ class RunManager:
         self._jump_ready_fired   = False
         self._kress_called_this_sector = False
         self._run_debt_reduced   = 0
+        self._run_snaps          = 0
+        self._run_slingshots     = 0
         self._shop_pending       = False
         self._sector_slingshots  = 0
         self._sector_snaps       = 0
@@ -230,6 +234,20 @@ class RunManager:
         self._sector    = generate_sector(self._sector_index, self._difficulty())
         self._sector_start_hull = ship.hull
         self._spawn_sector_objects()
+
+        # Bax loadout handoff — frame brief + cargo-specific addendum
+        _cargo_launch = {
+            "AcousticArchive":        "Bangers in the hold. Don't let 'em nick it.",
+            "EpistemologicalShrooms": "Mind the spores. Both of us.",
+            "SentientPaperwork":      "The paperwork's already filing itself. Ignore it.",
+            "SchrodingerVIP":         "Don't look in the back. Either state is fine until delivery.",
+        }
+        cargo_type = type(cargo).__name__ if cargo is not None else None
+        frame_bax  = frame.get("bax", "She'll fly.")
+        cargo_bax  = _cargo_launch.get(cargo_type, "Cargo's aboard.")
+        bus.emit(EVT_BAX_SPEAK, line=f"{frame_bax} {cargo_bax}")
+
+        bus.emit(EVT_SECTOR_START, sector_num=1, cargo_type=cargo_type)
 
     # ------------------------------------------------------------------
     def update(self, dt: float):
@@ -454,13 +472,15 @@ class RunManager:
             bus.emit(EVT_COMMS_SPEAK, speaker=speaker, line=line)
 
     def _on_slingshot(self, **_):
-        self._sector_slingshots += 1
+        self._sector_slingshots  += 1
+        self._run_slingshots     += 1
 
     def _on_tether_snap(self, **_):
         bonus = 1200
         self.meta.pay_off(bonus)
         self._run_debt_reduced += bonus
         self._sector_snaps     += 1
+        self._run_snaps        += 1
         self._sector_credits   += bonus
         bus.emit(EVT_BAX_SPEAK, line=random.choice([
             f"Snap! That's {bonus:,} off your tab. Union's gonna be LIVID.",
@@ -479,8 +499,10 @@ class RunManager:
 
     # ------------------------------------------------------------------
     def _build_run_context(self) -> dict:
-        ctx: dict = {"sector_index": self._sector_index,
-                     "run_credits":  self._run_debt_reduced}
+        ctx: dict = {"sector_index":    self._sector_index,
+                     "run_credits":     self._run_debt_reduced,
+                     "run_snaps":       self._run_snaps,
+                     "run_slingshots":  self._run_slingshots}
         if self._ship is not None:
             ctx["hull_pct"] = self._ship.hull / S.HULL_MAX
             cargo = self._ship.cargo
@@ -517,6 +539,14 @@ class RunManager:
             if self._sector_index >= 3:
                 pool.append("insurance_adjuster")
             npc_type = random.choice(pool)
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "Gate authority checkpoint. They want passage fees before we jump.",
+                "Sector boundary control. Standard stop — terminal incoming, hold course.",
+                "Local 404 checkpoint. Pre-jump inspection. You know what to do.",
+                "Clearance terminal inbound. Tell 'em what they wanna hear.",
+                "Gate authority's pinged us. Talk us through or we pay double.",
+                "Jump gate's flagging us. Pre-jump inspection — type smart.",
+            ]))
         self.open_terminal(npc_type)
         self._pending_advance = True
 
@@ -604,6 +634,12 @@ class RunManager:
         self._kress_called_this_sector = False
         self._shop_pending = False
         self._spawn_sector_objects()
+
+        cargo_type = (type(self._ship.cargo).__name__
+                      if self._ship and self._ship.cargo else None)
+        bus.emit(EVT_SECTOR_START,
+                 sector_num=self._sector_index + 1,
+                 cargo_type=cargo_type)
 
         # Final sector: announce to bax + extra immediate barge
         if self._sector_index == S.SECTORS_PER_RUN - 1:

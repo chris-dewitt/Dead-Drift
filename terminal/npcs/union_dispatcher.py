@@ -320,6 +320,22 @@ class UnionDispatcher(BaseNPC):
         ]
 
     def _dispatcher_filler(self) -> str:
+        run_snaps      = self._ctx.get("run_snaps", 0)
+        run_slingshots = self._ctx.get("run_slingshots", 0)
+        if run_snaps > 0 and random.random() < 0.18:
+            return (
+                f"I have your harpoon snap incidents on record. {run_snaps} of them. "
+                "Each generates a Form 17-R. "
+                f"I am now {47 + run_snaps} forms behind. "
+                "The 17-Rs are in my in-tray. Next to yours. Power down."
+            )
+        if run_slingshots > 0 and random.random() < 0.15:
+            return (
+                f"Gravitational slingshot logged: {run_slingshots} this run. "
+                "Each one generates an evasive manoeuvre report — Form 22-E. "
+                f"I have {22 + run_slingshots} of them now. "
+                "Impressive flying. Irrelevant to your debt. Power down."
+            )
         return random.choice([
             # Classic 47-forms energy
             "I am forty-seven forms behind. This conversation is making it forty-eight. "

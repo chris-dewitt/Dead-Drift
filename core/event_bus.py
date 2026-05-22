@@ -65,3 +65,4 @@ EVT_SHOP_ENTER      = "shop_enter"      # shop screen opened between sectors
 EVT_SHOP_BUY        = "shop_buy"        # item purchased; payload: tag, name
 EVT_SHOP_SKIP       = "shop_skip"       # player left shop without buying
 EVT_FINAL_SECTOR    = "final_sector"    # entering the last sector of the run
+EVT_SECTOR_START    = "sector_start"    # new sector loaded; payload: sector_num, cargo_type
