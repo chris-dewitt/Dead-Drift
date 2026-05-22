@@ -67,6 +67,7 @@ class MetaProgression:
             self._data["chapters_completed"].append(chapter)
             if len(self._data["chapters_completed"]) % 2 == 0:
                 self._data["bax_level"] += 1
+            self.save()
 
     def adjust_reputation(self, npc_id: str, delta: int):
         current = self._data["reputation"].get(npc_id, 0)

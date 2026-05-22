@@ -55,10 +55,11 @@ class DeliverySequence:
     PHASE_RUN      = "run"
     PHASE_RESULT   = "result"
 
-    def __init__(self, meta):
-        self.meta   = meta
-        self._phase = self.PHASE_APPROACH
-        self._t     = 0.0
+    def __init__(self, meta, chapter: int = 1):
+        self.meta    = meta
+        self.chapter = chapter
+        self._phase  = self.PHASE_APPROACH
+        self._t      = 0.0
 
         # Approach state
         self._ship_screen_x = float(S.SCREEN_W // 4)
@@ -172,77 +173,187 @@ class DeliverySequence:
     def _draw_approach(self, surface: pygame.Surface, W: int, H: int):
         t = self._t
         surface.fill((2, 4, 8))
+        approach_frac = min(1.0, t / _APPROACH_DURATION)
 
-        # Stars
+        # ── Background nebula wash ───────────────────────────────────────
+        neb = pygame.Surface((W, H), pygame.SRCALPHA)
+        neb.fill((0, 8, 24, 16))
+        surface.blit(neb, (0, 0))
+
+        # ── Starfield: dim base + neon accents ───────────────────────────
         rng = random.Random(42)
         for _ in range(140):
             sx = rng.randint(0, W)
             sy = rng.randint(0, H)
-            br = rng.randint(60, 180)
+            br = rng.randint(50, 180)
             pygame.draw.circle(surface, (br, br, br), (sx, sy), 1)
+        rng2 = random.Random(99)
+        for _ in range(16):
+            sx2 = rng2.randint(0, W)
+            sy2 = rng2.randint(0, H)
+            nc  = [(0, 255, 200), (255, 0, 220), (255, 176, 0)][rng2.randint(0, 2)]
+            pygame.draw.circle(surface, nc, (sx2, sy2), 1)
 
-        # Station — grows as we approach
-        approach_frac = min(1.0, t / _APPROACH_DURATION)
-        station_scale = 0.15 + approach_frac * 0.85   # grows from 15% to 100% of final
+        # ── Background traffic: distant ships crossing the frame ─────────
+        for i, (base_y_frac, spd, seed) in enumerate(
+                [(0.18, 14.0, 71), (0.82, 9.0, 83)]):
+            tx = int((W * 0.95 - t * spd) % (W * 1.4)) - int(W * 0.2)
+            ty = int(H * base_y_frac)
+            pygame.draw.polygon(surface, (28, 55, 75),
+                                [(tx + 13, ty), (tx - 9, ty - 4), (tx - 9, ty + 4)])
+            rl_p = 0.5 + 0.5 * math.sin(t * 2.0 + i * 1.3)
+            pygame.draw.circle(surface, (int(180 * rl_p), 0, 0), (tx - 8, ty - 3), 1)
+            pygame.draw.circle(surface, (0, int(180 * rl_p), 0), (tx - 8, ty + 3), 1)
+
+        # ── Station structure ─────────────────────────────────────────────
+        station_scale = 0.15 + approach_frac * 0.85
         st_cx = int(S.SCREEN_W * 0.78)
         st_cy = H // 2
+        sw    = int(340 * station_scale)
+        sh    = int(460 * station_scale)
 
-        # Station hull
-        sw = int(340 * station_scale)
-        sh = int(460 * station_scale)
+        # Docking arms extending left
+        for arm_y_frac in (-0.32, 0.32):
+            ay    = int(st_cy + sh * arm_y_frac)
+            a_len = int(90 * station_scale)
+            a_h   = max(4, int(16 * station_scale))
+            pygame.draw.rect(surface, (16, 28, 18),
+                             (st_cx - sw // 2 - a_len, ay - a_h // 2, a_len, a_h))
+            pygame.draw.rect(surface, (30, 60, 35),
+                             (st_cx - sw // 2 - a_len, ay - a_h // 2, a_len, a_h), 1)
+            tip_p = 0.3 + 0.7 * abs(math.sin(t * 1.8 + arm_y_frac * 10))
+            pygame.draw.circle(surface, (int(255 * tip_p), int(60 * tip_p), 0),
+                               (st_cx - sw // 2 - a_len, ay),
+                               max(2, int(3 * station_scale)))
+
+        # Radiator fins on far side
+        for fi in range(3):
+            fy   = int(st_cy - sh * 0.3 + fi * sh * 0.3)
+            f_h  = max(4, int(sh * 0.18))
+            f_w  = max(3, int(20 * station_scale))
+            pygame.draw.rect(surface, (10, 24, 12),
+                             (st_cx + sw // 2 + 2, fy - f_h // 2, f_w, f_h))
+            pygame.draw.rect(surface, (0, 70, 35),
+                             (st_cx + sw // 2 + 2, fy - f_h // 2, f_w, f_h), 1)
+
+        # Antenna cluster on top
+        ant_base_y = st_cy - sh // 2
+        for ox, a_len2 in [(0, 24), (-12, 14), (12, 18), (-6, 10)]:
+            ax2 = st_cx + int(ox * station_scale)
+            pygame.draw.line(surface, (40, 80, 50),
+                             (ax2, ant_base_y),
+                             (ax2, ant_base_y - int(a_len2 * station_scale)), 1)
+        if abs(math.sin(t * 2.5)) > 0.7:
+            pygame.draw.circle(surface, (255, 80, 80),
+                               (st_cx, ant_base_y - int(24 * station_scale)), 2)
+
+        # Main hull
         pygame.draw.rect(surface, (20, 30, 20),
                          (st_cx - sw // 2, st_cy - sh // 2, sw, sh))
         pygame.draw.rect(surface, (40, 80, 50),
                          (st_cx - sw // 2, st_cy - sh // 2, sw, sh), 2)
 
-        # Bay opening (gap in the hull)
-        bay_top    = int(st_cy - sh * 0.22)
-        bay_bot    = int(st_cy + sh * 0.22)
-        bay_left   = st_cx - sw // 2 - 2
-        bay_w      = int(sw * 0.32)
-        # Black out the bay opening
+        # Structural ribs
+        for ri in range(1, 4):
+            ry2 = int(st_cy - sh // 2 + ri * sh // 4)
+            pygame.draw.line(surface, (28, 50, 30),
+                             (st_cx - sw // 2, ry2), (st_cx + sw // 2, ry2), 1)
+
+        # Signage panels
+        if station_scale > 0.35:
+            f_sign = pygame.font.SysFont("monospace", max(8, int(9 * station_scale)), bold=True)
+            for sign_text, sy_frac, s_col in [
+                ("BAY 3",        -0.42, (200, 140,  0)),
+                ("LOCAL 404",     0.38, (  0, 160, 60)),
+                ("AUTHORIZED",   -0.15, ( 80, 120, 80)),
+            ]:
+                sy3 = int(st_cy + sh * sy_frac)
+                sx3 = st_cx - sw // 2 + max(4, int(6 * station_scale))
+                ss2 = f_sign.render(sign_text, True, s_col)
+                surface.blit(ss2, (sx3, sy3 - ss2.get_height() // 2))
+
+        # Running lights: red port (left), green starboard (right), white strobes
+        for rl_y_frac in (-0.45, -0.15, 0.15, 0.45):
+            rl_y2 = int(st_cy + sh * rl_y_frac)
+            pygame.draw.circle(surface, (180, 40, 40),
+                               (st_cx - sw // 2 - 4, rl_y2),
+                               max(2, int(3 * station_scale)))
+            pygame.draw.circle(surface, (40, 180, 40),
+                               (st_cx + sw // 2 + 4, rl_y2),
+                               max(2, int(3 * station_scale)))
+        strobe = 0.3 + 0.7 * abs(math.sin(t * 4.0))
+        sc2 = int(255 * strobe)
+        for sy4 in (st_cy - sh // 2, st_cy + sh // 2):
+            pygame.draw.circle(surface, (sc2, sc2, sc2),
+                               (st_cx, sy4), max(2, int(3 * station_scale)))
+
+        # Windows (scaled, hue-animated)
+        for row in range(-2, 3):
+            for col_i in (1, -1):
+                wx  = st_cx + col_i * int(sw * 0.28)
+                wy  = st_cy + row * int(sh * 0.14)
+                wf  = 0.5 + 0.5 * math.sin(t * 0.7 + row * 1.3 + col_i)
+                wc  = (0, int(140 * wf), int(80 * wf))
+                ww2 = max(4, int(10 * station_scale))
+                wh2 = max(3, int(8  * station_scale))
+                pygame.draw.rect(surface, wc, (wx - ww2 // 2, wy - wh2 // 2, ww2, wh2))
+
+        # ── Bay opening ───────────────────────────────────────────────────
+        bay_top  = int(st_cy - sh * 0.22)
+        bay_bot  = int(st_cy + sh * 0.22)
+        bay_left = st_cx - sw // 2 - 2
+        bay_w    = int(sw * 0.32)
         pygame.draw.rect(surface, (2, 4, 8),
                          (bay_left, bay_top, bay_w, bay_bot - bay_top))
-        # Glowing bay frame
         pulse = 0.7 + 0.3 * math.sin(t * 3.0)
         gcol  = (int(200 * pulse), int(140 * pulse), 0)
         pygame.draw.rect(surface, gcol,
                          (bay_left, bay_top, bay_w, bay_bot - bay_top), 2)
-        # Bay interior glow
-        gi = pygame.Surface((bay_w, bay_bot - bay_top), pygame.SRCALPHA)
+        # Bay guide-rail LEDs
+        if bay_w > 18:
+            step = max(8, (bay_bot - bay_top) // 6)
+            for led_y in range(bay_top + 8, bay_bot, step):
+                lp  = 0.4 + 0.6 * abs(math.sin(t * 2.0 + led_y * 0.05))
+                lc  = (int(80 * lp), int(200 * lp), int(120 * lp))
+                pygame.draw.circle(surface, lc,
+                                   (bay_left + max(2, int(4 * station_scale)), led_y), 2)
+        gi = pygame.Surface((max(1, bay_w), max(1, bay_bot - bay_top)), pygame.SRCALPHA)
         gi.fill((80, 60, 0, int(60 * pulse)))
         surface.blit(gi, (bay_left, bay_top))
 
-        # Windows on station
-        for row in range(-2, 3):
-            for col_i in (1, -1):
-                wx = st_cx + col_i * int(sw * 0.28)
-                wy = st_cy + row * int(sh * 0.14)
-                wf = 0.5 + 0.5 * math.sin(t * 0.7 + row * 1.3 + col_i)
-                wc = (0, int(140 * wf), int(80 * wf))
-                pygame.draw.rect(surface, wc, (wx - 5, wy - 4, 10, 8))
+        # PAPI glideslope lights visible when close
+        if station_scale > 0.5:
+            papi_y2 = bay_top - max(4, int(12 * station_scale))
+            on_gs   = self._ship_screen_y < (bay_top + bay_bot) / 2
+            for pi in range(4):
+                pc = (200, 0, 0) if (pi < 2 or not on_gs) else (200, 200, 200)
+                pygame.draw.circle(surface, pc,
+                                   (bay_left + int((pi + 1) * bay_w // 5), papi_y2),
+                                   max(2, int(3 * station_scale)))
 
-        # Player ship
-        sx = int(self._ship_screen_x)
-        sy = int(self._ship_screen_y)
-        angle = math.radians(15)
-        nose  = (sx + 22, sy)
-        tail_t = (sx - 14, sy - 11)
-        tail_b = (sx - 14, sy + 11)
+        # ── Player ship ───────────────────────────────────────────────────
+        px5 = int(self._ship_screen_x)
+        py5 = int(self._ship_screen_y)
+        nose   = (px5 + 22, py5)
+        tail_t = (px5 - 14, py5 - 11)
+        tail_b = (px5 - 14, py5 + 11)
+        halo = pygame.Surface((54, 44), pygame.SRCALPHA)
+        pygame.draw.ellipse(halo, (0, 220, 200, 28), (0, 0, 54, 44))
+        surface.blit(halo, (px5 - 12, py5 - 22))
         pygame.draw.polygon(surface, (20, 200, 200), [nose, tail_t, tail_b])
         pygame.draw.polygon(surface, (0, 255, 240), [nose, tail_t, tail_b], 1)
-        # Exhaust
-        for k in range(4):
-            ex = sx - 14 - k * 7
-            ecol = (0, int(180 - k * 40), int(100 - k * 20))
-            pygame.draw.line(surface, ecol, (sx - 14, sy - 4 + k), (ex, sy), 1)
+        pygame.draw.circle(surface, (0, 200,   0), (px5 + 8, py5 - 6), 2)
+        pygame.draw.circle(surface, (200,   0, 0), (px5 + 8, py5 + 6), 2)
+        for k in range(5):
+            ex2  = px5 - 14 - k * 7
+            ecol = (0, max(0, int(180 - k * 35)), max(0, int(100 - k * 18)))
+            pygame.draw.line(surface, ecol, (px5 - 14, py5 - 4 + k), (ex2, py5), 1)
 
-        # HUD
+        # ── HUD ───────────────────────────────────────────────────────────
         f = pygame.font.SysFont("monospace", 14)
         surface.blit(f.render("APPROACH STATION  ·  STEER INTO BAY", True, (140, 100, 0)),
                      (W // 2 - 170, 12))
         surface.blit(f.render("A/D  ←→   W/S  ↑↓", True, (60, 90, 60)), (W // 2 - 90, 30))
-        # Timer
         remain = max(0.0, _APPROACH_DURATION - t)
         tc = (0, 200, 80) if remain > 4 else (255, 120, 0)
         surface.blit(f.render(f"ENTRY IN  {remain:.0f}s", True, tc), (W - 150, 12))
@@ -273,78 +384,159 @@ class DeliverySequence:
 
     def _draw_land(self, surface: pygame.Surface, W: int, H: int):
         t = self._t
-        surface.fill((8, 14, 10))
+        surface.fill((12, 22, 14))
 
-        # Station interior — large chamber
-        chamber_col = (12, 22, 14)
-        surface.fill(chamber_col)
-        # Side walls
-        pygame.draw.rect(surface, (20, 38, 22), (0, 0, 80, H))
-        pygame.draw.rect(surface, (0, 100, 45), (80, 0, 2, H), 1)
-        pygame.draw.rect(surface, (20, 38, 22), (W - 80, 0, 80, H))
-        pygame.draw.rect(surface, (0, 100, 45), (W - 82, 0, 2, H), 1)
-        # Grid lines
+        # ── Chamber walls and grid ────────────────────────────────────────
+        pygame.draw.rect(surface, (20, 38, 22), (0,       0, 80, H))
+        pygame.draw.rect(surface, (0, 100, 45), (80,      0,  2, H), 1)
+        pygame.draw.rect(surface, (20, 38, 22), (W - 80,  0, 80, H))
+        pygame.draw.rect(surface, (0, 100, 45), (W - 82,  0,  2, H), 1)
         for gx in range(80, W - 80, 60):
             pygame.draw.line(surface, (14, 26, 16), (gx, 0), (gx, H), 1)
         for gy in range(0, H, 60):
             pygame.draw.line(surface, (14, 26, 16), (80, gy), (W - 80, gy), 1)
 
-        # Landing pad
-        pad_y = H - 140
-        pad_w = 220
+        # ── Overhead gantry crane ─────────────────────────────────────────
+        gantry_y = 88
+        pygame.draw.rect(surface, (18, 34, 20), (80, gantry_y - 10, W - 160, 10))
+        pygame.draw.rect(surface, (0, 80, 40),  (80, gantry_y - 10, W - 160, 10), 1)
+        crane_x = int(W // 2 + 60 * math.sin(t * 0.38))
+        pygame.draw.rect(surface, (28, 56, 30), (crane_x - 18, gantry_y - 8, 36, 14))
+        pygame.draw.rect(surface, (0, 120, 50), (crane_x - 18, gantry_y - 8, 36, 14), 1)
+        pygame.draw.line(surface, (0, 80, 40), (crane_x, gantry_y + 6), (crane_x, gantry_y + 48), 1)
+        pygame.draw.circle(surface, (40, 80, 45), (crane_x, gantry_y + 52), 4)
+        pygame.draw.circle(surface, (0, 120, 55), (crane_x, gantry_y + 52), 4, 1)
+
+        # ── Emergency lighting strips near ceiling ────────────────────────
+        for ex2 in range(100, W - 100, 90):
+            ep = 0.4 + 0.6 * abs(math.sin(t * 1.2 + ex2 * 0.022))
+            pygame.draw.rect(surface, (int(200 * ep), int(40 * ep), 0), (ex2, 0, 28, 7))
+
+        # ── Equipment crates along left wall ─────────────────────────────
+        pad_y  = H - 140
         pad_cx = W // 2
-        pulse  = 0.6 + 0.4 * math.sin(t * 4.0)
-        pcol   = (int(200 * pulse), int(140 * pulse), 0)
+        pad_w  = 220
+        f_sm   = pygame.font.SysFont("monospace", 9)
+        for ci, (cxc, cyc, cwc, chc) in enumerate([
+            (84,  H - 210, 44, 54), (84,  H - 148, 36, 44),
+            (132, H - 164, 30, 38), (84,  H -  88, 52, 36),
+        ]):
+            shade = (16 + ci * 2, 30 + ci * 2, 18)
+            pygame.draw.rect(surface, shade,   (cxc, cyc, cwc, chc))
+            pygame.draw.rect(surface, (0, 80, 40), (cxc, cyc, cwc, chc), 1)
+            lbl = f_sm.render(["L404", "FUEL", "MAINT", "PARTS"][ci], True, (0, 60, 30))
+            surface.blit(lbl, (cxc + 3, cyc + 3))
+        for cxc, cyc, cwc, chc in [(W - 128, H - 198, 44, 50), (W - 82, H - 134, 40, 40)]:
+            pygame.draw.rect(surface, (16, 30, 18), (cxc, cyc, cwc, chc))
+            pygame.draw.rect(surface, (0, 80, 40),  (cxc, cyc, cwc, chc), 1)
+
+        # ── Maintenance drone hovering near ceiling ───────────────────────
+        drone_x = int(W * 0.7 + 42 * math.sin(t * 0.58))
+        drone_y = int(160 + 14 * math.sin(t * 0.87))
+        pygame.draw.ellipse(surface, (16, 36, 20),
+                            (drone_x - 24, drone_y - 8, 48, 16))
+        pygame.draw.ellipse(surface, (0, 100, 50),
+                            (drone_x - 24, drone_y - 8, 48, 16), 1)
+        for ang in (0, 90, 180, 270):
+            ar2 = math.radians(ang)
+            ax3 = drone_x + int(24 * math.cos(ar2))
+            ay3 = drone_y + int(8  * math.sin(ar2))
+            pygame.draw.circle(surface, (0, 80, 40),  (ax3, ay3), 4)
+            pygame.draw.circle(surface, (0, 140, 60), (ax3, ay3), 4, 1)
+        if abs(math.sin(t * 3.0)) > 0.7:
+            pygame.draw.circle(surface, (200, 40, 40), (drone_x, drone_y - 6), 3)
+        ds_label = f_sm.render("MAINT-BOT", True, (0, 60, 30))
+        surface.blit(ds_label, (drone_x - ds_label.get_width() // 2, drone_y + 10))
+
+        # ── Ground crew technicians ───────────────────────────────────────
+        for tech_i, (tx2, facing) in enumerate([
+            (pad_cx - 180, 1), (pad_cx + 162, -1), (pad_cx - 140, 1),
+        ]):
+            ty2 = pad_y - 2
+            pygame.draw.rect(surface, (0, 60, 30),
+                             (tx2 - 7, ty2 - 28, 14, 20))
+            pygame.draw.rect(surface, (0, 100, 50),
+                             (tx2 - 7, ty2 - 28, 14, 20), 1)
+            pygame.draw.circle(surface, (0, 80, 40),  (tx2, ty2 - 34), 8)
+            pygame.draw.circle(surface, (0, 130, 60), (tx2, ty2 - 34), 8, 1)
+            pygame.draw.arc(surface, (0, 180, 220),
+                            (tx2 - 5, ty2 - 40, 10, 12), 0, math.pi, 2)
+            pygame.draw.line(surface, (0, 50, 25), (tx2 - 3, ty2 - 8), (tx2 - 3, ty2 + 8), 2)
+            pygame.draw.line(surface, (0, 50, 25), (tx2 + 3, ty2 - 8), (tx2 + 3, ty2 + 8), 2)
+            w_ang = math.sin(t * 1.4 + tech_i) * 0.4
+            wax2  = tx2 + facing * int(18 * math.cos(w_ang + 0.3))
+            way2  = ty2 - 18 + int(8 * math.sin(w_ang + 0.3))
+            pygame.draw.line(surface, (0, 80, 40),
+                             (tx2 + facing * 7, ty2 - 18), (wax2, way2), 2)
+            wp2 = 0.4 + 0.6 * abs(math.sin(t * 2.0 + tech_i * 2.1))
+            pygame.draw.circle(surface, (int(255 * wp2), int(140 * wp2), 0),
+                               (wax2, way2), 3)
+
+        # ── Station placard on far wall ───────────────────────────────────
+        pw2, ph2 = 240, 46
+        px_pl = W // 2 - pw2 // 2
+        py_pl = 138
+        pygame.draw.rect(surface, (10, 24, 12), (px_pl, py_pl, pw2, ph2))
+        pygame.draw.rect(surface, (0, 120, 50), (px_pl, py_pl, pw2, ph2), 2)
+        fp2  = pygame.font.SysFont("monospace", 12, bold=True)
+        fp2s = pygame.font.SysFont("monospace", 10)
+        ps1  = fp2.render("UNION LOCAL 404", True, (0, 180, 80))
+        ps2  = fp2s.render("CERTIFIED DOCKING FACILITY — BAY 3", True, (0, 100, 50))
+        surface.blit(ps1, (W // 2 - ps1.get_width() // 2, py_pl + 6))
+        surface.blit(ps2, (W // 2 - ps2.get_width() // 2, py_pl + 26))
+
+        # ── Hazard stripes flanking the pad ───────────────────────────────
+        for hx in range(pad_cx - pad_w // 2 - 32, pad_cx - pad_w // 2, 12):
+            pygame.draw.rect(surface, (160, 110, 0), (hx, pad_y - 22, 6, 22))
+        for hx in range(pad_cx + pad_w // 2, pad_cx + pad_w // 2 + 32, 12):
+            pygame.draw.rect(surface, (160, 110, 0), (hx, pad_y - 22, 6, 22))
+
+        # ── Landing pad ───────────────────────────────────────────────────
+        pulse = 0.6 + 0.4 * math.sin(t * 4.0)
+        pcol  = (int(200 * pulse), int(140 * pulse), 0)
         pygame.draw.rect(surface, (15, 25, 12),
                          (pad_cx - pad_w // 2 - 4, pad_y, pad_w + 8, 14))
         pygame.draw.rect(surface, pcol,
                          (pad_cx - pad_w // 2, pad_y, pad_w, 10))
-        # Pad markers
         for mk in range(pad_cx - pad_w // 2, pad_cx + pad_w // 2, 30):
             pygame.draw.rect(surface, (0, 0, 0), (mk, pad_y, 14, 10))
-        # Centre X
         pygame.draw.line(surface, (255, 200, 0),
                          (pad_cx - 20, pad_y + 5), (pad_cx + 20, pad_y + 5), 2)
         pygame.draw.line(surface, (255, 200, 0),
                          (pad_cx, pad_y - 2), (pad_cx, pad_y + 12), 2)
-        # Approach guides — vertical beams
         for bx_off in (-90, 90):
             for gy2 in range(0, pad_y, 24):
                 c = int(80 * pulse) if gy2 % 48 == 0 else int(40 * pulse)
                 pygame.draw.line(surface, (0, c, 0),
                                  (pad_cx + bx_off, gy2), (pad_cx + bx_off, gy2 + 12), 1)
 
-        # Ship
+        # ── Ship descending ───────────────────────────────────────────────
         ship_cx = W // 2
         ship_y  = int(self._land_y)
         ship_pts = [
-            (ship_cx, ship_y + 22),    # nose (pointing down)
+            (ship_cx,      ship_y + 22),
             (ship_cx - 18, ship_y),
             (ship_cx + 18, ship_y),
         ]
         pygame.draw.polygon(surface, (20, 200, 200), ship_pts)
         pygame.draw.polygon(surface, (0, 255, 240), ship_pts, 1)
-        # Thruster glow
         if self._land_throttle:
             for k in range(5):
-                cy  = ship_y - k * 8 - 6
-                bc  = (0, int(180 - k * 30), int(255 - k * 40))
-                pygame.draw.line(surface, bc,
-                                 (ship_cx - 6, ship_y), (ship_cx - 6, cy), 2)
-                pygame.draw.line(surface, bc,
-                                 (ship_cx + 6, ship_y), (ship_cx + 6, cy), 2)
+                cy3 = ship_y - k * 8 - 6
+                bc  = (0, max(0, int(180 - k * 30)), max(0, int(255 - k * 40)))
+                pygame.draw.line(surface, bc, (ship_cx - 6, ship_y), (ship_cx - 6, cy3), 2)
+                pygame.draw.line(surface, bc, (ship_cx + 6, ship_y), (ship_cx + 6, cy3), 2)
 
-        # HUD
-        f     = pygame.font.SysFont("monospace", 14)
-        fsm   = pygame.font.SysFont("monospace", 12)
-        spd   = abs(self._land_vy)
-        sc    = (0, 220, 80) if spd < 55 else (255, 180, 0) if spd < 130 else (220, 50, 50)
+        # ── HUD ───────────────────────────────────────────────────────────
+        f    = pygame.font.SysFont("monospace", 14)
+        fsm2 = pygame.font.SysFont("monospace", 12)
+        spd  = abs(self._land_vy)
+        sc6  = (0, 220, 80) if spd < 55 else (255, 180, 0) if spd < 130 else (220, 50, 50)
         surface.blit(f.render("STATION INTERIOR  ·  LAND ON PAD", True, (100, 140, 80)),
                      (W // 2 - 160, 12))
         surface.blit(f.render("HOLD  W  TO THRUST", True, (60, 90, 60)), (W // 2 - 90, 30))
-        surface.blit(f.render(f"DESCENT  {spd:>5.0f} px/s", True, sc),
-                     (W - 220, 12))
-        surface.blit(fsm.render("<55 SMOOTH · <130 OK · ABOVE = ROUGH", True, (50, 70, 50)),
+        surface.blit(f.render(f"DESCENT  {spd:>5.0f} px/s", True, sc6), (W - 220, 12))
+        surface.blit(fsm2.render("<55 SMOOTH · <130 OK · ABOVE = ROUGH", True, (50, 70, 50)),
                      (W - 290, 30))
 
     # ── Phase: Run ────────────────────────────────────────────────────────
@@ -407,6 +599,7 @@ class DeliverySequence:
             self.meta.pay_off(net_reduction)
         elif net_reduction < 0:
             self.meta.add_debt(-net_reduction)
+        self.meta.complete_chapter(self.chapter)
         self.meta.save()
 
     def _draw_result(self, surface: pygame.Surface, W: int, H: int):

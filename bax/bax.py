@@ -11,6 +11,7 @@ from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_GUN_MALFUNCTION, EVT_SPORE_INVERTED,
                              EVT_BARGE_INTERCEPT, EVT_KRESS_DIALLED,
                              EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_TORCH_ACTIVE,
+                             EVT_HARPOON_ARMING,
                              EVT_SHIP_DESTROYED, EVT_RUN_START,
                              EVT_SHOP_ENTER, EVT_SHOP_BUY, EVT_SHOP_SKIP,
                              EVT_FINAL_SECTOR, EVT_SECTOR_START)
@@ -295,6 +296,7 @@ class Bax:
         bus.subscribe(EVT_SATELLITE_HIT,    self._on_satellite_hit)
         bus.subscribe(EVT_ALIEN_SIGHTING,   self._on_alien_sighting)
         bus.subscribe(EVT_TORCH_ACTIVE,     self._on_torch_active)
+        bus.subscribe(EVT_HARPOON_ARMING,   self._on_harpoon_arming)
         bus.subscribe(EVT_SHIP_DESTROYED,   self._on_ship_destroyed)
         bus.subscribe(EVT_RUN_START,        self._on_run_start)
         bus.subscribe(EVT_SHOP_ENTER,       self._on_shop_enter)
@@ -532,6 +534,15 @@ class Bax:
                 "At this point I think they're just commuting. Past us. Every run. "
                 "Gerald's got somewhere to be.",
             ]))
+
+    def _on_harpoon_arming(self, countdown=1.5, **_):
+        self.speak(random.choice([
+            f"INCOMING HARPOON! BRACE — {countdown:.1f} seconds. BREAK THEIR LOCK!",
+            "TARGETING LASER ON US. Cut sideways or eat the cable. MOVE.",
+            "Harpoon's armin'! Get out of their cone — NOW!",
+            "EM LOCK INCOMING. Boost, juke, ANYTHING — go!",
+            "Their reticle's on you. Break the line of sight. FAST.",
+        ]))
 
     def _on_torch_active(self, **_):
         self.speak(random.choice([

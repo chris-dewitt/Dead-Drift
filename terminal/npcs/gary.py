@@ -71,6 +71,7 @@ class Gary(BaseNPC):
         self._deal_attempts    = 0
         self._sympathy_turns   = 0
         self._management_turns = 0
+        self._management_score = 0     # gated path counter — sympathy can't bleed into this
         self._article7_hit     = False
         self._sandra_turns     = 0
         self._ctx              = run_context or {}
@@ -273,10 +274,12 @@ class Gary(BaseNPC):
             blevins_hit = "blevins" in raw or "district supervisor" in raw
             if blevins_hit:
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="middle_management")
-                self.disposition += 3
+                self._management_score += 3
+                self.disposition       += 3
             else:
-                self.disposition += 1
-            if self.disposition >= 5:
+                self._management_score += 1
+                self.disposition       += 1
+            if self._management_score >= 5:
                 return NPCOutcome.RELEASE, random.choice([
                     "You know what? Blevins can tow it 'imself. "
                     "I'm on me break. Get out of 'ere. Shoo.",
@@ -385,11 +388,10 @@ class Gary(BaseNPC):
         return NPCOutcome.CONTINUE, self._gary_filler()
 
     def get_path_progress(self) -> list[tuple[str, int, int]]:
-        disp_toward_5 = max(0, min(5, self.disposition))
         return [
             ("DEAL/NEGOTIATE", min(self._deal_attempts, 2),    2),
             ("SYMPATHY",       min(self._sympathy_turns, 2),   2),
-            ("BLEVINS METHOD", disp_toward_5,                  5),
+            ("BLEVINS METHOD", min(self._management_score, 5), 5),
             ("ARTICLE 7",      int(self._article7_hit),        1),
             ("BRIBE (3k+)",    min(self._bribe_attempts, 1),   1),
         ]

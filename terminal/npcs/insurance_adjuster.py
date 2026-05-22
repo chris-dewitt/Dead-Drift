@@ -43,6 +43,13 @@ class InsuranceAdjuster(BaseNPC):
         "breach of protocol", "union liability", "barge liability",
         "barge at fault", "repo error", "harpoon violation",
         "harpoon unauthorized", "harpoon outside protocol",
+        # natural-language variants
+        "barge attacked", "they attacked", "attacked me", "they shot",
+        "started it", "they started", "initiated contact", "fault of local",
+        "their mistake", "fault of the barge", "fired at me",
+        "they came at me", "attacked my ship", "barge fault",
+        "barge was at fault", "local 404 at fault", "union mistake",
+        "they hit me first", "deployed without authorisation", "unauthorized action",
     ]
 
     # --- FORCE MAJEURE keywords (two buckets, both must appear) ---
@@ -52,12 +59,23 @@ class InsuranceAdjuster(BaseNPC):
         "solar", "asteroid", "meteor", "debris field",
         "gravity well", "spatial anomaly", "radiation storm",
         "uncharted debris", "natural event",
+        # natural-language variants
+        "natural hazard", "unforeseeable", "uncontrollable", "accident",
+        "accidental", "couldn't avoid", "no way to avoid",
+        "unavoidable collision", "natural obstacle", "space debris",
+        "field hazard", "rock", "couldn't help", "natural cause",
     ]
     _FORMAL_CLAIM_KEYWORDS = [
         "covered event", "force majeure", "environmental damage",
         "not pilot error", "clause 14", "natural damage",
         "covered under", "clause 14-b", "not my fault", "unavoidable",
         "no fault", "act of nature",
+        # natural-language variants
+        "insurance covers", "policy covers", "should cover this",
+        "under the policy", "clause b", "14b", "covered by insurance",
+        "covered by policy", "that's covered", "covered claim",
+        "policy event", "insured event", "natural disaster",
+        "covered by clause", "it's covered", "policy should",
     ]
 
     # --- COUNTER CLAIM THREAT keywords ---
@@ -66,6 +84,11 @@ class InsuranceAdjuster(BaseNPC):
         "file against you", "file against nova", "sue", "legal action",
         "solicitor", "file a claim", "take you to court",
         "report you", "regulatory body", "ombudsman",
+        # natural-language variants
+        "lawyer", "attorney", "legal counsel", "legal representation",
+        "see you in court", "formal complaint", "my solicitor",
+        "legal team", "take legal", "get a lawyer", "escalate this",
+        "arbitration board", "my attorney", "legal proceedings",
     ]
 
     # --- EXHAUSTION / SYMPATHY toward Morwenna ---
@@ -78,6 +101,13 @@ class InsuranceAdjuster(BaseNPC):
         "that's too much", "that's a lot to handle", "are you well",
         "you don't sound okay", "when did you last take a break",
         "do you ever get time off", "that's not fair to you",
+        # short-form natural variants
+        "you okay", "you alright", "hang in there", "you doing okay",
+        "hope you're okay", "sounds like a lot", "that's so much work",
+        "when do you sleep", "do you sleep", "you need rest",
+        "that's too much for one person", "you must be worn out",
+        "sounds really hard", "must be exhausting",
+        "that must take a toll", "you holding up",
     ]
 
     def __init__(self, run_context: dict | None = None):
