@@ -30,14 +30,14 @@ class RepoBarge:
     If already retreated recently, skip INTERCEPT and CLAMP immediately.
     """
 
-    DETECT_RANGE       = 320.0
-    CLAMP_RANGE        = 120.0
-    AIM_DURATION       = 1.6    # seconds barge tracks before firing harpoon — escape window
-    AIM_BREAK_RANGE    = 200.0  # if ship gets this far during AIM, barge aborts back to CHASE
+    DETECT_RANGE       = 260.0
+    CLAMP_RANGE        = 72.0
+    AIM_DURATION       = 2.8    # seconds barge tracks before firing harpoon — escape window
+    AIM_BREAK_RANGE    = 130.0  # if ship gets this far during AIM, barge aborts back to CHASE
     TORCH_INTERVAL     = 5.0
-    PATROL_SPEED       = 60.0
-    CHASE_SPEED        = 78.0
-    AIM_SPEED          = 32.0   # barge slows hard while locking on
+    PATROL_SPEED       = 55.0
+    CHASE_SPEED        = 44.0
+    AIM_SPEED          = 24.0   # barge slows hard while locking on
     RETREAT_DURATION   = 24.0   # seconds barge runs away after losing negotiation
     INTERCEPT_COOLDOWN = 45.0   # seconds before barge can intercept again
     DISRUPTION_HITS    = 2      # bullets needed to force a retreat

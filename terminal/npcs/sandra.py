@@ -32,21 +32,42 @@ class Sandra(BaseNPC):
         "worker", "workers", "union", "labour", "labor", "exploited", "exploit",
         "same boat", "same side", "we both", "fellow", "courier",
         "we all", "system", "rigged", "unfair", "underpaid",
+        # extended solidarity vocabulary
+        "solidarity", "together", "united", "we're the same", "not so different",
+        "all workers", "fellow workers", "we struggle", "shared struggle",
+        "same struggle", "we're tools", "they use us", "disposable",
+        "all of us", "work the same", "both of us", "both couriers",
+        "we both run", "same routes", "quota system",
     ]
     _INTEL_KEYWORDS = [
         "blevins", "supervisor", "tip", "intel", "gossip", "heard",
         "rumour", "rumor", "know something", "let me tell you",
         "between us", "off the record", "off record",
+        # extended intel vocabulary
+        "secret", "whisper", "confidential", "exclusive", "don't tell",
+        "heard something", "pass this on", "keep this quiet",
+        "just between us", "something you should know",
     ]
     _BOAST_KEYWORDS = [
         "snap", "snaps", "slingshot", "sling", "drift", "harpoon",
         "tether", "outran", "beat", "faster", "better", "outperformed",
         "outflew", "logged",
+        # extended boast vocabulary
+        "escaped", "evaded", "dodged", "clean run", "no hits",
+        "pulled off", "zero hits", "outpaced", "lost them",
+        "shook them", "ran the sector", "perfect run", "record time",
+        "did it clean", "no damage", "snapped it",
     ]
     _CONFESSION_KEYWORDS = [
         "favourite", "favorite", "pet", "show pony", "trophy",
         "puppet", "tool", "used", "complicit", "their property",
         "their courier", "their poster", "they own", "owned",
+        # extended confession vocabulary
+        "poster child", "mascot", "golden", "role model",
+        "model courier", "propaganda", "they use you", "showcase you",
+        "golden girl", "golden boy", "their golden", "their darling",
+        "their example", "held up as", "used as", "you're their",
+        "made an example", "the example", "proof of concept",
     ]
     _APOLOGY_KEYWORDS = [
         "sorry", "apologise", "apologize", "my fault", "my bad",

@@ -42,11 +42,22 @@ class Pirate(BaseNPC):
         "trajectory", "vector", "burn", "delta-v", "orbital",
         "swing past", "swing by", "swing around", "outrun",
         "thruster", "thrust", "newtonian", "momentum",
+        # extended physics vocabulary
+        "escape burn", "counter burn", "counter-burn", "run hot",
+        "punch it", "boost", "break away", "break free", "flight path",
+        "escape route", "escape vector", "exit vector", "course change",
+        "slingshot out", "orbital sling", "gravity sling", "well assist",
+        "boost away", "speed away", "pull away", "arc away",
     ]
     _PIRATE_TONE = [
         "shite", "damn", "bastard", "hell", "bollocks", "arse",
         "scuttle", "blast", "void you", "void off", "out here",
         "freebooter", "freelancer", "outer", "belt", "burn it",
+        # extended pirate vocabulary
+        "mate", "bleeding", "drifter", "free run", "no charter",
+        "no law out here", "void take", "uncharted", "out in the void",
+        "no law", "no rules", "borderless", "hull to hull",
+        "don't answer to", "answer to no one",
     ]
     _KRELL_KEYWORDS = [
         "krell", "outer belt", "outer-belt", "the belt", "tongueless krell",

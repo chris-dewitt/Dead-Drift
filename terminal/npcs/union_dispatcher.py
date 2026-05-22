@@ -36,10 +36,17 @@ class UnionDispatcher(BaseNPC):
                        "15k", "fifteen thousand", "25k", "30k", "thirty"]
     _COFFEE_WORDS   = ["coffee", "lunch", "break", "tired", "hungry", "food",
                        "eat", "rest", "shift", "hours", "overtime", "exhausted",
-                       "long day", "been here", "working late"]
+                       "long day", "been here", "working late",
+                       "tea", "water", "thirsty", "snack", "drink", "need a break",
+                       "take a break", "go home", "end of shift", "off the clock",
+                       "when do you eat", "have you eaten", "get some rest"]
     _FORMS_WORDS    = ["forms", "paperwork", "backlog",
                        "bureaucracy", "procedure", "stack", "pile", "admin",
-                       "in-tray", "intray", "in tray", "47 forms", "the forms"]
+                       "in-tray", "intray", "in tray", "47 forms", "the forms",
+                       "too many forms", "all this paperwork", "mountains of",
+                       "never-ending", "endless forms", "form after form",
+                       "never ends", "how many forms", "another form",
+                       "more paperwork", "form 47", "another 47"]
 
     def __init__(self, vocabulary_vault=None, run_context: dict | None = None):
         super().__init__("DISPATCHER", patience=9)

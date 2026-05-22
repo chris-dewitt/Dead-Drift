@@ -25,19 +25,31 @@ class UndergroundDJ(BaseNPC):
     _JAM_KEYWORDS = [
         "jam", "jammer", "scramble", "interfere", "block", "drown out",
         "noise", "static", "interference", "drown",
+        "disrupt", "distort", "frequencies", "frequency", "signal",
+        "flood the channel", "kill the signal", "cut their signal",
+        "jam their", "blind them", "interrupt their", "overpower",
     ]
     _INTEL_KEYWORDS = [
         "barge", "local 404", "union", "patrol", "patrols", "route",
         "intel", "tip", "weak", "weak spot", "weakness", "tell me about",
         "hear anything", "what do you know",
+        "dispatch", "schedule", "rotation", "sector plan",
+        "heads up", "what's coming", "what's ahead", "patrol window",
+        "where are they", "how many barges", "next sector",
     ]
     _DEDICATION_KEYWORDS = [
         "play", "song", "dedication", "dedicate", "request",
         "track", "tune", "spin", "bring it",
+        "music", "something good", "put something on", "play something",
+        "drop a track", "play for me", "play me something",
+        "good track", "play it", "soundtrack", "what's playing",
     ]
     _HANDLE_KEYWORDS = [
         "name's", "i'm called", "they call me", "handle", "callsign",
         "go by", "name is", "shoutout", "shout out",
+        "my name", "call me", "known as", "they know me",
+        "broadcast my name", "say my name", "mention me",
+        "give me a shout", "put me on", "shout me out",
     ]
     _TRACK_TRADE_KEYWORDS = [
         "archive", "from the archive", "vinyl", "side a", "side b",
@@ -46,6 +58,8 @@ class UndergroundDJ(BaseNPC):
     _GREETING_KEYWORDS = [
         "marrow", "hello", "hey", "hi", "evening", "morning",
         "what's up", "how are", "good to hear",
+        "roost", "radio", "broadcast", "tuned in", "you there",
+        "come in", "is anyone there", "greetings", "hey there",
     ]
 
     def __init__(self, run_context: dict | None = None, **_):
