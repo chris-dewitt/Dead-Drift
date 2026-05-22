@@ -535,18 +535,49 @@ class RunManager:
             ]))
         else:
             pool = ["gary", "synthetic_droid", "union_dispatcher"]
-            # Insurance adjuster from sector 3 onward — she's claims, not enforcement
+            if self._sector_index >= 1:
+                pool.append("underground_dj")    # benign ally, mid-game possible
+            if self._sector_index >= 2:
+                pool.extend(["sandra", "pirate"])
             if self._sector_index >= 3:
                 pool.append("insurance_adjuster")
             npc_type = random.choice(pool)
-            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+            framing = {
+                "sandra": [
+                    "Gate channel pickup — that's SANDRA. The 'perfect courier.' "
+                    "Brace yourself, mate. She's all manners and judgement.",
+                    "Comm incoming. Sandra Vega-Marsh. She doesn't usually slum it on gate duty. "
+                    "Something's up. Type sharp.",
+                    "Oh god. Sandra. The poster girl herself. "
+                    "Don't take the bait. Type like an adult.",
+                ],
+                "pirate": [
+                    "That's not a Union frequency. PIRATE intercept. No charter, no Article 7. "
+                    "Talk fast and weird. They respect weird.",
+                    "Outer Belt signature. We're past the Union's reach. "
+                    "These ones DON'T do paperwork. Mind the words.",
+                    "Pirate hail on the channel. They want cargo or blood. "
+                    "Pick your angle carefully — sympathy don't work on them.",
+                ],
+                "underground_dj": [
+                    "Oh — that's MARROW. Pirate radio. Friendly! "
+                    "He'll cut us a deal if you're nice. Ask for jamming if we're cookin'.",
+                    "Roost broadcast cuttin' through the gate channel. "
+                    "It's an ally, mate. Marrow. Use him — intel, jamming, dedications.",
+                    "Pirate radio signal punching through the gate comm. "
+                    "Marrow. He's on our side. Don't blow it.",
+                ],
+            }
+            default_framing = [
                 "Gate authority checkpoint. They want passage fees before we jump.",
                 "Sector boundary control. Standard stop — terminal incoming, hold course.",
                 "Local 404 checkpoint. Pre-jump inspection. You know what to do.",
                 "Clearance terminal inbound. Tell 'em what they wanna hear.",
                 "Gate authority's pinged us. Talk us through or we pay double.",
                 "Jump gate's flagging us. Pre-jump inspection — type smart.",
-            ]))
+            ]
+            lines = framing.get(npc_type, default_framing)
+            bus.emit(EVT_BAX_SPEAK, line=random.choice(lines))
         self.open_terminal(npc_type)
         self._pending_advance = True
 
