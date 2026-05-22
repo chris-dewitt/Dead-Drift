@@ -635,60 +635,297 @@ _DISPATCH = {
 # ---------------------------------------------------------------------------
 
 def _backdrop_gary(surface, inner, t):
-    # Barge cockpit interior: pulsing amber hazard light + control panel
-    # silhouette + a manifest binder against the wall
+    """Local 404 field barge cockpit — cramped, functional, overworked."""
     cx = inner.centerx
-    cy = inner.centery
-    # Hazard pulse — top corners
+    font6  = pygame.font.SysFont("monospace", 6, bold=True)
+    font7  = pygame.font.SysFont("monospace", 7)
+    font8  = pygame.font.SysFont("monospace", 8, bold=True)
+
+    # ── Back wall: horizontal hull-plate seams ──────────────────────────────
+    for i in range(3):
+        y = inner.top + 20 + i * 18
+        pygame.draw.line(surface, (30, 20, 4), (inner.left, y), (inner.right, y), 1)
+
+    # ── Viewport window (top-centre) — debris outside ──────────────────────
+    vp = pygame.Rect(cx - 38, inner.top + 6, 76, 42)
+    pygame.draw.rect(surface, (2, 6, 10), vp)
+    pygame.draw.rect(surface, (70, 50, 12), vp, 2)
+    # Window frame cross-bar
+    pygame.draw.line(surface, (60, 42, 10), (vp.left, vp.centery), (vp.right, vp.centery), 1)
+    pygame.draw.line(surface, (60, 42, 10), (vp.centerx, vp.top), (vp.centerx, vp.bottom), 1)
+    # Stars / debris dots visible through window
+    rng_vp = random.Random(17)
+    for _ in range(12):
+        sx = rng_vp.randint(vp.left + 3, vp.right - 3)
+        sy = rng_vp.randint(vp.top + 3, vp.bottom - 3)
+        pygame.draw.circle(surface, (80, 80, 100), (sx, sy), 1)
+    # Floating debris rock silhouette
+    drx, dry = cx - 12, inner.top + 18
+    drock = [(drx, dry-4), (drx+6, dry-6), (drx+10, dry-2), (drx+8, dry+4),
+             (drx+2, dry+5), (drx-2, dry+2)]
+    pygame.draw.polygon(surface, (28, 22, 38), drock)
+    pygame.draw.polygon(surface, (55, 45, 70), drock, 1)
+
+    # ── Hazard stripe panels left and right of viewport ─────────────────────
+    for side_x, w in ((inner.left, 34), (inner.right - 34, 34)):
+        stripe_rect = pygame.Rect(side_x, inner.top + 6, w, 42)
+        pygame.draw.rect(surface, (16, 12, 0), stripe_rect)
+        pygame.draw.rect(surface, (50, 35, 0), stripe_rect, 1)
+        # Diagonal hazard stripes
+        for k in range(0, w + 42, 12):
+            x1 = side_x + k
+            y1 = inner.top + 6
+            x2 = side_x + k - 42
+            y2 = inner.top + 48
+            pygame.draw.line(surface, (80, 55, 0),
+                             (max(side_x, min(side_x+w, x1)), y1),
+                             (max(side_x, min(side_x+w, x2)), y2), 2)
+
+    # ── CAUTION blink lights — top-left / top-right ──────────────────────────
     pulse = 0.5 + 0.5 * math.sin(t * 3.0)
-    amb_col = (int(80 + 100 * pulse), int(50 + 60 * pulse), 0)
-    pygame.draw.circle(surface, amb_col, (inner.left + 22, inner.top + 22), 6)
-    pygame.draw.circle(surface, amb_col, (inner.right - 22, inner.top + 22), 6)
-    # Side wall: vertical ribs
-    for i in range(4):
-        x = inner.left + 14 + i * 6
-        pygame.draw.line(surface, (28, 18, 4), (x, inner.top + 38),
-                         (x, inner.bottom - 18), 1)
-    for i in range(4):
-        x = inner.right - 14 - i * 6
-        pygame.draw.line(surface, (28, 18, 4), (x, inner.top + 38),
-                         (x, inner.bottom - 18), 1)
-    # Control panel silhouette at the bottom
-    panel = pygame.Rect(inner.left + 4, inner.bottom - 30,
-                        inner.width - 8, 22)
+    blink_fast = (int(t * 2.4) % 2 == 0)
+    caution_col = (int(200 * pulse), int(110 * pulse), 0) if blink_fast else (40, 22, 0)
+    for lx in (inner.left + 10, inner.right - 10):
+        pygame.draw.circle(surface, (30, 18, 0), (lx, inner.top + 11), 7)
+        pygame.draw.circle(surface, caution_col, (lx, inner.top + 11), 5)
+        pygame.draw.circle(surface, (60, 36, 0), (lx, inner.top + 11), 7, 1)
+    # CAUTION label between the lights
+    caut = font6.render("!! CAUTION !!", True, (int(160*pulse), int(80*pulse), 0))
+    surface.blit(caut, (cx - caut.get_width()//2, inner.top + 7))
+
+    # ── Side wall ribs ────────────────────────────────────────────────────────
+    for side, xs in (("left", range(4)), ("right", range(4))):
+        for i in xs:
+            if side == "left":
+                x = inner.left + 4 + i * 7
+            else:
+                x = inner.right - 4 - i * 7
+            pygame.draw.line(surface, (28, 18, 4), (x, inner.top + 54),
+                             (x, inner.bottom - 32), 1)
+
+    # ── Three monitor screens — STATUS, MANIFEST, COMMS ─────────────────────
+    screen_defs = [
+        (inner.left + 6,  inner.top + 55, 50, 30, "STATUS"),
+        (cx - 28,         inner.top + 55, 56, 30, "MANIFEST"),
+        (inner.right - 56, inner.top + 55, 50, 30, "COMMS"),
+    ]
+    mon_blink_frame = int(t * 4)
+    for mx, my, mw, mh, label in screen_defs:
+        pygame.draw.rect(surface, (6, 8, 2), (mx, my, mw, mh))
+        pygame.draw.rect(surface, (80, 60, 10), (mx, my, mw, mh), 1)
+        # Scanline
+        for sl in range(my + 3, my + mh - 2, 3):
+            pygame.draw.line(surface, (8, 10, 2), (mx+1, sl), (mx+mw-2, sl), 1)
+        # Label top strip
+        pygame.draw.rect(surface, (20, 15, 0), (mx, my, mw, 8))
+        lbl = font6.render(label, True, (140, 100, 20))
+        surface.blit(lbl, (mx + mw//2 - lbl.get_width()//2, my + 1))
+        # Scrolling data lines — offsets by time
+        for row in range(3):
+            scroll_idx = (mon_blink_frame + row * 3 + hash(label) % 7) % 8
+            line_col = (60, 180, 60) if scroll_idx < 6 else (180, 60, 20)
+            blen = int(mw * 0.3 + (scroll_idx / 8.0) * mw * 0.55)
+            pygame.draw.rect(surface, line_col,
+                             (mx + 3, my + 10 + row * 6, blen, 3))
+    # STATUS screen has a blinking "ONLINE" indicator
+    st_mx, st_my = screen_defs[0][0], screen_defs[0][1]
+    stat_blink = (int(t * 1.8) % 2 == 0)
+    sc2 = (0, 220, 80) if stat_blink else (0, 60, 20)
+    pygame.draw.circle(surface, sc2, (st_mx + 44, st_my + 25), 3)
+
+    # ── Union logo panel — right wall ─────────────────────────────────────────
+    logo_rect = pygame.Rect(inner.right - 30, inner.top + 55, 22, 30)
+    pygame.draw.rect(surface, (12, 8, 0), logo_rect)
+    pygame.draw.rect(surface, (100, 68, 0), logo_rect, 1)
+    lbl404 = font8.render("404", True, (220, 160, 30))
+    surface.blit(lbl404, (logo_rect.centerx - lbl404.get_width()//2, logo_rect.top + 3))
+    union_lbl = font6.render("LOCAL", True, (110, 80, 15))
+    surface.blit(union_lbl, (logo_rect.centerx - union_lbl.get_width()//2, logo_rect.top + 14))
+    union_lbl2 = font6.render("UNION", True, (110, 80, 15))
+    surface.blit(union_lbl2, (logo_rect.centerx - union_lbl2.get_width()//2, logo_rect.top + 21))
+
+    # ── Coffee mug outline on console ─────────────────────────────────────────
+    mug_x, mug_y = inner.left + 9, inner.bottom - 34
+    pygame.draw.rect(surface, (28, 18, 6), (mug_x, mug_y, 10, 12))
+    pygame.draw.rect(surface, (70, 50, 15), (mug_x, mug_y, 10, 12), 1)
+    pygame.draw.arc(surface, (70, 50, 15),
+                    pygame.Rect(mug_x + 9, mug_y + 3, 5, 6), -math.pi/2, math.pi/2, 1)
+    # Steam wisps
+    for si in range(2):
+        steam_x = mug_x + 3 + si * 4
+        steam_y = mug_y - 4 - int(3 * math.sin(t * 2.0 + si * 1.5))
+        pygame.draw.circle(surface, (50, 45, 40), (steam_x, steam_y), 1)
+
+    # ── Maintenance manuals stacked left side ─────────────────────────────────
+    book_defs = [(inner.left + 4, inner.bottom - 28, 14, 8, (80, 28, 14)),
+                 (inner.left + 4, inner.bottom - 20, 16, 8, (30, 60, 20)),
+                 (inner.left + 4, inner.bottom - 12, 18, 8, (14, 30, 80))]
+    for bx2, by2, bw2, bh2, bc in book_defs:
+        pygame.draw.rect(surface, bc, (bx2, by2, bw2, bh2))
+        pygame.draw.rect(surface, (100, 80, 40), (bx2, by2, bw2, bh2), 1)
+
+    # ── Radio handset outline ─────────────────────────────────────────────────
+    rx, ry = cx + 40, inner.bottom - 26
+    pygame.draw.rect(surface, (20, 14, 4), (rx, ry, 7, 16))
+    pygame.draw.rect(surface, (80, 55, 10), (rx, ry, 7, 16), 1)
+    pygame.draw.circle(surface, (60, 42, 8), (rx + 3, ry + 3), 2)
+    pygame.draw.circle(surface, (60, 42, 8), (rx + 3, ry + 12), 2)
+    # Coiled cord
+    pygame.draw.arc(surface, (60, 42, 8),
+                    pygame.Rect(rx + 6, ry + 6, 6, 4), -math.pi/2, math.pi/2, 1)
+
+    # ── Main control panel at the bottom ─────────────────────────────────────
+    panel = pygame.Rect(inner.left + 4, inner.bottom - 32, inner.width - 8, 24)
     pygame.draw.rect(surface, (14, 10, 0), panel)
-    pygame.draw.line(surface, (50, 32, 6),
-                     (panel.left, panel.top), (panel.right, panel.top), 1)
-    # Panel switches/lights
-    for i in range(8):
-        bx = panel.left + 10 + i * 22
-        lit = (int(t * 0.7) + i) % 4 == 0
-        col = (200, 120, 0) if lit else (40, 26, 4)
-        pygame.draw.rect(surface, col, (bx, panel.top + 7, 6, 4))
-    # Manifest binder on left
-    binder = pygame.Rect(inner.left + 8, inner.top + 40, 18, 26)
-    pygame.draw.rect(surface, (90, 30, 20), binder)
-    pygame.draw.rect(surface, (30, 10, 5), binder, 1)
-    font = pygame.font.SysFont("monospace", 6, bold=True)
-    bf = font.render("404", True, (220, 180, 80))
-    surface.blit(bf, (binder.centerx - bf.get_width()//2, binder.top + 4))
+    pygame.draw.line(surface, (60, 40, 8), (panel.left, panel.top), (panel.right, panel.top), 2)
+    # Toggle switches
+    for i in range(10):
+        bx3 = panel.left + 8 + i * 18
+        lit = (int(t * 0.6) + i * 3) % 9 == 0
+        col2 = (200, 120, 0) if lit else (40, 26, 4)
+        pygame.draw.rect(surface, col2, (bx3, panel.top + 6, 6, 4))
+        pygame.draw.rect(surface, (60, 42, 8), (bx3, panel.top + 6, 6, 4), 1)
+    # BARGE STATUS readout on panel
+    stat_col = (0, 180, 80) if (int(t * 0.5) % 2 == 0) else (0, 80, 30)
+    stat_txt = font7.render("BARGE STATUS: NOMINAL", True, stat_col)
+    surface.blit(stat_txt, (panel.left + 4, panel.top + 13))
 
 
 def _backdrop_synthetic_droid(surface, inner, t):
-    # Server room: vertical green LED columns + cable trays
-    for i in range(7):
-        x = inner.left + 12 + i * (inner.width - 24) // 6
-        for j in range(6):
-            y = inner.top + 22 + j * 12
-            phase = (i * 3 + j * 7 + int(t * 8)) % 12
-            lit = phase < 4
-            col = (0, 200, 90) if lit else (0, 40, 12)
-            pygame.draw.rect(surface, col, (x - 1, y, 3, 4))
-    # Cable trays overhead
-    for k in range(3):
-        cy = inner.top + 14 + k * 4
-        pygame.draw.line(surface, (16, 24, 16),
-                         (inner.left + 4, cy), (inner.right - 4, cy), 1)
+    """Nova Soma sterile processing room — white-green clinical tech horror."""
+    cx = inner.centerx
+    font6 = pygame.font.SysFont("monospace", 6, bold=True)
+    font7 = pygame.font.SysFont("monospace", 7)
+
+    # ── Grid floor — perspective lines converging at cx, bottom ──────────────
+    floor_y = inner.bottom - 12
+    vp_x    = cx
+    for gx in range(inner.left, inner.right + 1, 18):
+        pygame.draw.line(surface, (10, 22, 10),
+                         (gx, floor_y), (vp_x, inner.top + inner.height // 2), 1)
+    for gy_frac in (0.55, 0.70, 0.82, 0.92, 1.0):
+        gy = inner.top + int(inner.height * gy_frac) - 12
+        if inner.top <= gy <= floor_y:
+            pygame.draw.line(surface, (10, 22, 10),
+                             (inner.left, gy), (inner.right, gy), 1)
+
+    # ── Grid ceiling ─────────────────────────────────────────────────────────
+    ceil_y = inner.top + 12
+    for gx in range(inner.left, inner.right + 1, 18):
+        pygame.draw.line(surface, (8, 18, 8),
+                         (gx, ceil_y), (vp_x, inner.top + inner.height // 2), 1)
+    for gy_frac in (0.0, 0.06, 0.12, 0.18):
+        gy = inner.top + int(inner.height * gy_frac) + 4
+        if inner.top <= gy <= ceil_y + 20:
+            pygame.draw.line(surface, (8, 18, 8),
+                             (inner.left, gy), (inner.right, gy), 1)
+
+    # ── Server rack towers on left and right ──────────────────────────────────
+    rack_specs = [
+        (inner.left + 2, inner.top + 14, 26, inner.height - 28),
+        (inner.left + 30, inner.top + 20, 18, inner.height - 36),
+        (inner.right - 28, inner.top + 14, 26, inner.height - 28),
+        (inner.right - 48, inner.top + 20, 18, inner.height - 36),
+    ]
+    for rx, ry, rw, rh in rack_specs:
+        pygame.draw.rect(surface, (6, 14, 8), (rx, ry, rw, rh))
+        pygame.draw.rect(surface, (20, 50, 25), (rx, ry, rw, rh), 1)
+        # Rack unit lines
+        for unit in range(0, rh, 6):
+            pygame.draw.line(surface, (12, 28, 14),
+                             (rx + 1, ry + unit), (rx + rw - 2, ry + unit), 1)
+        # LED indicators — scrolling pattern
+        for row in range(0, rh - 4, 6):
+            phase = (row // 6 + int(t * 5) + rx) % 7
+            led_col = (0, 220, 80) if phase < 5 else (180, 30, 30)
+            if phase == 6:
+                led_col = (220, 180, 0)
+            pygame.draw.rect(surface, led_col, (rx + rw - 5, ry + row + 1, 3, 3))
+
+    # ── Cable conduits running walls ──────────────────────────────────────────
+    for cy_off in (0.22, 0.42, 0.62):
+        cy2 = inner.top + int(inner.height * cy_off)
+        pygame.draw.line(surface, (12, 28, 14),
+                         (inner.left + 28, cy2), (inner.right - 28, cy2), 3)
+        pygame.draw.line(surface, (0, 50, 20),
+                         (inner.left + 28, cy2), (inner.right - 28, cy2), 1)
+        # Conduit connectors
+        for cx3 in (inner.left + 42, cx, inner.right - 42):
+            pygame.draw.circle(surface, (20, 60, 30), (cx3, cy2), 3)
+            pygame.draw.circle(surface, (0, 100, 50), (cx3, cy2), 3, 1)
+
+    # ── Overhead cable tray ───────────────────────────────────────────────────
+    tray_y = inner.top + 10
+    pygame.draw.rect(surface, (8, 20, 10),
+                     (inner.left + 4, tray_y, inner.width - 8, 4))
+    pygame.draw.rect(surface, (30, 60, 35),
+                     (inner.left + 4, tray_y, inner.width - 8, 4), 1)
+    for hx in range(inner.left + 14, inner.right - 4, 10):
+        pygame.draw.line(surface, (15, 36, 18),
+                         (hx, tray_y + 4), (hx + 4, tray_y + 12), 1)
+
+    # ── Nova Soma logo — abstract diamond geometry centre wall ────────────────
+    logo_cx = cx
+    logo_cy = inner.top + int(inner.height * 0.38)
+    logo_r  = 14
+    # Outer diamond
+    ns_pts = [(logo_cx, logo_cy - logo_r), (logo_cx + logo_r, logo_cy),
+              (logo_cx, logo_cy + logo_r), (logo_cx - logo_r, logo_cy)]
+    pygame.draw.polygon(surface, (4, 18, 8), ns_pts)
+    pygame.draw.polygon(surface, (0, 200, 80), ns_pts, 1)
+    # Inner cross
+    inner_r = logo_r // 2
+    ns_inner = [(logo_cx, logo_cy - inner_r), (logo_cx + inner_r, logo_cy),
+                (logo_cx, logo_cy + inner_r), (logo_cx - inner_r, logo_cy)]
+    pygame.draw.polygon(surface, (0, 140, 55), ns_inner, 1)
+    # Centre pulse
+    pulse_a = 0.5 + 0.5 * math.sin(t * 3.0)
+    pygame.draw.circle(surface, (0, int(220 * pulse_a), int(80 * pulse_a)),
+                       (logo_cx, logo_cy), 3)
+    ns_lbl = font6.render("NOVA SOMA", True, (0, 140, 55))
+    surface.blit(ns_lbl, (logo_cx - ns_lbl.get_width()//2, logo_cy + logo_r + 3))
+
+    # ── Status monitor array — top-centre ─────────────────────────────────────
+    mon_x = cx - 34
+    mon_y = inner.top + 15
+    for mi in range(3):
+        msx = mon_x + mi * 24
+        pygame.draw.rect(surface, (2, 10, 4), (msx, mon_y, 20, 14))
+        pygame.draw.rect(surface, (20, 60, 25), (msx, mon_y, 20, 14), 1)
+        # Scrolling green bar
+        bar_w = int(4 + 12 * ((math.sin(t * 2.5 + mi * 1.1) * 0.5 + 0.5)))
+        pygame.draw.rect(surface, (0, 180, 60), (msx + 2, mon_y + 4, bar_w, 4))
+        blink2 = (int(t * 3 + mi) % 4 == 0)
+        led2 = (0, 220, 80) if blink2 else (0, 50, 18)
+        pygame.draw.circle(surface, led2, (msx + 17, mon_y + 2), 2)
+
+    # ── Analysis / dissection table in lower-centre ───────────────────────────
+    tbl_rect = pygame.Rect(cx - 32, inner.bottom - 20, 64, 10)
+    pygame.draw.rect(surface, (8, 20, 10), tbl_rect)
+    pygame.draw.rect(surface, (0, 120, 50), tbl_rect, 1)
+    # Table legs
+    for lx in (tbl_rect.left + 6, tbl_rect.right - 6):
+        pygame.draw.line(surface, (0, 80, 35),
+                         (lx, tbl_rect.bottom), (lx, tbl_rect.bottom + 4), 1)
+    # Object on table — abstract specimen container
+    pygame.draw.rect(surface, (4, 28, 14),
+                     (cx - 10, inner.bottom - 25, 20, 8))
+    pygame.draw.rect(surface, (0, 160, 70),
+                     (cx - 10, inner.bottom - 25, 20, 8), 1)
+    # Status: ANALYZING blink
+    an_col = (0, 200, 80) if (int(t * 2) % 2 == 0) else (0, 60, 24)
+    an_lbl = font6.render("ANALYZING", True, an_col)
+    surface.blit(an_lbl, (cx - an_lbl.get_width()//2, inner.bottom - 31))
+
+    # ── Cooling vents bottom ──────────────────────────────────────────────────
+    for vx in range(inner.left + 4, inner.right - 4, 14):
+        pygame.draw.rect(surface, (8, 18, 10),
+                         (vx, inner.bottom - 10, 10, 6))
+        pygame.draw.rect(surface, (20, 45, 22),
+                         (vx, inner.bottom - 10, 10, 6), 1)
+        for vy in range(inner.bottom - 9, inner.bottom - 4, 2):
+            pygame.draw.line(surface, (12, 30, 14),
+                             (vx + 1, vy), (vx + 9, vy), 1)
 
 
 def _backdrop_union_dispatcher(surface, inner, t):
