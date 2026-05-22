@@ -262,6 +262,101 @@ class DeliveryRun:
         pygame.draw.rect(surf, (18, 30, 18), (0, FLOOR_Y, CORRIDOR_W, CORRIDOR_H - FLOOR_Y))
         pygame.draw.line(surf, (0, 140, 60), (0, FLOOR_Y), (CORRIDOR_W, FLOOR_Y), 2)
 
+        # ── Environmental detail (parallax bg at 50% camera speed) ───────
+        bg_off = self._camera_x * 0.5
+
+        # Overhead conduit pipes running the length of the corridor
+        for py_c in (CEIL_Y + 5, CEIL_Y + 9):
+            pygame.draw.line(surf, (10, 22, 12), (0, py_c), (CORRIDOR_W, py_c), 1)
+        for cx_c in range(int(-bg_off % 60), CORRIDOR_W, 60):
+            pygame.draw.line(surf, (8, 20, 10), (cx_c, CEIL_Y), (cx_c, CEIL_Y + 14), 2)
+
+        # Propaganda posters along walls (world-space, parallax)
+        poster_data = [
+            ( 200, "YOUR DEBT IS YOUR IDENTITY",    (110, 60,  0)),
+            ( 700, "LOCAL 404 PROTECTS OUR UNION",  (  0, 80, 40)),
+            (1100, "CLONE WELLNESS PROGRAMME",       ( 80,  0, 80)),
+            (1500, "REPORT UNLICENSED COURIERS",     (110, 70,  0)),
+            (1900, "DEBT SETTLEMENT AVAILABLE",      (  0, 80, 40)),
+            (2300, "DEBT IS SECURITY",               (110, 60,  0)),
+            (2700, "YOUR CARGO IS OUR CONCERN",      (  0, 80, 40)),
+            (3050, "STAY COMPLIANT. STAY ALIVE.",    ( 80,  0, 80)),
+        ]
+        f_poster = pygame.font.SysFont("monospace", 8)
+        for bg_wx, text, col in poster_data:
+            psx = int(bg_wx - bg_off)
+            if -110 < psx < CORRIDOR_W + 10:
+                pw_p, ph_p = 100, 20
+                # Bottom poster (above floor strip)
+                py_p = FLOOR_Y - 28
+                pygame.draw.rect(surf, (int(col[0]*0.18), int(col[1]*0.18), int(col[2]*0.18)),
+                                 (psx, py_p, pw_p, ph_p))
+                pygame.draw.rect(surf, col, (psx, py_p, pw_p, ph_p), 1)
+                surf.set_clip(pygame.Rect(psx + 1, py_p + 1, pw_p - 2, ph_p - 2))
+                surf.blit(f_poster.render(text, True, col), (psx + 2, py_p + 4))
+                surf.set_clip(None)
+                # Top poster (below ceiling strip)
+                py_t2 = CEIL_Y + 17
+                pygame.draw.rect(surf, (int(col[0]*0.12), int(col[1]*0.12), int(col[2]*0.12)),
+                                 (psx, py_t2, pw_p, ph_p))
+                pygame.draw.rect(surf, (int(col[0]*0.5), int(col[1]*0.5), int(col[2]*0.5)),
+                                 (psx, py_t2, pw_p, ph_p), 1)
+
+        # Wall monitors (small screens showing debt data)
+        f_mon = pygame.font.SysFont("monospace", 7)
+        for mon_wx in (350, 900, 1450, 1950, 2450, 2950):
+            msx = int(mon_wx - bg_off)
+            if -50 < msx < CORRIDOR_W + 10:
+                mon_y = CEIL_Y + 26
+                pygame.draw.rect(surf, (8, 16, 10), (msx, mon_y, 38, 26))
+                pygame.draw.rect(surf, (0, 60, 30), (msx, mon_y, 38, 26), 1)
+                scroll = int((t * 18 + mon_wx * 0.08) % 54)
+                for li, ln in enumerate(["DEBT: 847K cr", "CLONE #: 003", "QUOTA: 2/5", "404 ACTIVE"]):
+                    ly = mon_y + 2 + li * 6 - scroll
+                    if mon_y + 2 <= ly <= mon_y + 22:
+                        surf.set_clip(pygame.Rect(msx + 1, mon_y + 1, 36, 24))
+                        surf.blit(f_mon.render(ln, True, (0, 140, 60)), (msx + 2, ly))
+                        surf.set_clip(None)
+
+        # Background NPC silhouettes (slower parallax — 40% speed)
+        bg_off2 = self._camera_x * 0.4
+        for npc_wx, walk_dir in [(400, 1), (950, -1), (1550, 1), (2100, -1), (2700, 1)]:
+            npc_wx2 = npc_wx + t * 16 * walk_dir
+            nsx = int(npc_wx2 - bg_off2)
+            if -25 < nsx < CORRIDOR_W + 20:
+                ny2 = FLOOR_Y - 1
+                lp2 = t * 2.8
+                pygame.draw.rect(surf, (4, 14, 8), (nsx - 5, ny2 - 24, 10, 16))
+                pygame.draw.circle(surf, (4, 14, 8), (nsx, ny2 - 30), 6)
+                pygame.draw.line(surf, (4, 14, 8),
+                                 (nsx - 2, ny2 - 8),
+                                 (nsx - 4 + int(3 * math.sin(lp2)), ny2), 2)
+                pygame.draw.line(surf, (4, 14, 8),
+                                 (nsx + 2, ny2 - 8),
+                                 (nsx + 4 + int(3 * math.sin(lp2 + math.pi)), ny2), 2)
+
+        # Debt collection drone — slow drift, scan beam, blink light
+        drone_wx = int(t * 22 + 450) % LEVEL_LENGTH
+        d_sx = int(drone_wx - bg_off)
+        if -40 < d_sx < CORRIDOR_W + 20:
+            d_sy = CEIL_Y + 28 + int(8 * math.sin(t * 0.7))
+            pygame.draw.ellipse(surf, (10, 22, 12), (d_sx - 20, d_sy - 7, 40, 14))
+            pygame.draw.ellipse(surf, (0, 60, 30),  (d_sx - 20, d_sy - 7, 40, 14), 1)
+            for r_a in (0, 180):
+                rax = d_sx + int(20 * math.cos(math.radians(r_a)))
+                ray = d_sy + int(7  * math.sin(math.radians(r_a)))
+                pygame.draw.circle(surf, (0, 40, 20), (rax, ray), 4)
+            # Downward scan beam
+            beam_h = FLOOR_Y - d_sy - 7
+            if beam_h > 0:
+                bm = pygame.Surface((12, beam_h), pygame.SRCALPHA)
+                bm.fill((200, 0, 0, int(50 + 30 * math.sin(t * 2.0))))
+                surf.blit(bm, (d_sx - 6, d_sy + 7))
+            if abs(math.sin(t * 4.0)) > 0.7:
+                pygame.draw.circle(surf, (220, 40, 40), (d_sx, d_sy - 5), 2)
+            surf.blit(f_poster.render("COLLECT-BOT", True, (0, 60, 30)),
+                      (d_sx - 28, d_sy + 8))
+
         # Ceiling lights at intervals
         light_spacing = 180
         first_light = int(self._camera_x / light_spacing) * light_spacing - light_spacing
