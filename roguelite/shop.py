@@ -53,9 +53,8 @@ class _ShopItem:
                     ship.cargo.spore_level  = max(0.0, ship.cargo.spore_level - 0.5)
         elif self.tag == "scrap_bullets":
             if hasattr(ship, "gun"):
-                ship.gun._cooldown      = 0.0
-                ship.gun.is_jammed      = False
-                ship.gun._jam_t         = 0.0
+                ship.gun._cooldown = 0.0
+                ship.gun._jam_t    = 0.0
 
 
 _POOL_ALL: list[_ShopItem] = [
