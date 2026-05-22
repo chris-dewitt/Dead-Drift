@@ -16,7 +16,11 @@ from renderer.vector_renderer import VectorRenderer
 from renderer.hud_renderer import HUDRenderer
 from renderer.terminal_renderer import TerminalRenderer
 from renderer.cockpit_renderer import CockpitRenderer
-from audio.audio_manager import AudioManager
+from audio.audio_manager import (
+    AudioManager,
+    SCENE_MENU, SCENE_FLIGHT, SCENE_TERMINAL, SCENE_DELIVERY,
+    SCENE_SHOP, SCENE_INTERSTITIAL, SCENE_DECANTING, SCENE_LOADOUT,
+)
 from delivery.delivery_sequence import DeliverySequence
 from roguelite.shop import ShopScreen
 
@@ -73,6 +77,21 @@ class Game:
         bus.subscribe(EVT_RUN_END,        self._on_run_end)
         bus.subscribe(EVT_TORCH_ACTIVE,   self._on_torch_active)
 
+    # ------------------------------------------------------------------
+    # State → musical scene mapping. Drives AudioManager.set_scene().
+    _STATE_TO_SCENE = {
+        GameState.MAIN_MENU:     SCENE_MENU,
+        GameState.LOADOUT_DRAFT: SCENE_LOADOUT,
+        GameState.FLIGHT:        SCENE_FLIGHT,
+        GameState.TERMINAL:      SCENE_TERMINAL,
+        GameState.DELIVERY:      SCENE_DELIVERY,
+        GameState.SHOP:          SCENE_SHOP,
+        GameState.INTERSTITIAL:  SCENE_INTERSTITIAL,
+        GameState.DECANTING:     SCENE_DECANTING,
+        GameState.SECTOR_JUMP:   SCENE_FLIGHT,
+        GameState.GAME_OVER:     SCENE_MENU,
+    }
+
     def _goto(self, new_state: GameState):
         """Animated state change: capture the current frame, start the
         CRT power-down transition, then swap state. Use this for any
@@ -84,6 +103,10 @@ class Game:
             snapshot = pygame.Surface((S.SCREEN_W, S.SCREEN_H))
         self.transition.start(snapshot)
         self.states.transition(new_state)
+        # Update the soundtrack scene to match
+        scene = self._STATE_TO_SCENE.get(new_state)
+        if scene is not None and self.audio is not None:
+            self.audio.set_scene(scene)
 
     def _on_torch_active(self, countdown=5.0, **_):
         self._torch_warn_t = countdown
@@ -156,6 +179,8 @@ class Game:
         self.run_mgr._ship = self.ship
 
         self.states.transition(GameState.FLIGHT)
+        if self.audio is not None:
+            self.audio.set_scene(SCENE_FLIGHT)
 
     # ------------------------------------------------------------------
     def _handle_events(self):
