@@ -1302,10 +1302,15 @@ class VectorRenderer:
         bx, by = int(pos.x), int(pos.y)
         state  = barge.state
 
-        # Aggressive halo when in chase/clamp/torch
-        if state in ("chase", "clamp", "torch"):
+        # Aggressive halo when in chase/aim/clamp/torch
+        if state in ("chase", "aim", "clamp", "torch"):
             halo_pulse = 0.6 + 0.4 * math.sin(t * 6.0)
-            halo_col = (220, 60, 30) if state in ("clamp", "torch") else (220, 130, 0)
+            if state in ("clamp", "torch"):
+                halo_col = (220, 60, 30)
+            elif state == "aim":
+                halo_col = (255, 220, 40)   # bright targeting yellow
+            else:
+                halo_col = (220, 130, 0)
             halo = pygame.Surface((100, 70), pygame.SRCALPHA)
             pygame.draw.ellipse(halo, (*halo_col, int(35 * halo_pulse)), (0, 0, 100, 70))
             pygame.draw.ellipse(halo, (*halo_col, int(60 * halo_pulse)), (8, 5, 84, 60))
@@ -1403,6 +1408,41 @@ class VectorRenderer:
         surface_404 = font.render("404", True, (200, 140, 0))
         self.surface.blit(surface_404, (bx - surface_404.get_width() // 2,
                                         by - surface_404.get_height() // 2))
+
+        # Harpoon-arming warning — dashed targeting beam + reticle while in AIM
+        if state == "aim" and ship and ship.is_alive:
+            sx, sy = int(ship.pos.x), int(ship.pos.y)
+            aim_t        = getattr(barge, "_aim_t", 0.0)
+            aim_duration = getattr(barge, "AIM_DURATION", 1.6)
+            progress     = max(0.0, min(1.0, 1.0 - aim_t / aim_duration))
+            pulse        = 0.5 + 0.5 * math.sin(t * 28.0)
+            # Yellow → red as the lock completes
+            beam_r = 255
+            beam_g = int(230 - 200 * progress)
+            beam_b = 30
+            # Dashed beam barge → ship
+            dx, dy = sx - bx, sy - by
+            L      = max(1.0, math.hypot(dx, dy))
+            ux, uy = dx / L, dy / L
+            dash_len = 14
+            gap      = 8
+            cur      = 0.0
+            beam_col = (beam_r, beam_g, beam_b)
+            while cur < L:
+                seg_end = min(cur + dash_len, L)
+                p1 = (int(bx + ux * cur), int(by + uy * cur))
+                p2 = (int(bx + ux * seg_end), int(by + uy * seg_end))
+                pygame.draw.line(self.surface, beam_col, p1, p2, 2)
+                cur += dash_len + gap
+            # Reticle on ship — pulsing crosshair circle
+            ret_r = int(20 + 8 * pulse + 14 * progress)
+            pygame.draw.circle(self.surface, beam_col, (sx, sy), ret_r, 2)
+            pygame.draw.circle(self.surface, beam_col, (sx, sy), ret_r + 5, 1)
+            tick = 6
+            pygame.draw.line(self.surface, beam_col, (sx - ret_r - tick, sy), (sx - ret_r + 2, sy), 2)
+            pygame.draw.line(self.surface, beam_col, (sx + ret_r - 2, sy), (sx + ret_r + tick, sy), 2)
+            pygame.draw.line(self.surface, beam_col, (sx, sy - ret_r - tick), (sx, sy - ret_r + 2), 2)
+            pygame.draw.line(self.surface, beam_col, (sx, sy + ret_r - 2), (sx, sy + ret_r + tick), 2)
 
         # Tether — double-layered crackling EM beam
         tether = getattr(barge, "_tether", None)

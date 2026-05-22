@@ -4,13 +4,14 @@ import random
 from physics.body import RigidBody2D, Vec2
 from physics.tether import Tether
 from config import settings as S
-from core.event_bus import bus, EVT_MODULE_UNBOLTED, EVT_TETHER_HIT, EVT_BARGE_INTERCEPT, EVT_BAX_SPEAK, EVT_TORCH_ACTIVE
+from core.event_bus import bus, EVT_MODULE_UNBOLTED, EVT_TETHER_HIT, EVT_BARGE_INTERCEPT, EVT_BAX_SPEAK, EVT_TORCH_ACTIVE, EVT_HARPOON_ARMING
 from terminal.npcs.base_npc import NPCOutcome
 
 
 class BargeState:
     PATROL    = "patrol"
     CHASE     = "chase"
+    AIM       = "aim"        # tracking ship before firing — visible warning beam
     INTERCEPT = "intercept"  # holding position while comm terminal is open
     CLAMP     = "clamp"      # tether fired, dragging player
     TORCH     = "torch"      # plasma torch unbolting modules
@@ -29,11 +30,14 @@ class RepoBarge:
     If already retreated recently, skip INTERCEPT and CLAMP immediately.
     """
 
-    DETECT_RANGE       = 360.0
+    DETECT_RANGE       = 320.0
     CLAMP_RANGE        = 120.0
+    AIM_DURATION       = 1.6    # seconds barge tracks before firing harpoon — escape window
+    AIM_BREAK_RANGE    = 200.0  # if ship gets this far during AIM, barge aborts back to CHASE
     TORCH_INTERVAL     = 5.0
     PATROL_SPEED       = 60.0
-    CHASE_SPEED        = 100.0
+    CHASE_SPEED        = 78.0
+    AIM_SPEED          = 32.0   # barge slows hard while locking on
     RETREAT_DURATION   = 24.0   # seconds barge runs away after losing negotiation
     INTERCEPT_COOLDOWN = 45.0   # seconds before barge can intercept again
     DISRUPTION_HITS    = 2      # bullets needed to force a retreat
@@ -55,6 +59,7 @@ class RepoBarge:
         self._intercept_cd   = 0.0   # cooldown before next intercept attempt
         self._disruption_hits = 0    # bullet hits since last disruption reset
         self._torch_warned   = False  # track if torch_active event was emitted
+        self._aim_t          = 0.0    # countdown while in AIM state
 
     # ------------------------------------------------------------------
     def update(self, dt: float):
@@ -80,7 +85,16 @@ class RepoBarge:
                 if self._intercept_cd <= 0:
                     self._open_comm()
                 else:
-                    self._fire_harpoon(ship)
+                    self._enter_aim()
+
+        elif self.state == BargeState.AIM:
+            self._move_toward(ship.pos, self.AIM_SPEED, dt)
+            self._aim_t -= dt
+            if dist > self.AIM_BREAK_RANGE:
+                # Player escaped the targeting cone — abort to chase
+                self.state = BargeState.CHASE
+            elif self._aim_t <= 0:
+                self._fire_harpoon(ship)
 
         elif self.state == BargeState.INTERCEPT:
             # Hold position — braking force so we don't drift away
@@ -135,12 +149,15 @@ class RepoBarge:
             self._intercept_cd = self.INTERCEPT_COOLDOWN
             self.state         = BargeState.RETREAT
         else:
-            # Patience ran out — fire the harpoon
-            ship = self._get_ship()
-            if ship is not None:
-                self._fire_harpoon(ship)
+            # Patience ran out — start the aim sequence (player still gets warning)
+            self._enter_aim()
 
     # ------------------------------------------------------------------
+    def _enter_aim(self):
+        self.state  = BargeState.AIM
+        self._aim_t = self.AIM_DURATION
+        bus.emit(EVT_HARPOON_ARMING, barge=self, countdown=self.AIM_DURATION)
+
     def _open_comm(self):
         """Open a mid-flight comm terminal instead of immediately clamping."""
         self.state = BargeState.INTERCEPT
