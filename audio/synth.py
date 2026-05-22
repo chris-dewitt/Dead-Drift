@@ -310,6 +310,261 @@ def debt_ding() -> pygame.mixer.Sound:
     return _to_sound(_adsr(w, 0.002, 0.05, 0.40, 0.28))
 
 
+# ---------------------------------------------------------------------------
+# 80s new wave + delta blues palette — drums, bass, guitars, pads
+# All sounds returned as pygame.mixer.Sound or numpy arrays as noted.
+
+def drum_kick(duration: float = 0.4) -> pygame.mixer.Sound:
+    """808-style boomy kick — sub sine pitch-drops 60→35Hz over ~80ms."""
+    n      = int(SAMPLE_RATE * duration)
+    t      = np.linspace(0.0, duration, n, endpoint=False)
+    drop_n = int(SAMPLE_RATE * 0.08)
+    f      = np.empty(n)
+    f[:drop_n] = np.linspace(60.0, 35.0, drop_n)
+    f[drop_n:] = 35.0
+    phase = np.cumsum(_2PI * f / SAMPLE_RATE)
+    w     = np.sin(phase) * 0.95
+    # punchy click on the front
+    click_n = int(SAMPLE_RATE * 0.004)
+    if click_n > 0:
+        w[:click_n] += np.linspace(1.0, 0.0, click_n) * 0.35
+    # body envelope
+    env = np.exp(-t * 7.5)
+    return _to_sound((w * env).clip(-1.0, 1.0))
+
+
+def drum_snare_gated(duration: float = 0.5) -> pygame.mixer.Sound:
+    """LinnDrum-style snare — noise burst + 200Hz tone with abrupt 80s gated tail."""
+    n  = int(SAMPLE_RATE * duration)
+    t  = np.linspace(0.0, duration, n, endpoint=False)
+    # Noise body + tonal element
+    noise = np.random.uniform(-1.0, 1.0, n) * 0.75
+    tone  = np.sin(_2PI * 200.0 * t) * 0.45
+    tone += np.sin(_2PI * 330.0 * t) * 0.20
+    w     = noise + tone
+    # Tight attack, sustained noise, abrupt gate cut at ~0.35s
+    env = np.empty(n)
+    a = int(SAMPLE_RATE * 0.003)
+    d = int(SAMPLE_RATE * 0.04)
+    gate_t = min(0.35, duration * 0.7)
+    g = int(SAMPLE_RATE * gate_t)
+    env[:a]      = np.linspace(0.0, 1.0, a)
+    env[a:a+d]   = np.linspace(1.0, 0.85, d)
+    # sustained body up to gate
+    body_end = min(g, n)
+    env[a+d:body_end] = np.linspace(0.85, 0.55, max(0, body_end - (a+d)))
+    if body_end < n:
+        # Quick gated drop to silence — characteristic 80s sound
+        cut_n = int(SAMPLE_RATE * 0.015)
+        cut_end = min(body_end + cut_n, n)
+        env[body_end:cut_end] = np.linspace(0.55, 0.0, cut_end - body_end)
+        if cut_end < n:
+            env[cut_end:] = 0.0
+    return _to_sound((w * env).clip(-1.0, 1.0))
+
+
+def drum_hihat(duration: float = 0.12) -> pygame.mixer.Sound:
+    """Short bright noise burst with fast decay — high-pass feel via diff."""
+    n = int(SAMPLE_RATE * duration)
+    t = np.linspace(0.0, duration, n, endpoint=False)
+    noise = np.random.uniform(-1.0, 1.0, n)
+    # Crude high-pass via first-difference
+    noise = np.diff(noise, prepend=noise[0])
+    noise = np.diff(noise, prepend=noise[0])  # 2nd-order
+    # Fast exponential decay
+    env = np.exp(-t * 38.0)
+    w   = noise * env * 0.55
+    return _to_sound(w.clip(-1.0, 1.0))
+
+
+def drum_clap(duration: float = 0.3) -> pygame.mixer.Sound:
+    """Phil Collins / 80s — three short noise bursts ~25ms apart + reverb tail."""
+    n = int(SAMPLE_RATE * duration)
+    w = np.zeros(n)
+    # Three bursts
+    burst_dur = 0.012
+    burst_n   = int(SAMPLE_RATE * burst_dur)
+    burst_env = np.exp(-np.linspace(0.0, burst_dur, burst_n) * 220.0)
+    for offset_s in (0.0, 0.018, 0.038):
+        i = int(SAMPLE_RATE * offset_s)
+        if i + burst_n <= n:
+            noise = np.random.uniform(-1.0, 1.0, burst_n)
+            # high-pass-ish via diff
+            noise = np.diff(noise, prepend=noise[0])
+            w[i:i+burst_n] += noise * burst_env * 0.65
+    # Reverb tail — filtered noise that lingers
+    tail_start = int(SAMPLE_RATE * 0.045)
+    tail_n     = n - tail_start
+    if tail_n > 0:
+        tail_t    = np.linspace(0.0, duration - 0.045, tail_n)
+        tail      = np.random.uniform(-1.0, 1.0, tail_n) * 0.18
+        # crude low-pass moving avg to make it "verb-y"
+        for _ in range(3):
+            tail = (tail + np.roll(tail, 1) + np.roll(tail, 2)) / 3.0
+        tail_env  = np.exp(-tail_t * 10.0)
+        w[tail_start:] += tail * tail_env
+    return _to_sound(w.clip(-1.0, 1.0))
+
+
+def synth_bass_note(freq: float, duration: float = 0.5) -> pygame.mixer.Sound:
+    """Moog-style synth bass — saw + sub sine + crude lowpass via mixed harmonics."""
+    n = int(SAMPLE_RATE * duration)
+    t = np.linspace(0.0, duration, n, endpoint=False)
+    # Sawtooth fundamental
+    saw = (2.0 * ((t * freq) % 1.0) - 1.0) * 0.55
+    # Sub sine an octave down
+    sub = np.sin(_2PI * freq * 0.5 * t) * 0.40
+    # Mid-harmonic sine for body
+    mid = np.sin(_2PI * freq * t) * 0.30
+    w = saw + sub + mid
+    # Crude lowpass via cumulative averaging — kills the sharpness of saw
+    w = (w + np.roll(w, 1) + np.roll(w, 2) + np.roll(w, 3)) / 4.0
+    # Tight ADSR — punchy
+    w = _adsr(w, 0.006, 0.08, 0.65, max(0.05, duration * 0.30))
+    peak = np.max(np.abs(w))
+    if peak > 0:
+        w = w / peak * 0.75
+    return _to_sound(w)
+
+
+def acoustic_guitar_note(freq: float, duration: float = 1.2) -> pygame.mixer.Sound:
+    """Karplus-Strong plucked string with body resonance."""
+    n          = int(SAMPLE_RATE * duration)
+    buf_len    = max(2, int(SAMPLE_RATE / max(20.0, freq)))
+    # Random excitation
+    buf        = np.random.uniform(-1.0, 1.0, buf_len)
+    out        = np.empty(n)
+    decay      = 0.996  # string damping factor
+    for i in range(n):
+        out[i]            = buf[i % buf_len]
+        # Average adjacent samples → string decay
+        next_val          = 0.5 * (buf[i % buf_len] + buf[(i + 1) % buf_len]) * decay
+        buf[i % buf_len]  = next_val
+    # Body resonance — quiet low sine at 90Hz
+    t        = np.linspace(0.0, duration, n, endpoint=False)
+    body     = np.sin(_2PI * 90.0 * t) * 0.06 * np.exp(-t * 1.8)
+    out      = out * 0.55 + body
+    # Gentle fade-in to avoid pop, long natural decay
+    fade_in  = int(SAMPLE_RATE * 0.005)
+    if fade_in > 0:
+        out[:fade_in] *= np.linspace(0.0, 1.0, fade_in)
+    fade_out = int(SAMPLE_RATE * 0.08)
+    if fade_out > 0 and fade_out < n:
+        out[-fade_out:] *= np.linspace(1.0, 0.0, fade_out)
+    peak = np.max(np.abs(out))
+    if peak > 0:
+        out = out / peak * 0.70
+    return _to_sound(out.clip(-1.0, 1.0))
+
+
+def slide_blues_note(start_freq: float, end_freq: float,
+                     duration: float = 0.8) -> pygame.mixer.Sound:
+    """Karplus-Strong with frequency-interpolated buffer length — delta slide."""
+    n = int(SAMPLE_RATE * duration)
+    # Build frequency curve
+    freqs = np.linspace(start_freq, end_freq, n)
+    # Start with longest buffer (lowest freq)
+    init_len = max(2, int(SAMPLE_RATE / max(20.0, min(start_freq, end_freq))))
+    buf      = np.random.uniform(-1.0, 1.0, init_len)
+    out      = np.empty(n)
+    decay    = 0.997
+    # Per-sample buffer-step that varies with target freq
+    for i in range(n):
+        cur_len = max(2, int(SAMPLE_RATE / max(20.0, freqs[i])))
+        idx     = i % cur_len
+        nxt_idx = (i + 1) % cur_len
+        # Bounds: keep within init_len
+        idx     = idx     % init_len
+        nxt_idx = nxt_idx % init_len
+        out[i]  = buf[idx]
+        buf[idx] = 0.5 * (buf[idx] + buf[nxt_idx]) * decay
+    # Body resonance with subtle vibrato (slide character)
+    t   = np.linspace(0.0, duration, n, endpoint=False)
+    vib = 1.0 + 0.012 * np.sin(_2PI * 5.0 * t)
+    body = np.sin(_2PI * 80.0 * t * vib) * 0.05 * np.exp(-t * 1.3)
+    out  = out * 0.55 + body
+    # Envelope — pluck attack, slow decay
+    fade_in  = int(SAMPLE_RATE * 0.008)
+    if fade_in > 0:
+        out[:fade_in] *= np.linspace(0.0, 1.0, fade_in)
+    fade_out = int(SAMPLE_RATE * 0.12)
+    if fade_out > 0 and fade_out < n:
+        out[-fade_out:] *= np.linspace(1.0, 0.0, fade_out)
+    peak = np.max(np.abs(out))
+    if peak > 0:
+        out = out / peak * 0.68
+    return _to_sound(out.clip(-1.0, 1.0))
+
+
+# Chord interval ratios — minor 7 / minor 9
+_CHORD_RATIOS = {
+    "minor":  [1.0, 1.1892, 1.4983, 1.7818],            # 1, b3, 5, b7
+    "minor9": [1.0, 1.1892, 1.4983, 1.7818, 2.2449],    # 1, b3, 5, b7, 9
+    "minor7": [1.0, 1.1892, 1.4983, 1.7818],
+}
+
+
+def new_wave_chord(root_freq: float, mode: str = "minor",
+                   duration: float = 2.0) -> pygame.mixer.Sound:
+    """Layered saw/triangle 7th chord with chorus detune. Tangerine Dream-ish."""
+    ratios = _CHORD_RATIOS.get(mode, _CHORD_RATIOS["minor"])
+    n = int(SAMPLE_RATE * duration)
+    t = np.linspace(0.0, duration, n, endpoint=False)
+    w = np.zeros(n)
+    for i, r in enumerate(ratios):
+        f = root_freq * r
+        # Saw voice
+        saw = (2.0 * ((t * f) % 1.0) - 1.0)
+        # Triangle voice via |saw|*2-1
+        tri = 2.0 * np.abs(2.0 * ((t * f) % 1.0) - 1.0) - 1.0
+        # Slight detune for chorus
+        det = 1.0 + 0.004 * ((i * 7) % 5 - 2)
+        saw2 = (2.0 * ((t * f * det) % 1.0) - 1.0)
+        voice = saw * 0.18 + saw2 * 0.14 + tri * 0.20
+        # Amplitude per chord tone — root and 5th louder
+        amp = 0.32 if i in (0, 2) else 0.22
+        w += voice * amp
+    # Crude lowpass — saw/tri otherwise too harsh
+    for _ in range(2):
+        w = (w + np.roll(w, 1) + np.roll(w, 2)) / 3.0
+    # Slow-attack pad envelope
+    attack   = int(SAMPLE_RATE * 0.15)
+    release  = int(SAMPLE_RATE * min(0.6, duration * 0.3))
+    env = np.ones(n)
+    if attack > 0:
+        env[:attack] = np.linspace(0.0, 1.0, attack)
+    if release > 0 and release < n:
+        env[-release:] = np.linspace(1.0, 0.0, release)
+    w = w * env
+    peak = np.max(np.abs(w))
+    if peak > 0:
+        w = w / peak * 0.55
+    return _to_sound(w.clip(-1.0, 1.0))
+
+
+def gated_reverb_tail(duration: float = 0.4) -> pygame.mixer.Sound:
+    """Standalone reverb burst — filtered noise + short envelope. For layering."""
+    n = int(SAMPLE_RATE * duration)
+    t = np.linspace(0.0, duration, n, endpoint=False)
+    noise = np.random.uniform(-1.0, 1.0, n) * 0.6
+    # Multi-pass lowpass for "verby" texture
+    for _ in range(4):
+        noise = (noise + np.roll(noise, 1) + np.roll(noise, 2)) / 3.0
+    # Quick attack, slow body, abrupt gate
+    env = np.empty(n)
+    a   = int(SAMPLE_RATE * 0.005)
+    body = int(SAMPLE_RATE * min(duration * 0.7, 0.28))
+    env[:a]          = np.linspace(0.0, 1.0, a)
+    env[a:a+body]    = np.linspace(1.0, 0.5, max(0, body))
+    if a + body < n:
+        cut = int(SAMPLE_RATE * 0.015)
+        cut_end = min(a + body + cut, n)
+        env[a+body:cut_end] = np.linspace(0.5, 0.0, cut_end - (a+body))
+        if cut_end < n:
+            env[cut_end:] = 0.0
+    return _to_sound((noise * env).clip(-1.0, 1.0))
+
+
 def terminal_drone(duration: float = 6.0) -> pygame.mixer.Sound:
     """Ominous Am-chord pad that loops during terminal interrogation."""
     t       = _t(duration)
