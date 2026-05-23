@@ -27,7 +27,7 @@ from audio.synth import (
 )
 from audio.blues_licks import prebuild_all, generate_lick
 from audio.voices import prebuild_voices
-from audio.new_wave_pad import build_new_wave_pad
+from audio.new_wave_pad import build_new_wave_pad, build_long_form_menu_pad
 from audio.guitar_phrases import prebuild_phrases
 
 # ---------------------------------------------------------------------------
@@ -284,6 +284,7 @@ class AudioManager:
         self._chapter: int = 1
         self._chapter_root: float = _CHAPTER_ROOTS[1]
         self._chapter_mode: str   = _CHAPTER_MODES[1]
+        self._chapter_stem_gates: dict[str, float] = {"drum": 1.0, "bass": 1.0, "arp": 1.0}
 
         # Lick mood filter — set by Bax event handler
         self._next_lick_mood: str | None = None
@@ -296,6 +297,26 @@ class AudioManager:
             self._master_fx.install()
         except Exception:
             pass
+
+        # --- Decanting choreography state machine ---
+        # Step list: (delay_s, action_key) — action runs after delay elapses
+        # actions: "slide_high", "printer", "slide_low", "hold"
+        self._decant_steps: list[tuple[float, str]] = []
+        self._decant_t:     float = 0.0
+        self._decant_active: bool = False
+
+        # --- Main menu long-form mode ---
+        self._menu_idle_t:    float = 0.0
+        self._long_form_pad:  pygame.mixer.Sound | None = None
+        self._long_form_active: bool = False
+
+        # --- Radio stations ---
+        self._radio_stations: dict[str, pygame.mixer.Sound] = {}
+        self._radio_current_idx: int = 0
+        self._radio_ch:        pygame.mixer.Channel | None = None
+
+        # --- Chapter inflection modules (lazy-loaded) ---
+        self._chapter_modules: dict[int, object] = {}
 
         self._build()
         self._start_loops()
@@ -370,6 +391,34 @@ class AudioManager:
             slide_blues_note(164.81, 130.81, duration=2.0),
             slide_blues_note(146.83, 110.0,  duration=2.2),
         ]
+        # Specific notes for choreographed decanting: D3 (146.83) and C3 (130.81)
+        # one whole step lower
+        self._decant_slide_high = slide_blues_note(220.0,  174.61, duration=1.6)
+        self._decant_slide_low  = slide_blues_note(196.0,  155.56, duration=1.8)
+
+        print("[audio] generating long-form menu pad (90s)…", flush=True)
+        try:
+            self._long_form_pad = build_long_form_menu_pad()
+        except Exception as e:
+            print(f"[audio] long-form pad skipped: {e}")
+            self._long_form_pad = None
+
+        print("[audio] generating radio stations…", flush=True)
+        try:
+            from audio.radio_stations import build_all_stations, RADIO_STATIONS
+            self._radio_stations = build_all_stations()
+            self._radio_station_order = list(RADIO_STATIONS)
+        except Exception as e:
+            print(f"[audio] radio stations skipped: {e}")
+            self._radio_station_order = []
+
+        print("[audio] loading chapter inflection modules…", flush=True)
+        for ch_num in (1, 2, 3, 4):
+            try:
+                mod = __import__(f"audio.chapter_{ch_num}", fromlist=["*"])
+                self._chapter_modules[ch_num] = mod
+            except Exception as e:
+                print(f"[audio] chapter {ch_num} module skipped: {e}")
 
         print("[audio] ready.", flush=True)
 
@@ -423,6 +472,9 @@ class AudioManager:
             self._barge_ch.set_volume(0.0)
             self._barge_ch.play(self._barge_motif_snd, loops=-1)
 
+        # Radio piggybacks on the slide channel (only one ever active at a time)
+        self._radio_ch = self._slide_ch
+
     def _wire(self):
         bus.subscribe(EVT_HULL_DAMAGE,    self._on_hull)
         bus.subscribe(EVT_TETHER_HIT,     self._on_clang)
@@ -468,6 +520,9 @@ class AudioManager:
         self._tick_barge_motif()
         self._tick_snap_resolve(dt)
         self._tick_slingshot_modulation(dt)
+        self._tick_decanting(dt)
+        self._tick_menu_idle(dt)
+        self._tick_chapter_cargo(dt)
 
         if self._master_fx:
             self._master_fx.update(hull_pct, cargo_alarm)
@@ -531,7 +586,27 @@ class AudioManager:
         """Switch musical scene. Optionally load a chapter's sonic palette."""
         if chapter is not None and chapter != self._chapter:
             self.load_chapter(chapter)
+        prev_scene = self._scene
         self._scene = scene_name
+
+        # Exit long-form mode if leaving menu
+        if prev_scene == SCENE_MENU and scene_name != SCENE_MENU and self._long_form_active:
+            self._exit_long_form()
+        # Reset menu idle timer on any scene change
+        if scene_name != SCENE_MENU:
+            self._menu_idle_t = 0.0
+
+        # Stop radio if leaving radio scene
+        if prev_scene == SCENE_RADIO and scene_name != SCENE_RADIO and self._radio_ch:
+            if self._radio_ch.get_busy():
+                self._radio_ch.stop()
+
+        # Start choreographed decanting if entering decanting; cancel otherwise
+        if scene_name == SCENE_DECANTING:
+            self._start_decanting_sequence()
+        else:
+            self._decant_active = False
+            self._decant_steps = []
 
         if scene_name == SCENE_FLIGHT:
             # Voicing width driven by pressure (0→1 maps 1.0→0.5)
@@ -560,9 +635,10 @@ class AudioManager:
             self._slide_interval = (0.0, 0.0)
 
         elif scene_name == SCENE_DECANTING:
+            # Choreographed sequence handled in _tick_decanting — no looping slide
             self._vol_targets = {"drum": 0.0, "bass": 0.0, "arp": 0.0}
             self._gtr_interval   = (0.0, 0.0)
-            self._slide_interval = (4.0, 5.5)
+            self._slide_interval = (0.0, 0.0)
 
         elif scene_name == SCENE_LOADOUT:
             self._vol_targets = {"drum": 0.0, "bass": 0.0, "arp": 0.28}
@@ -585,10 +661,16 @@ class AudioManager:
             self._slide_cd = random.uniform(*self._slide_interval) * 0.4
 
     def load_chapter(self, chapter: int):
-        """Retune engine drones and pad to the chapter's home key."""
-        self._chapter      = chapter
-        self._chapter_root = _CHAPTER_ROOTS.get(chapter, 220.0)
-        self._chapter_mode = _CHAPTER_MODES.get(chapter, "minor")
+        """Retune engine drones and pad to the chapter's home key.
+        Pulls metadata from audio/chapter_N.py module when available."""
+        self._chapter = chapter
+        mod = self._chapter_modules.get(chapter)
+        if mod is not None:
+            self._chapter_root = getattr(mod, "HOME_KEY_ROOT", _CHAPTER_ROOTS.get(chapter, 220.0))
+            self._chapter_mode = getattr(mod, "MODE", _CHAPTER_MODES.get(chapter, "minor"))
+        else:
+            self._chapter_root = _CHAPTER_ROOTS.get(chapter, 220.0)
+            self._chapter_mode = _CHAPTER_MODES.get(chapter, "minor")
         # Rebuild engine drones at new root
         for i, ch in enumerate(self._eng_ch):
             was_vol = ch.get_volume()
@@ -597,6 +679,13 @@ class AudioManager:
             ch.stop()
             ch.play(snd, loops=-1)
             ch.set_volume(was_vol)
+        # Apply chapter STEM_GATES to volume targets (e.g. chapter 4 silences bass)
+        gates = getattr(mod, "STEM_GATES", {}) if mod else {}
+        self._chapter_stem_gates = {
+            "drum": gates.get("drum", 1.0),
+            "bass": gates.get("bass", 1.0),
+            "arp":  gates.get("arp",  1.0),
+        }
 
     # ------------------------------------------------------------------
     def _tick_band_volumes(self, dt: float):
@@ -622,12 +711,13 @@ class AudioManager:
 
     def _apply_band_volumes(self):
         m = self._master
+        g = self._chapter_stem_gates
         if self._drum_ch is not None:
-            self._drum_ch.set_volume(m * self._vol_current["drum"])
+            self._drum_ch.set_volume(m * self._vol_current["drum"] * g.get("drum", 1.0))
         if self._bass_ch is not None:
-            self._bass_ch.set_volume(m * self._vol_current["bass"])
+            self._bass_ch.set_volume(m * self._vol_current["bass"] * g.get("bass", 1.0))
         if self._arp_ch is not None:
-            self._arp_ch.set_volume(m * self._vol_current["arp"])
+            self._arp_ch.set_volume(m * self._vol_current["arp"] * g.get("arp", 1.0))
 
     def _enforce_stem_budget(self):
         """Duck the lowest-priority active stem if more than 5 are hot."""
@@ -766,6 +856,121 @@ class AudioManager:
 
     def _tick_slingshot_modulation(self, dt: float):
         pass   # bar counter handled in _tick_bar
+
+    # ------------------------------------------------------------------
+    # Decanting choreography (Section 7.5)
+    # Sequence:
+    #   t=0.0  slide-blues note (high), 1.6s
+    #   t=1.6  3s silence (just tape hum)
+    #   t=4.6  receipt printer SFX
+    #   t=5.0  4s silence
+    #   t=9.0  slide-blues note (whole step lower), 1.8s
+    #   t=10.8 hold (silent) until ENTER → scene change
+
+    def _start_decanting_sequence(self):
+        self._decant_t = 0.0
+        self._decant_active = True
+        self._decant_steps = [
+            (0.0,  "slide_high"),
+            (4.6,  "printer"),
+            (9.0,  "slide_low"),
+        ]
+        # Mute all music stems so the silence is real
+        for ch in (self._drum_ch, self._bass_ch, self._arp_ch,
+                   self._music_a, self._music_b, self._lick_ch,
+                   self._gtr_ch, self._barge_ch):
+            if ch is not None:
+                ch.set_volume(0.0)
+
+    def _tick_decanting(self, dt: float):
+        if not self._decant_active or not self._decant_steps:
+            return
+        self._decant_t += dt
+        # Execute any step whose time has passed
+        while self._decant_steps and self._decant_t >= self._decant_steps[0][0]:
+            _, action = self._decant_steps.pop(0)
+            if action == "slide_high" and self._slide_ch and self._decant_slide_high:
+                self._slide_ch.set_volume(self._master * 0.65)
+                self._slide_ch.play(self._decant_slide_high)
+            elif action == "printer" and self._sfx.get("printer"):
+                ch = pygame.mixer.find_channel(True)
+                if ch:
+                    ch.set_volume(self._master * 0.55)
+                    ch.play(self._sfx["printer"])
+            elif action == "slide_low" and self._slide_ch and self._decant_slide_low:
+                self._slide_ch.set_volume(self._master * 0.65)
+                self._slide_ch.play(self._decant_slide_low)
+
+    # ------------------------------------------------------------------
+    # Main-menu listening room (Section 7.6) — long-form pad after 120s idle
+
+    def _tick_menu_idle(self, dt: float):
+        if self._scene != SCENE_MENU or self._long_form_pad is None:
+            self._menu_idle_t = 0.0
+            if self._long_form_active:
+                self._exit_long_form()
+            return
+        self._menu_idle_t += dt
+        if not self._long_form_active and self._menu_idle_t >= 120.0:
+            self._enter_long_form()
+
+    def _enter_long_form(self):
+        """Swap menu pad to the 90s composition; mute slide/lick distractions."""
+        if self._arp_ch and self._long_form_pad:
+            vol = self._arp_ch.get_volume()
+            self._arp_ch.stop()
+            self._arp_ch.play(self._long_form_pad, loops=-1)
+            self._arp_ch.set_volume(max(vol, self._master * 0.32))
+            self._long_form_active = True
+            self._slide_interval = (0.0, 0.0)   # no slide overlays
+            # Stop any ongoing slide
+            if self._slide_ch and self._slide_ch.get_busy():
+                self._slide_ch.stop()
+
+    def _exit_long_form(self):
+        if self._arp_ch and self._pad_loop:
+            vol = self._arp_ch.get_volume()
+            self._arp_ch.stop()
+            self._arp_ch.play(self._pad_loop, loops=-1)
+            self._arp_ch.set_volume(vol)
+        self._long_form_active = False
+
+    # ------------------------------------------------------------------
+    # Radio stations (Section 7.1)
+
+    def cycle_radio_station(self):
+        """Advance to next radio station; engage SCENE_RADIO."""
+        if not self._radio_stations or not self._radio_station_order:
+            return
+        self._radio_current_idx = (self._radio_current_idx + 1) % len(self._radio_station_order)
+        self.set_scene(SCENE_RADIO)
+
+    def _play_current_radio_station(self):
+        if not self._radio_stations or not self._radio_station_order or self._radio_ch is None:
+            return
+        key = self._radio_station_order[self._radio_current_idx]
+        snd = self._radio_stations.get(key)
+        if snd is None:
+            return
+        if self._radio_ch.get_busy():
+            self._radio_ch.stop()
+        self._radio_ch.set_volume(self._master * 0.52)
+        self._radio_ch.play(snd, loops=-1)
+
+    # ------------------------------------------------------------------
+    # Chapter cargo alarm (Section 4)
+
+    def _tick_chapter_cargo(self, dt: float):
+        mod = self._chapter_modules.get(self._chapter)
+        if mod is None:
+            return
+        cb = getattr(mod, "cargo_alarm_callback", None)
+        if cb is None:
+            return
+        try:
+            cb(self._cargo_alarm, master_fx=self._master_fx)
+        except Exception:
+            pass
 
     def _restore_pad_transposition(self):
         """Return pad to root transposition after slingshot key change."""

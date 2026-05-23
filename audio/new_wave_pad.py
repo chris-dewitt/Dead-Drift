@@ -171,3 +171,54 @@ def build_new_wave_pad(progression: list[float],
     if peak > 0.95:
         out = out / peak * 0.85
     return _to_sound(out.clip(-1.0, 1.0))
+
+
+def build_long_form_menu_pad() -> pygame.mixer.Sound:
+    """
+    90-second main-menu listening-room piece (Section 7.6).
+    Chord progression: Am – F – G – Em – Dm – G – C – E7 – Am
+    Each chord ~10s. Harmonica solo over the back half.
+    No drums. No bass. Just the void and the harp.
+    """
+    from audio.blues_licks import _harp_note, _NOTES
+    # Roots (Hz) for Am, F, G, Em, Dm, G, C, E7, Am
+    progression = [220.0, 174.61, 196.0, 164.81,
+                   146.83, 196.0, 261.63, 164.81, 220.0]
+    chord_dur = 10.0
+    pad = build_new_wave_pad(progression, duration_per_chord=chord_dur,
+                             mode="minor", with_arpeggio=True, voicing_width=1.0)
+    # Convert back to numpy so we can mix harp solo over the back half
+    arr = pygame.sndarray.array(pad)
+    if arr.ndim == 2:
+        arr = arr[:, 0]
+    pad_np = arr.astype(np.float32) / 32767.0
+
+    n = len(pad_np)
+    half = n // 2
+
+    # Harmonica solo phrases over the back half — sparse, lonely
+    solo_notes = [
+        ('A3', 0.6, 0.0),  ('G3', 0.5, 0.0),  ('E3', 0.9, 0.0),
+        ('D3', 0.5, 0.0),  ('E3', 0.7, 0.04), ('C3', 1.1, 0.0),
+        ('A2', 1.4, 0.0),
+    ]
+    # Build solo as concatenated phrases with long gaps between
+    solo = np.zeros(n - half, dtype=np.float32)
+    cursor = int(SAMPLE_RATE * 2.0)  # leave ~2s before first note
+    for note_name, dur, bend in solo_notes:
+        note = _harp_note(_NOTES[note_name], dur, amp=0.55, bend=bend).astype(np.float32)
+        end = cursor + len(note)
+        if end > len(solo):
+            break
+        solo[cursor:end] += note
+        gap = int(SAMPLE_RATE * (dur + 1.8))  # long breath between notes
+        cursor += gap
+
+    # Mix solo over back half at 0.4 gain
+    out = pad_np.copy()
+    out[half:half + len(solo)] += solo * 0.42
+
+    peak = float(np.max(np.abs(out))) if len(out) else 0.0
+    if peak > 0.95:
+        out = out / peak * 0.85
+    return _to_sound(out.clip(-1.0, 1.0))

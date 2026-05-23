@@ -20,6 +20,7 @@ from audio.audio_manager import (
     AudioManager,
     SCENE_MENU, SCENE_FLIGHT, SCENE_TERMINAL, SCENE_DELIVERY,
     SCENE_SHOP, SCENE_INTERSTITIAL, SCENE_DECANTING, SCENE_LOADOUT,
+    SCENE_RADIO,
 )
 from delivery.delivery_sequence import DeliverySequence
 from roguelite.shop import ShopScreen
@@ -94,18 +95,23 @@ class Game:
 
     def _goto(self, new_state: GameState):
         """Animated state change: capture the current frame, start the
-        CRT power-down transition, then swap state. Use this for any
-        state change the player should *see* happening — keep direct
-        StateManager.transition() for boot/dev-only paths."""
+        CRT power-down transition, then swap state."""
         try:
             snapshot = self.screen.copy()
         except (pygame.error, AttributeError):
             snapshot = pygame.Surface((S.SCREEN_W, S.SCREEN_H))
         self.transition.start(snapshot)
         self.states.transition(new_state)
-        # Update the soundtrack scene to match
         scene = self._STATE_TO_SCENE.get(new_state)
         if scene is not None and self.audio is not None:
+            # Pass current chapter for chapter-keyed scenes (flight + delivery)
+            if scene in (SCENE_FLIGHT, SCENE_DELIVERY) and self.run_mgr is not None:
+                try:
+                    chap = self.run_mgr._current_chapter()
+                    self.audio.set_scene(scene, chapter=chap)
+                    return
+                except Exception:
+                    pass
             self.audio.set_scene(scene)
 
     def _on_torch_active(self, countdown=5.0, **_):
@@ -198,6 +204,14 @@ class Game:
         state = self.states.state
 
         if state == GameState.FLIGHT:
+            # R = cockpit radio (cycles stations); also acts as toggle to/from SCENE_FLIGHT
+            if event.key == pygame.K_r and self.audio is not None:
+                if self.audio._scene == SCENE_RADIO:
+                    self.audio.cycle_radio_station()
+                else:
+                    self.audio.cycle_radio_station()
+                    self.audio._play_current_radio_station()
+                return
             self.run_mgr.handle_key(event)
         elif state == GameState.TERMINAL:
             if self.run_mgr.active_terminal is not None:
