@@ -323,8 +323,9 @@ class RunManager:
 
         for rock in self._debris:
             rock.update(dt)
-            if rock.collides(self._ship.pos):
+            if rock.collides(self._ship.pos) and rock.can_damage_ship():
                 self._ship.take_damage(S.DEBRIS_DAMAGE, source="debris")
+                rock.register_ship_hit()
                 rock.hit()
 
         for can in self._canisters:
@@ -356,8 +357,9 @@ class RunManager:
             self._shower_t -= dt
             for rock in self._shower_rocks:
                 rock.update(dt)
-                if rock.collides(self._ship.pos):
+                if rock.collides(self._ship.pos) and rock.can_damage_ship():
                     self._ship.take_damage(S.DEBRIS_DAMAGE, source="debris_shower")
+                    rock.register_ship_hit()
                     rock.hit()
             if self._shower_t <= 0:
                 self._shower_rocks.clear()

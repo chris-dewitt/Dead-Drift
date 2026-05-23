@@ -82,22 +82,15 @@ class DeliverySequence:
         self._align_held_t  = 0.0
         self._lock_flash_t  = 0.0
 
-        # Landing state (Beat 2)
-        self._land_y        = 60.0
-        self._land_vy       = 0.0
-        self._land_throttle = False
+        # Landing state (Beat 2) — physics-based descent
+        self._land_y        = 60.0    # ship Y position in the bay (px from top)
+        self._land_vy       = 8.0     # initial slow descent speed (px/s)
+        self._land_throttle = False   # True when SPACE is held (retros firing)
         self._land_score    = 0       # 0=rough, 1=ok, 2=smooth
-        self._beat2_sub     = 0       # 0=j_gauge, 1=burn
-        self._gauge_angle   = 0.0     # 0-100
-        self._gauge_dir     = 1
-        self._gauge_t       = 0.0
-        self._j_hit         = False
-        self._j_window_open = False
-        self._j_window_t    = 0.0
-        self._burn_held     = False
-        self._burn_held_t   = 0.0
+        self._beat2_sub_t   = 0.0    # time in Beat2 phase
+        # Legacy fields kept for score display (unused by new physics system)
+        self._j_hit         = True
         self._burn_done     = False
-        self._beat2_sub_t   = 0.0    # time in current sub-phase
 
         # Beat 3: cutscene
         self._clamp_anim_t  = 0.0
@@ -123,15 +116,8 @@ class DeliverySequence:
         if self._phase == self.PHASE_APPROACH:
             pass   # A/D rotation via held keys in update
         elif self._phase == self.PHASE_LAND:
-            if self._beat2_sub == 0 and event.key == pygame.K_j:
-                # J-tap: check if gauge is in the green zone
-                in_zone = abs(self._gauge_angle - 50) < 15
-                self._j_hit = in_zone
-                self._j_window_open = True
-                self._j_window_t = 0.4
-            elif self._beat2_sub == 1:
-                if event.key == pygame.K_SPACE:
-                    self._burn_held = True
+            if event.key == pygame.K_SPACE:
+                self._land_throttle = True
         elif self._phase == self.PHASE_RUN:
             if self._run is not None:
                 self._run.handle_key(event)
@@ -139,7 +125,7 @@ class DeliverySequence:
     def handle_keyup(self, event: pygame.event.Event):
         if self._phase == self.PHASE_LAND:
             if event.key == pygame.K_SPACE:
-                self._burn_held = False
+                self._land_throttle = False
 
     def update(self, dt: float):
         self._t += dt
@@ -452,51 +438,66 @@ class DeliverySequence:
         needle_c  = (0, 255, 100) if self._aligned else (255, 180, 0)
         pygame.draw.rect(surface, needle_c, (needle_x - 2, H - 35, 4, 18))
 
-    # ── Phase: Land (Beat 2 — thruster gauge + retro burn) ───────────────
+    # ── Phase: Land (Beat 2 — physics-based descent into the pad) ────────
+    # Tunable constants for the new physics-driven landing
+    _LAND_GRAVITY      = 28.0    # px/s² downward — gentle, gives ~5-6s to react
+    _LAND_RETRO_ACCEL  = 65.0    # px/s² upward while SPACE is held
+    _LAND_VY_SMOOTH    = 40.0    # below this descent velocity = smooth landing
+    _LAND_VY_OK        = 75.0    # below this = ok
+    _LAND_VY_MAX_DRIFT = 110.0   # hard ceiling on descent velocity
+    _LAND_MAX_DURATION = 9.0     # auto-finish landing after this many seconds
+
     def _update_land(self, dt: float):
         self._beat2_sub_t += dt
-        self._j_window_t   = max(0.0, self._j_window_t - dt)
-        if self._j_window_t <= 0:
-            self._j_window_open = False
 
-        if self._beat2_sub == 0:
-            # J-gauge: needle swings sinusoidally between 0-100
-            self._gauge_t     += dt * 60.0  # degrees/s
-            self._gauge_angle  = 50 + 48 * math.sin(math.radians(self._gauge_t))
-            # Auto-advance after 2.5s
-            if self._beat2_sub_t >= 2.5 or self._j_hit:
-                if self._j_hit:
-                    self._land_score = max(self._land_score, 1)
-                self._beat2_sub    = 1
-                self._beat2_sub_t  = 0.0
-                self._burn_held_t  = 0.0
+        # Pad position is computed in _draw_land; we replicate the math here.
+        # Pad surface line at H - 140; ship contacts pad when bottom reaches it.
+        H_local   = S.SCREEN_H
+        pad_top_y = H_local - 140      # top of pad sprite
+        # Ship's vertical extent is ~22px from anchor, so contact when land_y + 22 >= pad_top
+        contact_y = pad_top_y - 22
 
-        elif self._beat2_sub == 1:
-            # SPACE burn: hold for 1.2s
-            if self._burn_held:
-                self._burn_held_t += dt
-            # Auto-advance after 2.5s
-            if self._beat2_sub_t >= 2.5 or self._burn_held_t >= 1.2:
-                if self._burn_held_t >= 1.0:
-                    self._burn_done    = True
-                    self._land_score   = 2
-                    bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_LAND_SMOOTH))
-                elif not self._j_hit:
-                    self._land_score = 0
-                    bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_LAND_ROUGH))
-                # Compute docking bonus
-                hits = (1 if self._approach_score >= 1 else 0) + \
-                       (1 if self._j_hit else 0) + \
-                       (1 if self._burn_done else 0)
-                if hits >= 2:
-                    self._dock_bonus_cr = 500
-                    bus.emit(EVT_DOCK_PERFECT)
-                elif hits == 0:
-                    self._dock_bonus_cr = -200
-                    bus.emit(EVT_DOCK_ROUGH)
-                # Transition to Beat 3
-                self._t     = 0.0
-                self._phase = self.PHASE_BEAT3
+        # Physics: gravity + retro thrust
+        self._land_vy += self._LAND_GRAVITY * dt
+        if self._land_throttle:
+            self._land_vy -= self._LAND_RETRO_ACCEL * dt
+        # Don't let it climb too far — sub-zero vy is fine briefly, but cap upward drift
+        self._land_vy = max(-30.0, min(self._LAND_VY_MAX_DRIFT, self._land_vy))
+        self._land_y += self._land_vy * dt
+        # Hold ceiling: ship can't escape back through the top of the bay
+        if self._land_y < 60.0:
+            self._land_y  = 60.0
+            self._land_vy = max(self._land_vy, 0.0)
+
+        # Touchdown check
+        timed_out = self._beat2_sub_t >= self._LAND_MAX_DURATION
+        if self._land_y >= contact_y or timed_out:
+            self._land_y = contact_y
+            # Score by impact velocity at the moment of contact
+            impact_vy = max(0.0, self._land_vy)
+            if impact_vy <= self._LAND_VY_SMOOTH:
+                self._land_score = 2
+                bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_LAND_SMOOTH))
+            elif impact_vy <= self._LAND_VY_OK:
+                self._land_score = 1
+            else:
+                self._land_score = 0
+                bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_LAND_ROUGH))
+            self._j_hit     = (impact_vy <= self._LAND_VY_OK)
+            self._burn_done = (impact_vy <= self._LAND_VY_SMOOTH)
+
+            # Total dock score combines approach + landing
+            hits = ((1 if self._approach_score >= 1 else 0) +
+                    (1 if self._j_hit else 0) +
+                    (1 if self._burn_done else 0))
+            if hits >= 2:
+                self._dock_bonus_cr = 500
+                bus.emit(EVT_DOCK_PERFECT)
+            elif hits == 0:
+                self._dock_bonus_cr = -200
+                bus.emit(EVT_DOCK_ROUGH)
+            self._t     = 0.0
+            self._phase = self.PHASE_BEAT3
 
     def _update_beat3(self, dt: float):
         self._clamp_anim_t += dt
@@ -648,11 +649,17 @@ class DeliverySequence:
         pygame.draw.polygon(surface, (20, 200, 200), ship_pts)
         pygame.draw.polygon(surface, (0, 255, 240), ship_pts, 1)
         if self._land_throttle:
-            for k in range(5):
-                cy3 = ship_y - k * 8 - 6
-                bc  = (0, max(0, int(180 - k * 30)), max(0, int(255 - k * 40)))
-                pygame.draw.line(surface, bc, (ship_cx - 6, ship_y), (ship_cx - 6, cy3), 2)
-                pygame.draw.line(surface, bc, (ship_cx + 6, ship_y), (ship_cx + 6, cy3), 2)
+            # Retro-burn flames out the nose (downward), slowing the descent.
+            # Ship nose is at (ship_cx, ship_y + 22). Flames extend further down.
+            nose_y = ship_y + 22
+            for k in range(7):
+                cy3 = nose_y + k * 6 + 4
+                bc  = (max(0, int(255 - k * 28)),
+                       max(0, int(180 - k * 24)),
+                       0)
+                pygame.draw.line(surface, bc, (ship_cx - 5, nose_y), (ship_cx - 5, cy3), 2)
+                pygame.draw.line(surface, bc, (ship_cx + 5, nose_y), (ship_cx + 5, cy3), 2)
+                pygame.draw.line(surface, bc, (ship_cx,     nose_y), (ship_cx,     cy3 + 4), 2)
 
         # ── Beat 2 interactive overlay ────────────────────────────────────
         f    = pygame.font.SysFont("monospace", 14)
@@ -660,40 +667,75 @@ class DeliverySequence:
         overlay_x = W // 2 - 160
         overlay_y = H // 2 - 80
 
-        if self._beat2_sub == 0:
-            # J-Gauge
-            surface.blit(f.render("BEAT 2  ·  ALIGN THRUSTERS  ·  TAP  J",
-                                   True, (200, 160, 0)), (W // 2 - 200, 14))
-            # Gauge background
-            g_x, g_y, g_w, g_h = overlay_x, overlay_y + 30, 320, 40
-            pygame.draw.rect(surface, (12, 24, 14), (g_x, g_y, g_w, g_h))
-            pygame.draw.rect(surface, (0, 120, 60),  (g_x, g_y, g_w, g_h), 2)
-            # Green zone (center ±15%)
-            zone_x = g_x + int(g_w * 0.35)
-            zone_w = int(g_w * 0.30)
-            z_col  = (0, 100, 40) if not self._j_hit else (0, 180, 80)
-            pygame.draw.rect(surface, z_col, (zone_x, g_y + 4, zone_w, g_h - 8))
-            # Needle
-            needle_px = g_x + int(g_w * self._gauge_angle / 100)
-            n_col = (0, 255, 100) if self._j_hit else (255, 200, 0)
-            pygame.draw.rect(surface, n_col, (needle_px - 3, g_y - 4, 6, g_h + 8))
-            hit_s = fsm2.render("HIT!" if self._j_hit else "TAP J IN GREEN ZONE",
-                                 True, (0, 220, 100) if self._j_hit else (160, 140, 60))
-            surface.blit(hit_s, (g_x, g_y + g_h + 6))
+        # Heading text
+        surface.blit(f.render("BEAT 2  ·  TOUCH DOWN  ·  HOLD  SPACE  FOR RETROS",
+                               True, (200, 160, 0)), (W // 2 - 290, 14))
 
-        elif self._beat2_sub == 1:
-            # SPACE burn bar
-            surface.blit(f.render("BEAT 2  ·  RETRO BURN  ·  HOLD  SPACE",
-                                   True, (200, 160, 0)), (W // 2 - 210, 14))
-            b_x, b_y, b_w, b_h = overlay_x, overlay_y + 30, 320, 40
-            pygame.draw.rect(surface, (12, 24, 14), (b_x, b_y, b_w, b_h))
-            pygame.draw.rect(surface, (0, 120, 60),  (b_x, b_y, b_w, b_h), 2)
-            fill_w = int(b_w * min(1.0, self._burn_held_t / 1.2))
-            burn_col = (0, 200, 80) if fill_w < b_w else (0, 255, 120)
-            pygame.draw.rect(surface, burn_col, (b_x, b_y + 4, fill_w, b_h - 8))
-            done_s = fsm2.render("BURN COMPLETE!" if self._burn_done else "HOLD SPACE  1.2s",
-                                  True, (0, 255, 120) if self._burn_done else (160, 140, 60))
-            surface.blit(done_s, (b_x, b_y + b_h + 6))
+        # ── Vertical Speed Indicator (VSI) — left side ─────────────────────
+        vsi_x = 30
+        vsi_y = 120
+        vsi_w = 28
+        vsi_h = H - 260
+        pygame.draw.rect(surface, (10, 22, 12), (vsi_x, vsi_y, vsi_w, vsi_h))
+        pygame.draw.rect(surface, (0, 140, 70), (vsi_x, vsi_y, vsi_w, vsi_h), 2)
+
+        # Zones: green (smooth), yellow (ok), red (rough). Layout top→bottom = slow→fast.
+        zone_max = self._LAND_VY_MAX_DRIFT
+        smooth_frac = self._LAND_VY_SMOOTH / zone_max
+        ok_frac     = self._LAND_VY_OK     / zone_max
+        green_h = int(vsi_h * smooth_frac)
+        yellow_h = int(vsi_h * (ok_frac - smooth_frac))
+        red_h    = vsi_h - green_h - yellow_h
+        pygame.draw.rect(surface, (0, 110, 50),  (vsi_x + 2, vsi_y + 2,                vsi_w - 4, green_h))
+        pygame.draw.rect(surface, (160, 130, 0), (vsi_x + 2, vsi_y + 2 + green_h,      vsi_w - 4, yellow_h))
+        pygame.draw.rect(surface, (160, 30, 20), (vsi_x + 2, vsi_y + 2 + green_h + yellow_h, vsi_w - 4, max(0, red_h - 4)))
+
+        # Needle — current vy (clamped to gauge range, can show climb at top)
+        clamped_vy = max(-zone_max * 0.3, min(zone_max, self._land_vy))
+        ny_frac    = (clamped_vy + zone_max * 0.3) / (zone_max * 1.3)
+        needle_y   = int(vsi_y + ny_frac * vsi_h)
+        ncol       = (0, 255, 100) if abs(self._land_vy) <= self._LAND_VY_SMOOTH else \
+                     (255, 200, 0) if self._land_vy   <= self._LAND_VY_OK     else (255, 80, 60)
+        pygame.draw.rect(surface, ncol, (vsi_x - 6, needle_y - 2, vsi_w + 12, 4))
+
+        # Label
+        vsi_lbl = fsm2.render("VSI", True, (140, 170, 140))
+        surface.blit(vsi_lbl, (vsi_x - 2, vsi_y - 16))
+        vy_lbl  = fsm2.render(f"{self._land_vy:>+5.0f} px/s", True, ncol)
+        surface.blit(vy_lbl, (vsi_x - 6, vsi_y + vsi_h + 6))
+
+        # ── Altitude (right side, simpler — just a bar) ────────────────────
+        H_local   = S.SCREEN_H
+        pad_top_y = H_local - 140
+        contact_y = pad_top_y - 22
+        alt       = max(0.0, contact_y - self._land_y)
+        max_alt   = contact_y - 60.0
+        alt_frac  = alt / max_alt if max_alt > 0 else 0
+        alt_x = W - 60
+        alt_y = vsi_y
+        alt_w = 28
+        alt_h = vsi_h
+        pygame.draw.rect(surface, (10, 22, 12), (alt_x, alt_y, alt_w, alt_h))
+        pygame.draw.rect(surface, (0, 140, 70), (alt_x, alt_y, alt_w, alt_h), 2)
+        # Fill from bottom up (more fill = higher altitude)
+        fill_h = int(alt_h * alt_frac)
+        pygame.draw.rect(surface, (0, 180, 100),
+                         (alt_x + 2, alt_y + alt_h - fill_h, alt_w - 4, fill_h - 2))
+        alt_lbl = fsm2.render("ALT", True, (140, 170, 140))
+        surface.blit(alt_lbl, (alt_x - 2, alt_y - 16))
+        alt_v   = fsm2.render(f"{alt:>4.0f}", True, (0, 200, 120))
+        surface.blit(alt_v, (alt_x - 6, alt_y + alt_h + 6))
+
+        # ── Time pressure indicator (centre top) ───────────────────────────
+        time_left = max(0.0, self._LAND_MAX_DURATION - self._beat2_sub_t)
+        t_col = (0, 255, 100) if time_left > 4 else (255, 180, 0) if time_left > 1.5 else (255, 60, 60)
+        t_surf = f.render(f"WINDOW  {time_left:>4.1f}s", True, t_col)
+        surface.blit(t_surf, (W // 2 - t_surf.get_width() // 2, 40))
+
+        # Throttle indicator
+        thr_lbl = fsm2.render("RETROS: ON" if self._land_throttle else "RETROS: off",
+                              True, (0, 220, 120) if self._land_throttle else (90, 100, 90))
+        surface.blit(thr_lbl, (W // 2 - thr_lbl.get_width() // 2, 64))
 
     def _draw_beat3(self, surface: pygame.Surface, W: int, H: int):
         """Beat 3: dock-clamp cutscene + fade to corridor."""
@@ -751,22 +793,28 @@ class DeliverySequence:
                 self._result_t = _RESULT_HOLD
 
     def _draw_run(self, surface: pygame.Surface, W: int, H: int):
-        surface.fill((4, 8, 6))
+        surface.fill((2, 4, 3))
         if self._run is None:
             return
-        # Draw corridor centred in window
-        cx = (W - CORRIDOR_W) // 2
-        cy = (H - CORRIDOR_H) // 2
-        # Frame
-        pygame.draw.rect(surface, (0, 80, 40),
-                         (cx - 3, cy - 3, CORRIDOR_W + 6, CORRIDOR_H + 6), 2)
-        self._run.draw(surface, cx, cy)
+        # Scale corridor to fill most of the screen (maintain aspect ratio)
+        scale_x = W / CORRIDOR_W
+        scale_y = H / CORRIDOR_H
+        scale   = min(scale_x, scale_y) * 0.96   # slight margin
+        disp_w  = int(CORRIDOR_W * scale)
+        disp_h  = int(CORRIDOR_H * scale)
+        cx      = (W - disp_w) // 2
+        cy      = (H - disp_h) // 2
+
+        # Render corridor into its internal surface (pass screen=None to skip blit)
+        self._run.draw(None, 0, 0)
+        corridor_surf = self._run.get_surface()
+        scaled = pygame.transform.scale(corridor_surf, (disp_w, disp_h))
+        # Border frame
+        pygame.draw.rect(surface, (0, 60, 30),
+                         (cx - 2, cy - 2, disp_w + 4, disp_h + 4), 2)
+        surface.blit(scaled, (cx, cy))
         # Bax mini-portrait in corner
         self._draw_bax_corner(surface, W, H)
-        # Phase label
-        f = pygame.font.SysFont("monospace", 12)
-        surface.blit(f.render("DELIVERY RUN  ·  REACH THE DROP-OFF", True, (50, 80, 50)),
-                     ((W - CORRIDOR_W) // 2, cy - 20))
 
     def _draw_bax_corner(self, surface: pygame.Surface, W: int, H: int):
         t  = pygame.time.get_ticks() / 1000.0

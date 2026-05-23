@@ -71,6 +71,16 @@ class Game:
         self._interstitial_next       = 2
         self._interstitial_campaign_end = False
 
+        # Decanting — cached Bax wake-up line (picked once on death, not per frame)
+        self._decant_bax_line: str = ""
+
+        # Terminal win hold — show outcome for 2s before returning to flight
+        self._terminal_win_hold_t: float = 0.0
+        self._terminal_win_str: str = ""
+
+        # Death hold — brief black screen before DECANTING to let the explosion register
+        self._death_hold_t: float = 0.0   # >0 = holding on death flash before transition
+
         self._wire_events()
 
     def _wire_events(self):
@@ -121,7 +131,13 @@ class Game:
         sector_idx = getattr(self.run_mgr, '_sector_index', 0) if self.run_mgr else 0
         self.meta.apply_death_penalty(sector_index=sector_idx)
         self._run_just_completed = False
-        self._goto(GameState.DECANTING)
+        # Pick the Bax decanting line once — cached so _render_decanting doesn't
+        # re-roll it every frame, which makes the text flash/go crazy.
+        src  = getattr(self.ship, "last_damage_source", "unknown")
+        pool = self._DECANT_BAX_BY_SOURCE.get(src, self._DECANT_BAX)
+        self._decant_bax_line = random.choice(pool).format(n=self.meta.clone_count)
+        # Brief death hold (0.9s) before transitioning — gives the explosion a moment
+        self._death_hold_t = 0.9
 
     def _on_run_end(self, success, **_):
         if success:
@@ -237,6 +253,13 @@ class Game:
     def _update(self, dt: float):
         state = self.states.state
 
+        # Death hold — freeze in FLIGHT for a moment, then transition to DECANTING
+        if self._death_hold_t > 0:
+            self._death_hold_t -= dt
+            if self._death_hold_t <= 0:
+                self._goto(GameState.DECANTING)
+            return   # skip all other update logic during hold
+
         if state == GameState.FLIGHT:
             if self._delivery_pending:
                 # Hold in FLIGHT so Bax's "we did it" line plays in the cockpit strip
@@ -287,9 +310,29 @@ class Game:
                         sector.gravity.apply_all(self.ship.body)
                     self.ship.body.integrate(dt)
                     self.ship._wrap_screen()
-                if terminal.is_done:
-                    self.run_mgr.on_terminal_complete(terminal.outcome)
-                    # Only go back to FLIGHT if run_end hasn't already redirected us
+                if terminal.is_done and self._terminal_win_hold_t <= 0:
+                    outcome = terminal.outcome
+                    from terminal.npcs.base_npc import NPCOutcome
+                    win = outcome in (NPCOutcome.RELEASE, NPCOutcome.EXPLOIT,
+                                      "release", "exploit")
+                    if win:
+                        # Hold on terminal screen so the player sees the outcome
+                        self._terminal_win_hold_t = 2.2
+                        self._terminal_win_str = (
+                            "NEGOTIATION SUCCESS" if outcome in ("release", NPCOutcome.RELEASE)
+                            else "SYSTEM EXPLOITED"
+                        )
+                    else:
+                        self.run_mgr.on_terminal_complete(terminal.outcome)
+                        if self.states.state == GameState.TERMINAL:
+                            self._goto(GameState.FLIGHT)
+            # Win-hold countdown — complete the terminal and leave after timer
+            if self._terminal_win_hold_t > 0:
+                self._terminal_win_hold_t -= dt
+                if self._terminal_win_hold_t <= 0:
+                    if self.run_mgr.active_terminal is not None:
+                        self.run_mgr.on_terminal_complete(
+                            self.run_mgr.active_terminal.outcome)
                     if self.states.state == GameState.TERMINAL:
                         self._goto(GameState.FLIGHT)
 
@@ -319,6 +362,21 @@ class Game:
         self.screen.fill(S.VOID)
         state = self.states.state
 
+        # Death hold: red flash that fades to black before DECANTING
+        if self._death_hold_t > 0:
+            # Show the ship explosion moment: red->black flash
+            frac = self._death_hold_t / 0.9   # 1.0 at start, 0.0 at end
+            r    = int(200 * frac)
+            self.screen.fill((r, 0, 0))
+            f = pygame.font.SysFont("monospace", 28, bold=True)
+            if frac > 0.4:
+                txt = f.render("SHIP DESTROYED", True, (255, 80, 80))
+                self.screen.blit(txt, (S.SCREEN_W // 2 - txt.get_width() // 2,
+                                       S.SCREEN_H // 2 - 14))
+            self.transition.draw(self.screen, self._dt)
+            pygame.display.flip()
+            return
+
         if state == GameState.FLIGHT:
             self.vec_renderer.draw(self.run_mgr, self.ship, self._dt)
             self.hud_renderer.draw(self.ship)
@@ -332,6 +390,9 @@ class Game:
             self.term_renderer.draw(self.run_mgr.active_terminal)
             if self.run_mgr._intercepting_barge is not None:
                 self._render_drift_strip()
+            # Terminal win overlay — show outcome message before returning to flight
+            if self._terminal_win_hold_t > 0 and self._terminal_win_str:
+                self._render_terminal_win_overlay()
 
         elif state == GameState.LOADOUT_DRAFT:
             self.run_mgr.draft.render(self.screen)
@@ -610,8 +671,43 @@ class Game:
         ],
     }
 
+    def _render_terminal_win_overlay(self):
+        """Semi-transparent overlay shown after a terminal win — player sees outcome for 2s."""
+        t    = pygame.time.get_ticks() / 1000.0
+        frac = min(1.0, self._terminal_win_hold_t / 2.2)
+        # Fade in quickly, hold, fade out near end
+        alpha = 200 if frac > 0.15 else int(200 * frac / 0.15)
+        ov    = pygame.Surface((S.SCREEN_W, S.SCREEN_H), pygame.SRCALPHA)
+        ov.fill((0, 0, 0, alpha))
+        self.screen.blit(ov, (0, 0))
+
+        cx = S.SCREEN_W // 2
+        cy = S.SCREEN_H // 2
+        is_exploit = "EXPLOIT" in self._terminal_win_str
+        col = (0, 255, 140) if not is_exploit else (200, 80, 255)
+
+        # Pulsing glow ring
+        pulse = 0.7 + 0.3 * math.sin(t * 4.0)
+        glow_col = (int(col[0] * pulse * 0.35), int(col[1] * pulse * 0.35),
+                    int(col[2] * pulse * 0.35))
+        pygame.draw.circle(self.screen, glow_col, (cx, cy - 30), 80, 4)
+
+        fh = pygame.font.SysFont("monospace", 28, bold=True)
+        fs = pygame.font.SysFont("monospace", 14)
+        title = fh.render(self._terminal_win_str, True, col)
+        self.screen.blit(title, (cx - title.get_width() // 2, cy - 50))
+
+        dim_col = (int(col[0] * 0.6), int(col[1] * 0.6), int(col[2] * 0.6))
+        sub_lines = (
+            ["debt reduced  ·  sector advance", "returning to flight..."]
+            if not is_exploit else
+            ["system compromised  ·  credits rerouted", "they'll find out eventually."]
+        )
+        for i, line in enumerate(sub_lines):
+            s = fs.render(line, True, dim_col)
+            self.screen.blit(s, (cx - s.get_width() // 2, cy + 10 + i * 20))
+
     def _render_decanting(self):
-        import random as _rnd
         t = pygame.time.get_ticks() / 1000.0
         font_sm  = pygame.font.SysFont("monospace", 13)
         font     = pygame.font.SysFont("monospace", 17)
@@ -663,10 +759,9 @@ class Game:
             self.screen.blit(surf, (S.SCREEN_W // 2 - surf.get_width() // 2, y))
             y += f.get_linesize() + 2
 
-        # Bax wake-up line — pick from death-cause-specific pool if available
-        src = getattr(self.ship, "last_damage_source", "unknown")
-        pool = self._DECANT_BAX_BY_SOURCE.get(src, self._DECANT_BAX)
-        bax_line = _rnd.choice(pool).format(n=self.meta.clone_count)
+        # Bax wake-up line — use the line cached at death time (not re-rolled each frame)
+        bax_line = self._decant_bax_line or random.choice(self._DECANT_BAX).format(
+            n=self.meta.clone_count)
         font_bax = pygame.font.SysFont("monospace", 12)
         bax_surf = font_bax.render(bax_line, True, (100, 130, 100))
         self.screen.blit(bax_surf,
