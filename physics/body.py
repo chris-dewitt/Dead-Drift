@@ -58,6 +58,9 @@ class RigidBody2D:
         self.mass     = mass
         self._force   = Vec2()     # accumulator, reset each tick
         self.angle    = 0.0        # degrees, 0 = right
+        # Overdrive: when > 0 this overrides MAX_VELOCITY for _overdrive_t seconds
+        self._vel_cap_override = 0.0
+        self._overdrive_t      = 0.0
 
     # ------------------------------------------------------------------
     def apply_force(self, force: Vec2):
@@ -101,10 +104,18 @@ class RigidBody2D:
         accel   = self._force * (1.0 / self.mass)
         self.vel = self.vel + accel * dt
 
-        # Hard velocity cap — the ship frame can only take so much.
+        # Overdrive timer — slingshot and other bonuses can briefly raise the cap.
+        if self._overdrive_t > 0.0:
+            self._overdrive_t -= dt
+            if self._overdrive_t <= 0.0:
+                self._vel_cap_override = 0.0
+
+        cap = self._vel_cap_override if self._vel_cap_override > S.MAX_VELOCITY else S.MAX_VELOCITY
         speed = self.vel.length()
-        if speed > S.MAX_VELOCITY:
-            self.vel = self.vel * (S.MAX_VELOCITY / speed)
+        if speed > cap:
+            # Soft drag: shed excess speed over ~0.15s rather than hard-clamping.
+            excess_pct = (speed - cap) / cap
+            self.vel = self.vel * (1.0 - excess_pct * dt * 6.0)
 
         self.pos = self.pos + self.vel * dt
         self._force = Vec2()   # reset accumulator

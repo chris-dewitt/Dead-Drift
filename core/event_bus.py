@@ -1,4 +1,3 @@
-from collections import defaultdict
 from typing import Callable
 
 
@@ -6,16 +5,25 @@ class EventBus:
     """Lightweight pub/sub. All game systems talk through here."""
 
     def __init__(self):
-        self._listeners: dict[str, list[Callable]] = defaultdict(list)
+        self._listeners: dict[str, list[Callable]] = {}
 
     def subscribe(self, event: str, callback: Callable):
+        if event not in self._listeners:
+            self._listeners[event] = []
         self._listeners[event].append(callback)
 
     def unsubscribe(self, event: str, callback: Callable):
-        self._listeners[event].remove(callback)
+        lst = self._listeners.get(event)
+        if lst:
+            try:
+                lst.remove(callback)
+            except ValueError:
+                pass
 
     def emit(self, event: str, **payload):
-        for cb in self._listeners[event]:
+        # Snapshot the list before iterating so a callback that unsubscribes
+        # itself during dispatch doesn't skip adjacent entries.
+        for cb in list(self._listeners.get(event, ())):
             cb(**payload)
 
 

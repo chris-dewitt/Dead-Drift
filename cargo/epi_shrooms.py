@@ -9,7 +9,10 @@ class EpistemologicalShrooms(BaseCargo):
     """
     Ch.2 — bioluminescent psychic fungi.
     Every SPORE_INTERVAL seconds, controls invert for SPORE_DURATION seconds.
-    Cargo damage raises spore_level which shortens the interval.
+    spore_level rises over time (pressure curve — creates urgency even without damage)
+    AND rises on cargo damage (hits shorten the inversion interval further).
+    Both drivers are intentional: time ensures the mechanic always fires,
+    damage makes careful flying matter.
     """
 
     def __init__(self):

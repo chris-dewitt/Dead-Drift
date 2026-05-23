@@ -8,7 +8,8 @@ from antagonists.alien_ship import HULL_PTS as _ALIEN_HULL, INNER_PTS as _ALIEN_
 from core.event_bus import (bus, EVT_SLINGSHOT, EVT_SCAN_PING,
                              EVT_TETHER_HIT, EVT_TETHER_SNAP,
                              EVT_MODULE_UNBOLTED, EVT_HULL_DAMAGE,
-                             EVT_HULL_CRITICAL, EVT_WARP_JUMP, EVT_SECTOR_CLEAR)
+                             EVT_HULL_CRITICAL, EVT_WARP_JUMP, EVT_SECTOR_CLEAR,
+                             EVT_SECTOR_START)
 
 
 # ---------------------------------------------------------------------------
@@ -48,6 +49,9 @@ class VectorRenderer:
         self._shooting_stars: list[list[float]] = []
         self._next_shooting_star = random.uniform(4.0, 10.0)
 
+        # Slingshot floater — list of (x, y, t) where t counts down from 1.0
+        self._sling_floaters: list[list[float]] = []
+
         # Ember particles trailing exhaust — (x, y, vx, vy, age, lifetime, hue)
         self._embers: list[list[float]] = []
 
@@ -76,10 +80,17 @@ class VectorRenderer:
         bus.subscribe(EVT_HULL_CRITICAL,    self._on_hull_critical)
         bus.subscribe(EVT_WARP_JUMP,        self._on_warp_jump)
         bus.subscribe(EVT_SECTOR_CLEAR,     self._on_sector_clear)
+        bus.subscribe(EVT_SECTOR_START,     self._on_sector_start)
+
+        # Sector intro card state
+        self._intro_card_t     = 0.0
+        self._intro_card_data: dict | None = None
 
     def _on_slingshot(self, **_):
         self._flash_t   = 0.45
         self._flash_col = (160, 210, 255)
+        # Spawn "+800cr  FREE −5s" floater near the ship
+        self._sling_floaters.append([self._last_ship_x, self._last_ship_y, 1.2])
 
     def _on_scan_ping(self, pos_x, pos_y, **_):
         t = pygame.time.get_ticks() / 1000.0
@@ -119,6 +130,16 @@ class VectorRenderer:
         # Intensity ramps with sector — escalates background density + brightness
         self._sector_intensity = min(1.0, sector_num / max(1, S.SECTORS_PER_RUN - 1))
 
+    def _on_sector_start(self, sector_num=0, cargo_type=None,
+                         theme="", sector_name="", formerly="", **_):
+        self._intro_card_t    = 2.0
+        self._intro_card_data = {
+            "sector_num":  sector_num,
+            "theme":       theme,
+            "name":        sector_name,
+            "formerly":    formerly,
+        }
+
     # ------------------------------------------------------------------
     def draw(self, run_mgr, ship, dt: float = 0.016):
         t = pygame.time.get_ticks() / 1000.0
@@ -156,6 +177,8 @@ class VectorRenderer:
         self._draw_exhaust(ship, t)
         self._draw_proximity_alarm(run_mgr, ship, t)
         self._draw_flash(dt)
+        self._draw_sector_intro_card(dt)
+        self._draw_sling_floaters(dt)
         self._draw_spore_effect(ship, t)
         self._draw_cargo_overlays(ship, t)
         self._draw_warp_streak(dt)
@@ -1627,15 +1650,27 @@ class VectorRenderer:
             pygame.draw.line(self.surface, beam_col, (sx, sy - ret_r - tick), (sx, sy - ret_r + 2), 2)
             pygame.draw.line(self.surface, beam_col, (sx, sy + ret_r - 2), (sx, sy + ret_r + tick), 2)
 
-        # Tether — double-layered crackling EM beam
+        # Tether — double-layered crackling EM beam with snap-charge color
         tether = getattr(barge, "_tether", None)
         if tether and tether.is_active and ship and ship.is_alive:
             sx, sy  = int(ship.pos.x), int(ship.pos.y)
             dist    = math.hypot(sx - bx, sy - by)
             stretch = min(1.0, dist / S.TETHER_MAX_LENGTH)
-            # Color shifts orange → red as stretch increases
-            tr = int(40  + 215 * stretch)
-            tg = int(180 - 150 * stretch)
+            # Snap-charge: 0%=red  50%=amber  100%=bright green
+            snap_pct = min(1.0, getattr(tether, "lateral_speed", 0.0) / S.SNAP_VELOCITY)
+            if snap_pct < 0.5:
+                # red → amber
+                p2 = snap_pct * 2.0
+                tr = int(200 + 55 * p2)
+                tg = int(80  * p2)
+            else:
+                # amber → bright green
+                p2 = (snap_pct - 0.5) * 2.0
+                tr = int(255 - 255 * p2)
+                tg = int(80  + 175 * p2)
+            # At full snap-charge: pulse bright
+            if snap_pct >= 0.95:
+                tr, tg = 40, 255
             jitter_max = int((1 - abs(0.5 - 0.5) * 2) * 10 * (0.4 + stretch))
 
             # Glow pass (thick, dim)
@@ -1742,6 +1777,58 @@ class VectorRenderer:
         overlay.fill((*self._flash_col, alpha))
         self.surface.blit(overlay, (0, 0))
         self._flash_t -= dt
+
+    def _draw_sector_intro_card(self, dt: float):
+        """2-second sector intro card in the top-left on sector load."""
+        if self._intro_card_t <= 0 or self._intro_card_data is None:
+            return
+        self._intro_card_t -= dt
+        from core.text import render_text
+        from roguelite.procedural import THEME_DESCRIPTIONS
+        d     = self._intro_card_data
+        pct   = min(1.0, self._intro_card_t / 1.6)
+        alpha = min(220, int(pct * 280))
+        y     = 14
+
+        def blit_line(text, size, color, bold=False):
+            nonlocal y
+            surf = render_text(text, size, color, bold=bold)
+            surf.set_alpha(alpha)
+            self.surface.blit(surf, (14, y))
+            y += surf.get_height() + 3
+
+        theme = d.get("theme", "")
+        name  = d.get("name", "")
+        form  = d.get("formerly", "")
+        desc  = THEME_DESCRIPTIONS.get(theme, "")
+
+        blit_line(theme or f"SECTOR {d.get('sector_num', '')}", 14, (255, 176, 0), bold=True)
+        if name:
+            blit_line(name, 11, (180, 180, 180))
+        if form:
+            blit_line(f"formerly: {form}", 10, (120, 120, 140))
+        if desc:
+            blit_line(desc, 10, (100, 180, 130))
+
+    def _draw_sling_floaters(self, dt: float):
+        """Slingshot reward UI floater: '+800cr  FREE −5s' drifting up from ship."""
+        if not self._sling_floaters:
+            return
+        from core.text import render_text
+        alive = []
+        for f in self._sling_floaters:
+            f[2] -= dt
+            if f[2] <= 0:
+                continue
+            pct   = f[2] / 1.2
+            alpha = min(255, int(pct * 340))
+            y_off = int((1.2 - f[2]) * 60)
+            surf  = render_text("+800cr  FREE −5s", 13, (255, 220, 60), bold=True, shadow=True)
+            surf.set_alpha(alpha)
+            self.surface.blit(surf, (int(f[0]) - surf.get_width() // 2,
+                                     int(f[1]) - 20 - y_off))
+            alive.append(f)
+        self._sling_floaters = alive
 
     # ------------------------------------------------------------------
     def _draw_spore_effect(self, ship, t: float):

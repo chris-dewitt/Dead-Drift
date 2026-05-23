@@ -1,4 +1,5 @@
 from __future__ import annotations
+import random
 from ship.modules.base_module import BaseModule
 from core.event_bus import bus, EVT_MODULE_UNBOLTED
 
@@ -57,7 +58,6 @@ class SignalChain:
     # ------------------------------------------------------------------
     def unbolt_random(self) -> BaseModule | None:
         """Repo Man plasma torch hits a random active module."""
-        import random
         active = [m for m in self.slots if m is not None and m.active]
         if not active:
             return None
