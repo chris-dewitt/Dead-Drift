@@ -9,19 +9,21 @@ from config import settings as S
 
 
 _NPC_DOSSIER_TITLE = {
-    "GARY":       "FIELD PROFILE",
-    "TK-9":       "VULNERABILITY SCAN",
-    "DISPATCHER": "PATH ANALYSIS",
-    "KRESS":      "INTEL DOSSIER",
-    "MORWENNA":   "CLAIMS ANALYSIS",
+    "GARY":           "FIELD PROFILE",
+    "TK-9":           "VULNERABILITY SCAN",
+    "DISPATCHER":     "PATH ANALYSIS",
+    "KRESS":          "INTEL DOSSIER",
+    "MORWENNA":       "CLAIMS ANALYSIS",
+    "TOLL AUTHORITY": "GATE RECORD",
 }
 
 _NPC_HINTS = {
-    "GARY":       "deal×2 · bribe ≥3k · sympathy×2 · blevins · overtime+article7 · [ESC] abort",
-    "TK-9":       "paradox×2 · drop table · statute×3 · override · friendship×3 · emp.month · [ESC] abort",
-    "DISPATCHER": "coffee/break/tired · forms×3 · say '42' · grievance×3 · quantum+legal · bribe ≥10k · [ESC] abort",
-    "KRESS":      "intel · contraband · volkov · connie · be friendly×3 · [ESC] abort",
-    "MORWENNA":   "union negligence×3 · force majeure · counter-claim×2 · sympathy×3 · form 34-A×2 · [ESC] abort",
+    "GARY":           "deal×2 · bribe ≥3k · sympathy×2 · blevins · overtime+article7 · [ESC] abort",
+    "TK-9":           "paradox×2 · drop table · statute×3 · override · friendship×3 · emp.month · [ESC] abort",
+    "DISPATCHER":     "coffee/break/tired · forms×3 · say '42' · grievance×3 · quantum+legal · bribe ≥10k · [ESC] abort",
+    "KRESS":          "intel · contraband · volkov · connie · be friendly×3 · [ESC] abort",
+    "MORWENNA":       "union negligence×3 · force majeure · counter-claim×2 · sympathy×3 · form 34-A×2 · [ESC] abort",
+    "TOLL AUTHORITY": "pay ≥1500 · forms/permits/id · union/local404 · offer 500-1000 (40%) · [ESC] abort",
 }
 
 # Keywords shown as live chips while player types — gives "signal probe" feedback
@@ -62,6 +64,14 @@ _SCAN_VOCAB: dict[str, dict[str, str]] = {
         "harpoon": "UNION-NEG", "operational breach": "UNION-NEG★", "local 404": "UNION-NEG",
         "force majeure": "FORCE-MAJ★", "gravitational": "FORCE-MAJ", "debris shower": "FORCE-MAJ★",
         "tired": "EXHAUST", "how long": "EXHAUST", "that sounds hard": "EXHAUST",
+    },
+    "TOLL AUTHORITY": {
+        "pay": "PAY★", "credits": "PAY★", "1500": "PAY★", "fee": "PAY★",
+        "form": "PAPERWORK", "permit": "PAPERWORK", "clearance": "PAPERWORK",
+        "id": "PAPERWORK", "documentation": "PAPERWORK", "paperwork": "PAPERWORK",
+        "union": "UNION-GRIPE", "local 404": "UNION-GRIPE★", "local404": "UNION-GRIPE★",
+        "repo": "UNION-GRIPE", "quota": "UNION-GRIPE",
+        "500": "LOW-BRIBE", "1000": "LOW-BRIBE",
     },
 }
 
@@ -498,7 +508,8 @@ class Terminal:
 
         total_px = sum(_block_h(bl) for bl in blocks)
         avail    = DIAG_Y1 - DIAG_Y0 - 10
-        y        = DIAG_Y0 + 6 + (avail - total_px)
+        # Anchor to top when content is sparse; scroll old msgs off top when full
+        y        = DIAG_Y0 + 6 + min(0, avail - total_px)
 
         prev_clip = surface.get_clip()
         surface.set_clip(pygame.Rect(0, DIAG_Y0, W, DIAG_Y1 - DIAG_Y0))

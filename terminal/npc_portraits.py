@@ -9,14 +9,15 @@ import pygame
 from config import settings as S
 
 _NAME_TO_KEY = {
-    "GARY":       "gary",
-    "TK-9":       "synthetic_droid",
-    "DISPATCHER": "union_dispatcher",
-    "KRESS":      "kress",
-    "MORWENNA":   "insurance_adjuster",
-    "SANDRA":     "sandra",
-    "KRELLBORN":  "pirate",
-    "MARROW":     "underground_dj",
+    "GARY":           "gary",
+    "TK-9":           "synthetic_droid",
+    "DISPATCHER":     "union_dispatcher",
+    "KRESS":          "kress",
+    "MORWENNA":       "insurance_adjuster",
+    "SANDRA":         "sandra",
+    "KRELLBORN":      "pirate",
+    "MARROW":         "underground_dj",
+    "TOLL AUTHORITY": "toll_authority",
 }
 
 
@@ -2266,3 +2267,173 @@ _DISPATCH["insurance_adjuster"] = _insurance_adjuster
 _DISPATCH["sandra"]             = _sandra
 _DISPATCH["pirate"]             = _pirate
 _DISPATCH["underground_dj"]     = _underground_dj
+
+
+# ---------------------------------------------------------------------------
+# Toll Authority — Gate Seven Checkpoint Attendant
+# ---------------------------------------------------------------------------
+
+def _backdrop_toll_authority(surface, inner, t):
+    """Cramped checkpoint booth interior — harsh fluorescent strips, form stacks."""
+    cx = inner.centerx
+    # Back wall — grey booth panelling
+    for i in range(4):
+        y = inner.top + 8 + i * 15
+        col = (28, 30, 28) if i % 2 == 0 else (20, 22, 20)
+        pygame.draw.rect(surface, col, (inner.left, y, inner.width, 15))
+    # Fluorescent strip light — flickers
+    flicker = 1.0 if int(t * 7) % 17 != 0 else 0.55
+    strip_col = (int(200 * flicker), int(210 * flicker), int(180 * flicker))
+    pygame.draw.rect(surface, strip_col, (cx - 32, inner.top + 5, 64, 4))
+    # Stack of forms on left
+    for i in range(5):
+        fy = inner.top + 32 + i * 3
+        pygame.draw.rect(surface, (160, 148, 110), (inner.left + 6, fy, 28, 2))
+    # Terminal screen glow (right side)
+    scr_rect = pygame.Rect(inner.right - 40, inner.top + 20, 30, 22)
+    pygame.draw.rect(surface, (20, 60, 20), scr_rect)
+    pygame.draw.rect(surface, (0, 90, 40), scr_rect, 1)
+    font7 = pygame.font.SysFont("monospace", 6)
+    for row, txt in enumerate(["LEVY:1500", "STATUS:OK", "QUEUE:18"]):
+        s = font7.render(txt, True, (0, 200, 80))
+        surface.blit(s, (scr_rect.left + 2, scr_rect.top + 2 + row * 7))
+    # Booth window frame
+    pygame.draw.rect(surface, (60, 55, 40),
+                     (inner.left, inner.top, inner.width, inner.height), 2)
+
+
+def _toll_authority(surface, cx, cy, s, disposition, t):
+    """
+    Gate Seven attendant — bored, tired, slightly resentful.
+    Uniform cap, slight bags under eyes, headset, clipboard held up.
+    """
+    skin  = (210, 175, 140)
+    skin_d = (130, 100, 75)
+    suit  = (55, 60, 50)      # grey-green Transit Authority uniform
+    cap   = (40, 45, 35)
+    cap_b = (70, 80, 60)
+    white = (230, 230, 220)
+    amber = (220, 170, 40)
+
+    # Torso / uniform
+    torso_pts = [
+        (int(cx - 38 * s), int(cy + 80 * s)),
+        (int(cx + 38 * s), int(cy + 80 * s)),
+        (int(cx + 30 * s), int(cy + 20 * s)),
+        (int(cx - 30 * s), int(cy + 20 * s)),
+    ]
+    pygame.draw.polygon(surface, suit, torso_pts)
+    # Shoulder insignia stripe
+    for side in (-1, 1):
+        sx = cx + side * int(26 * s)
+        pygame.draw.rect(surface, amber,
+                         (sx - int(4 * s), int(cy + 25 * s), int(8 * s), int(4 * s)))
+
+    # Neck
+    pygame.draw.rect(surface, skin,
+                     (cx - int(8 * s), int(cy + 10 * s), int(16 * s), int(14 * s)))
+
+    # Head — slightly round, tired
+    head_rect = pygame.Rect(cx - int(26 * s), int(cy - 42 * s),
+                            int(52 * s), int(54 * s))
+    pygame.draw.ellipse(surface, skin, head_rect)
+    pygame.draw.ellipse(surface, skin_d, head_rect, 1)
+
+    # Cap
+    brim_y = int(cy - 42 * s)
+    pygame.draw.rect(surface, cap,
+                     (cx - int(30 * s), brim_y - int(18 * s),
+                      int(60 * s), int(20 * s)))
+    pygame.draw.rect(surface, cap_b,
+                     (cx - int(32 * s), brim_y - int(3 * s),
+                      int(64 * s), int(5 * s)))
+    # Cap badge — small amber rectangle
+    pygame.draw.rect(surface, amber,
+                     (cx - int(8 * s), brim_y - int(14 * s), int(16 * s), int(8 * s)))
+
+    # Tired eyes — slightly drooped lids
+    for ex_off in (-13, 13):
+        ex = cx + int(ex_off * s)
+        ey = int(cy - 20 * s)
+        pygame.draw.ellipse(surface, white,
+                            pygame.Rect(ex - int(7 * s), ey - int(4 * s),
+                                        int(14 * s), int(8 * s)))
+        # Pupil — slightly unfocused, looking sideways
+        pygame.draw.circle(surface, (50, 55, 45),
+                           (ex + int(1 * s), ey), max(1, int(3 * s)))
+        # Drooped upper lid
+        pygame.draw.arc(surface, skin_d,
+                        pygame.Rect(ex - int(7 * s), ey - int(4 * s),
+                                    int(14 * s), int(8 * s)),
+                        0, math.pi, max(1, int(2 * s)))
+
+    # Bags under eyes
+    for ex_off in (-13, 13):
+        ex = cx + int(ex_off * s)
+        ey = int(cy - 15 * s)
+        pygame.draw.arc(surface, skin_d,
+                        pygame.Rect(ex - int(8 * s), ey, int(16 * s), int(6 * s)),
+                        math.pi, math.tau, 1)
+
+    # Nose
+    pygame.draw.line(surface, skin_d,
+                     (cx, int(cy - 10 * s)), (cx - int(4 * s), int(cy - 2 * s)), 1)
+
+    # Thin line of a mouth — slightly disapproving
+    mouth_y = int(cy + 5 * s)
+    pygame.draw.line(surface, skin_d,
+                     (cx - int(10 * s), mouth_y), (cx + int(10 * s), mouth_y), 1)
+    # Slight downturn at corners
+    pygame.draw.line(surface, skin_d,
+                     (cx - int(10 * s), mouth_y),
+                     (cx - int(13 * s), mouth_y + int(3 * s)), 1)
+    pygame.draw.line(surface, skin_d,
+                     (cx + int(10 * s), mouth_y),
+                     (cx + int(13 * s), mouth_y + int(3 * s)), 1)
+
+    # Headset
+    pygame.draw.arc(surface, (80, 85, 75),
+                    pygame.Rect(cx - int(28 * s), int(cy - 40 * s),
+                                int(56 * s), int(30 * s)),
+                    0, math.pi, max(1, int(3 * s)))
+    # Earpiece right
+    pygame.draw.circle(surface, (60, 65, 55),
+                       (cx + int(28 * s), int(cy - 25 * s)), max(2, int(5 * s)))
+    # Mic boom
+    pygame.draw.line(surface, (80, 85, 75),
+                     (cx - int(28 * s), int(cy - 25 * s)),
+                     (cx - int(34 * s), int(cy - 8 * s)), 1)
+    pygame.draw.circle(surface, (50, 55, 45),
+                       (cx - int(34 * s), int(cy - 8 * s)), max(1, int(2 * s)))
+
+    # Clipboard held up (right arm)
+    clip_x = cx + int(32 * s)
+    clip_y = int(cy + 5 * s)
+    pygame.draw.rect(surface, (180, 165, 120),
+                     (clip_x, clip_y, int(22 * s), int(28 * s)))
+    pygame.draw.rect(surface, (100, 90, 60),
+                     (clip_x, clip_y, int(22 * s), int(28 * s)), 1)
+    pygame.draw.rect(surface, (100, 90, 60),
+                     (clip_x + int(4 * s), clip_y - int(4 * s),
+                      int(14 * s), int(5 * s)))
+    for row in range(4):
+        pygame.draw.line(surface, (60, 55, 40),
+                         (clip_x + int(3 * s), clip_y + int(4 + row * 5) * s),
+                         (clip_x + int(19 * s), clip_y + int(4 + row * 5) * s), 1)
+
+    # Disposition tint — high disp = slight smile; low = scowl
+    if disposition >= 3:
+        pygame.draw.arc(surface, (160, 130, 100),
+                        pygame.Rect(cx - int(10 * s), mouth_y - int(4 * s),
+                                    int(20 * s), int(10 * s)),
+                        math.pi, math.tau, 1)
+    elif disposition <= -3:
+        for dx in (-14, 14):
+            pygame.draw.line(surface, skin_d,
+                             (cx + int(dx * s), mouth_y - int(2 * s)),
+                             (cx + int((dx + 2 if dx > 0 else dx - 2) * s),
+                              mouth_y + int(5 * s)), 1)
+
+
+_DISPATCH["toll_authority"] = _toll_authority
+_BACKDROPS["toll_authority"] = _backdrop_toll_authority

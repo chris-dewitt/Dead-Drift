@@ -90,6 +90,10 @@ class BaseNPC(ABC):
     def _out_of_patience_line(self) -> str:
         return "Alright, that's it. Harpoon's locked. You're getting towed."
 
+    def bribe_cost(self) -> int:
+        """Credits the player owes for a successful bribe. Override in subclasses."""
+        return 0
+
     @property
     def transcript(self) -> list[tuple[str, str]]:
         return list(self._log)
