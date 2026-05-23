@@ -113,9 +113,12 @@ class RigidBody2D:
         cap = self._vel_cap_override if self._vel_cap_override > S.MAX_VELOCITY else S.MAX_VELOCITY
         speed = self.vel.length()
         if speed > cap:
-            # Soft drag: shed excess speed over ~0.15s rather than hard-clamping.
             excess_pct = (speed - cap) / cap
-            self.vel = self.vel * (1.0 - excess_pct * dt * 6.0)
+            # Drag scales quadratically with excess: gentle near cap, hard at extremes.
+            # At 2x cap (excess_pct=1): drag_k=18, recovers in ~0.06s.
+            # At 1.1x cap (excess_pct=0.1): drag_k=6.6, recovers in ~0.23s.
+            drag_k = 6.0 * (1.0 + excess_pct * 2.0)
+            self.vel = self.vel * (1.0 - excess_pct * dt * drag_k)
 
         self.pos = self.pos + self.vel * dt
         self._force = Vec2()   # reset accumulator

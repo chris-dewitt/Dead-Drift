@@ -334,9 +334,20 @@ class Corridor:
                 else:
                     self._active_path = "low"
 
-            # Auto-run (inversion applies)
-            run_dir = -1 if self._invert_t > 0 else 1
-            self._px += run_dir * RUN_SPEED * dt
+            # Player-controlled forward movement (D/RIGHT = run, A/LEFT = retreat)
+            # Controls invert when spore-zone is active (Ch.2 mechanic)
+            inverted = self._invert_t > 0
+            move_fwd = keys[pygame.K_d] or keys[pygame.K_RIGHT]
+            move_bck = keys[pygame.K_a] or keys[pygame.K_LEFT]
+            if inverted:
+                move_fwd, move_bck = move_bck, move_fwd
+
+            if move_fwd:
+                self._px += RUN_SPEED * dt
+            elif move_bck:
+                # Can retreat but only back to the camera left edge (can't go behind camera)
+                min_x = self._cam_x + _PLAYER_X_FIXED * 0.5
+                self._px = max(min_x, self._px - RUN_SPEED * 0.6 * dt)
 
             # Gravity
             self._pvy += GRAVITY * dt
@@ -444,7 +455,8 @@ class Corridor:
                 and abs(self._px - room.branch_x) < 80
                 and self._active_path is None):
             f = pygame.font.SysFont("monospace", 10)
-            s = f.render("↑ HIGH PATH / KEEP RUNNING = LOW PATH", True, (200, 200, 0))
+            s = f.render("W/↑ = HIGH PATH  ·  keep running = LOW PATH",
+                         True, (200, 200, 0))
             surf.blit(s, (CORRIDOR_W // 2 - s.get_width() // 2, CEIL_Y + 8))
 
         # Player
@@ -470,7 +482,8 @@ class Corridor:
             ov.set_alpha(max(0, min(255, alpha)))
             surf.blit(ov, (0, 0))
 
-        screen.blit(surf, (screen_x, screen_y))
+        if screen is not None:
+            screen.blit(surf, (screen_x, screen_y))
 
     # ── Properties ──────────────────────────────────────────────────────
 
@@ -485,6 +498,10 @@ class Corridor:
     @property
     def credits_earned(self) -> int:
         return self._credits
+
+    def get_surface(self) -> pygame.Surface:
+        """Return the internally rendered corridor surface (before screen blit)."""
+        return self._surf
 
     # ── Internal helpers ────────────────────────────────────────────────
 
@@ -737,6 +754,13 @@ class Corridor:
             iw = f.render("CONTROLS INVERTED", True,
                            (int(200 + 55 * math.sin(t * 8)), 80, 255))
             surf.blit(iw, (CORRIDOR_W // 2 - iw.get_width() // 2, CEIL_Y + 4))
+
+        # Controls hint (only show for first 8s)
+        if self._elapsed < 8.0:
+            hint_alpha = min(255, int(255 * (1.0 - self._elapsed / 8.0) * 2))
+            hint_col   = (0, max(0, int(160 * hint_alpha / 255)), 0)
+            hint = fsm.render("D/→ run  A/← retreat  SPACE jump", True, hint_col)
+            surf.blit(hint, (CORRIDOR_W // 2 - hint.get_width() // 2, CEIL_Y + 6))
 
         # Progress bar
         prog = min(1.0, self._px / max(1, room.length))

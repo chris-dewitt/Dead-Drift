@@ -98,6 +98,7 @@ def main():
 
     print("[demo] Dead Drift flight demo running. Fly safe out there, courier.")
 
+    _well_hit_times: dict = {}   # per-well last-damage timestamps
     running = True
     while running:
         dt = clock.tick(S.FPS) / 1000.0
@@ -124,8 +125,9 @@ def main():
                 run_mgr.barges.remove(barge)
         for rock in run_mgr.debris:
             rock.update(dt)
-            if rock.collides(ship.pos):
+            if rock.collides(ship.pos) and rock.can_damage_ship():
                 ship.take_damage(S.DEBRIS_DAMAGE)
+                rock.register_ship_hit()
                 rock.hit()
         for can in run_mgr.canisters:
             can.update(dt, ship.pos)
@@ -133,12 +135,16 @@ def main():
         bax.update(dt)
         cockpit.update(dt)
 
-        # Gravity well collision = instant heavy damage
+        # Gravity well core collision — 15 hull once per second per well
         well = gravity.check_collisions(ship.body)
         if well is not None and ship.is_alive:
-            ship.take_damage(35.0)
-            # Bounce away so we don't stick
-            push = (ship.body.pos - well.pos).normalized() * 250.0
+            well_id = id(well)
+            now     = pygame.time.get_ticks() / 1000.0
+            if now - _well_hit_times.get(well_id, -999) > 1.0:
+                ship.take_damage(15.0)
+                _well_hit_times[well_id] = now
+            # Bounce away from core so we don't get stuck inside
+            push = (ship.body.pos - well.pos).normalized() * 200.0
             ship.body.apply_impulse(push)
 
         # --- render ---

@@ -22,6 +22,7 @@ class DebrisRock:
         self.hp        = 3 if self.radius >= 13 else 2   # large=3 hits, small=2 hits
         self.is_hit    = False   # brief flash on collision
         self._hit_t    = 0.0
+        self._ship_cd  = 0.0   # cooldown before this rock can damage the ship again
 
         # Irregular polygon: N points at slightly randomised angles + radii
         n = random.randint(5, 7)
@@ -39,6 +40,8 @@ class DebrisRock:
         if self._hit_t > 0:
             self._hit_t = max(0.0, self._hit_t - dt)
             self.is_hit = self._hit_t > 0
+        if self._ship_cd > 0:
+            self._ship_cd = max(0.0, self._ship_cd - dt)
 
     def hit(self) -> bool:
         """Decrement HP, flash, knock away.  Returns True when destroyed."""
@@ -48,6 +51,14 @@ class DebrisRock:
         self.vel.x += random.uniform(-30, 30)
         self.vel.y += random.uniform(-30, 30)
         return self.hp <= 0
+
+    def can_damage_ship(self) -> bool:
+        """True if this rock is ready to deal ship damage (0.8s cooldown per hit)."""
+        return self._ship_cd <= 0.0
+
+    def register_ship_hit(self):
+        """Mark this rock as having just damaged the ship. Starts cooldown."""
+        self._ship_cd = 0.8
 
     def collides(self, pos: Vec2) -> bool:
         return (self.pos - pos).length() < self.radius + 10
