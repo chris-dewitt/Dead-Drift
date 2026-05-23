@@ -75,3 +75,14 @@ EVT_SHOP_BUY        = "shop_buy"        # item purchased; payload: tag, name
 EVT_SHOP_SKIP       = "shop_skip"       # player left shop without buying
 EVT_FINAL_SECTOR    = "final_sector"    # entering the last sector of the run
 EVT_SECTOR_START    = "sector_start"    # new sector loaded; payload: sector_num, cargo_type
+
+# New events (Epic 7 / corridor / dock)
+EVT_BARGE_KILLED    = "barge_killed"    # repo barge destroyed; payload: barge
+EVT_KILL_SCORED     = "kill_scored"     # any target killed in sector
+EVT_CORRIDOR_RUN    = "corridor_run"    # ambient: player running in corridor
+EVT_CORRIDOR_JUMP   = "corridor_jump"   # player jumped a gap in corridor
+EVT_CORRIDOR_SECRET = "corridor_secret" # secret found in corridor
+EVT_CORRIDOR_DEATH  = "corridor_death"  # player hit/died in corridor (respawn)
+EVT_DOCK_APPROACH   = "dock_approach"   # landing Beat 1 begins
+EVT_DOCK_PERFECT    = "dock_perfect"    # both landing inputs hit cleanly
+EVT_DOCK_ROUGH      = "dock_rough"      # both landing inputs missed

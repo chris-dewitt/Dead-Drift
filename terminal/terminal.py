@@ -178,6 +178,10 @@ class Terminal:
         self._disp_flash: tuple[int, float] | None = None
         self._exploit_flash: float | None = None
 
+        # Keystroke feedback state (Epic 6.1)
+        self._key_pulse_t   = 0.0
+        self._key_type      = "normal"   # "normal" | "backspace" | "enter"
+
         self._font:    pygame.font.Font | None = None
         self._font_sm: pygame.font.Font | None = None
 
@@ -205,11 +209,17 @@ class Terminal:
             self._outcome = NPCOutcome.RELEASE
             bus.emit(EVT_TERMINAL_CLOSE, outcome=self._outcome)
         elif event.key == pygame.K_RETURN and self._input.strip():
+            self._key_type    = "enter"
+            self._key_pulse_t = 0.2
             self._submit()
         elif event.key == pygame.K_BACKSPACE:
+            self._key_type    = "backspace"
+            self._key_pulse_t = 0.08
             self._input = self._input[:-1]
         elif event.unicode and event.unicode.isprintable():
             if len(self._input) < 78:
+                self._key_type    = "normal"
+                self._key_pulse_t = 0.08
                 self._input += event.unicode
 
     def _submit(self):
@@ -290,10 +300,11 @@ class Terminal:
                 if label not in seen_labels:
                     hits.append(label)
                     seen_labels.add(label)
-        return hits[:5]
+        return hits[:4]
 
     # ------------------------------------------------------------------
     def update(self, dt: float):
+        self._key_pulse_t = max(0.0, self._key_pulse_t - dt)
         self._cursor_timer += dt
         if self._cursor_timer >= S.CURSOR_BLINK_MS / 1000.0:
             self._cursor_visible = not self._cursor_visible
@@ -558,9 +569,27 @@ class Terminal:
         inp_y    = H - BTM_H + 8
         inp_rect = pygame.Rect(M, inp_y, W - 2 * M, 32)
         pygame.draw.rect(surface, (0, 14, 4), inp_rect)
-        pygame.draw.rect(surface, (0, 172, 70), inp_rect, 1)
 
-        # INJECT // prompt with tighter active border when typing
+        # Keystroke pulse border (Epic 6.1)
+        if self._key_pulse_t > 0:
+            pulse_pct = self._key_pulse_t / (0.2 if self._key_type == "enter" else 0.08)
+            if self._key_type == "backspace":
+                p_col = (int(200 * pulse_pct), int(40 * pulse_pct), int(40 * pulse_pct))
+            else:
+                p_col = (int(255 * pulse_pct), int(200 * pulse_pct), int(30 * pulse_pct))
+            pygame.draw.rect(surface, p_col, inp_rect, 2)
+            # Screen-edge amber bloom on ENTER
+            if self._key_type == "enter":
+                edge_a = int(80 * pulse_pct)
+                edge_s = pygame.Surface((W, H), pygame.SRCALPHA)
+                for thickness in range(1, 5):
+                    edge_c = (255, 200, 0, edge_a // thickness)
+                    pygame.draw.rect(edge_s, edge_c, (0, 0, W, H), thickness * 3)
+                surface.blit(edge_s, (0, 0))
+        else:
+            pygame.draw.rect(surface, (0, 172, 70), inp_rect, 1)
+
+        # Tighter active border when typing
         if self._input:
             pygame.draw.rect(surface, (0, 200, 85), inp_rect, 1)
         cursor = "█" if self._cursor_visible else " "
@@ -657,6 +686,12 @@ class Terminal:
         sig_col = (50, 90, 50) if int(t * 2) % 3 != 0 else (80, 130, 80)
         sig     = font_sm.render("COMM  ·  SIGNAL: DEGRADED", True, sig_col)
         surface.blit(sig, (x, rect.bottom - lh_sm - 4))
+
+        # Dossier footer — show after terminal closes (Epic 6.6)
+        if self._done:
+            footer_col = (0, 120, 60) if int(t * 3) % 2 == 0 else (0, 80, 40)
+            footer = font_sm.render("Bax filed your method. Review from main menu.", True, footer_col)
+            surface.blit(footer, (x, rect.bottom - lh_sm * 2 - 6))
 
     def _build_hint(self) -> str:
         paths = self.npc.get_path_progress()

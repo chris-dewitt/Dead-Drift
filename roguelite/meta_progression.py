@@ -39,8 +39,15 @@ class MetaProgression:
             json.dump(self._data, f, indent=2)
 
     # ------------------------------------------------------------------
-    def apply_death_penalty(self):
-        penalty = S.BASE_CLONE_DEBT + S.CLONE_FLUID_FEE + S.WRECKAGE_TOW_FEE
+    def apply_death_penalty(self, sector_index: int = 0):
+        """Stepped tow fee: sectors 0-1 → 8k, 2-3 → 12k, 4+ → 16k."""
+        if sector_index >= 4:
+            tow_fee = 16000
+        elif sector_index >= 2:
+            tow_fee = 12000
+        else:
+            tow_fee = S.WRECKAGE_TOW_FEE  # 8000
+        penalty = S.BASE_CLONE_DEBT + S.CLONE_FLUID_FEE + tow_fee
         self._data["debt"]        += penalty
         self._data["clone_count"] += 1
         bus.emit(EVT_DEBT_UPDATE, delta=penalty, total=self.debt)

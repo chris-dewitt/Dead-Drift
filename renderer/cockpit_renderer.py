@@ -2,7 +2,7 @@ from __future__ import annotations
 import math
 import pygame
 from config import settings as S
-from core.event_bus import bus, EVT_BAX_SPEAK, EVT_COMMS_SPEAK, EVT_DEBT_UPDATE
+from core.event_bus import bus, EVT_BAX_SPEAK, EVT_COMMS_SPEAK, EVT_DEBT_UPDATE, EVT_HULL_DAMAGE
 
 _STRIP_TOP = S.SCREEN_H - S.COCKPIT_H   # y=640
 _INFO_W    = 162                          # left info panel width
@@ -67,9 +67,18 @@ class CockpitRenderer:
         # Floating debt-delta numbers — each entry is [amount, age, lifetime]
         self._debt_floats: list[list[float]] = []
 
+        # Hull damage reaction state (Epic 7.1)
+        self._hull_pct       = 1.0
+        self._dmg_eyes_t     = 0.0   # eyes-widen timer (0.4s)
+        self._dmg_scan_t     = 0.0   # scanline-glitch timer (0.6s)
+        self._dmg_ant_t      = 0.0   # antenna-spark timer (0.3s)
+        self._dmg_cd         = 0.0   # cooldown between reactions (1.5s)
+        self._hull_flicker_t = 0.0   # persistent flicker phase
+
         bus.subscribe(EVT_BAX_SPEAK,   self._on_bax_speak)
         bus.subscribe(EVT_COMMS_SPEAK, self._on_comms_speak)
         bus.subscribe(EVT_DEBT_UPDATE, self._on_debt_update)
+        bus.subscribe(EVT_HULL_DAMAGE, self._on_hull_damage_cockpit)
 
     # ------------------------------------------------------------------
     def _on_bax_speak(self, line: str, priority: bool = False, **_):
@@ -77,6 +86,15 @@ class CockpitRenderer:
 
     def _on_comms_speak(self, speaker: str, line: str, **_):
         self._enqueue(speaker, line)
+
+    def _on_hull_damage_cockpit(self, amount=0, **_):
+        if self._ship is not None:
+            self._hull_pct = getattr(self._ship, 'hull_pct', self._hull_pct)
+        if self._dmg_cd <= 0:
+            self._dmg_eyes_t = 0.4
+            self._dmg_scan_t = 0.6
+            self._dmg_ant_t  = 0.3
+            self._dmg_cd     = 1.5
 
     def _on_debt_update(self, delta: int, total: int, **_):
         if delta == 0:
@@ -107,6 +125,16 @@ class CockpitRenderer:
 
     # ------------------------------------------------------------------
     def update(self, dt: float):
+        # Tick hull damage reaction timers
+        self._dmg_cd     = max(0.0, self._dmg_cd     - dt)
+        self._dmg_eyes_t = max(0.0, self._dmg_eyes_t - dt)
+        self._dmg_scan_t = max(0.0, self._dmg_scan_t - dt)
+        self._dmg_ant_t  = max(0.0, self._dmg_ant_t  - dt)
+        self._hull_flicker_t += dt
+        # Keep hull_pct in sync from ship if available
+        if self._ship is not None:
+            self._hull_pct = getattr(self._ship, 'hull_pct', self._hull_pct)
+
         if self._state == "typing":
             self._type_t += dt
             n = int(self._type_t * 32)
@@ -246,8 +274,39 @@ class CockpitRenderer:
         port_y = _STRIP_TOP + 3
         pygame.draw.rect(surf, (5, 5, 13),
                          pygame.Rect(_PORT_X, port_y, _PORT_W, _PORT_H))
-        pygame.draw.rect(surf, S.AMBER_TERM,
+
+        # Hull-state ambient glow (Epic 7.1)
+        hp = self._hull_pct
+        if hp < 0.10:
+            # Panic: bright red persistent flicker
+            flicker = 0.5 + 0.5 * abs(math.sin(self._hull_flicker_t * 18.0))
+            glow_col = (int(180 * flicker), 0, 0)
+            glow_a   = int(120 * flicker)
+        elif hp < 0.30:
+            # Critical: red flicker
+            flicker = 0.5 + 0.5 * abs(math.sin(self._hull_flicker_t * 7.0))
+            glow_col = (int(140 * flicker), int(30 * flicker), 0)
+            glow_a   = int(80 * flicker)
+        elif hp < 0.60:
+            # Warning: orange pulse on damage, constant dim amber
+            base_a   = 40
+            extra_a  = int(60 * (self._dmg_scan_t / 0.6)) if self._dmg_scan_t > 0 else 0
+            glow_col = (200, 80, 0)
+            glow_a   = base_a + extra_a
+        else:
+            glow_col = (0, 0, 0)
+            glow_a   = 0
+
+        if glow_a > 0:
+            g = pygame.Surface((_PORT_W, _PORT_H), pygame.SRCALPHA)
+            g.fill((*glow_col, glow_a))
+            surf.blit(g, (_PORT_X, port_y))
+
+        # Border — red tinge at low hull
+        border_col = (220, 30, 30) if hp < 0.30 else S.AMBER_TERM
+        pygame.draw.rect(surf, border_col,
                          pygame.Rect(_PORT_X, port_y, _PORT_W, _PORT_H), 1)
+
         speaking = self._state in ("typing", "holding") and self._speaker == "BAX"
         self._draw_bax_figure(t, speaking)
 
@@ -258,10 +317,22 @@ class CockpitRenderer:
         # ---- Antenna ----
         pygame.draw.line(surf, S.GREY_DEAD, (cx-2, cy-19), (cx-12, cy-32), 2)
         pygame.draw.line(surf, S.GREY_DEAD, (cx-12, cy-32), (cx-7,  cy-40), 1)
-        tip_v   = 0.6 + 0.4 * abs(math.sin(t * 2.1)) if speaking else 0.25
-        tip_col = _hsv(0.11, 0.9, tip_v)
+        sparking = self._dmg_ant_t > 0 or self._hull_pct < 0.10
+        if sparking:
+            tip_v   = 0.8 + 0.2 * abs(math.sin(t * 18.0))
+            tip_col = (int(255 * tip_v), int(60 * tip_v), 0)
+            # Spark particles
+            import random as _r
+            rng = _r.Random(int(t * 30))
+            for _ in range(3):
+                sx = cx - 7 + rng.randint(-6, 6)
+                sy = cy - 41 + rng.randint(-6, 3)
+                pygame.draw.circle(surf, (255, 140, 0), (sx, sy), 1)
+        else:
+            tip_v   = 0.6 + 0.4 * abs(math.sin(t * 2.1)) if speaking else 0.25
+            tip_col = _hsv(0.11, 0.9, tip_v)
         pygame.draw.circle(surf, tip_col, (cx-7, cy-41), 3)
-        if speaking:
+        if speaking and not sparking:
             pygame.draw.circle(surf, (255, 255, 160), (cx-7, cy-41), 1)
 
         # ---- Head polygon (asymmetric) ----
@@ -286,8 +357,17 @@ class CockpitRenderer:
                              (ep[0]+2, cy), (ep[0]+5, cy), 1)
 
         # ---- CRT scan lines ----
+        scan_col = (18, 18, 28)
+        if self._dmg_scan_t > 0:
+            # Glitch: brighter, offset scanlines during damage reaction
+            glitch_pct = self._dmg_scan_t / 0.6
+            scan_col = (int(60 * glitch_pct), int(20 * glitch_pct), int(20 * glitch_pct))
         for sy in range(cy-17, cy+15, 3):
-            pygame.draw.line(surf, (18, 18, 28), (cx-25, sy), (cx+26, sy), 1)
+            pygame.draw.line(surf, scan_col, (cx-25, sy), (cx+26, sy), 1)
+        # Scanline tear during glitch
+        if self._dmg_scan_t > 0:
+            tear_y = cy - 10 + int(8 * math.sin(self._dmg_scan_t * 40))
+            pygame.draw.rect(surf, (180, 30, 10), (cx-25, tear_y, 52, 2))
 
         # ---- Brow ridge ----
         brow = [(cx-23, cy-12), (cx+22, cy-14), (cx+24, cy-9), (cx-21, cy-8)]
@@ -310,19 +390,27 @@ class CockpitRenderer:
         # ---- Eyes ----
         eye_l = (cx-10, cy-5)
         eye_r = (cx+12, cy-7)
+        panic_mode = self._hull_pct < 0.10
+        eyes_wide  = self._dmg_eyes_t > 0 or panic_mode
         if speaking:
             pygame.draw.circle(surf, (70, 44, 0), eye_l, 9)
             pygame.draw.circle(surf, (70, 44, 0), eye_r, 9)
             eye_col = (255, 205, 45)
+        elif eyes_wide:
+            # Wider eye glow on damage reaction
+            eye_col = (220, 80, 20) if self._hull_pct < 0.30 else (200, 140, 0)
+            pygame.draw.circle(surf, tuple(c // 4 for c in eye_col), eye_l, 10)
+            pygame.draw.circle(surf, tuple(c // 4 for c in eye_col), eye_r, 10)
         else:
             eye_col = (85, 55, 4)
-        pygame.draw.circle(surf, eye_col, eye_l, 5)
-        pygame.draw.circle(surf, eye_col, eye_r, 5)
+        eye_r_px = 7 if eyes_wide else 5
+        pygame.draw.circle(surf, eye_col, eye_l, eye_r_px)
+        pygame.draw.circle(surf, eye_col, eye_r, eye_r_px)
         pygame.draw.circle(surf, (0, 0, 0), eye_l, 2)
         pygame.draw.circle(surf, (0, 0, 0), eye_r, 2)
         # Eye socket shadow ring
-        pygame.draw.circle(surf, (30, 22, 4), eye_l, 7, 1)
-        pygame.draw.circle(surf, (30, 22, 4), eye_r, 7, 1)
+        pygame.draw.circle(surf, (30, 22, 4), eye_l, eye_r_px + 2, 1)
+        pygame.draw.circle(surf, (30, 22, 4), eye_r, eye_r_px + 2, 1)
 
         # ---- Damage scratches ----
         pygame.draw.line(surf, (55, 42, 62), (cx+6, cy-9),  (cx+16, cy+3),  1)
@@ -335,6 +423,12 @@ class CockpitRenderer:
             for mx in range(cx-14, cx+15, 2):
                 wave = int(math.sin(mx * 0.55 + t * 14) * 2)
                 pygame.draw.circle(surf, S.AMBER_TERM, (mx, mouth_y + wave), 1)
+        elif panic_mode:
+            # Open mouth — panic expression
+            pygame.draw.ellipse(surf, (60, 20, 20),
+                                pygame.Rect(cx-10, mouth_y - 2, 20, 10))
+            pygame.draw.ellipse(surf, (180, 40, 40),
+                                pygame.Rect(cx-10, mouth_y - 2, 20, 10), 1)
         else:
             pygame.draw.line(surf, S.GREY_DEAD, (cx-14, mouth_y), (cx+14, mouth_y), 1)
 
