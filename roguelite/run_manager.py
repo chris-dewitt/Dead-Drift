@@ -160,6 +160,7 @@ class RunManager:
         # Toll checkpoint state
         self._toll_pending    = False
         self._toll_t          = 10.0   # trigger at 10s into sector
+        self._well_hit_times: dict[int, float] = {}  # per-well core damage cooldown
         self._active_terminal: Terminal | None = None
         self._intercepting_barge = None   # set when a barge opens a mid-flight comm
         self._kress_called_this_sector = False
@@ -236,6 +237,7 @@ class RunManager:
         self._sector_snaps       = 0
         self._sector_credits     = 0
         self._sector_start_hull  = ship.hull if ship else S.HULL_MAX
+        self._well_hit_times.clear()
         self._flash_t            = 0.0
         self._last_stats         = None
         self._spawn_queue.clear()
@@ -305,6 +307,18 @@ class RunManager:
 
         self._sector.gravity.apply_all(self._ship.body)
         self._sector.gravity.update(dt)   # three-body well drift
+
+        # Gravity-well core — capped hull damage (matches play.py demo)
+        if self._ship.is_alive:
+            well = self._sector.gravity.check_collisions(self._ship.body)
+            if well is not None:
+                well_id = id(well)
+                last = self._well_hit_times.get(well_id, -999.0)
+                if self._sector_timer - last >= 1.0:
+                    self._ship.take_damage(15.0, source="gravity_well")
+                    self._well_hit_times[well_id] = self._sector_timer
+                push = (self._ship.body.pos - well.pos).normalized() * 200.0
+                self._ship.body.apply_impulse(push)
 
         if self._tutorial is not None:
             self._tutorial.update(dt, self)
@@ -563,9 +577,47 @@ class RunManager:
         return self._active_terminal
 
     def open_barge_terminal(self, barge) -> Terminal:
-        """Mid-flight intercept: Gary opens a comm, no sector advance on close."""
+        """Mid-flight intercept: repo comm — Gary is common but not guaranteed."""
         self._intercepting_barge = barge
-        return self.open_terminal("gary", intercepted=True)
+        pool = ["union_dispatcher", "synthetic_droid"]
+        if self._sector_index >= 2:
+            pool.append("insurance_adjuster")
+        if self._sector_index >= 4:
+            pool.append("pirate")
+        # Gary ~30%; other pool members share the rest
+        if self._sector_index >= 1 and random.random() < 0.30:
+            npc_type = "gary"
+        else:
+            npc_type = random.choice(pool)
+        if npc_type == "gary":
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "Gary Pruitt on the comm. Repo intercept. Same tricks — deal, bribe, sympathy.",
+                "Local 404 hail. It's Gary again. Talk 'im down before the 'arpoon.",
+                "Barge is hailing. Gary Pruitt. Outstanding fees. You know the script.",
+            ]))
+            return self.open_terminal("gary", intercepted=True)
+        framing = {
+            "union_dispatcher": [
+                "Union dispatcher on the barge channel. Paperwork angle might work.",
+                "That's Central Dispatch, not Gary for once. Forms, grievance, or break-room chat.",
+            ],
+            "synthetic_droid": [
+                "TK-9 answering the barge relay. Paradox or SQL — same as the gates.",
+                "Droid on the intercept comm. Logic exploits only. No charm.",
+            ],
+            "insurance_adjuster": [
+                "Insurance adjuster piggybacking the repo signal. Claims and forms.",
+                "Morwenna on the line via the barge relay. Legal pressure might work.",
+            ],
+            "pirate": [
+                "That's NOT Gary — pirate relay on the barge frequency. Talk weird.",
+                "Pirate cuttin' through the repo comm. No Article 7 here.",
+            ],
+        }
+        bus.emit(EVT_BAX_SPEAK, line=random.choice(
+            framing.get(npc_type, ["Intercept comm open. Type smart."])
+        ))
+        return self.open_terminal(npc_type)
 
     def _open_jump_terminal(self):
         # Final sector: chapter climax — face the NPC tied to the cargo
@@ -584,7 +636,9 @@ class RunManager:
             if self._sector_index >= 2:
                 pool.extend(["sandra", "pirate"])
             if self._sector_index >= 3:
-                pool.extend(["insurance_adjuster", "gary"])
+                pool.append("insurance_adjuster")
+            if self._sector_index >= 5:
+                pool.append("gary")
             npc_type = random.choice(pool)
             framing = {
                 "sandra": [
@@ -669,10 +723,13 @@ class RunManager:
         bribe_paid = npc.bribe_cost() if npc else 0
         if bribe_paid > 0:
             self.meta.add_debt(bribe_paid)
+            self._sector_credits = max(0, self._sector_credits - bribe_paid)
+            self._run_debt_reduced = max(0, self._run_debt_reduced - bribe_paid)
             bus.emit(EVT_BAX_SPEAK, line=random.choice([
-                f"Bribe accepted. {bribe_paid:,} credits gone. Not the cleanest exit.",
-                f"That cost us {bribe_paid:,}. Could've been worse. Could've been impound.",
-                f"Paid {bribe_paid:,} to get through. Technically negotiation. Technically.",
+                f"−{bribe_paid:,} credits out the airlock. Debt just went UP. "
+                f"Not the cleanest exit, Boss.",
+                f"Paid {bribe_paid:,} to walk. That's off this sector AND added to the tab.",
+                f"Bribe logged: {bribe_paid:,} credits. I felt that one in the ledger.",
             ]))
 
         # Toll authority IMPOUND: he actually calls Local 404 — spawn a chaser
@@ -865,6 +922,7 @@ class RunManager:
         self._flare_t      = 0.0
         self._toll_pending = False
         self._toll_t       = 10.0
+        self._well_hit_times.clear()
 
         theme = getattr(self._sector, "theme", "")
 
@@ -973,10 +1031,18 @@ class RunManager:
     def _open_toll_terminal(self):
         from terminal.npc_logic import make_npc
         from terminal.terminal import Terminal
+        bus.emit(EVT_BAX_SPEAK, line=random.choice([
+            "Toll checkpoint live on the comm. Fifteen 'undred — pay, paperwork, or Union gripe.",
+            "Transit Authority hailing. Gate Seven. Pay up or talk 'im down.",
+            "Checkpoint booth on channel. 'E hates Local 404. Might work in our favour.",
+        ]))
         npc = make_npc("toll_authority",
                        vocabulary_vault=getattr(self, "_vault", None),
-                       run_context={})
-        self._active_terminal = Terminal(npc, blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset())
+                       run_context=self._build_run_context())
+        self._active_terminal = Terminal(
+            npc,
+            blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset(),
+        )
 
     def _spawn_barge(self, immediate_chase: bool = False):
         from antagonists.repo_barge import BargeState

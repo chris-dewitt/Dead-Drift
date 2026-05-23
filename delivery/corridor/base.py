@@ -422,10 +422,13 @@ class Corridor:
         prog = self._px / max(1, room.length)
         if not self._mid1_spoken and prog > 0.33:
             self._mid1_spoken = True
+            bus.emit(EVT_BAX_SPEAK, line="Corridor's long. Keep movin'. D/→ to run.")
         if not self._mid2_spoken and prog > 0.66:
             self._mid2_spoken = True
+            bus.emit(EVT_BAX_SPEAK, line="Nearly there. Watch the beams. Jump with W.")
         if not self._near_end_spoken and self._px > room.length - 400:
             self._near_end_spoken = True
+            bus.emit(EVT_BAX_SPEAK, line="Drop-off's ahead. Don't faceplant at the finish.")
 
         # Room end
         if self._px >= room.length:

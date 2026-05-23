@@ -35,6 +35,7 @@ _SCAN_VOCAB: dict[str, dict[str, str]] = {
         "bribe": "BRIBE", "pay": "BRIBE", "credits": "BRIBE", "money": "BRIBE",
         "deal": "DEAL", "negotiate": "DEAL", "reduce": "DEAL", "settlement": "DEAL",
         "please": "SYMPATHY", "family": "SYMPATHY", "desperate": "SYMPATHY",
+        "sorry": "SYMPATHY", "begging": "SYMPATHY", "rough": "SYMPATHY",
         "overtime": "OVERTIME", "union": "UNION", "quota": "QUOTA",
     },
     "TK-9": {

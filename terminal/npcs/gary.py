@@ -52,6 +52,7 @@ class Gary(BaseNPC):
         "survive", "struggling", "starving", "no choice", "last run",
         "lost everything", "dying", "broke", "nothing left", "help me",
         "can't afford", "cannot afford", "just let me", "i'm begging", "begging",
+        "sorry", "apolog", "rough", "hard time", "going through", "need this",
     ]
     _BIG_AMOUNTS = [
         "five thousand", "ten thousand", "fifteen thousand", "twenty thousand",
@@ -252,7 +253,12 @@ class Gary(BaseNPC):
             elif self._bribe_attempts >= 3:
                 self.disposition += 1
                 if self.disposition >= 3:
-                    self._bribe_paid = parsed.amount if parsed.amount else 1000
+                    self._bribe_paid = max(
+                        3000,
+                        parsed.amount if parsed.amount else 3000,
+                    )
+                    self._current_path = "BRIBE (3k+)"
+                    bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="bribe")
                     return NPCOutcome.RELEASE, (
                         "Alright, alright. You know what, I'm tired. "
                         "It's been six stops and none of 'em 'ave offered me anyfing. "
