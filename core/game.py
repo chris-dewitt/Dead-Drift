@@ -373,6 +373,16 @@ class Game:
         elif state == GameState.DECANTING:
             pass
 
+        # Always tick audio (xfade, band volumes, Bax voice) — not just in FLIGHT.
+        # In non-flight states use speed=0 so engine hum is silent.
+        if state != GameState.FLIGHT and self.audio is not None:
+            ship_speed = getattr(self.ship.body, 'speed', lambda: 0.0)() \
+                         if self.ship is not None else 0.0
+            self.audio.update(
+                ship_speed, dt,
+                hull_pct=self.ship.hull_pct if self.ship else 1.0,
+            )
+
     # ------------------------------------------------------------------
     def _render(self):
         self.screen.fill(S.VOID)
