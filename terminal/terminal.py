@@ -150,11 +150,13 @@ _OUTCOME_COLOR = {
     NPCOutcome.RELEASE: (28, 225, 106),
     NPCOutcome.IMPOUND: (215, 38, 38),
     NPCOutcome.EXPLOIT: (0, 210, 255),
+    "abort":            (255, 140, 0),
 }
 _OUTCOME_LABEL = {
     NPCOutcome.RELEASE: "NEGOTIATION SUCCESSFUL — VESSEL RELEASED",
     NPCOutcome.IMPOUND: "IMPOUND AUTHORIZED — DO NOT RESIST",
     NPCOutcome.EXPLOIT: "EXPLOIT CONFIRMED — SYSTEM COMPROMISED",
+    "abort":            "CONNECTION SEVERED — HULL INTEGRITY PENALTY",
 }
 
 
@@ -214,9 +216,9 @@ class Terminal:
         if self._done:
             return
         if event.key == pygame.K_ESCAPE:
-            self._push("SYSTEM", "[connection terminated by user]")
+            self._push("SYSTEM", "[connection severed — static burst through hull plating]")
             self._done    = True
-            self._outcome = NPCOutcome.RELEASE
+            self._outcome = "abort"
             bus.emit(EVT_TERMINAL_CLOSE, outcome=self._outcome)
         elif event.key == pygame.K_RETURN and self._input.strip():
             self._key_type    = "enter"

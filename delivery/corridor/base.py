@@ -274,8 +274,12 @@ class Corridor:
                 self._pvy      = JUMP_VY
                 self._grounded = False
                 bus.emit(EVT_CORRIDOR_JUMP)
-            elif self._on_ladder:
-                pass  # handled by held-key in update
+            elif self._on_ladder and event.key == pygame.K_SPACE:
+                # Jump off ladder mid-way
+                self._pvy       = JUMP_VY * 0.75
+                self._grounded  = False
+                self._on_ladder = False
+                bus.emit(EVT_CORRIDOR_JUMP)
         elif event.key in (pygame.K_s, pygame.K_DOWN):
             pass  # descend on ladder handled by held-key
 
@@ -321,8 +325,22 @@ class Corridor:
             if keys[pygame.K_DOWN] or keys[pygame.K_s]:
                 self._py  += CLIMB_SPD * dt
                 self._pvy  = 0.0
-            self._px    = ladder.x
-            self._grounded = False
+
+            # Dismount at top: step off onto the surface above the ladder
+            if self._py + PLAYER_H <= ladder.y_top:
+                self._py        = ladder.y_top - PLAYER_H
+                self._pvy       = 0.0
+                self._grounded  = True
+                self._on_ladder = False
+            # Dismount at bottom: drop to floor
+            elif self._py >= ladder.y_bot - PLAYER_H:
+                self._py        = float(FLOOR_Y - PLAYER_H)
+                self._pvy       = 0.0
+                self._grounded  = True
+                self._on_ladder = False
+            else:
+                self._px       = ladder.x
+                self._grounded = False
         else:
             # Branch choice at branch point
             if (room.branch_x is not None

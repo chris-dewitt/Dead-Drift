@@ -647,6 +647,22 @@ class RunManager:
         self._pending_advance = True
 
     def on_terminal_complete(self, outcome):
+        # ESC abort: static burst deals hull damage, no reward
+        if outcome == "abort":
+            if self._ship is not None:
+                self._ship.take_damage(20, source="terminal_abort")
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "You HUNG UP on a repo man. Their jammer just spiked our 'ull. Twenty points.",
+                "Static blowback from the cut. Hull's taken a hit. Next time, negotiate.",
+                "Rude. Also painful. Twenty hull gone from the signal blowback.",
+            ]))
+            self._active_terminal = None
+            if self._intercepting_barge is not None:
+                barge = self._intercepting_barge
+                self._intercepting_barge = None
+                barge.on_terminal_outcome("impound")
+            return
+
         # Deduct any bribe the player paid
         npc = self._active_terminal.npc if self._active_terminal else None
         bribe_paid = npc.bribe_cost() if npc else 0
