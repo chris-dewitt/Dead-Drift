@@ -11,7 +11,8 @@ import math
 import random
 import pygame
 
-from delivery.platformer import DeliveryRun, CORRIDOR_W, CORRIDOR_H
+from delivery.corridor import make_corridor
+from delivery.corridor.elements import CORRIDOR_W, CORRIDOR_H
 from config import settings as S
 from core.event_bus import bus, EVT_BAX_SPEAK
 
@@ -74,7 +75,7 @@ class DeliverySequence:
         self._land_score    = 0       # 0=rough, 1=ok, 2=smooth
 
         # Run state
-        self._run: DeliveryRun | None = None
+        self._run = None
         self._run_stars = 0
 
         # Result
@@ -380,7 +381,7 @@ class DeliverySequence:
             self._land_vy = 0.0
             self._t       = 0.0
             self._phase   = self.PHASE_RUN
-            self._run     = DeliveryRun()
+            self._run     = make_corridor(self.chapter)
 
     def _draw_land(self, surface: pygame.Surface, W: int, H: int):
         t = self._t
