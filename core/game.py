@@ -334,7 +334,23 @@ class Game:
                         self.run_mgr.on_terminal_complete(
                             self.run_mgr.active_terminal.outcome)
                     if self.states.state == GameState.TERMINAL:
-                        self._goto(GameState.FLIGHT)
+                        if self._delivery_pending:
+                            # Run just ended via terminal win — hold here for Bax line,
+                            # then go directly to DELIVERY without cutting to FLIGHT first.
+                            pass
+                        else:
+                            self._goto(GameState.FLIGHT)
+            # If delivery is pending while still in TERMINAL, run the countdown here
+            # so we never show the FLIGHT/space view after a terminal win
+            if self._delivery_pending and state == GameState.TERMINAL:
+                self._delivery_delay_t -= dt
+                self.bax.update(dt)
+                self.cockpit_renderer.update(dt)
+                if self._delivery_delay_t <= 0:
+                    self._delivery_pending = False
+                    self._delivery = DeliverySequence(self.meta,
+                                                      chapter=self._delivery_chapter)
+                    self._goto(GameState.DELIVERY)
 
         elif state == GameState.LOADOUT_DRAFT:
             if self.run_mgr.draft.is_confirmed():
