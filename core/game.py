@@ -946,6 +946,9 @@ class Game:
         # --- "Begin Run" pulsing prompt ---
         self._render_menu_begin_prompt(t)
 
+        # --- Cargo dossier cards (Epic 8.2) ---
+        self._render_menu_cargo_dossier(t)
+
         # --- Lore strap line (above bottom bar) ---
         font_lore = pygame.font.SysFont("monospace", 13)
         lore_lines = [
@@ -1100,6 +1103,70 @@ class Game:
             cs = font_c.render("// RUN COMPLETE //  DEBT REDUCED  //",
                                True, S.GREEN_TERM)
             self.screen.blit(cs, (cx - cs.get_width() // 2, py - 38))
+
+    # ------------------------------------------------------------------
+    def _render_menu_cargo_dossier(self, t: float):
+        """4 cargo chapter cards — completed = bright, unfinished = dimmed (Epic 8.2)."""
+        _CARGO_CARDS = [
+            (1, "CH.1  —  ACOUSTIC ARCHIVE",
+             "Illegal music library.",
+             "Proximity → signal static.",
+             (160, 80,  30), (220, 120, 40)),
+            (2, "CH.2  —  MYCORRHIZAL PAYLOAD",
+             "Psychoactive fungal spores.",
+             "Spore leak → controls invert.",
+             (40,  120, 200), (80,  200, 160)),
+            (3, "CH.3  —  THE PAPERWORK",
+             "Sentient bureaucratic forms.",
+             "Random HUD filing popups.",
+             (140, 160, 80), (180, 200, 100)),
+            (4, "CH.4  —  SCHRÖDINGER VIP",
+             "Passenger: alive or deceased.",
+             "Observation collapses payout.",
+             (200, 160, 40), (255, 210, 80)),
+        ]
+        completed = set(self.meta.chapters_completed)
+        card_w, card_h = 240, 80
+        gap  = 16
+        total_w = len(_CARGO_CARDS) * card_w + (len(_CARGO_CARDS) - 1) * gap
+        x0   = (S.SCREEN_W - total_w) // 2
+        cy   = S.SCREEN_H // 2 + 115   # below begin prompt
+
+        font_h  = pygame.font.SysFont("monospace", 10, bold=True)
+        font_sm = pygame.font.SysFont("monospace", 9)
+
+        for i, (chap, title, desc1, desc2, col, accent) in enumerate(_CARGO_CARDS):
+            cx_card = x0 + i * (card_w + gap)
+            done    = chap in completed
+            dim     = 1.0 if done else 0.35
+            pulse   = 0.8 + 0.2 * abs(math.sin(t * 2.0 + i)) if done else 0.5
+
+            bg_col  = tuple(int(c * dim * 0.25) for c in col)
+            bd_col  = tuple(int(c * dim * pulse) for c in accent)
+
+            pygame.draw.rect(self.screen, bg_col,
+                             pygame.Rect(cx_card, cy, card_w, card_h))
+            pygame.draw.rect(self.screen, bd_col,
+                             pygame.Rect(cx_card, cy, card_w, card_h), 1)
+
+            # Completion badge or dim lock
+            if done:
+                badge_col = tuple(int(c * pulse) for c in accent)
+                bs = font_h.render("✓ DELIVERED", True, badge_col)
+            else:
+                badge_col = tuple(int(c * dim) for c in accent)
+                bs = font_h.render("[ LOCKED ]", True, badge_col)
+            self.screen.blit(bs, (cx_card + 6, cy + 6))
+
+            # Title
+            ts = font_h.render(title, True, tuple(int(c * dim) for c in accent))
+            self.screen.blit(ts, (cx_card + 6, cy + 22))
+
+            # Description lines
+            for j, dline in enumerate((desc1, desc2)):
+                ds = font_sm.render(dline, True,
+                                    tuple(int(c * dim * 0.8) for c in accent))
+                self.screen.blit(ds, (cx_card + 6, cy + 40 + j * 14))
 
     # ------------------------------------------------------------------
     def _render_menu_propaganda(self, t: float):
