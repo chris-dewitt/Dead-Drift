@@ -1,12 +1,7 @@
 {
-  "debt": 352500,
-  "clone_count": 13,
+  "debt": 134500,
+  "clone_count": 4,
   "chapters_completed": [],
   "bax_level": 1,
-  "reputation": {
-    "gary": 0,
-    "tk9": 0,
-    "dispatcher": 0,
-    "blevins": -3
-  }
+  "reputation": {}
 }
