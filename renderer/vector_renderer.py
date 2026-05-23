@@ -1522,11 +1522,14 @@ class VectorRenderer:
             pygame.draw.ellipse(halo, (*halo_col, int(60 * halo_pulse)), (8, 5, 84, 60))
             self.surface.blit(halo, (bx - 50, by - 35))
 
-        # Hull body — filled dark with amber outline
+        # Hull body — filled dark with amber outline; white flash on bullet hit
         rect = pygame.Rect(bx-30, by-16, 60, 32)
-        pygame.draw.rect(self.surface, (16, 10, 0), rect)
+        hit_flash = getattr(barge, 'hit_flash_t', 0.0)
+        fill_col  = (180, 120, 40) if hit_flash > 0 else (16, 10, 0)
+        rim_col   = (255, 255, 200) if hit_flash > 0 else S.AMBER_TERM
+        pygame.draw.rect(self.surface, fill_col, rect)
         pygame.draw.rect(self.surface, (55, 35, 0), rect, 4)
-        pygame.draw.rect(self.surface, S.AMBER_TERM, rect, 2)
+        pygame.draw.rect(self.surface, rim_col, rect, 2)
 
         # Hazard stripes — angled diagonal warning bars on top
         for stripe_x in range(bx - 26, bx + 26, 6):

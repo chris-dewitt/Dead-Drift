@@ -438,7 +438,7 @@ class RunManager:
             for barge in self._barges:
                 if barge.is_destroyed:
                     continue
-                if (barge.pos - bullet.pos).length() < 26:
+                if (barge.pos - bullet.pos).length() < 32:
                     bullet.lifetime = -1
                     barge.take_hit()
                     break
