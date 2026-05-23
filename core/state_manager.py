@@ -12,6 +12,7 @@ class GameState(Enum):
     DELIVERY       = auto()   # end-of-run delivery sequence
     SHOP           = auto()   # mid-run black market between sectors
     INTERSTITIAL   = auto()   # between successful delivery and next chapter's loadout
+    PAUSED         = auto()   # gameplay frozen; overlay menu
 
 
 class StateManager:

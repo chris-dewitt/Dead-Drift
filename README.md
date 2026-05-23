@@ -12,9 +12,17 @@ A 2D Newtonian physics roguelite for PC. You are a space courier saddled with cr
 
 ```bash
 pip install pygame-ce numpy nltk
-python main.py        # full game
-python test_stage.py  # interactive stage launcher — boot into any screen
+python main.py        # full game (recommended)
+python test_stage.py  # dev only — jump to a specific screen/sector
 ```
+
+**Testing tips:** Use `python main.py` for the real flow (main menu → loadout → run). Use `test_stage.py` when you need to reproduce one screen without playing from the title. Campaign progress lives in `data/saves/` (three slots); your old `data/run_history.json` is migrated into slot 1 on first launch.
+
+**Save slots (main menu):** **RESUME RUN** when a mid-run checkpoint exists (`slot_XX_run.json`); otherwise **CONTINUE** starts a new contract on that campaign. **NEW GAME** / **LOAD GAME** manage the three campaign slots. Checkpoints autosave every **25 seconds** in flight and on sector/shop transitions.
+
+**Death:** Clone invoice screen → **ENTER** puts you back **in the same sector** (fresh hull, same cargo contract) — not the main menu.
+
+**Pause (in-run):** **P** (or **ESC** outside terminals). **SAVE & RETURN TO MENU** writes campaign + mid-run checkpoint.
 
 ---
 
@@ -42,7 +50,8 @@ python test_stage.py  # interactive stage launcher — boot into any screen
 | D / Right | Rotate CW |
 | Space | Fire gun |
 | J | Jump to next sector (after 20s timer) |
-| ESC | Abort terminal connection |
+| P | Pause (resume / save & menu) |
+| ESC | Pause in-flight; abort terminal connection while interrogating |
 
 ---
 

@@ -7,7 +7,7 @@ from core.event_bus import (
     EVT_HULL_DAMAGE, EVT_TETHER_HIT, EVT_TETHER_SNAP,
     EVT_GUN_FIRE, EVT_TERMINAL_OPEN, EVT_TERMINAL_CLOSE,
     EVT_SPORE_INVERTED, EVT_SHIP_DESTROYED, EVT_SLINGSHOT,
-    EVT_CANISTER_GRAB, EVT_BARGE_NEARBY, EVT_BAX_SPEAK,
+    EVT_CANISTER_GRAB, EVT_BARGE_NEARBY, EVT_BAX_SPEAK, EVT_COMMS_SPEAK,
     EVT_VOICE_CHAR, EVT_JUMP_READY, EVT_DEBT_DING,
     EVT_DELIVERY_STEP, EVT_DELIVERY_HIT, EVT_DELIVERY_DONE,
     EVT_SECTOR_CLEAR, EVT_RUN_START,
@@ -229,6 +229,12 @@ class AudioManager:
         self._bax_speak_t    = 0.0
         self._bax_speak_dur  = 0.0
         self._bax_blip_cd    = 0.0
+        # Duck music/stems while Bax or NPC speech is active
+        self._voice_duck         = 1.0
+        self._voice_duck_target  = 1.0
+        self._npc_speak_t        = 0.0
+        self._VOICE_DUCK_FLOOR   = 0.18   # music at ~18% during dialogue
+        self._VOICE_BLIP_VOL     = 0.88   # voice loud enough over bed
 
         # Bandstand channels
         self._scene: str = SCENE_MENU
@@ -488,6 +494,7 @@ class AudioManager:
         bus.subscribe(EVT_CANISTER_GRAB,  self._on_canister)
         bus.subscribe(EVT_BARGE_NEARBY,   self._on_barge_nearby)
         bus.subscribe(EVT_BAX_SPEAK,      self._on_bax_speak)
+        bus.subscribe(EVT_COMMS_SPEAK,    self._on_comms_speak)
         bus.subscribe(EVT_VOICE_CHAR,     self._on_voice_char)
         bus.subscribe(EVT_JUMP_READY,     self._on_jump_ready)
         bus.subscribe(EVT_DEBT_DING,      self._on_debt_ding)
@@ -513,6 +520,7 @@ class AudioManager:
             self._update_engine(speed)
             self._tick_licks(dt)
         self._tick_bax_voice(dt)
+        self._tick_voice_duck(dt)
         self._tick_music_xfade(dt)
         self._tick_band_volumes(dt)
         self._tick_guitar_phrases(dt)
@@ -709,8 +717,47 @@ class AudioManager:
         if changed:
             self._apply_band_volumes()
 
+    def _music_gain(self) -> float:
+        """Master scale for music/stems — reduced while voices speak."""
+        return self._master * self._voice_duck
+
+    def _tick_voice_duck(self, dt: float) -> None:
+        if self._npc_speak_t > 0:
+            self._npc_speak_t = max(0.0, self._npc_speak_t - dt)
+        if self._bax_speaking or self._npc_speak_t > 0:
+            self._voice_duck_target = self._VOICE_DUCK_FLOOR
+        else:
+            self._voice_duck_target = 1.0
+        rate = 7.0
+        if self._voice_duck < self._voice_duck_target:
+            self._voice_duck = min(self._voice_duck_target,
+                                   self._voice_duck + rate * dt)
+        elif self._voice_duck > self._voice_duck_target:
+            self._voice_duck = max(self._voice_duck_target,
+                                   self._voice_duck - rate * dt)
+        self._refresh_ducked_loops()
+
+    def _refresh_ducked_loops(self) -> None:
+        """Re-apply duck to channels not driven every frame by band mixer."""
+        m = self._music_gain()
+        if self._amb_ch and not self._in_terminal:
+            base = 0.20 if not self._in_terminal else 0.06
+            self._amb_ch.set_volume(m * (base / self._master) if self._master else 0)
+        if self._hum_ch:
+            self._hum_ch.set_volume(m * (0.038 / self._master) if self._master else 0)
+        if self._lick_ch and self._lick_ch.get_busy():
+            self._lick_ch.set_volume(m * (1.0 / self._master) if self._master else 0)
+        if self._gtr_ch and self._gtr_ch.get_busy():
+            vol = 0.55 if self._scene == SCENE_DELIVERY else 0.42
+            self._gtr_ch.set_volume(m * (vol / self._master) if self._master else 0)
+        if self._slide_ch and self._slide_ch.get_busy():
+            vol = 0.65 if self._scene == SCENE_DECANTING else 0.40
+            self._slide_ch.set_volume(m * (vol / self._master) if self._master else 0)
+        if self._barge_ch and self._barge_ch.get_busy():
+            self._barge_ch.set_volume(m * (0.28 / self._master) if self._master else 0)
+
     def _apply_band_volumes(self):
-        m = self._master
+        m = self._music_gain()
         g = self._chapter_stem_gates
         if self._drum_ch is not None:
             self._drum_ch.set_volume(m * self._vol_current["drum"] * g.get("drum", 1.0))
@@ -742,13 +789,14 @@ class AudioManager:
             return
         self._music_xfade = max(0.0, self._music_xfade - dt / self._music_xfade_dur)
         frac = 1.0 - self._music_xfade
-        gain = 0.18 if self._in_terminal else self._music_target_vol
+        gain = (0.18 if self._in_terminal else self._music_target_vol) * self._voice_duck
+        mg = self._master
         if self._music_active == 1:
-            self._music_b.set_volume(self._master * gain * frac)
-            self._music_a.set_volume(self._master * gain * (1.0 - frac))
+            self._music_b.set_volume(mg * gain * frac)
+            self._music_a.set_volume(mg * gain * (1.0 - frac))
         else:
-            self._music_a.set_volume(self._master * gain * frac)
-            self._music_b.set_volume(self._master * gain * (1.0 - frac))
+            self._music_a.set_volume(mg * gain * frac)
+            self._music_b.set_volume(mg * gain * (1.0 - frac))
         if self._music_xfade <= 0.0:
             (self._music_a if self._music_active == 1 else self._music_b).stop()
 
@@ -767,11 +815,12 @@ class AudioManager:
         if upper != tier:
             span  = max(1.0, _SPEED_BP[upper] - _SPEED_BP[tier])
             blend = min(1.0, (speed - _SPEED_BP[tier]) / span)
+        eng_m = self._music_gain()
         for i, ch in enumerate(self._eng_ch):
             if i == tier:
-                vol = self._master * 0.56 * (1.0 - blend)
+                vol = eng_m * 0.56 * (1.0 - blend)
             elif i == upper:
-                vol = self._master * 0.56 * blend
+                vol = eng_m * 0.56 * blend
             else:
                 vol = 0.0
             ch.set_volume(vol)
@@ -787,7 +836,7 @@ class AudioManager:
                 self._next_lick_mood = None
             else:
                 lick = random.choice(self._licks)
-            self._lick_ch.set_volume(self._master * 1.0)
+            self._lick_ch.set_volume(self._music_gain() * (1.0 / self._master) if self._master else 0)
             self._lick_ch.play(lick)
             if self._scene == SCENE_TERMINAL:
                 self._lick_cd = random.uniform(18.0, 32.0)
@@ -816,7 +865,7 @@ class AudioManager:
         if self._gtr_cd <= 0.0:
             snd = random.choice(self._guitar_phrases)
             vol = 0.55 if self._scene == SCENE_DELIVERY else 0.42
-            self._gtr_ch.set_volume(self._master * vol)
+            self._gtr_ch.set_volume(self._music_gain() * (vol / self._master) if self._master else 0)
             self._gtr_ch.play(snd)
             self._gtr_cd = random.uniform(lo, hi)
 
@@ -830,7 +879,7 @@ class AudioManager:
         if self._slide_cd <= 0.0:
             snd = random.choice(self._slide_notes)
             vol = 0.55 if self._scene == SCENE_DECANTING else 0.40
-            self._slide_ch.set_volume(self._master * vol)
+            self._slide_ch.set_volume(self._music_gain() * (vol / self._master) if self._master else 0)
             self._slide_ch.play(snd)
             self._slide_cd = random.uniform(lo, hi)
 
@@ -838,7 +887,7 @@ class AudioManager:
         """Fade barge motif drone in/out based on proximity."""
         if self._barge_ch is None:
             return
-        target_vol = self._master * 0.28 if self._barge_nearby else 0.0
+        target_vol = self._music_gain() * 0.28 if self._barge_nearby else 0.0
         cur = self._barge_ch.get_volume()
         step = 0.016 * 0.4   # ~2.5s fade
         if cur < target_vol:
@@ -1002,7 +1051,7 @@ class AudioManager:
         if not blips or channel is None:
             return
         snd = random.choice(blips)
-        channel.set_volume(self._master * 0.48)
+        channel.set_volume(self._master * self._VOICE_BLIP_VOL)
         channel.play(snd)
 
     # ------------------------------------------------------------------
@@ -1062,7 +1111,16 @@ class AudioManager:
         self._bax_speak_dur = len(line) / _BAX_CHARS_PER_SEC
         self._bax_blip_cd   = 0.0
 
+    def _on_comms_speak(self, speaker: str = "", line: str = "", **_):
+        """Duck music for radio/comms lines (Kress, Medi-Corp, etc.)."""
+        if line:
+            self._npc_speak_t = max(self._npc_speak_t, len(line) / 22.0)
+        sp = (speaker or "").strip().upper()
+        if sp and sp != "BAX":
+            self._play_voice_blip(speaker, self._npc_v_ch)
+
     def _on_voice_char(self, speaker: str = "", **_):
+        self._npc_speak_t = max(self._npc_speak_t, 0.55)
         self._play_voice_blip(speaker, self._npc_v_ch)
 
     def _on_jump_ready(self, **_):  self._play_sfx("jump", 0.82)

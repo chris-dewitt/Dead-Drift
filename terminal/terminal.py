@@ -5,6 +5,7 @@ import pygame
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import NLPParser
 from terminal.npc_portraits import draw_portrait
+from renderer.sci_fi_ui import draw_terminal_backdrop
 from core.event_bus import bus, EVT_TERMINAL_OPEN, EVT_TERMINAL_CLOSE, EVT_VOICE_CHAR
 from config import settings as S
 
@@ -385,13 +386,16 @@ class Terminal:
             for sy in range(0, H, 3):
                 pygame.draw.line(self._scan_surf, (0, 0, 0, 30), (0, sy), (W, sy))
 
-        # ── Background + outer border ─────────────────────────────────
-        surface.fill((2, 7, 2))
-        pygame.draw.rect(surface, (0, 118, 48), (2, 2, W - 4, H - 4), 1)
+        # ── Background + outer border (phosphor CRT) ─────────────────
+        surface.fill((6, 14, 10))
+        draw_terminal_backdrop(surface, t)
+        pygame.draw.rect(surface, (255, 160, 40), (0, 0, W, H), 3)
+        pygame.draw.rect(surface, (0, 200, 90), (4, 4, W - 8, H - 8), 1)
+        pygame.draw.rect(surface, (80, 40, 120), (6, 6, W - 12, H - 12), 1)
 
         # ── Header bar ────────────────────────────────────────────────
-        pygame.draw.rect(surface, (4, 20, 7), (0, 0, W, HDR_H))
-        pygame.draw.line(surface, (0, 140, 58), (0, HDR_H), (W, HDR_H), 1)
+        pygame.draw.rect(surface, (12, 32, 18), (0, 0, W, HDR_H))
+        pygame.draw.line(surface, (255, 180, 60), (0, HDR_H), (W, HDR_H), 2)
 
         ROW_Y = HDR_H // 2   # vertical centre of header = 30
 
@@ -481,8 +485,9 @@ class Terminal:
 
         # ── Portrait panel ────────────────────────────────────────────
         p_rect = pygame.Rect(M, HDR_H + 4, PNL_W - M - 4, PORT_H)
-        pygame.draw.rect(surface, (4, 12, 4), p_rect)
-        pygame.draw.rect(surface, (0, 80, 34), p_rect, 1)
+        pygame.draw.rect(surface, (8, 20, 12), p_rect)
+        pygame.draw.rect(surface, (255, 140, 50), p_rect, 2)
+        pygame.draw.rect(surface, (0, 220, 120), p_rect.inflate(-4, -4), 1)
         draw_portrait(surface, self.npc.name, p_rect, self.npc.disposition, t)
 
         if not hasattr(self, '_p_scan') or self._p_scan.get_size() != (p_rect.w, p_rect.h):

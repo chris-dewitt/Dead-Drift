@@ -5,6 +5,7 @@ import pygame
 from config import settings as S
 from antagonists.repo_barge import BargeState
 from antagonists.alien_ship import HULL_PTS as _ALIEN_HULL, INNER_PTS as _ALIEN_INNER
+from renderer.visual_fx import VisualFX
 from core.event_bus import (bus, EVT_SLINGSHOT, EVT_SCAN_PING,
                              EVT_TETHER_HIT, EVT_TETHER_SNAP,
                              EVT_MODULE_UNBOLTED, EVT_HULL_DAMAGE,
@@ -32,10 +33,11 @@ class VectorRenderer:
     """
 
     _STAR_SEED  = 7
-    _STAR_COUNT = 170
+    _STAR_COUNT = 320
 
     def __init__(self, surface: pygame.Surface):
         self.surface     = surface
+        self._vfx        = VisualFX()
         self._stars      = self._gen_stars()
         self._nebulae    = self._gen_nebulae()
         self._dust       = self._gen_dust()
@@ -155,7 +157,7 @@ class VectorRenderer:
         self._draw_dust(t)
         self._draw_planets(t)
         self._draw_stations(t)
-        self._draw_stars(t)
+        self._draw_stars(t, ship)
         self._update_shooting_stars(dt, t)
         self._draw_shooting_stars(t)
         self._draw_scan_pings(t)
@@ -183,6 +185,11 @@ class VectorRenderer:
         self._draw_cargo_overlays(ship, t)
         self._draw_warp_streak(dt)
         self._apply_screen_shake(dt)
+        self._vfx.apply_flight_grade(
+            self.surface, dt,
+            hull_pct=ship.hull_pct if ship else 1.0,
+            sector_intensity=self._sector_intensity,
+        )
 
     # ------------------------------------------------------------------  WARP STREAK
     def _draw_warp_streak(self, dt: float):
@@ -504,7 +511,7 @@ class VectorRenderer:
         self._draw_dust(t)
         self._draw_planets(t)
         self._draw_stations(t)
-        self._draw_stars(t)
+        self._draw_stars(t, None)
         # Single decorative well centred behind the title
         class _FW:
             pass
@@ -851,36 +858,47 @@ class VectorRenderer:
         for _ in range(self._STAR_COUNT):
             stars.append((
                 rng.randint(0, S.SCREEN_W - 1),
-                rng.randint(0, S.SCREEN_H - 1),
+                rng.randint(0, S.FLIGHT_H - 1),
                 rng.random(),              # lum
                 rng.random(),              # hue
                 rng.uniform(0.6, 2.5),     # twinkle speed
                 rng.random() * math.tau,   # twinkle phase
+                rng.choice((0, 0, 0, 1, 1, 2)),  # depth layer (parallax)
             ))
         return stars
 
-    def _draw_stars(self, t: float = 0.0):
+    def _draw_stars(self, t: float = 0.0, ship=None):
         surf = self.surface
-        for x, y, lum, hue, tw_speed, tw_phase in self._stars:
+        par_x = par_y = 0.0
+        if ship is not None:
+            par_x = -ship.pos.x * 0.018
+            par_y = -ship.pos.y * 0.018
+        for x, y, lum, hue, tw_speed, tw_phase, depth in self._stars:
+            layer_scale = (0.35, 0.65, 1.0)[depth]
+            sx = int((x + par_x * layer_scale)) % S.SCREEN_W
+            sy = int((y + par_y * layer_scale)) % S.FLIGHT_H
             twinkle = 0.5 + 0.5 * math.sin(t * tw_speed + tw_phase)
             if lum < 0.48:
-                v = int(lum * 40 * (0.7 + 0.3 * twinkle))
-                surf.set_at((x, y), (v, v, v + 9))
+                v = int(lum * 55 * (0.7 + 0.3 * twinkle) * layer_scale)
+                surf.set_at((sx, sy), (v, v, v + 12))
             elif lum < 0.80:
-                v = int((50 + lum * 65) * (0.75 + 0.25 * twinkle))
-                surf.set_at((x, y), (v - 12, v - 12, v))
+                v = int((50 + lum * 75) * (0.75 + 0.25 * twinkle) * layer_scale)
+                surf.set_at((sx, sy), (v - 12, v - 12, v + 8))
             elif lum < 0.93:
-                br = int(185 + 35 * twinkle)
-                pygame.draw.circle(surf, (br - 10, br - 10, br),
-                                   (x, y), 2 if twinkle > 0.85 else 1)
+                br = int(195 + 45 * twinkle)
+                pygame.draw.circle(surf, (br - 10, br - 8, br),
+                                   (sx, sy), 2 if twinkle > 0.85 else 1)
             else:
                 shifted_hue = (hue + self._sector_hue_shift) % 1.0
                 neon = _hsv(shifted_hue, 0.9, 1.0)
                 r = 2 if twinkle > 0.7 else 1
-                pygame.draw.circle(surf, neon, (x, y), r)
+                pygame.draw.circle(surf, neon, (sx, sy), r)
                 if twinkle > 0.88:
-                    pygame.draw.line(surf, neon, (x - 4, y), (x + 4, y), 1)
-                    pygame.draw.line(surf, neon, (x, y - 4), (x, y + 4), 1)
+                    pygame.draw.line(surf, neon, (sx - 5, sy), (sx + 5, sy), 1)
+                    pygame.draw.line(surf, neon, (sx, sy - 5), (sx, sy + 5), 1)
+                    glow = pygame.Surface((12, 12), pygame.SRCALPHA)
+                    pygame.draw.circle(glow, (*neon, 60), (6, 6), 5)
+                    surf.blit(glow, (sx - 6, sy - 6))
 
     # ------------------------------------------------------------------  SCAN PINGS
     def _draw_scan_pings(self, t: float):
@@ -913,6 +931,16 @@ class VectorRenderer:
         r      = well.radius
         drift  = (t * 0.07) % 1.0
         pulse  = math.sin(t * 1.4) * 4.5
+
+        # Soft core bloom
+        bloom = pygame.Surface((r * 10, r * 10), pygame.SRCALPHA)
+        for layer in range(5, 0, -1):
+            br = int(r * (0.5 + layer * 0.35))
+            hue = (drift + 0.35) % 1.0
+            col = _hsv(hue, 0.6, 0.35)
+            pygame.draw.circle(bloom, (*col, 12 + layer * 6), (r * 5, r * 5), br)
+        self.surface.blit(bloom, (cx - r * 5, cy - r * 5))
+        self._vfx.draw_pulsing_ring(self.surface, (cx, cy), int(r * 3.2), drift + 0.5, t)
 
         # 7 concentric rings, hue spread across 0.45 of wheel, width=2
         rings = [

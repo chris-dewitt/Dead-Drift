@@ -10,6 +10,8 @@ import math
 import random
 import pygame
 
+from renderer.sci_fi_ui import draw_courier_sprite
+
 from delivery.corridor.elements import (
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H, PLAYER_W,
     Platform, MovingPlatform, CollapsingPlatform, Ladder,
@@ -457,8 +459,13 @@ class Corridor:
                          (0, CEIL_Y), (CORRIDOR_W, CEIL_Y), 2)
         pygame.draw.rect(surf, pal.get("floor_fill", (18, 30, 18)),
                          (0, FLOOR_Y, CORRIDOR_W, CORRIDOR_H - FLOOR_Y))
+        brick = pal.get("brick", (100, 50, 20))
+        for tx in range(-16, CORRIDOR_W + 16, 16):
+            sx = tx - int(self._cam_x * 0.3) % 16
+            pygame.draw.rect(surf, brick, (sx, FLOOR_Y + 2, 14, 8))
+            pygame.draw.rect(surf, pal.get("brick_hi", brick), (sx, FLOOR_Y + 2, 14, 3))
         pygame.draw.line(surf, pal.get("floor_line", (0, 140, 60)),
-                         (0, FLOOR_Y), (CORRIDOR_W, FLOOR_Y), 2)
+                         (0, FLOOR_Y), (CORRIDOR_W, FLOOR_Y), 3)
 
         # Elements
         for el in room.elements:
@@ -679,42 +686,10 @@ class Corridor:
         inv_glow = self._invert_t > 0
 
         if not stun_fls:
-            body_col = (0, 180, 255) if not self._grounded else \
-                       (0, 200, 255) if inv_glow else (0, 210, 100)
-            # Body
-            pygame.draw.rect(surf, body_col,
-                             (px - PLAYER_W // 2, py, PLAYER_W, PLAYER_H))
-            pygame.draw.rect(surf, (0, 255, 140),
-                             (px - PLAYER_W // 2, py, PLAYER_W, PLAYER_H), 1)
-            # Head
-            pygame.draw.rect(surf, (0, 190, 90),
-                             (px - 7, py - 12, 14, 12))
-            pygame.draw.rect(surf, (0, 240, 120),
-                             (px - 7, py - 12, 14, 12), 1)
-            # Visor
-            visor_col = (200, 100, 255) if inv_glow else (0, 150, 220)
-            pygame.draw.rect(surf, visor_col, (px - 4, py - 10, 8, 4))
-            # Cargo on back
+            draw_courier_sprite(surf, px, py - 8, t,
+                                inv=inv_glow, grounded=self._grounded)
             self._draw_cargo_silhouette(surf, px, py)
-            # Legs
-            if self._grounded:
-                lp = t * 8.0
-                l1 = int(6 * math.sin(lp))
-                l2 = int(6 * math.sin(lp + math.pi))
-                pygame.draw.line(surf, (0, 160, 70),
-                                 (px - 4, py + PLAYER_H),
-                                 (px - 4, py + PLAYER_H + 10 + l1), 2)
-                pygame.draw.line(surf, (0, 160, 70),
-                                 (px + 4, py + PLAYER_H),
-                                 (px + 4, py + PLAYER_H + 10 + l2), 2)
-            elif self._on_ladder:
-                pygame.draw.line(surf, (0, 160, 70),
-                                 (px - 4, py + PLAYER_H),
-                                 (px - 6, py + PLAYER_H + 10), 2)
-                pygame.draw.line(surf, (0, 160, 70),
-                                 (px + 4, py + PLAYER_H),
-                                 (px + 6, py + PLAYER_H + 10), 2)
-            else:
+            if not self._grounded and not self._on_ladder:
                 pygame.draw.line(surf, (0, 160, 70),
                                  (px - 4, py + PLAYER_H),
                                  (px - 8, py + PLAYER_H + 8), 2)

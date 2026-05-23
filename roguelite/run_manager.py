@@ -1,6 +1,8 @@
 from __future__ import annotations
 import random
+import secrets
 import pygame
+from physics.body import RigidBody2D, Vec2
 from roguelite.procedural import (generate_sector, SectorLayout,
                                    THEME_WRECKAGE_BELT, THEME_INDUSTRIAL_GRAVEYARD,
                                    THEME_JUNK_BELT, THEME_MINE_STRIP,
@@ -208,6 +210,8 @@ class RunManager:
         self._sector_start_hull = S.HULL_MAX
         self._flash_t           = 0.0
         self._last_stats: dict | None = None
+        self._run_seed          = 0
+        self._frame_name        = ""
 
         bus.subscribe(EVT_CANISTER_GRAB, self._on_canister_grab)
         bus.subscribe(EVT_TETHER_SNAP,   self._on_tether_snap)
@@ -216,6 +220,8 @@ class RunManager:
     # ------------------------------------------------------------------
     def start_run(self, ship):
         bus.emit(EVT_RUN_START)
+        self._run_seed = secrets.randbelow(2 ** 31)
+        self._frame_name = ""
         self._sector_index = 0
         self._barges.clear()
         self._debris.clear()
@@ -251,6 +257,7 @@ class RunManager:
         frame  = self.draft.selected_frame
         module = self.draft.selected_module
         cargo  = self.draft.selected_cargo
+        self._frame_name = frame.get("name", "")
 
         ship.hull       = min(S.HULL_MAX, S.HULL_MAX + frame.get("hull_bonus", 0))
         ship.body.mass  = S.SHIP_MASS * frame.get("mass_mod", 1.0)
@@ -258,8 +265,9 @@ class RunManager:
         ship.cargo      = cargo
         self._ship      = ship
 
+        rng = random.Random(self._run_seed + self._sector_index * 997)
         self._sector    = generate_sector(self._sector_index, self._difficulty(),
-                                          chapter=self._current_chapter())
+                                          rng=rng, chapter=self._current_chapter())
         self._sector_start_hull = ship.hull
         self._spawn_sector_objects()
 
@@ -822,8 +830,9 @@ class RunManager:
         self._load_next_sector()
 
     def _load_next_sector(self):
+        rng = random.Random(self._run_seed + self._sector_index * 997)
         self._sector       = generate_sector(self._sector_index, self._difficulty(),
-                                             chapter=self._current_chapter())
+                                             rng=rng, chapter=self._current_chapter())
         self._sector_timer = 0.0
         self._jump_ready_fired = False
         self._barges.clear()
@@ -1137,3 +1146,55 @@ class RunManager:
         if hasattr(cargo, 'spore_level'):
             return float(cargo.spore_level)
         return 0.0
+
+    # ------------------------------------------------------------------
+    # Death respawn + sector restart (same run, fresh sector attempt)
+    def respawn_after_death(self, ship) -> None:
+        """After decanting: new clone, same contract, retry current sector."""
+        from ship.gun import Gun
+
+        ship._destroyed = False
+        ship.hull = S.HULL_MAX
+        ship.body = RigidBody2D(S.SCREEN_W / 2, S.SCREEN_H / 2, mass=ship.body.mass)
+        ship.body.angle = 270.0
+        ship.body.vel = Vec2()
+        ship.gun = Gun()
+        ship.controls_inverted = False
+        self._active_terminal = None
+        self._intercepting_barge = None
+        self._pending_advance = False
+        self._shower_rocks.clear()
+        self._restart_current_sector(ship)
+        bus.emit(EVT_BAX_SPEAK, line=random.choice([
+            "New body, same debt, same sector. Welcome back to work, Boss.",
+            "Clone's online. Sector's still hostile. Let's not die twice in a row.",
+            "Decant complete. They billed us AND kept the contract. Typical. Fly.",
+            "Fresh meat, old job. Hull's mint. Try not to spend it all at once.",
+        ]))
+        bus.emit(EVT_SECTOR_START,
+                 sector_num=self._sector_index + 1,
+                 cargo_type=type(ship.cargo).__name__ if ship.cargo else None,
+                 theme=getattr(self._sector, "theme", ""),
+                 sector_name=getattr(self._sector, "name", ""),
+                 formerly=getattr(self._sector, "formerly", ""))
+
+    def _restart_current_sector(self, ship) -> None:
+        """Reset sector timer and respawn hazards; keep sector index and loadout."""
+        rng = random.Random(self._run_seed + self._sector_index * 997)
+        self._sector = generate_sector(
+            self._sector_index, self._difficulty(),
+            rng=rng, chapter=self._current_chapter(),
+        )
+        self._sector_timer = 0.0
+        self._jump_ready_fired = False
+        self._kress_called_this_sector = False
+        self._barges.clear()
+        self._spawn_queue.clear()
+        self._sling_well_t.clear()
+        self._well_hit_times.clear()
+        self._sector_slingshots = 0
+        self._sector_snaps = 0
+        self._sector_credits = 0
+        self._sector_start_hull = ship.hull
+        self._ship = ship
+        self._spawn_sector_objects()
