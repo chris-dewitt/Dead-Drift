@@ -145,8 +145,9 @@ class Gary(BaseNPC):
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         raw = parsed.raw.lower()
 
-        # ARTICLE 7 EXPLOIT — specific, immediate
-        if "overtime" in raw and "article 7" in raw:
+        # ARTICLE 7 EXPLOIT — cite the Article 7 forced overtime clause
+        # Works with just "article 7" or the full phrase
+        if "article 7" in raw or ("overtime" in raw and "article" in raw):
             self._article7_hit = True
             self._current_path = "ARTICLE 7"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="overtime")
@@ -266,8 +267,9 @@ class Gary(BaseNPC):
                 "More persistent would 'elp.",
             ][min(self._bribe_attempts - 1, 2)]
 
-        # MANAGEMENT COMPLAINT
-        if (parsed.intent == "complain" or
+        # MANAGEMENT COMPLAINT — also triggers on "blevins" alone
+        if ("blevins" in raw or "district supervisor" in raw or
+                parsed.intent == "complain" or
                 any(w in raw for w in [
                     "union", "management", "supervisor", "quota", "overtime",
                     "unfair", "underpaid", "bureaucracy", "system",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 import math
+import random
 import pygame
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import NLPParser
@@ -150,11 +151,13 @@ _OUTCOME_COLOR = {
     NPCOutcome.RELEASE: (28, 225, 106),
     NPCOutcome.IMPOUND: (215, 38, 38),
     NPCOutcome.EXPLOIT: (0, 210, 255),
+    "abort":            (255, 140, 0),
 }
 _OUTCOME_LABEL = {
     NPCOutcome.RELEASE: "NEGOTIATION SUCCESSFUL — VESSEL RELEASED",
     NPCOutcome.IMPOUND: "IMPOUND AUTHORIZED — DO NOT RESIST",
     NPCOutcome.EXPLOIT: "EXPLOIT CONFIRMED — SYSTEM COMPROMISED",
+    "abort":            "CONNECTION SEVERED — HULL INTEGRITY PENALTY",
 }
 
 
@@ -172,12 +175,15 @@ class Terminal:
     - EXPLOIT outcome gets cyan aura; RELEASE gets gold.
     """
 
-    def __init__(self, npc: BaseNPC):
+    def __init__(self, npc: BaseNPC,
+                 blocked_paths: frozenset[str] = frozenset()):
         self.npc      = npc
         self._history: list[tuple[str, str]] = []
         self._input   = ""
         self._done    = False
         self._outcome = NPCOutcome.CONTINUE
+        self._blocked_paths   = blocked_paths
+        self._hardened_once   = False   # block fires at most once per terminal
 
         self._cursor_visible = True
         self._cursor_timer   = 0.0
@@ -214,9 +220,9 @@ class Terminal:
         if self._done:
             return
         if event.key == pygame.K_ESCAPE:
-            self._push("SYSTEM", "[connection terminated by user]")
+            self._push("SYSTEM", "[connection severed — static burst through hull plating]")
             self._done    = True
-            self._outcome = NPCOutcome.RELEASE
+            self._outcome = "abort"
             bus.emit(EVT_TERMINAL_CLOSE, outcome=self._outcome)
         elif event.key == pygame.K_RETURN and self._input.strip():
             self._key_type    = "enter"
@@ -242,6 +248,29 @@ class Terminal:
         disp_before = self.npc.disposition
         outcome, response = self.npc.respond(player_text)
         disp_after  = self.npc.disposition
+
+        # Path-hardening cooldown: same exploit approach in consecutive terminals
+        # delays the win by one attempt (approach still advances internally).
+        current_path = getattr(self.npc, '_current_path', '')
+        if (not self._hardened_once and
+                outcome in (NPCOutcome.RELEASE, NPCOutcome.EXPLOIT) and
+                current_path and current_path in self._blocked_paths):
+            self._hardened_once = True
+            outcome  = NPCOutcome.CONTINUE
+            response = (
+                random.choice([
+                    "...Wait. Doesn't this feel familiar? *checks file* "
+                    "You ran this same angle last intercept. "
+                    "System flagged it. "
+                    f"[{current_path}: hardened — try once more to push through]",
+                    "Hang on. *frowns* I've seen this approach before. "
+                    "Recent intel flag on your profile. "
+                    f"[{current_path}: approach flagged — one more attempt breaks through]",
+                    "Nice try. *pause* Actually, less nice than last time. "
+                    "Same tactic as the previous intercept. "
+                    f"[{current_path}: pattern recognised — override requires one more push]",
+                ])
+            )
 
         delta = disp_after - disp_before
         if delta != 0:
@@ -782,3 +811,10 @@ class Terminal:
     @property
     def outcome(self) -> str:
         return self._outcome
+
+    @property
+    def winning_path(self) -> str:
+        """The NPC's _current_path when the terminal closed with a win."""
+        if self._outcome in (NPCOutcome.RELEASE, NPCOutcome.EXPLOIT, "release", "exploit"):
+            return getattr(self.npc, '_current_path', '')
+        return ''

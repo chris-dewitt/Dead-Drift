@@ -753,6 +753,11 @@ class AudioManager:
             (self._music_a if self._music_active == 1 else self._music_b).stop()
 
     def _update_engine(self, speed: float):
+        # Silence engine when ship is not thrusting (delivery corridor, terminal, etc.)
+        if speed < 8.0:
+            for ch in self._eng_ch:
+                ch.set_volume(0.0)
+            return
         tier  = 0
         for i in range(_N_TIERS - 1):
             if speed >= _SPEED_BP[i]:

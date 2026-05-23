@@ -121,7 +121,7 @@ _INTENT_PATTERNS: list[tuple[str, list[str]]] = [
 ]
 
 _SQL_PATTERN = re.compile(
-    r"(?:^|\b)(DROP\s+TABLE|SELECT\s+\*|DELETE\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|TRUNCATE)(?=\s|$).*",
+    r"(?:^|\b)(DROP\s+TABLE|SELECT\s+[\*\w]|DELETE\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|TRUNCATE)(?=[\s;.,)]|$).*",
     re.IGNORECASE,
 )
 

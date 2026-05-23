@@ -49,9 +49,9 @@ CURSOR_BLINK_MS   = 530
 TYPEWRITER_SPEED  = 44.0          # chars/sec for NPC dialogue reveal
 
 # --- MycoShroom (Ch.2 cargo) ---
-SPORE_INTERVAL_MIN = 13.0          # seconds between inversion triggers
-SPORE_INTERVAL_MAX = 25.0
-SPORE_DURATION     = 4.0           # seconds controls are inverted
+SPORE_INTERVAL_MIN = 22.0          # seconds between inversion triggers
+SPORE_INTERVAL_MAX = 38.0
+SPORE_DURATION     = 3.0           # seconds controls are inverted
 
 # --- Roguelite ---
 SECTORS_PER_RUN   = 5             # the 5-sector sprint

@@ -60,6 +60,7 @@ class RepoBarge:
         self._disruption_hits = 0    # bullet hits since last disruption reset
         self._torch_warned   = False  # track if torch_active event was emitted
         self._aim_t          = 0.0    # countdown while in AIM state
+        self.hit_flash_t     = 0.0   # > 0 when recently hit (for renderer)
 
     # ------------------------------------------------------------------
     def update(self, dt: float):
@@ -67,6 +68,7 @@ class RepoBarge:
             return
 
         self._intercept_cd = max(0.0, self._intercept_cd - dt)
+        self.hit_flash_t   = max(0.0, self.hit_flash_t - dt)
 
         ship = self._get_ship()
         if ship is None:
@@ -188,9 +190,10 @@ class RepoBarge:
 
     # ------------------------------------------------------------------
     def take_hit(self):
-        """Called when a player bullet connects. Three hits forces a retreat."""
+        """Called when a player bullet connects. Two hits force a retreat."""
         if self.state == BargeState.RETREAT:
             return
+        self.hit_flash_t = 0.25
         self._disruption_hits += 1
         if self._disruption_hits >= self.DISRUPTION_HITS:
             self._disruption_hits = 0
@@ -200,10 +203,18 @@ class RepoBarge:
                 self._tether.active = False
                 self._tether = None
             bus.emit(EVT_BAX_SPEAK, line=random.choice([
-                "THREE HITS. They're pullin' back! Move it!",
-                "Disrupted their nav! You've got eleven seconds — GO!",
+                "Nice shootin'! They're pullin' back! Move it!",
+                "Disrupted their nav! You've got twenty seconds — GO!",
                 "Ha! Union property, dented. Get out of 'ere!",
                 "Their instruments are screamin'. Leg it!",
+                "Direct hit! Barge is breaking off — window's open!",
+            ]))
+        else:
+            # First hit — immediate audio feedback
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "Hit! Keep goin'! One more and they'll back off!",
+                "Round connected! They felt that — one more!",
+                "Good hit! Their shields are rattlin'!",
             ]))
 
     def take_damage(self, amount: float):

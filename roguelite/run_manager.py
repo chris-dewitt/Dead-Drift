@@ -185,6 +185,7 @@ class RunManager:
 
         self._pending_advance  = False
         self._jump_ready_fired = False   # prevents duplicate jump-ready sound per sector
+        self._last_winning_path: str = ""  # path that won the previous terminal
         self._run_debt_reduced = 0   # credits recovered this run (shown in HUD)
         self._run_snaps        = 0   # tether snaps this entire run
         self._run_slingshots   = 0   # slingshots this entire run
@@ -437,7 +438,7 @@ class RunManager:
             for barge in self._barges:
                 if barge.is_destroyed:
                     continue
-                if (barge.pos - bullet.pos).length() < 26:
+                if (barge.pos - bullet.pos).length() < 32:
                     bullet.lifetime = -1
                     barge.take_hit()
                     break
@@ -558,7 +559,7 @@ class RunManager:
     def open_terminal(self, npc_type: str, **npc_kwargs) -> Terminal:
         npc_kwargs.setdefault("run_context", self._build_run_context())
         npc = make_npc(npc_type, **npc_kwargs)
-        self._active_terminal = Terminal(npc)
+        self._active_terminal = Terminal(npc, blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset())
         return self._active_terminal
 
     def open_barge_terminal(self, barge) -> Terminal:
@@ -647,6 +648,22 @@ class RunManager:
         self._pending_advance = True
 
     def on_terminal_complete(self, outcome):
+        # ESC abort: static burst deals hull damage, no reward
+        if outcome == "abort":
+            if self._ship is not None:
+                self._ship.take_damage(20, source="terminal_abort")
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "You HUNG UP on a repo man. Their jammer just spiked our 'ull. Twenty points.",
+                "Static blowback from the cut. Hull's taken a hit. Next time, negotiate.",
+                "Rude. Also painful. Twenty hull gone from the signal blowback.",
+            ]))
+            self._active_terminal = None
+            if self._intercepting_barge is not None:
+                barge = self._intercepting_barge
+                self._intercepting_barge = None
+                barge.on_terminal_outcome("impound")
+            return
+
         # Deduct any bribe the player paid
         npc = self._active_terminal.npc if self._active_terminal else None
         bribe_paid = npc.bribe_cost() if npc else 0
@@ -666,6 +683,12 @@ class RunManager:
                 "Toll bloke flagged us. Barge incoming. Brilliant. Just brilliant.",
                 "Local 404 is en route. Should've paid. Or not been so polite.",
             ]))
+
+        # Track winning path for cross-terminal cooldown
+        if outcome in ("exploit", "release") and npc is not None:
+            self._last_winning_path = getattr(npc, '_current_path', '')
+        elif outcome == "impound":
+            self._last_winning_path = ""  # reset on loss
 
         # Grant debt reduction based on how the negotiation went
         if outcome == "exploit":
@@ -953,7 +976,7 @@ class RunManager:
         npc = make_npc("toll_authority",
                        vocabulary_vault=getattr(self, "_vault", None),
                        run_context={})
-        self._active_terminal = Terminal(npc)
+        self._active_terminal = Terminal(npc, blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset())
 
     def _spawn_barge(self, immediate_chase: bool = False):
         from antagonists.repo_barge import BargeState
