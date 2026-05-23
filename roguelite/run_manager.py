@@ -975,3 +975,31 @@ class RunManager:
     @property
     def jump_cooldown(self) -> float:
         return max(0.0, self._sector_dur - self._sector_timer)
+
+    def barge_threat_level(self) -> float:
+        """0..1 scalar for AudioManager flight_pressure. 1.0 when tethered."""
+        if not self._barges or self._ship is None:
+            return 0.0
+        from config import settings as S
+        min_dist = min(
+            (b.pos - self._ship.pos).length() for b in self._barges
+        )
+        proximity_range = getattr(S, 'BARGE_PROXIMITY_RANGE', 320.0)
+        # 1.0 if any barge has active tether; else scale by inverse proximity
+        for b in self._barges:
+            if getattr(b, '_tether', None) and getattr(b._tether, 'active', False):
+                return 1.0
+        return max(0.0, 1.0 - min_dist / (proximity_range * 2.0))
+
+    def cargo_alarm_level(self) -> float:
+        """0..1 chapter-specific cargo stress level for flight_pressure."""
+        if self._ship is None or self._ship.cargo is None:
+            return 0.0
+        cargo = self._ship.cargo
+        # AcousticArchive: proximity to barge degrades audio
+        if hasattr(cargo, 'degradation'):
+            return float(cargo.degradation)
+        # MycoShroom: spore level
+        if hasattr(cargo, 'spore_level'):
+            return float(cargo.spore_level)
+        return 0.0

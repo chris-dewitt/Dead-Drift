@@ -52,12 +52,20 @@ def _adsr(wave: np.ndarray, attack: float, decay: float,
 # ---------------------------------------------------------------------------
 # Engine drones — 5 speed tiers, space-blues character
 
-def engine_drone(tier: int, duration: float = 3.0) -> pygame.mixer.Sound:
+def engine_drone(tier: int, duration: float = 3.0,
+                 root_freq: float | None = None) -> pygame.mixer.Sound:
     """
     Sawtooth fundamental + harmonic stack + slow LFO wail.
     tier 0 = idle drift, tier 4 = redline.
+    When root_freq is provided, each tier tunes to a chord tone of that key
+    so the accelerating ship plays the scale (player IS the bassist).
     """
-    base = [52.0, 64.0, 78.0, 96.0, 118.0][tier]
+    if root_freq is not None:
+        # Map tier → chord tone: root, b3, 4, 5, b7
+        chord_mults = [1.0, 1.1892, 1.3348, 1.4983, 1.7818]
+        base = root_freq * chord_mults[tier]
+    else:
+        base = [52.0, 64.0, 78.0, 96.0, 118.0][tier]
     t    = _t(duration)
     lfo  = 0.65 + 0.35 * np.sin(_2PI * 0.38 * t)   # 0.38 Hz blues moan
 
@@ -496,11 +504,14 @@ def slide_blues_note(start_freq: float, end_freq: float,
     return _to_sound(out.clip(-1.0, 1.0))
 
 
-# Chord interval ratios — minor 7 / minor 9
+# Chord interval ratios — minor 7 / minor 9 + modal variants
 _CHORD_RATIOS = {
-    "minor":  [1.0, 1.1892, 1.4983, 1.7818],            # 1, b3, 5, b7
-    "minor9": [1.0, 1.1892, 1.4983, 1.7818, 2.2449],    # 1, b3, 5, b7, 9
-    "minor7": [1.0, 1.1892, 1.4983, 1.7818],
+    "minor":   [1.0, 1.1892, 1.4983, 1.7818],           # 1, b3, 5, b7  (aeolian)
+    "minor9":  [1.0, 1.1892, 1.4983, 1.7818, 2.2449],   # 1, b3, 5, b7, 9
+    "minor7":  [1.0, 1.1892, 1.4983, 1.7818],
+    "dorian":  [1.0, 1.1892, 1.4983, 1.7818, 2.2449],   # 1, b3, 5, b7, 9  (dorian = minor+9)
+    "locrian": [1.0, 1.0595, 1.3348, 1.7818],           # 1, b2, b5, b7  (diminished)
+    "sus2":    [1.0, 1.1225, 1.4983, 1.7818],           # 1, 2, 5, b7   (never resolves)
 }
 
 
@@ -563,6 +574,149 @@ def gated_reverb_tail(duration: float = 0.4) -> pygame.mixer.Sound:
         if cut_end < n:
             env[cut_end:] = 0.0
     return _to_sound((noise * env).clip(-1.0, 1.0))
+
+
+def tape_hum_bed(duration: float = 8.0) -> pygame.mixer.Sound:
+    """
+    Subliminal glue layer: pink noise band 80Hz-4kHz at -32 dBFS +
+    60 Hz mains hum + 7.5 ips tape-wow LFO modulation.
+    Plays under everything, every scene. Players hear its absence.
+    """
+    n = int(SAMPLE_RATE * duration)
+    t = np.linspace(0.0, duration, n, endpoint=False)
+
+    # Pink noise approximation: white noise shaped by 1/sqrt(f) via cumsum
+    white = np.random.uniform(-1.0, 1.0, n).astype(np.float32)
+    # 3-pole pink approximation
+    b0, b1, b2 = 0.0, 0.0, 0.0
+    pink = np.empty(n, dtype=np.float32)
+    for i in range(n):
+        w = white[i]
+        b0 = 0.99886 * b0 + w * 0.0555179
+        b1 = 0.99332 * b1 + w * 0.0750759
+        b2 = 0.96900 * b2 + w * 0.1538520
+        pink[i] = (b0 + b1 + b2 + w * 0.5362) * 0.11
+
+    # Band-limit 80 Hz–4 kHz via crude FFT notch
+    spec  = np.fft.rfft(pink)
+    freqs = np.fft.rfftfreq(n, 1.0 / SAMPLE_RATE)
+    spec[(freqs < 80.0) | (freqs > 4000.0)] *= 0.05
+    pink = np.fft.irfft(spec, n).astype(np.float32)
+
+    # 60 Hz mains hum
+    hum = np.sin(_2PI * 60.0 * t).astype(np.float32) * 0.012
+
+    # Tape-wow: slow LFO amplitude modulation ~0.7 Hz (7.5 ips flutter)
+    wow_lfo = (0.88 + 0.12 * np.sin(_2PI * 0.72 * t)).astype(np.float32)
+
+    w = (pink * 0.055 + hum) * wow_lfo
+
+    # Seamless loop crossfade
+    fade = int(SAMPLE_RATE * 0.4)
+    if fade > 0 and fade * 2 < n:
+        w[:fade]  *= np.linspace(0.0, 1.0, fade)
+        w[-fade:] *= np.linspace(1.0, 0.0, fade)
+
+    return _to_sound(w.clip(-1.0, 1.0))
+
+
+def slingshot_stinger(duration: float = 1.5) -> pygame.mixer.Sound:
+    """
+    Reverse-cymbal swell for the slingshot musical event.
+    Noise burst with rising envelope (linspace 0→1) — sounds like a
+    reverse crash cymbal. Pitch-less texture, works in any key.
+    """
+    n = int(SAMPLE_RATE * duration)
+    t = np.linspace(0.0, duration, n, endpoint=False)
+
+    # Broadband noise
+    noise = np.random.uniform(-1.0, 1.0, n).astype(np.float32)
+    # High-pass character via double-diff
+    noise = np.diff(noise, prepend=noise[0])
+    noise = np.diff(noise, prepend=noise[0])
+
+    # Rising envelope (the "reverse" feel)
+    env = np.linspace(0.0, 1.0, n).astype(np.float32) ** 1.4
+    # Brief tail fade in last 8%
+    tail = int(n * 0.08)
+    if tail > 0:
+        env[-tail:] *= np.linspace(1.0, 0.0, tail)
+
+    # Add a pad swell — sine rising a perfect fifth
+    pad_freq = np.linspace(55.0, 82.4, n)   # A2 → E3 = perfect fifth
+    phase = np.cumsum(_2PI * pad_freq / SAMPLE_RATE)
+    pad = (np.sin(phase) * 0.28 + np.sin(phase * 1.5) * 0.14).astype(np.float32)
+    pad_env = np.linspace(0.0, 1.0, n).astype(np.float32) ** 2.0
+
+    w = noise * env * 0.45 + pad * pad_env
+    peak = float(np.max(np.abs(w)))
+    if peak > 0:
+        w = w / peak * 0.72
+    return _to_sound(w.clip(-1.0, 1.0))
+
+
+def barge_motif(duration: float = 4.0) -> pygame.mixer.Sound:
+    """
+    Threat motif: minor second interval (A2 + Bb2) on detuned harp.
+    Played at -6 cents flat (blue-collar signal). Loopable low drone.
+    Fades in/out for seamless looping.
+    """
+    from audio.blues_licks import _harp_note, _NOTES
+    n_a  = _harp_note(_NOTES['A2'] * 0.9965,  duration * 0.6, amp=0.55)  # A2 flat -6¢
+    gap  = np.zeros(int(SAMPLE_RATE * 0.08))
+    # Bb2 = A2 * 2^(1/12) ≈ 116.54 Hz, also slightly flat
+    bb2  = _NOTES['A2'] * (2.0 ** (1.0 / 12.0)) * 0.9965
+    n_bb = _harp_note(bb2, duration * 0.55, amp=0.45)
+
+    seg  = np.concatenate([n_a, gap, n_bb])
+    total = int(SAMPLE_RATE * duration)
+    w = np.zeros(total, dtype=np.float32)
+    seg_len = min(len(seg), total)
+    w[:seg_len] = seg[:seg_len].astype(np.float32)
+
+    # Seamless loop fade
+    fade = int(SAMPLE_RATE * 0.5)
+    if fade > 0 and fade * 2 < total:
+        w[:fade]  *= np.linspace(0.0, 1.0, fade)
+        w[-fade:] *= np.linspace(1.0, 0.0, fade)
+
+    return _to_sound(w.clip(-1.0, 1.0))
+
+
+def decanting_printer(n_clicks: int = 6) -> pygame.mixer.Sound:
+    """
+    Receipt printer SFX for the decanting death sequence.
+    Small soft kick + rapid high-frequency click train.
+    """
+    kick_dur = 0.04
+    n_kick = int(SAMPLE_RATE * kick_dur)
+    t_k = np.linspace(0.0, kick_dur, n_kick, endpoint=False)
+    kick = np.sin(_2PI * 180.0 * t_k) * np.exp(-t_k * 80.0) * 0.45
+
+    click_dur  = 0.008
+    click_gap  = 0.032
+    n_click    = int(SAMPLE_RATE * click_dur)
+    t_c        = np.linspace(0.0, click_dur, n_click, endpoint=False)
+    click_tone = (np.random.uniform(-1.0, 1.0, n_click) * 0.55
+                  + np.sin(_2PI * 3800.0 * t_c) * 0.30)
+    click_env  = np.exp(-t_c * 400.0)
+    click_snd  = click_tone * click_env
+
+    total_dur = kick_dur + 0.02 + n_clicks * (click_dur + click_gap)
+    total_n   = int(SAMPLE_RATE * total_dur)
+    w = np.zeros(total_n, dtype=np.float32)
+
+    # Place kick at start
+    w[:n_kick] = kick.astype(np.float32)
+
+    # Click train after short gap
+    offset = n_kick + int(SAMPLE_RATE * 0.02)
+    for i in range(n_clicks):
+        pos = offset + i * int(SAMPLE_RATE * (click_dur + click_gap))
+        end = min(pos + n_click, total_n)
+        w[pos:end] = (click_snd[:end - pos] * (0.9 - i * 0.08)).astype(np.float32)
+
+    return _to_sound(w.clip(-1.0, 1.0))
 
 
 def terminal_drone(duration: float = 6.0) -> pygame.mixer.Sound:

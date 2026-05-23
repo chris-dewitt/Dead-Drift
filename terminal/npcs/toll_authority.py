@@ -157,3 +157,9 @@ class TollAuthority(BaseNPC):
     @property
     def barge_called(self) -> bool:
         return self._barge_called
+
+    def exploits(self) -> dict[str, str]:
+        return {
+            "PAID_TOLL":      "Offer 1500+ credits to clear the gate",
+            "UNION_SYMPATHY": "Gripe about Local 404 — he hates them too",
+        }
