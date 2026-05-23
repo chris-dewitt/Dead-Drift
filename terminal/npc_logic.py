@@ -7,6 +7,7 @@ from terminal.npcs.insurance_adjuster import InsuranceAdjuster
 from terminal.npcs.sandra import Sandra
 from terminal.npcs.pirate import Pirate
 from terminal.npcs.underground_dj import UndergroundDJ
+from terminal.npcs.toll_authority import TollAuthority
 from terminal.npcs.base_npc import BaseNPC
 
 
@@ -21,6 +22,7 @@ def make_npc(npc_type: str, **kwargs) -> BaseNPC:
         "sandra":             Sandra,
         "pirate":             Pirate,
         "underground_dj":     UndergroundDJ,
+        "toll_authority":     TollAuthority,
     }
     cls = registry.get(npc_type)
     if cls is None:

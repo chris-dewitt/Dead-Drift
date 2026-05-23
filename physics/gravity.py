@@ -1,6 +1,12 @@
 from __future__ import annotations
+import math
 from physics.body import RigidBody2D, Vec2
 from config import settings as S
+
+# Bounding box wells bounce inside (px from screen edges).
+_WELL_MARGIN = 100
+_WELL_MAX_SPEED = 30.0   # px/s cap on inter-well drift
+_WELL_REPULSE_R = 80.0   # soft repulsion inside this radius
 
 
 class GravityWell:
@@ -11,6 +17,7 @@ class GravityWell:
 
     def __init__(self, x: float, y: float, mass: float, radius: float = 60.0):
         self.pos    = Vec2(x, y)
+        self.vel    = Vec2()      # wells can drift via three-body interactions
         self.mass   = mass
         self.radius = radius      # visual + collision radius
 
@@ -59,8 +66,61 @@ class ThreeBodySystem:
             well.apply_to(body)
 
     def update(self, dt: float):
-        """Wells attract each other (simplified — treat them as fixed for now)."""
-        pass   # TODO: mutual attraction between wells for full three-body chaos
+        """Mutual gravitational attraction between wells — three-body drift."""
+        wells = self.wells
+        if len(wells) < 2:
+            return
+
+        # Accumulate forces on each well from all others (15% of player-strength).
+        forces = [Vec2() for _ in wells]
+        for i, a in enumerate(wells):
+            for j, b in enumerate(wells):
+                if j <= i:
+                    continue
+                delta  = b.pos - a.pos
+                dist_sq = delta.length_sq()
+                if dist_sq < 1.0:
+                    continue
+                # Soft repulsion when wells get too close
+                dist = math.sqrt(dist_sq)
+                if dist < _WELL_REPULSE_R:
+                    repulse = delta.normalized() * ((_WELL_REPULSE_R - dist) * 0.5)
+                    forces[i] = forces[i] - repulse
+                    forces[j] = forces[j] + repulse
+                    continue
+                # Mutual attraction at 15% player-attraction strength
+                eff_sq   = max(dist_sq, (a.radius * 1.4) ** 2)
+                fmag     = S.GRAVITY_CONSTANT * a.mass * b.mass / eff_sq * 0.15
+                fmag     = min(fmag, S.THRUSTER_FORCE * 0.1)
+                fdir     = delta.normalized() * fmag
+                forces[i] = forces[i] + fdir
+                forces[j] = forces[j] - fdir
+
+        # Integrate well positions
+        m = _WELL_MARGIN
+        bx_lo, bx_hi = m, S.SCREEN_W - m
+        by_lo, by_hi = m, S.FLIGHT_H - m
+
+        for well, force in zip(wells, forces):
+            well.vel = well.vel + force * dt
+            # Cap well speed
+            spd = well.vel.length()
+            if spd > _WELL_MAX_SPEED:
+                well.vel = well.vel * (_WELL_MAX_SPEED / spd)
+            well.pos = well.pos + well.vel * dt
+            # Bounce off bounding box
+            if well.pos.x < bx_lo:
+                well.pos.x  = bx_lo
+                well.vel.x  = abs(well.vel.x)
+            elif well.pos.x > bx_hi:
+                well.pos.x  = bx_hi
+                well.vel.x  = -abs(well.vel.x)
+            if well.pos.y < by_lo:
+                well.pos.y  = by_lo
+                well.vel.y  = abs(well.vel.y)
+            elif well.pos.y > by_hi:
+                well.pos.y  = by_hi
+                well.vel.y  = -abs(well.vel.y)
 
     def check_collisions(self, body: RigidBody2D) -> GravityWell | None:
         for well in self.wells:

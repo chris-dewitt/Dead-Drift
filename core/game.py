@@ -5,6 +5,8 @@ import pygame
 
 from config import settings as S
 from core.state_manager import StateManager, GameState
+from core.transitions import TransitionManager
+from core.text import install_font_patch
 from core.event_bus import bus, EVT_SHIP_DESTROYED, EVT_RUN_END, EVT_TORCH_ACTIVE, EVT_DEBT_DING, EVT_BAX_SPEAK
 from roguelite.meta_progression import MetaProgression
 from roguelite.run_manager import RunManager
@@ -14,7 +16,11 @@ from renderer.vector_renderer import VectorRenderer
 from renderer.hud_renderer import HUDRenderer
 from renderer.terminal_renderer import TerminalRenderer
 from renderer.cockpit_renderer import CockpitRenderer
-from audio.audio_manager import AudioManager
+from audio.audio_manager import (
+    AudioManager,
+    SCENE_MENU, SCENE_FLIGHT, SCENE_TERMINAL, SCENE_DELIVERY,
+    SCENE_SHOP, SCENE_INTERSTITIAL, SCENE_DECANTING, SCENE_LOADOUT,
+)
 from delivery.delivery_sequence import DeliverySequence
 from roguelite.shop import ShopScreen
 
@@ -22,6 +28,9 @@ from roguelite.shop import ShopScreen
 class Game:
     def __init__(self):
         pygame.init()
+        # Route every pygame.font.SysFont("monospace", ...) call through
+        # the bundled DejaVu Sans Mono with a +2pt size bump.
+        install_font_patch()
         self.screen  = pygame.display.set_mode((S.SCREEN_W, S.SCREEN_H))
         pygame.display.set_caption(S.TITLE)
         self.clock   = pygame.time.Clock()
@@ -41,6 +50,9 @@ class Game:
             self.screen, self.ship, self.run_mgr, self.meta
         )
         self.audio = AudioManager()
+
+        # CRT power-down scene transitions
+        self.transition = TransitionManager()
 
         self._dt                  = 0.016
         self._run_just_completed  = False
@@ -65,13 +77,44 @@ class Game:
         bus.subscribe(EVT_RUN_END,        self._on_run_end)
         bus.subscribe(EVT_TORCH_ACTIVE,   self._on_torch_active)
 
+    # ------------------------------------------------------------------
+    # State → musical scene mapping. Drives AudioManager.set_scene().
+    _STATE_TO_SCENE = {
+        GameState.MAIN_MENU:     SCENE_MENU,
+        GameState.LOADOUT_DRAFT: SCENE_LOADOUT,
+        GameState.FLIGHT:        SCENE_FLIGHT,
+        GameState.TERMINAL:      SCENE_TERMINAL,
+        GameState.DELIVERY:      SCENE_DELIVERY,
+        GameState.SHOP:          SCENE_SHOP,
+        GameState.INTERSTITIAL:  SCENE_INTERSTITIAL,
+        GameState.DECANTING:     SCENE_DECANTING,
+        GameState.SECTOR_JUMP:   SCENE_FLIGHT,
+        GameState.GAME_OVER:     SCENE_MENU,
+    }
+
+    def _goto(self, new_state: GameState):
+        """Animated state change: capture the current frame, start the
+        CRT power-down transition, then swap state. Use this for any
+        state change the player should *see* happening — keep direct
+        StateManager.transition() for boot/dev-only paths."""
+        try:
+            snapshot = self.screen.copy()
+        except (pygame.error, AttributeError):
+            snapshot = pygame.Surface((S.SCREEN_W, S.SCREEN_H))
+        self.transition.start(snapshot)
+        self.states.transition(new_state)
+        # Update the soundtrack scene to match
+        scene = self._STATE_TO_SCENE.get(new_state)
+        if scene is not None and self.audio is not None:
+            self.audio.set_scene(scene)
+
     def _on_torch_active(self, countdown=5.0, **_):
         self._torch_warn_t = countdown
 
     def _on_ship_destroyed(self, **_):
         self.meta.apply_death_penalty()
         self._run_just_completed = False
-        self.states.transition(GameState.DECANTING)
+        self._goto(GameState.DECANTING)
 
     def _on_run_end(self, success, **_):
         if success:
@@ -92,7 +135,7 @@ class Game:
         else:
             self.meta.save()
             self._run_just_completed = False
-            self.states.transition(GameState.MAIN_MENU)
+            self._goto(GameState.MAIN_MENU)
 
     # ------------------------------------------------------------------
     def run(self, start_state: GameState = None, start_sector: int = 0):
@@ -101,16 +144,16 @@ class Game:
         (used by test_stage.py).
         """
         if start_state is None or start_state == GameState.MAIN_MENU:
-            self.states.transition(GameState.MAIN_MENU)
+            self._goto(GameState.MAIN_MENU)
         elif start_state == GameState.LOADOUT_DRAFT:
             self.run_mgr.start_run(self.ship)
-            self.states.transition(GameState.LOADOUT_DRAFT)
+            self._goto(GameState.LOADOUT_DRAFT)
         elif start_state == GameState.FLIGHT:
             self._dev_start_flight(start_sector)
         elif start_state == GameState.DECANTING:
-            self.states.transition(GameState.DECANTING)
+            self._goto(GameState.DECANTING)
         else:
-            self.states.transition(start_state)
+            self._goto(start_state)
 
         while self.running:
             self._dt = self.clock.tick(S.FPS) / 1000.0
@@ -136,6 +179,8 @@ class Game:
         self.run_mgr._ship = self.ship
 
         self.states.transition(GameState.FLIGHT)
+        if self.audio is not None:
+            self.audio.set_scene(SCENE_FLIGHT)
 
     # ------------------------------------------------------------------
     def _handle_events(self):
@@ -168,7 +213,7 @@ class Game:
             if event.key == pygame.K_RETURN:
                 self.run_mgr.start_run(self.ship)
                 self._run_just_completed = False
-                self.states.transition(GameState.LOADOUT_DRAFT)
+                self._goto(GameState.LOADOUT_DRAFT)
         elif state == GameState.INTERSTITIAL:
             if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
                 self._exit_interstitial()
@@ -186,7 +231,7 @@ class Game:
                 if self._delivery_delay_t <= 0:
                     self._delivery_pending = False
                     self._delivery = DeliverySequence(self.meta, chapter=self._delivery_chapter)
-                    self.states.transition(GameState.DELIVERY)
+                    self._goto(GameState.DELIVERY)
             else:
                 self._torch_warn_t = max(0.0, self._torch_warn_t - dt)
                 self.run_mgr.update(dt)
@@ -197,10 +242,10 @@ class Game:
                 # Shop stop between sectors
                 if self.run_mgr._shop_pending:
                     self._shop = ShopScreen(self.run_mgr, self.ship)
-                    self.states.transition(GameState.SHOP)
+                    self._goto(GameState.SHOP)
                 # Terminal opened by jump key — transition immediately
                 elif self.run_mgr.active_terminal is not None:
-                    self.states.transition(GameState.TERMINAL)
+                    self._goto(GameState.TERMINAL)
 
         elif state == GameState.SHOP:
             if self._shop is not None:
@@ -208,7 +253,7 @@ class Game:
                 if self._shop.is_done:
                     self._shop = None
                     self.run_mgr._load_next_sector()
-                    self.states.transition(GameState.FLIGHT)
+                    self._goto(GameState.FLIGHT)
 
         elif state == GameState.TERMINAL:
             terminal = self.run_mgr.active_terminal
@@ -225,12 +270,12 @@ class Game:
                     self.run_mgr.on_terminal_complete(terminal.outcome)
                     # Only go back to FLIGHT if run_end hasn't already redirected us
                     if self.states.state == GameState.TERMINAL:
-                        self.states.transition(GameState.FLIGHT)
+                        self._goto(GameState.FLIGHT)
 
         elif state == GameState.LOADOUT_DRAFT:
             if self.run_mgr.draft.is_confirmed():
                 self.run_mgr.apply_draft(self.ship)
-                self.states.transition(GameState.FLIGHT)
+                self._goto(GameState.FLIGHT)
 
         elif state == GameState.DELIVERY:
             if self._delivery is not None:
@@ -286,6 +331,9 @@ class Game:
 
         elif state == GameState.MAIN_MENU:
             self._render_main_menu()
+
+        # CRT power-down overlay (no-op when no transition is active)
+        self.transition.draw(self.screen, self._dt)
 
         pygame.display.flip()
 
@@ -645,17 +693,17 @@ class Game:
         self._interstitial_next          = next_ch
         self._interstitial_campaign_end  = campaign_end
         self._interstitial_t             = 11.0   # auto-advance window
-        self.states.transition(GameState.INTERSTITIAL)
+        self._goto(GameState.INTERSTITIAL)
 
     def _exit_interstitial(self):
         if self._interstitial_campaign_end:
             self._run_just_completed = True
-            self.states.transition(GameState.MAIN_MENU)
+            self._goto(GameState.MAIN_MENU)
         else:
             # Auto-advance into next chapter's loadout draft
             self.run_mgr.start_run(self.ship)
             self._run_just_completed = False
-            self.states.transition(GameState.LOADOUT_DRAFT)
+            self._goto(GameState.LOADOUT_DRAFT)
 
     def _render_interstitial(self):
         t  = pygame.time.get_ticks() / 1000.0

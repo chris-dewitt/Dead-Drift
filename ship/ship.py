@@ -77,7 +77,7 @@ class PlayerShip:
 
         if rev:
             for t in thrusters:
-                self.body.apply_thrust(-t.force * 0.4)
+                self.body.apply_thrust(-t.force * 0.6)
 
         if keys[pygame.K_SPACE]:
             rad = math.radians(self.body.angle)
@@ -137,3 +137,7 @@ class PlayerShip:
         self.controls_inverted = False
         self.cargo             = None
         self.gun               = Gun()
+        # Clear upgrade slots (2–5) so shop purchases don't persist across deaths.
+        # Slots 0 (LifeSupport) and 1 (Thruster) are baseline issue — re-set by apply_draft.
+        for slot in range(2, self.chain.MAX_SLOTS):
+            self.chain.remove(slot)

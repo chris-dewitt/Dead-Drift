@@ -16,11 +16,12 @@ class Tether:
     """
 
     def __init__(self, ship: RigidBody2D, barge_pos: Vec2, barge_ref):
-        self.ship       = ship
-        self.barge_pos  = barge_pos   # updated each frame by the barge
-        self.barge_ref  = barge_ref
-        self.rest_len   = 80.0        # px — slack before tension kicks in
-        self.active     = True
+        self.ship         = ship
+        self.barge_pos    = barge_pos   # updated each frame by the barge
+        self.barge_ref    = barge_ref
+        self.rest_len     = 80.0        # px — slack before tension kicks in
+        self.active       = True
+        self.lateral_speed = 0.0       # updated each frame — used for snap-charge HUD + tether glow
 
         bus.emit(EVT_TETHER_HIT, barge=barge_ref)
 
@@ -29,25 +30,28 @@ class Tether:
         if not self.active:
             return
 
-        delta  = self.barge_pos - self.ship.pos
-        dist   = delta.length()
+        delta   = self.barge_pos - self.ship.pos
+        dist_sq = delta.length_sq()
 
-        if dist > S.TETHER_MAX_LENGTH:
+        if dist_sq > S.TETHER_MAX_LENGTH * S.TETHER_MAX_LENGTH:
             self._snap("overextended")
             return
 
-        if dist > self.rest_len:
+        if dist_sq > self.rest_len * self.rest_len:
+            dist       = dist_sq ** 0.5
             # Spring force pulling ship toward barge
             stretch    = dist - self.rest_len
-            force_dir  = delta.normalized()
+            force_dir  = delta * (1.0 / dist)   # normalized, avoids second sqrt
             force_mag  = S.TETHER_FORCE * stretch / S.TETHER_MAX_LENGTH
             self.ship.apply_force(force_dir * force_mag)
 
             # Check if player is drifting hard enough perpendicular to tether
             perp = Vec2(-force_dir.y, force_dir.x)
-            lateral_speed = abs(self.ship.vel.dot(perp))
-            if lateral_speed >= S.SNAP_VELOCITY:
+            self.lateral_speed = abs(self.ship.vel.dot(perp))
+            if self.lateral_speed >= S.SNAP_VELOCITY:
                 self._snap("drift")
+        else:
+            self.lateral_speed = 0.0
 
     def _snap(self, reason: str):
         self.active = False

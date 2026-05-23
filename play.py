@@ -49,7 +49,8 @@ class _DemoSector:
 class _DemoRunMgr:
     """Minimal stand-in for RunManager — exposes .sector, .barges, ._ship."""
     def __init__(self, gravity: ThreeBodySystem, ship: PlayerShip):
-        self.sector   = _DemoSector(gravity)
+        self.sector      = _DemoSector(gravity)
+        self.sector_num  = 1   # cockpit HUD expects this
         self.barges:    list[RepoBarge]    = []
         self.debris:    list[DebrisRock]   = [DebrisRock() for _ in range(S.DEBRIS_COUNT)]
         self.canisters: list[FuelCanister] = [FuelCanister() for _ in range(S.CANISTER_COUNT)]

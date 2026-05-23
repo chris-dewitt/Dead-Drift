@@ -1,7 +1,11 @@
 from __future__ import annotations
 import random
 import pygame
-from roguelite.procedural import generate_sector, SectorLayout
+from roguelite.procedural import (generate_sector, SectorLayout,
+                                   THEME_WRECKAGE_BELT, THEME_INDUSTRIAL_GRAVEYARD,
+                                   THEME_JUNK_BELT, THEME_MINE_STRIP,
+                                   THEME_FROZEN_TRAIL, THEME_FLARE_CORRIDOR,
+                                   THEME_TOLL_AUTHORITY)
 from roguelite.loadout_draft import LoadoutDraft
 from roguelite.meta_progression import MetaProgression
 from roguelite.tutorial import TutorialManager
@@ -10,6 +14,12 @@ from antagonists.debris import DebrisRock
 from antagonists.fuel_canister import FuelCanister
 from antagonists.satellite import SpinningSatellite
 from antagonists.alien_ship import AlienShip
+from antagonists.wreck import SpaceWreck
+from antagonists.dead_station import DeadStation
+from antagonists.trash_field import TrashField
+from antagonists.mine_field import MineField
+from antagonists.ice_field import IceField
+from antagonists.comet_trail import CometTrail
 from terminal.terminal import Terminal
 from terminal.npc_logic import make_npc
 from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
@@ -136,6 +146,20 @@ class RunManager:
         self._satellites: list[SpinningSatellite] = []
         self._alien: AlienShip | None = None
         self._alien_spoken = False
+        # Theme-based obstacles (Epic 3)
+        self._wrecks: list[SpaceWreck]       = []
+        self._dead_station: DeadStation | None = None
+        self._trash_field: TrashField | None   = None
+        self._mine_field: MineField | None     = None
+        self._ice_field: IceField | None       = None
+        self._comet_trail: CometTrail | None   = None
+        # Solar flare state
+        self._flare_cd        = 22.0   # seconds until next flare event
+        self._flare_active    = False
+        self._flare_t         = 0.0    # countdown during active flare
+        # Toll checkpoint state
+        self._toll_pending    = False
+        self._toll_t          = 10.0   # trigger at 10s into sector
         self._active_terminal: Terminal | None = None
         self._intercepting_barge = None   # set when a barge opens a mid-flight comm
         self._kress_called_this_sector = False
@@ -170,9 +194,9 @@ class RunManager:
         # Populated by _spawn_sector_objects(), drained in update()
         self._spawn_queue: list[tuple[float, str]] = []
 
-        # Tutorial — first-run only
+        # Tutorial — shown for first three clones so quick deaths still get hints
         self._tutorial: TutorialManager | None = (
-            TutorialManager() if meta.clone_count == 1 else None
+            TutorialManager() if meta.clone_count <= 3 else None
         )
 
         # Per-sector stat tracking for the between-sector flash card
@@ -231,7 +255,8 @@ class RunManager:
         ship.cargo      = cargo
         self._ship      = ship
 
-        self._sector    = generate_sector(self._sector_index, self._difficulty())
+        self._sector    = generate_sector(self._sector_index, self._difficulty(),
+                                          chapter=self._current_chapter())
         self._sector_start_hull = ship.hull
         self._spawn_sector_objects()
 
@@ -278,6 +303,7 @@ class RunManager:
             bus.emit(EVT_JUMP_READY)
 
         self._sector.gravity.apply_all(self._ship.body)
+        self._sector.gravity.update(dt)   # three-body well drift
 
         if self._tutorial is not None:
             self._tutorial.update(dt, self)
@@ -338,6 +364,9 @@ class RunManager:
 
         # Bullet-rock collision
         self._check_bullets()
+
+        # Theme-based obstacle updates
+        self._update_theme_obstacles(dt)
 
         self._check_slingshot()
         self._check_proximity()
@@ -414,10 +443,11 @@ class RunManager:
     def _check_slingshot(self):
         if self._sling_cd > 0 or self._sector is None:
             return
-        speed = self._ship.body.speed()
+        speed   = self._ship.body.speed()
+        sling_r2 = S.SLINGSHOT_RANGE * S.SLINGSHOT_RANGE
         for i, well in enumerate(self._sector.gravity.wells):
-            dist = (well.pos - self._ship.body.pos).length()
-            if dist < S.SLINGSHOT_RANGE:
+            delta = well.pos - self._ship.body.pos
+            if delta.length_sq() < sling_r2:
                 self._sling_well_t[i] = self._sector_timer
 
         if speed > S.SLINGSHOT_SPEED:
@@ -432,8 +462,9 @@ class RunManager:
     def _check_proximity(self):
         if self._prox_cd > 0 or not self._barges:
             return
-        min_dist = min((b.pos - self._ship.pos).length() for b in self._barges)
-        if min_dist < 320:
+        min_dist_sq = min((b.pos - self._ship.pos).length_sq() for b in self._barges)
+        if min_dist_sq < 320 * 320:
+            min_dist = min_dist_sq ** 0.5
             bus.emit(EVT_BARGE_NEARBY, distance=min_dist)
             self._prox_cd = 12.0
 
@@ -471,9 +502,19 @@ class RunManager:
             speaker, line = random.choice(_COLLECTOR_LINES)
             bus.emit(EVT_COMMS_SPEAK, speaker=speaker, line=line)
 
-    def _on_slingshot(self, **_):
-        self._sector_slingshots  += 1
-        self._run_slingshots     += 1
+    def _on_slingshot(self, speed=0, **_):
+        self._sector_slingshots += 1
+        self._run_slingshots    += 1
+        # Credit bonus per clean slingshot
+        bonus = 800
+        self.meta.pay_off(bonus)
+        self._run_debt_reduced += bonus
+        self._sector_credits   += bonus
+        # Overdrive window: 2 seconds at 1.5× velocity cap
+        if self._ship and self._ship.is_alive:
+            import math as _math
+            self._ship.body._vel_cap_override = S.MAX_VELOCITY * 1.5
+            self._ship.body._overdrive_t      = 2.0
 
     def _on_tether_snap(self, **_):
         bonus = 1200
@@ -656,7 +697,8 @@ class RunManager:
         self._load_next_sector()
 
     def _load_next_sector(self):
-        self._sector       = generate_sector(self._sector_index, self._difficulty())
+        self._sector       = generate_sector(self._sector_index, self._difficulty(),
+                                             chapter=self._current_chapter())
         self._sector_timer = 0.0
         self._jump_ready_fired = False
         self._barges.clear()
@@ -669,13 +711,20 @@ class RunManager:
         cargo_type = (type(self._ship.cargo).__name__
                       if self._ship and self._ship.cargo else None)
         bus.emit(EVT_SECTOR_START,
-                 sector_num=self._sector_index + 1,
-                 cargo_type=cargo_type)
+                 sector_num  = self._sector_index + 1,
+                 cargo_type  = cargo_type,
+                 theme       = getattr(self._sector, "theme", ""),
+                 sector_name = getattr(self._sector, "name", ""),
+                 formerly    = getattr(self._sector, "formerly", ""))
 
-        # Final sector: announce to bax + extra immediate barge
+        # Final sector: announce to Bax; extra barge only if player arrived healthy.
         if self._sector_index == S.SECTORS_PER_RUN - 1:
             bus.emit(EVT_FINAL_SECTOR)
-            self._spawn_barge(immediate_chase=True)
+            hull_pct = (self._ship.hull / S.HULL_MAX
+                        if self._ship and self._ship.is_alive else 0.5)
+            if hull_pct > 0.7:
+                # Arrived in good shape — earned the gauntlet
+                self._spawn_barge(immediate_chase=True)
 
         # Ambush: spawn an additional barge that's already hunting
         if self._sector.is_ambush:
@@ -712,7 +761,7 @@ class RunManager:
 
         # Barge spawn ramp — sector 1-2 are intro, then escalate.
         # Barges also deferred: first barge at 8s so player can orient.
-        # Final sector gets heavier: handled by _load_next_sector spawning one immediately.
+        # Final sector extra spawns depend on hull state — see _load_next_sector.
         barge_count = 0
         if idx >= 2:
             barge_count = 1
@@ -722,17 +771,144 @@ class RunManager:
         for i in range(barge_count):
             self._spawn_queue.append((barge_delay + i * 6.0, "barge"))
 
-        # Final sector: queue a second deferred barge and one extra debris.
-        # The gauntlet stays intense via the two barges, not via debris spam.
+        # Final sector: extra deferred barge only if player arrived healthy (checked in _load_next_sector).
         if idx == S.SECTORS_PER_RUN - 1:
-            self._spawn_queue.append((barge_delay + 3.0, "barge"))
-            self._spawn_queue.append((3.0, "debris"))
+            hull_pct = (self._ship.hull / S.HULL_MAX
+                        if self._ship and self._ship.is_alive else 0.5)
+            if hull_pct > 0.7:
+                self._spawn_queue.append((barge_delay + 3.0, "barge"))
+                self._spawn_queue.append((3.0, "debris"))
 
         # Demolition notice — 22% chance from sector 2 onward
         if idx >= 1 and random.random() < 0.22:
             speaker, line = random.choice(_DEMO_NOTICES)
             bus.emit(EVT_DEMO_NOTICE)
             bus.emit(EVT_COMMS_SPEAK, speaker=speaker, line=line)
+
+        # --- Theme-based obstacle spawning (Epic 3) ---
+        self._wrecks.clear()
+        self._dead_station = None
+        self._trash_field  = None
+        self._mine_field   = None
+        self._ice_field    = None
+        self._comet_trail  = None
+        self._flare_cd     = 22.0
+        self._flare_active = False
+        self._flare_t      = 0.0
+        self._toll_pending = False
+        self._toll_t       = 10.0
+
+        theme = getattr(self._sector, "theme", "")
+
+        if theme == THEME_WRECKAGE_BELT:
+            # 1-2 wrecks (no fuel canisters in this sector)
+            n = random.randint(1, 2)
+            self._wrecks = [SpaceWreck() for _ in range(n)]
+            self._canisters.clear()
+
+        elif theme == THEME_INDUSTRIAL_GRAVEYARD:
+            self._dead_station = DeadStation()
+            self._wrecks = [SpaceWreck()]
+            self._canisters.clear()
+
+        elif theme == THEME_JUNK_BELT:
+            self._trash_field = TrashField()
+            self._canisters.clear()
+            # Asteroid-field: more debris, higher HP
+            extra = int(S.DEBRIS_COUNT * 0.6)
+            for i in range(extra):
+                rock = DebrisRock()
+                rock.hp += 1
+                self._debris.append(rock)
+
+        elif theme == THEME_MINE_STRIP:
+            self._mine_field = MineField()
+
+        elif theme == THEME_FROZEN_TRAIL:
+            self._ice_field   = IceField()
+            self._comet_trail = CometTrail()
+
+        elif theme == THEME_FLARE_CORRIDOR:
+            self._flare_cd = 22.0   # first flare in ~22s
+
+        elif theme == THEME_TOLL_AUTHORITY:
+            self._toll_pending = True
+            self._toll_t       = 10.0
+
+    def _update_theme_obstacles(self, dt: float):
+        """Per-frame update for all theme-specific obstacles."""
+        ship = self._ship
+        if ship is None or not ship.is_alive:
+            return
+
+        # Wrecks — collision check
+        for wreck in self._wrecks:
+            wreck.update(dt)
+            if wreck.collides(ship.pos):
+                ship.take_damage(wreck.damage, source="wreck")
+
+        # Dead station — core + ring collision
+        if self._dead_station is not None:
+            self._dead_station.update(dt)
+            if self._dead_station.collides_body(ship.pos):
+                ship.take_damage(S.DEBRIS_DAMAGE * 1.2, source="dead_station")
+            elif self._dead_station.collides_ring(ship.pos):
+                ship.take_damage(self._dead_station.ring_damage, source="station_ring")
+
+        # Trash field — chip damage + alive pieces
+        if self._trash_field is not None:
+            self._trash_field.update(dt)
+            for piece in self._trash_field.alive_pieces:
+                if piece.collides(ship.pos):
+                    ship.take_damage(piece.chip_damage, source="trash")
+
+        # Mine field — proximity arming + detonation
+        if self._mine_field is not None:
+            results = self._mine_field.update(dt, ship.pos)
+            for r in results:
+                if r == "detonate":
+                    ship.take_damage(S.DEBRIS_DAMAGE * 2.0, source="mine")
+
+        # Ice field — apply slick physics if inside
+        if self._ice_field is not None:
+            self._ice_field.apply_to(ship)
+
+        # Comet trail — chip damage on fragment contact
+        if self._comet_trail is not None:
+            self._comet_trail.update(dt)
+            for frag in self._comet_trail.all_fragments():
+                if frag.collides(ship.pos):
+                    ship.take_damage(self._comet_trail.chip_damage, source="comet")
+
+        # Solar flare — periodic sweep
+        if THEME_FLARE_CORRIDOR == getattr(self._sector, "theme", ""):
+            self._flare_cd -= dt
+            if self._flare_active:
+                self._flare_t -= dt
+                if self._flare_t <= 0:
+                    self._flare_active = False
+                    self._flare_cd     = random.uniform(18.0, 28.0)
+            elif self._flare_cd <= 0:
+                self._flare_active = True
+                self._flare_t      = 4.0
+                bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                    "Solar flare incoming. Yeah, ROMANTIC. Shield your eyes, the ship has none.",
+                    "Radiation spike! The gun's gonna fizzle. Hold tight.",
+                    "Flare sweep. HUD's gonna glitch. Keep flying straight.",
+                ]))
+
+        # Toll checkpoint — one-time terminal at t=10s
+        if self._toll_pending and self._sector_timer >= self._toll_t:
+            self._toll_pending = False
+            self._open_toll_terminal()
+
+    def _open_toll_terminal(self):
+        from terminal.npc_logic import make_npc
+        from terminal.terminal import Terminal
+        npc = make_npc("toll_authority",
+                       vocabulary_vault=getattr(self, "_vault", None),
+                       run_context={})
+        self._active_terminal = Terminal(npc)
 
     def _spawn_barge(self, immediate_chase: bool = False):
         from antagonists.repo_barge import BargeState
