@@ -1,7 +1,9 @@
 {
-  "debt": 161000,
-  "clone_count": 5,
-  "chapters_completed": [],
+  "debt": 112700,
+  "clone_count": 8,
+  "chapters_completed": [
+    1
+  ],
   "bax_level": 1,
   "reputation": {}
 }
