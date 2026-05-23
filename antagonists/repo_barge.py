@@ -4,7 +4,7 @@ import random
 from physics.body import RigidBody2D, Vec2
 from physics.tether import Tether
 from config import settings as S
-from core.event_bus import bus, EVT_MODULE_UNBOLTED, EVT_TETHER_HIT, EVT_BARGE_INTERCEPT, EVT_BAX_SPEAK, EVT_TORCH_ACTIVE, EVT_HARPOON_ARMING
+from core.event_bus import bus, EVT_MODULE_UNBOLTED, EVT_TETHER_HIT, EVT_BARGE_INTERCEPT, EVT_BAX_SPEAK, EVT_TORCH_ACTIVE, EVT_HARPOON_ARMING, EVT_BARGE_KILLED
 from terminal.npcs.base_npc import NPCOutcome
 
 
@@ -212,6 +212,7 @@ class RepoBarge:
             self.is_destroyed = True
             if self._tether:
                 self._tether.active = False
+            bus.emit(EVT_BARGE_KILLED, barge=self)
 
     def _get_ship(self):
         try:

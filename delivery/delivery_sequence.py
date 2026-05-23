@@ -14,7 +14,7 @@ import pygame
 from delivery.corridor import make_corridor
 from delivery.corridor.elements import CORRIDOR_W, CORRIDOR_H
 from config import settings as S
-from core.event_bus import bus, EVT_BAX_SPEAK
+from core.event_bus import bus, EVT_BAX_SPEAK, EVT_DOCK_APPROACH, EVT_DOCK_PERFECT, EVT_DOCK_ROUGH
 
 # ── Payout config ──────────────────────────────────────────────────────────
 _DELIVERY_BONUS   = {3: 8000, 2: 4000, 1: 1000}   # credits added
@@ -116,7 +116,7 @@ class DeliverySequence:
         # Approach stars track
         self._approach_score = 0   # 0=miss, 1=ok, 2=centred
 
-        bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_APPROACH))
+        bus.emit(EVT_DOCK_APPROACH)
 
     # ── Public interface ──────────────────────────────────────────────────
     def handle_key(self, event: pygame.event.Event):
@@ -488,10 +488,12 @@ class DeliverySequence:
                 hits = (1 if self._approach_score >= 1 else 0) + \
                        (1 if self._j_hit else 0) + \
                        (1 if self._burn_done else 0)
-                if hits == 3:
+                if hits >= 2:
                     self._dock_bonus_cr = 500
+                    bus.emit(EVT_DOCK_PERFECT)
                 elif hits == 0:
                     self._dock_bonus_cr = -200
+                    bus.emit(EVT_DOCK_ROUGH)
                 # Transition to Beat 3
                 self._t     = 0.0
                 self._phase = self.PHASE_BEAT3

@@ -17,7 +17,9 @@ from delivery.corridor.elements import (
     NPCEncounter, Collectible, Secret, Checkpoint, StealthZone,
     BossRoomTrigger, SporeZone, QuantumDoor,
 )
-from core.event_bus import bus, EVT_BAX_SPEAK, EVT_DELIVERY_DONE
+from core.event_bus import (bus, EVT_BAX_SPEAK, EVT_DELIVERY_DONE,
+                            EVT_CORRIDOR_RUN, EVT_CORRIDOR_JUMP,
+                            EVT_CORRIDOR_SECRET, EVT_CORRIDOR_DEATH)
 
 GRAVITY   = 980.0
 JUMP_VY   = -440.0
@@ -247,6 +249,9 @@ class Corridor:
         # Result
         self._done      = False
         self._stars     = 0
+
+        # Ambient run Bax commentary timer
+        self._run_speak_t = 10.0   # fire first corridor-run line after 10s
         self._result_t  = 0.0
         self._result_credits = 0
 
@@ -268,6 +273,7 @@ class Corridor:
             if self._grounded and not self._on_ladder:
                 self._pvy      = JUMP_VY
                 self._grounded = False
+                bus.emit(EVT_CORRIDOR_JUMP)
             elif self._on_ladder:
                 pass  # handled by held-key in update
         elif event.key in (pygame.K_s, pygame.K_DOWN):
@@ -294,9 +300,13 @@ class Corridor:
             self._result_t -= dt
             return
 
-        self._elapsed += dt
-        self._stun_t   = max(0.0, self._stun_t - dt)
-        self._invert_t = max(0.0, self._invert_t - dt)
+        self._elapsed      += dt
+        self._stun_t        = max(0.0, self._stun_t - dt)
+        self._invert_t      = max(0.0, self._invert_t - dt)
+        self._run_speak_t  -= dt
+        if self._run_speak_t <= 0:
+            self._run_speak_t = 12.0
+            bus.emit(EVT_CORRIDOR_RUN)
 
         keys = pygame.key.get_pressed()
         room = self.rooms[self._room_idx]
@@ -516,6 +526,7 @@ class Corridor:
                 v, lore = el.try_collect(self._px, self._py)
                 if v or lore:
                     self._credits += v
+                    bus.emit(EVT_CORRIDOR_SECRET)
                     if lore:
                         bus.emit(EVT_BAX_SPEAK, line=lore[:60])
 
@@ -561,6 +572,7 @@ class Corridor:
         self._stun_t   = 1.2
         from core.event_bus import EVT_DELIVERY_HIT
         bus.emit(EVT_DELIVERY_HIT)
+        bus.emit(EVT_CORRIDOR_DEATH)
 
     def _start_wipe_out(self):
         self._wipe_t               = 0.5

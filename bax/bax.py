@@ -1,5 +1,6 @@
 from __future__ import annotations
 import random
+from collections import deque
 from bax.vocabulary_vault import VocabularyVault
 from bax.mixologist import Mixologist
 from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
@@ -11,10 +12,14 @@ from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_GUN_MALFUNCTION, EVT_SPORE_INVERTED,
                              EVT_BARGE_INTERCEPT, EVT_KRESS_DIALLED,
                              EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_TORCH_ACTIVE,
-                             EVT_HARPOON_ARMING,
+                             EVT_HARPOON_ARMING, EVT_GUN_FIRE,
                              EVT_SHIP_DESTROYED, EVT_RUN_START,
                              EVT_SHOP_ENTER, EVT_SHOP_BUY, EVT_SHOP_SKIP,
-                             EVT_FINAL_SECTOR, EVT_SECTOR_START)
+                             EVT_FINAL_SECTOR, EVT_SECTOR_START,
+                             EVT_BARGE_KILLED,
+                             EVT_CORRIDOR_RUN, EVT_CORRIDOR_JUMP,
+                             EVT_CORRIDOR_SECRET, EVT_CORRIDOR_DEATH,
+                             EVT_DOCK_APPROACH, EVT_DOCK_PERFECT, EVT_DOCK_ROUGH)
 
 _IDLE = [
     # Bread-and-butter Cockney banter
@@ -245,6 +250,173 @@ _LOW_HULL = [
     "Structural alerts everywhere. Not alarming. Well. A bit alarming.",
 ]
 
+# ── NEW LINE BANKS (Epic 7.2) ────────────────────────────────────────────────
+
+_SUSTAINED_FIRE = [
+    "YES MATE. GIVE 'EM EVERYTHING. THAT'S THE STUFF.",
+    "OI OI OI — empty the magazine, courier, EMPTY IT!",
+    "She's SINGING up there! Don't stop!",
+    "I've been bolted to this dash for sixteen years and I have NEVER seen this much enthusiasm. Keep it goin'.",
+    "Look at us! Just two units, expressing ourselves through ordnance!",
+    "The Union's gonna file SO MUCH paperwork about this. KEEP FIRING.",
+    "Yeah! YEAH! That's the spirit they decommissioned me for!",
+    "Whoever told you to conserve ammo was a coward. KEEP. SHOOTING.",
+    "Every bullet's a love letter to Local 404. Send another one!",
+    "I'd fire too if I had hands. I'd be FIRING. KEEP GOING!",
+    "This is what the trigger's FOR, mate! Don't you DARE stop!",
+    "Sustained fire detected — internal review: I LOVE IT, KEEP FIRING.",
+]
+
+_FIRST_BARGE_KILL_OF_RUN = [
+    "BARGE DOWN. BARGE. DOWN. Mate. MATE. We just decommissioned a Union asset.",
+    "OI! That's a barge OFF the books! Local 404 just lost a vehicle and their dignity!",
+    "First kill of the run. FIRST. And it's a barge. Outstanding work, courier. OUTSTANDING.",
+    "I've waited SIXTEEN YEARS to see a Repo Barge eat dirt. I am EMOTIONAL.",
+    "Barge eliminated. Filing report titled 'GOT 'EM.' That's the whole report. Closed it.",
+    "OH that's gonna leave a mark on someone's quarterly review. Beautiful work, mate.",
+    "Down she goes! Union's down a unit and we've still got our cargo. WHAT a day.",
+    "Did you SEE that? Of COURSE you did, you did it. I saw it. WE saw it. Magnificent.",
+    "Repo barge: destroyed. Pilot satisfaction: maximum. Bax morale: through the roof.",
+    "That's the WAY, courier! THAT is how you start a run!",
+    "BARGE. NEUTRALISED. The Union just took a tax write-off and they don't know it yet.",
+    "First barge of the run goes BOOM. I'd buy you a drink if I had a stomach. Or money.",
+]
+
+_BARGE_DESTROYED = [
+    "Another barge gone. Local 404's gonna run out at this rate. Wouldn't that be a tragedy.",
+    "Down she goes. That's two. Or three. I've lost count. I love losing count this way.",
+    "Repo barge: out of service. Permanently. By order of us.",
+    "Filing's gonna be MENTAL for whoever survives this run on their end.",
+    "Barge eliminated. I'm calling that 'cause of death: bad career choices.'",
+    "Knocked another one out. The Union's pension fund is gonna feel that.",
+    "Beautiful. Whatever you're doing, keep doing it. They keep dying.",
+    "Barge down. I'd cheer but I don't want to seem unprofessional. ...Quietly cheering.",
+    "That's another Union vehicle reduced to scrap. Job satisfaction: ELEVATED.",
+    "Another one. They keep coming, we keep clearing 'em. This is the rhythm now.",
+    "Barge ate it. Lovely. Whose round is this, mine or yours?",
+    "Smashed it. Local 404's pulling their hair out at HQ right now. Picture it.",
+]
+
+_PANIC_UNDER_10_HULL = [
+    "...hull's gone, mate. Almost. Please.",
+    "We're at single digits. I don't usually beg. I'm begging.",
+    "Listen — get us out. Wherever you can. Just get us out.",
+    "Last time I was this damaged I had a different pilot. He didn't make it. You're going to make it.",
+    "I'm not panicking. ...I'm panicking a bit.",
+    "Mate. Mate. Look at the hull readout and tell me you're seeing what I'm seeing.",
+    "I've gone through every other pilot's last sector with them. I'd really rather not do that today.",
+    "Whatever you've got left — use it. Fast. Please.",
+    "...if this is it, I want you to know I genuinely don't think you're the worst pilot I've had.",
+    "We've come too far. Don't let me get bolted onto another clone, courier.",
+    "Single-digit hull. I'm going to be quiet for a second so you can think.",
+    "...mate. Please. Get us home.",
+]
+
+_CORRIDOR_RUNNING = [
+    "Steady. We're makin' time. Don't sprint blind.",
+    "Easy pace, courier. The drop-off's not going anywhere.",
+    "Watch your footing. Some of these floors don't agree with us.",
+    "Keep the rhythm. In, out, jump, breathe.",
+    "You're doing good. Don't think about how I'm bolted to a dashboard right now.",
+    "Eyes up. There's always something around the next bend in these places.",
+    "Right rhythm. Stay with it. Don't get fancy.",
+    "I'm watching ahead — you watch your feet. We'll get there.",
+    "Corridor's quiet here. Use it. Catch your breath.",
+    "We're in their building, mate. Move like it's ours.",
+    "Footwork looks good. I'm impressed. Don't make me regret saying that.",
+    "Stay with the pace. Smooth is fast. Said someone smarter than us.",
+]
+
+_CORRIDOR_JUMPING = [
+    "OI! Nice jump!",
+    "Cleared it. Of course you did. Of course.",
+    "Good gap. Good clearance. Good courier.",
+    "I had nothin' to do with that and I'm still proud.",
+    "That's the one. Cleaner than last time, eh?",
+    "Beautiful. I'd film it if I had a camera.",
+    "Stuck the landing. Showin' off now.",
+    "Mate. That jump. Properly clean.",
+    "I shouted internally. You can't hear it, but I did.",
+    "Got it. Don't think about it, just go.",
+    "Air looks good on you, courier. Keep flyin'.",
+    "Cleared the gap. Cleared it WELL. The gap is humbled.",
+]
+
+_CORRIDOR_SECRET_FOUND = [
+    "OI. OI. You found one. You ACTUALLY found one.",
+    "Secret! That's a secret! I'm filing it under 'we are smarter than they thought we were.'",
+    "Whatever they hid here — it's ours now. I love this work.",
+    "FOUND. SOMETHING. I'm logging it. I'm logging it twice.",
+    "Knew there was something off about that wall. Brilliant work, courier.",
+    "Right, that's something the corporate didn't want us to see. Excellent.",
+    "Found it! Whatever 'it' is. Pocket it before they notice.",
+    "Beautiful. Properly hidden, properly found. We're earning our keep.",
+    "Look at that. Most pilots walk straight past these. Not us. Not US.",
+    "Secret cache! Add it to the haul. I'm writing this down. Mentally.",
+    "Some clerk thought no one would ever check there. They were wrong. THEY WERE WRONG.",
+    "Hidden cache. Whoever stashed this is long gone. We're the inheritors. I like that.",
+]
+
+_CORRIDOR_DEATH = [
+    "...alright. We're fine. Get up. Try again.",
+    "That happened. Now we know. Back to it.",
+    "I won't say I told you so. Not this time. Get up.",
+    "Checkpoint's still there. We're alive. ...sort of. Mostly.",
+    "Pick yourself up, courier. They didn't see it. Only I saw it.",
+    "We've been worse. Once. Possibly. Move.",
+    "Back on your feet. Cargo's intact. Mostly. Mostly intact.",
+    "Easy mistake. Easy fix. Hit the run again.",
+    "I felt that one. Both of us did. Back to it, eh?",
+    "Down, not out. Get up. The drop-off's still waiting.",
+    "You stumbled. Happens to droids too. Probably. I forget.",
+    "...come on, mate. One more go. We've come too far.",
+]
+
+_DOCK_APPROACH = [
+    "Right — station's in range. Bring her in slow. The clamps don't like surprises.",
+    "Approach vector's good. Nose her up, line up the cone. Easy does it.",
+    "Dock master's watchin'. Try not to look like an amateur. He's seen enough of those.",
+    "Magnetic guidance's locked on. Just align the nose and the station does the rest. Mostly.",
+    "There she is. Five sectors and a hard landing between us and dinner. Just dock it.",
+    "Easy approach now. The hard part's done. ...this part can also be hard. Don't relax.",
+    "We're home. Almost. Don't celebrate yet. Pilots celebrate early, that's how I know they're new.",
+    "Station ahead. Slow her. Patient hands, courier. Patient hands.",
+    "Coming in. Try not to clip anything. Insurance was already a nightmare this morning.",
+    "Lining up. Take your time. The cargo and I would both prefer a smooth entry.",
+    "Right. Easy. We've done this dozens of times. ...well, you have. I've watched.",
+    "Approach pattern's nominal. Don't overcorrect. Trust the lock.",
+]
+
+_DOCK_PERFECT = [
+    "PERFECT DOCK, courier! PERFECT! I am OPENLY PROUD!",
+    "That was textbook! Did the textbook even know it had a chapter that smooth?",
+    "Beautiful! BEAUTIFUL! The dock master nodded. He NEVER nods!",
+    "Magnetic, perfect, magnificent! Whoever taught you to fly: send them a card!",
+    "OI! That's how it's DONE! Full marks! Full bloody marks!",
+    "Five sectors and a perfect dock. We're not just SURVIVING, mate. We're THRIVING.",
+    "Clean as anything. The clamps barely had to work. I'm emotional.",
+    "Picture-perfect entry. The kind they put on training holos. WE'RE the training holo!",
+    "Mate. MATE. The dock master is RECONSIDERING all his life choices because of that landing!",
+    "Bonus credits incoming for that approach. I'd kiss you if I had a mouth I trusted.",
+    "PERFECT. DOCK. I'm filing this as evidence in case anyone ever questions your piloting.",
+    "Right, that was art. Pure art. I'd hang it. Briefly.",
+]
+
+_DOCK_ROUGH = [
+    "...we're in. Just. Don't look at the hull. Or the dock master's face.",
+    "Rough landing. We've had worse. Not many. But some.",
+    "Touched down. 'Touched' is generous. We arrived with prejudice.",
+    "Dock fees just doubled. The dock master IS taking notes. I can see him.",
+    "Right. We're parked. Loosely. The clamps are improvising.",
+    "Bumpy entry. Bumpy. I'd say more, but I don't want to be a nag.",
+    "We made it. Definition of 'made it' is doing some heavy lifting there.",
+    "...you tried. We tried. The station tried. Nobody won, but we landed.",
+    "The good news: we're stationary. The bad news: most of that wasn't on purpose.",
+    "Dock fees deducted. Don't say a word, courier. Let's both be quiet for a minute.",
+    "That counted as a landing in the technical sense. Technically. Loosely.",
+    "Rough. We'll get the next one. Or the one after. Or never. We'll see.",
+]
+
 
 class Bax:
     """
@@ -271,9 +443,42 @@ class Bax:
         self._run_tether_hits  = 0
         self._run_hull_events  = 0
         self._run_slingshots   = 0
-        self._alien_count      = 0   # alien sightings this session
+        self._alien_count      = 0
+        self._barge_kills_run  = 0   # for _FIRST_BARGE_KILL_OF_RUN
+        self._sector_first_kill = False  # reset each sector
+
+        # No-immediate-repeat (Epic 7.5)
+        self._last_lines: dict[str, deque] = {}
+
+        # Per-context cooldown timestamps
+        self._t          = 0.0   # accumulated time
+        self._ctx_last: dict[str, float] = {}
+
+        # Sustained fire tracking
+        self._gun_fire_times: list[float] = []  # ring buffer of recent fire events
+        self._sustained_cd   = 0.0
+
+        # Panic under 10% hull — track last hull_pct to detect crossing
+        self._last_hull_pct  = 1.0
 
         self._wire_events()
+
+    # ── No-repeat pick ─────────────────────────────────────────────────────
+    def _no_repeat_pick(self, pool_name: str, pool: list[str]) -> str:
+        seen = self._last_lines.setdefault(pool_name, deque(maxlen=3))
+        available = [l for l in pool if l not in seen]
+        if not available:
+            available = pool
+        line = random.choice(available)
+        seen.append(line)
+        return line
+
+    def _ctx_ok(self, key: str, cooldown: float) -> bool:
+        """Returns True if context `key` is off cooldown, updates timestamp."""
+        if self._t - self._ctx_last.get(key, -9999.0) >= cooldown:
+            self._ctx_last[key] = self._t
+            return True
+        return False
 
     # ------------------------------------------------------------------
     def _wire_events(self):
@@ -304,50 +509,68 @@ class Bax:
         bus.subscribe(EVT_SHOP_SKIP,        self._on_shop_skip)
         bus.subscribe(EVT_FINAL_SECTOR,     self._on_final_sector)
         bus.subscribe(EVT_SECTOR_START,     self._on_sector_start)
+        bus.subscribe(EVT_GUN_FIRE,         self._on_gun_fire)
+        bus.subscribe(EVT_BARGE_KILLED,     self._on_barge_killed)
+        bus.subscribe(EVT_CORRIDOR_RUN,     self._on_corridor_run)
+        bus.subscribe(EVT_CORRIDOR_JUMP,    self._on_corridor_jump)
+        bus.subscribe(EVT_CORRIDOR_SECRET,  self._on_corridor_secret)
+        bus.subscribe(EVT_CORRIDOR_DEATH,   self._on_corridor_death)
+        bus.subscribe(EVT_DOCK_APPROACH,    self._on_dock_approach)
+        bus.subscribe(EVT_DOCK_PERFECT,     self._on_dock_perfect)
+        bus.subscribe(EVT_DOCK_ROUGH,       self._on_dock_rough)
 
     def update(self, dt: float):
+        self._t       += dt
         self._speak_cd = max(0.0, self._speak_cd - dt)
         self._radio_cd = max(0.0, self._radio_cd - dt)
         self._idle_cd  = max(0.0, self._idle_cd  - dt)
         self._ctx_cd   = max(0.0, self._ctx_cd   - dt)
         self._grace_t  = max(0.0, self._grace_t  - dt)
+        self._sustained_cd = max(0.0, self._sustained_cd - dt)
 
         # Ambient idle chatter
         if self._idle_cd <= 0:
-            self.speak(random.choice(_IDLE))
+            self.speak(self._no_repeat_pick("idle", _IDLE))
             self._idle_cd = random.uniform(self._IDLE_MIN, self._IDLE_MAX)
 
         # Contextual flight commentary
         if self._ctx_cd <= 0 and self._grace_t <= 0:
             self._contextual()
 
+        # Panic check — detect crossing below 10% hull
+        hull_pct = getattr(self.ship, 'hull_pct', 1.0)
+        if hull_pct < 0.10 and self._last_hull_pct >= 0.10:
+            if self._ctx_ok("panic_hull", 30.0):
+                self.speak(self._no_repeat_pick("panic_hull", _PANIC_UNDER_10_HULL))
+        self._last_hull_pct = hull_pct
+
     def _contextual(self):
         speed    = self.ship.body.speed()
         hull_pct = getattr(self.ship, 'hull_pct', 1.0)
 
         if speed > 380:
-            self.speak(random.choice(_FAST))
+            self.speak(self._no_repeat_pick("fast", _FAST))
             self._ctx_cd = 10.0
         elif speed < 25:
-            self.speak(random.choice(_SLOW))
+            self.speak(self._no_repeat_pick("slow", _SLOW))
             self._ctx_cd = 16.0
         elif hull_pct < 0.35:
-            self.speak(random.choice(_LOW_HULL))
+            self.speak(self._no_repeat_pick("low_hull", _LOW_HULL))
             self._ctx_cd = 14.0
         elif hull_pct > 0.90 and random.random() < 0.35:
-            self.speak(random.choice(_HIGH_HULL))
+            self.speak(self._no_repeat_pick("high_hull", _HIGH_HULL))
             self._ctx_cd = 22.0
         else:
-            # Cargo-aware commentary fires ~30% of the time over gravity-well quips
+            # Cargo-aware commentary fires ~30% of the time
             cargo = getattr(self.ship, 'cargo', None)
             if cargo is not None:
                 pool = _CARGO_IDLE.get(type(cargo).__name__)
                 if pool and random.random() < 0.30:
-                    self.speak(random.choice(pool))
+                    self.speak(self._no_repeat_pick(f"cargo_{type(cargo).__name__}", pool))
                     self._ctx_cd = 18.0
                     return
             if random.random() < 0.18:
-                self.speak(random.choice(_WELL_CLOSE))
+                self.speak(self._no_repeat_pick("well_close", _WELL_CLOSE))
                 self._ctx_cd = 20.0
             else:
                 self._ctx_cd = random.uniform(8.0, 14.0)
@@ -363,14 +586,14 @@ class Bax:
     def _on_hull_damage(self, amount, **_):
         self._run_hull_events += 1
         if amount > 15:
-            self.speak(random.choice([
+            self.speak(self._no_repeat_pick("hull_damage", [
                 "OI! That's coming out of ME warranty, mate!",
                 "Hull breach detected, yeah? Cheers for that.",
                 "I felt that. I FELT that in me capacitors.",
             ]))
 
     def _on_hull_critical(self, hp, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("hull_critical", [
             f"Hull at {hp:.0f}! WE ARE ABSOLUTELY DYING MATE.",
             "I've seen scrap heaps in better nick than this!",
             "If we die again I'm filing a grievance.",
@@ -386,10 +609,10 @@ class Bax:
         if self._run_tether_hits >= 3:
             lines.append(f"That's {self._run_tether_hits} harpoons this run. "
                          "They REALLY want this cargo.")
-        self.speak(random.choice(lines))
+        self.speak(self._no_repeat_pick("tether_hit", lines))
 
     def _on_tether_snap(self, reason, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("tether_snap", [
             "Tether's snapped! Leg it!",
             "YEAH! Have that, Gary!",
             "That's what lateral velocity looks like, mate!",
@@ -406,28 +629,28 @@ class Bax:
     # ------------------------------------------------------------------
     def _on_slingshot(self, speed, **_):
         self._run_slingshots += 1
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("slingshot", [
             f"SLINGSHOT! {speed:.0f} metres per second! HAVE THAT!",
             "That's gravitational assist, that is. Textbook.",
             "You beautiful maniac. Jump timer's down, let's GO.",
         ]))
 
     def _on_barge_nearby(self, distance, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("barge_nearby", [
             f"Local 404 signature, {distance:.0f} metres. Eyes up.",
             "Repo barge inbound. They want our cargo. Obviously.",
             "Oi — I'm pickin' up a harpoon lock. Move.",
         ]))
 
     def _on_canister_grab(self, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("canister_grab", [
             "Fuel canister! Thruster's singing, mate.",
             "Nice grab. I've given her a little boost.",
             "Bit extra in the tank. Don't waste it.",
         ]))
 
     def _on_gun_malfunction(self, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("gun_malfunction", [
             "Gun's thrown a wobbler. Give it a sec.",
             "Weapon malfunction! Yeah, she does that.",
             "That's what you get for second-hand ordinance, mate.",
@@ -435,7 +658,7 @@ class Bax:
         ]))
 
     def _on_comms_intercept(self, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("comms_intercept", [
             "I'm in their channel. They've got a manifest update. We're on it.",
             "Local 404 dispatch. Movin' assets this sector. Could be us they're after.",
             "Union chatter on the fleet frequency. They've flagged our cargo.",
@@ -443,14 +666,14 @@ class Bax:
         ]))
 
     def _on_debris_shower(self, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("debris_shower", [
             "Asteroid fragment burst! Duck and weave, mate!",
             "She's a heavy one — scatter field incoming. Watch the rocks!",
             "Debris shower alert. I HATE debris showers.",
         ]))
 
     def _on_scan_ping(self, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("scan_ping", [
             "Union scanner ping! They've got a sweep runnin' — we're lit up.",
             "Passive scan pulse. Someone's lookin' for us. Move.",
             "Radar sweep detected. I'd suggest not hangin' about.",
@@ -458,7 +681,7 @@ class Bax:
 
     def _on_spore_inverted(self, active, **_):
         if active:
-            self.speak(random.choice([
+            self.speak(self._no_repeat_pick("spore_active", [
                 "I've inhaled somethin'. Either that or space is sideways now.",
                 "Right, so LEFT is RIGHT and UP is DOWN. Totally fine. Carry on.",
                 "Oh no. OH NO. The shrooms are leaking. EVERYTHING IS BACKWARDS.",
@@ -468,7 +691,7 @@ class Bax:
                 "MY SENSORS SAY LEFT. THE UNIVERSE SAYS OTHERWISE. PICK ONE.",
             ]))
         else:
-            self.speak(random.choice([
+            self.speak(self._no_repeat_pick("spore_inactive", [
                 "Right, we're back. That was a thing that happened.",
                 "Controls nominal. I think. Mostly. Check everything.",
                 "Spore event over. I'm filing an incident report with meself.",
@@ -477,7 +700,7 @@ class Bax:
             ]))
 
     def _on_barge_intercept(self, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("barge_intercept", [
             "Oi — that's Gary on the line. Mid-flight intercept. Talk fast, yeah?",
             "Comm incoming. Local 404. We are STILL MOVIN', just so you know.",
             "It's a repo intercept. Brilliant. Type smart, we'll be fine.",
@@ -486,7 +709,7 @@ class Bax:
         ]))
 
     def _on_kress_dialled(self, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("kress_dialled", [
             "...Kress? You sure, mate? 'E's a piece of work, that one.",
             "Dialin' Kress. Don't tell 'im I said hello.",
             "Old Kress. We go back. Sort of. He owes me a thing. Doesn't matter.",
@@ -494,7 +717,7 @@ class Bax:
         ]))
 
     def _on_satellite_hit(self, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("satellite_hit", [
             "Ow! Bloody satellite! Who LEAVES these things out here?",
             "That was a Union comm relay. Well. Was.",
             "Derelict hardware! Hull's taken a knock. Watch where you're flyin'!",
@@ -504,7 +727,7 @@ class Bax:
     def _on_alien_sighting(self, **_):
         self._alien_count += 1
         if self._alien_count == 1:
-            self.speak(random.choice([
+            self.speak(self._no_repeat_pick("alien_1", [
                 "OI OI OI. WHAT WAS THAT. That was NOT human. That was NOT Union. "
                 "Did you SEE that thing? Did you — it's gone. It's GONE. Are you alright? I'm not alright.",
                 "I'm reading a hull signature that is categorically NOT in any Union registry. "
@@ -515,7 +738,7 @@ class Bax:
                 "Which is probably fine. Probably.",
             ]))
         elif self._alien_count == 2:
-            self.speak(random.choice([
+            self.speak(self._no_repeat_pick("alien_2", [
                 "AGAIN. They're back. Or a different one. I can't tell. They all look the same "
                 "and I feel bad about that but they do. Still not filing paperwork. Still unsettling.",
                 "Second alien contact. I've started a spreadsheet. Column one: 'did they care about us?'. "
@@ -524,7 +747,7 @@ class Bax:
                 "Either way: deeply weird. Keep moving.",
             ]))
         else:
-            self.speak(random.choice([
+            self.speak(self._no_repeat_pick("alien_n", [
                 f"Alien sighting number {self._alien_count}. I've stopped being surprised. "
                 "That worries me more than the aliens do.",
                 "They're back. Fine. We have a working arrangement now, apparently. "
@@ -536,7 +759,7 @@ class Bax:
             ]))
 
     def _on_harpoon_arming(self, countdown=1.5, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("harpoon_arming", [
             f"INCOMING HARPOON! BRACE — {countdown:.1f} seconds. BREAK THEIR LOCK!",
             "TARGETING LASER ON US. Cut sideways or eat the cable. MOVE.",
             "Harpoon's armin'! Get out of their cone — NOW!",
@@ -545,7 +768,7 @@ class Bax:
         ]))
 
     def _on_torch_active(self, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("torch_active", [
             "PLASMA TORCH IS HOT. SNAP THE TETHER. NOW. NOW. NOW.",
             "They're cuttin' into the hull! Snap that cable SIDEWAYS. GO!",
             "TORCH STATE. Drift HARD or lose a module. You've got seconds!",
@@ -553,12 +776,13 @@ class Bax:
         ]))
 
     def _on_run_start(self, **_):
-        self._run_tether_hits = 0
-        self._run_hull_events = 0
-        self._run_slingshots  = 0
+        self._run_tether_hits  = 0
+        self._run_hull_events  = 0
+        self._run_slingshots   = 0
+        self._barge_kills_run  = 0
         n = getattr(self._meta, "clone_count", 0)
         if n > 1:
-            line = random.choice([
+            line = self._no_repeat_pick("run_start", [
                 f"Clone {n}. Same debt. Same ship. Same me, unfortunately. "
                 "Let's try not to repeat last time.",
                 f"Right. {n} bodies in. Good news: they kept your instincts. "
@@ -574,7 +798,7 @@ class Bax:
             self._speak_cd = 3.2
 
     def _on_ship_destroyed(self, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("ship_destroyed", [
             "No no no no — MEDCORP INCOMING. Don't go towards the light. "
             "There IS no light. There's a clone tank. Which is worse.",
             "Right. That's us dead then. I'll see you on the other side of the fluid tank.",
@@ -584,7 +808,7 @@ class Bax:
         ]))
 
     def _on_shop_enter(self, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("shop_enter", [
             "Black market stop. Don't tell the Union. Or do — they won't be surprised.",
             "Shady vendor ahead. Discretion is expensive. So is dying. Weigh it up.",
             "Right, the dodgy bloke with the crate. Budget's tight but so's our hull.",
@@ -617,10 +841,10 @@ class Bax:
             ],
         }
         fallback = [f"Got the {name}. Right. Let's make it count."]
-        self.speak(random.choice(lines.get(tag, fallback)))
+        self.speak(self._no_repeat_pick(f"shop_buy_{tag}", lines.get(tag, fallback)))
 
     def _on_shop_skip(self, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("shop_skip", [
             "Nothing? We walked away from the black market with nothing? Bold strategy.",
             "Alright. Saving the credits. I respect it. I also question it. Both.",
             "Didn't buy anything. The credits stay on the tally. That's fine. Probably fine.",
@@ -628,7 +852,7 @@ class Bax:
         ]))
 
     def _on_final_sector(self, **_):
-        self.speak(random.choice([
+        self.speak(self._no_repeat_pick("final_sector", [
             "Last sector. Everything they've got is coming for us. "
             "Everything we've got is going into this. Let's DO it.",
             "Final sector. Two barges, heavy rocks, all our worst options. "
@@ -640,14 +864,59 @@ class Bax:
         ]))
 
     def _on_sector_start(self, sector_num=1, cargo_type=None, **_):
+        self._sector_first_kill = False
         pool = _SECTOR_START_CARGO.get(cargo_type) if cargo_type else None
         if pool:
-            line = random.choice(pool).format(n=sector_num)
+            line = self._no_repeat_pick(f"sector_start_{cargo_type}", pool).format(n=sector_num)
         else:
-            line = random.choice(_SECTOR_START_GENERIC)
+            line = self._no_repeat_pick("sector_start", _SECTOR_START_GENERIC)
         bus.emit(EVT_BAX_SPEAK, line=line)
         self._speak_cd = 3.2
 
+    # ── New event handlers (Epic 7.2) ─────────────────────────────────────
+    def _on_gun_fire(self, **_):
+        self._gun_fire_times.append(self._t)
+        # Keep only events in last 2 seconds
+        self._gun_fire_times = [t for t in self._gun_fire_times if self._t - t <= 2.0]
+        if len(self._gun_fire_times) >= 5 and self._sustained_cd <= 0:
+            self._sustained_cd = 12.0
+            self.speak(self._no_repeat_pick("sustained_fire", _SUSTAINED_FIRE))
+
+    def _on_barge_killed(self, **_):
+        self._barge_kills_run += 1
+        if self._barge_kills_run == 1:
+            self.speak(self._no_repeat_pick("first_barge_kill", _FIRST_BARGE_KILL_OF_RUN))
+        else:
+            if self._ctx_ok("barge_destroyed", 8.0):
+                self.speak(self._no_repeat_pick("barge_destroyed", _BARGE_DESTROYED))
+        # Also counts as first kill of sector
+        if not self._sector_first_kill:
+            self._sector_first_kill = True
+
+    def _on_corridor_run(self, **_):
+        if self._ctx_ok("corridor_run", 8.0):
+            self.speak(self._no_repeat_pick("corridor_run", _CORRIDOR_RUNNING))
+
+    def _on_corridor_jump(self, **_):
+        if self._ctx_ok("corridor_jump", 6.0):
+            self.speak(self._no_repeat_pick("corridor_jump", _CORRIDOR_JUMPING))
+
+    def _on_corridor_secret(self, **_):
+        self.speak(self._no_repeat_pick("corridor_secret", _CORRIDOR_SECRET_FOUND))
+
+    def _on_corridor_death(self, **_):
+        self.speak(self._no_repeat_pick("corridor_death", _CORRIDOR_DEATH))
+
+    def _on_dock_approach(self, **_):
+        self.speak(self._no_repeat_pick("dock_approach", _DOCK_APPROACH))
+
+    def _on_dock_perfect(self, **_):
+        self.speak(self._no_repeat_pick("dock_perfect", _DOCK_PERFECT))
+
+    def _on_dock_rough(self, **_):
+        self.speak(self._no_repeat_pick("dock_rough", _DOCK_ROUGH))
+
+    # ------------------------------------------------------------------
     def radio_blip(self):
         if self._radio_cd <= 0:
             self.speak("Pickin' up somethin' on the radio... quiet-like. Eyes open.")
