@@ -112,7 +112,8 @@ class Game:
         self._torch_warn_t = countdown
 
     def _on_ship_destroyed(self, **_):
-        self.meta.apply_death_penalty()
+        sector_idx = getattr(self.run_mgr, '_sector_index', 0) if self.run_mgr else 0
+        self.meta.apply_death_penalty(sector_index=sector_idx)
         self._run_just_completed = False
         self._goto(GameState.DECANTING)
 
