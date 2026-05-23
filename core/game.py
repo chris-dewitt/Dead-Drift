@@ -239,7 +239,13 @@ class Game:
                 self.ship.update(dt)
                 self.bax.update(dt)
                 self.cockpit_renderer.update(dt)
-                self.audio.update(self.ship.body.speed(), dt)
+                self.audio.update(
+                    self.ship.body.speed(), dt,
+                    hull_pct=self.ship.hull_pct,
+                    barge_threat=self.run_mgr.barge_threat_level(),
+                    sector_idx=getattr(self.run_mgr, '_sector_index', 0),
+                    cargo_alarm=self.run_mgr.cargo_alarm_level(),
+                )
                 # Shop stop between sectors
                 if self.run_mgr._shop_pending:
                     self._shop = ShopScreen(self.run_mgr, self.ship)

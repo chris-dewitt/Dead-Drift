@@ -21,9 +21,18 @@ def _tri_voice(freq: float, n: int) -> np.ndarray:
 
 
 def _chord_block(root: float, duration: float,
-                 mode: str = "minor") -> np.ndarray:
-    """Build a sustained chord block with attack/release ramp. No tail cut."""
+                 mode: str = "minor",
+                 voicing_width: float = 1.0) -> np.ndarray:
+    """Build a sustained chord block with attack/release ramp. No tail cut.
+    voicing_width < 1.0 narrows to root + b7 only (pressure closes in on the player).
+    """
     ratios = _CHORD_RATIOS.get(mode, _CHORD_RATIOS["minor"])
+    # Narrow the voicing under pressure: keep only root + b7 when width <= 0.5
+    if voicing_width <= 0.5:
+        ratios = [ratios[0], ratios[-1]]  # root + b7
+    elif voicing_width < 1.0:
+        # Keep root, 5th, b7 (drop the b3 for a more open sound)
+        ratios = [ratios[0]] + ([ratios[2]] if len(ratios) > 2 else []) + [ratios[-1]]
     n      = int(SAMPLE_RATE * duration)
     w      = np.zeros(n, dtype=np.float32)
     for i, r in enumerate(ratios):
@@ -34,10 +43,8 @@ def _chord_block(root: float, duration: float,
         tri  = _tri_voice(f, n) * 0.18
         amp  = 0.32 if i in (0, 2) else 0.22
         w   += (saw1 + saw2 + tri) * amp
-    # Lowpass: cumulative averaging twice
     for _ in range(2):
         w = (w + np.roll(w, 1) + np.roll(w, 2)) / 3.0
-    # Slow LFO breath
     t   = np.arange(n, dtype=np.float32) / SAMPLE_RATE
     lfo = 0.78 + 0.22 * np.sin(_2PI * 0.18 * t)
     w   = w * lfo
@@ -80,7 +87,8 @@ def _arpeggio_layer(roots: list[float], duration_per_chord: float,
 def build_new_wave_pad(progression: list[float],
                        duration_per_chord: float = 4.0,
                        mode: str = "minor",
-                       with_arpeggio: bool = True) -> pygame.mixer.Sound:
+                       with_arpeggio: bool = True,
+                       voicing_width: float = 1.0) -> pygame.mixer.Sound:
     """
     Build a looping chord progression as a single pad. Chords crossfade.
     progression: list of root frequencies (Hz). e.g. [220, 174.61, 196, 164.81]
@@ -99,9 +107,8 @@ def build_new_wave_pad(progression: list[float],
     chord_n = int(SAMPLE_RATE * duration_per_chord)
 
     for ci, root in enumerate(progression):
-        # Build chord with crossfade tails on both ends
         block_dur = duration_per_chord + xfade_s
-        block     = _chord_block(root, block_dur, mode=mode)
+        block     = _chord_block(root, block_dur, mode=mode, voicing_width=voicing_width)
         # Crossfade envelope: ramp-in at start, hold, ramp-out at end
         env       = np.ones(len(block), dtype=np.float32)
         if xfade_n > 0 and xfade_n < len(block):
