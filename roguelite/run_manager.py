@@ -577,13 +577,13 @@ class RunManager:
                 "Right — final exit interview. The whole chapter hinges on this.",
             ]))
         else:
-            pool = ["gary", "synthetic_droid", "union_dispatcher"]
+            pool = ["synthetic_droid", "union_dispatcher", "toll_authority"]
             if self._sector_index >= 1:
                 pool.append("underground_dj")    # benign ally, mid-game possible
             if self._sector_index >= 2:
                 pool.extend(["sandra", "pirate"])
             if self._sector_index >= 3:
-                pool.append("insurance_adjuster")
+                pool.extend(["insurance_adjuster", "gary"])
             npc_type = random.choice(pool)
             framing = {
                 "sandra": [
@@ -610,6 +610,28 @@ class RunManager:
                     "Pirate radio signal punching through the gate comm. "
                     "Marrow. He's on our side. Don't blow it.",
                 ],
+                "toll_authority": [
+                    "Gate checkpoint incomin'. Transit levy — fifteen 'undred credits. "
+                    "Could try talkin' 'im down. Could mention the Union.",
+                    "Toll booth. Some bored Transit Authority bloke. "
+                    "Pay up, run the paperwork angle, or complain about Local 404. 'E hates 'em.",
+                    "Gate Seven checkpoint. Looks like a long-shift type. "
+                    "Might sympathise if you bring up the Union. Worth a shot.",
+                ],
+                "synthetic_droid": [
+                    "TK-9 on the channel. Their logic unit's got exploits. "
+                    "Hit it with a paradox or flash the SQL. Don't make friends.",
+                    "Droid checkpoint. They run on Union logic trees. "
+                    "Find the exploit and they fold. Article overrides work.",
+                    "Machine gate authority. No feelings, but definite bugs. "
+                    "Paradoxes, override commands — their weakness, our door.",
+                ],
+                "gary": [
+                    "Gary Pruitt, jump gate. 'E's everywhere, this one. "
+                    "Same tricks work — deal, bribe, sympathy. You know the drill.",
+                    "Gary again. Different gate, same bloke. "
+                    "At least we know 'is weaknesses. Give 'im somethin' to work with.",
+                ],
             }
             default_framing = [
                 "Gate authority checkpoint. They want passage fees before we jump.",
@@ -625,6 +647,17 @@ class RunManager:
         self._pending_advance = True
 
     def on_terminal_complete(self, outcome):
+        # Deduct any bribe the player paid
+        npc = self._active_terminal.npc if self._active_terminal else None
+        bribe_paid = npc.bribe_cost() if npc else 0
+        if bribe_paid > 0:
+            self.meta.add_debt(bribe_paid)
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                f"Bribe accepted. {bribe_paid:,} credits gone. Not the cleanest exit.",
+                f"That cost us {bribe_paid:,}. Could've been worse. Could've been impound.",
+                f"Paid {bribe_paid:,} to get through. Technically negotiation. Technically.",
+            ]))
+
         # Grant debt reduction based on how the negotiation went
         if outcome == "exploit":
             bonus = 9000
@@ -636,7 +669,8 @@ class RunManager:
                 f"Their firewall had the structural integrity of wet paper. {bonus:,} back.",
                 f"You just robbed a repo man digitally. {bonus:,} off. I'm proud.",
             ]))
-        elif outcome == "release":
+        elif outcome == "release" and bribe_paid == 0:
+            # Only give the full release bonus when no bribe was needed
             bonus = 2500
             self.meta.pay_off(bonus)
             self._run_debt_reduced += bonus

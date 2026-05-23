@@ -291,7 +291,6 @@ class Corridor:
             if self._dialog.is_done:
                 self._credits += self._dialog.credits
                 if self._dialog.lore:
-                    from core.event_bus import bus, EVT_BAX_SPEAK
                     bus.emit(EVT_BAX_SPEAK, line=self._dialog.lore[:60])
                 self._dialog = None
             return

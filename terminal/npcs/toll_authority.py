@@ -62,6 +62,7 @@ class TollAuthority(BaseNPC):
         self._paperwork    = False
         self._low_bribed   = False
         self._barge_called = False
+        self._bribe_paid   = 0
 
     # ------------------------------------------------------------------
     # Intro
@@ -130,6 +131,7 @@ class TollAuthority(BaseNPC):
             if kw in text_l:
                 self.disposition += 4
                 self._paid = True
+                self._bribe_paid = _TOLL_COST
                 if self._vault:
                     self._vault.record("toll_authority", "PAID_TOLL")
                 bus.emit(EVT_NLP_EXPLOIT, npc="toll_authority",
@@ -141,6 +143,7 @@ class TollAuthority(BaseNPC):
             self.disposition += 1
             self._low_bribed = True
             if random.random() < 0.4:
+                self._bribe_paid = 750
                 if self._vault:
                     self._vault.record("toll_authority", "LOW_BRIBE")
                 bus.emit(EVT_NLP_EXPLOIT, npc="toll_authority",
@@ -313,6 +316,9 @@ class TollAuthority(BaseNPC):
     # ------------------------------------------------------------------
     # Properties / public API
     # ------------------------------------------------------------------
+
+    def bribe_cost(self) -> int:
+        return self._bribe_paid
 
     @property
     def barge_called(self) -> bool:

@@ -68,6 +68,7 @@ class Gary(BaseNPC):
         self._intercepted      = intercepted
         self._therapy_points   = 0
         self._bribe_attempts   = 0
+        self._bribe_paid       = 0     # credit amount owed when bribe is accepted
         self._deal_attempts    = 0
         self._sympathy_turns   = 0
         self._management_turns = 0
@@ -162,7 +163,7 @@ class Gary(BaseNPC):
             self._sympathy_turns += 1
             self._current_path    = "SYMPATHY"
             self.disposition += 2
-            if self.disposition >= 4:
+            if self._sympathy_turns >= 2:
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="sympathy")
                 return NPCOutcome.RELEASE, random.choice([
                     "*long pause* ...Look. I got a mum on 'er fourth body. "
@@ -227,6 +228,7 @@ class Gary(BaseNPC):
             has_big = (any(amt in raw for amt in self._BIG_AMOUNTS) or
                        (parsed.amount is not None and parsed.amount >= 3000))
             if has_big:
+                self._bribe_paid = parsed.amount if parsed.amount else 3000
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="bribe")
                 return NPCOutcome.RELEASE, random.choice([
                     "*long pause* ...Right. I didn't see nuffin'. "
@@ -249,6 +251,7 @@ class Gary(BaseNPC):
             elif self._bribe_attempts >= 3:
                 self.disposition += 1
                 if self.disposition >= 3:
+                    self._bribe_paid = parsed.amount if parsed.amount else 1000
                     return NPCOutcome.RELEASE, (
                         "Alright, alright. You know what, I'm tired. "
                         "It's been six stops and none of 'em 'ave offered me anyfing. "
@@ -386,6 +389,9 @@ class Gary(BaseNPC):
 
         # DEFAULT — changes tone based on progress
         return NPCOutcome.CONTINUE, self._gary_filler()
+
+    def bribe_cost(self) -> int:
+        return self._bribe_paid
 
     def get_path_progress(self) -> list[tuple[str, int, int]]:
         return [
