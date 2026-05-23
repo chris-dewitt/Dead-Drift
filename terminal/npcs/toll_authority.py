@@ -100,14 +100,19 @@ class TollAuthority(BaseNPC):
     # Evaluation — checked in priority order
     # ------------------------------------------------------------------
 
-    def _evaluate(self, parsed: ParsedInput) -> NPCOutcome | None:
+    def _decide_outcome(self, parsed: ParsedInput) -> str:
+        """Return one of NPCOutcome.{RELEASE, IMPOUND, CONTINUE}.
+
+        Note: patience is decremented by the base class on CONTINUE, so this
+        method never manually ticks self._patience.
+        """
         text_l = parsed.raw.lower()
 
-        # Hostile → barge call
+        # Hostile → barge call (immediate impound)
         if any(w in text_l for w in _HOSTILE_WORDS):
             self._barge_called = True
             self.disposition = -10
-            return None
+            return NPCOutcome.IMPOUND
 
         # PAPERWORK exploit — goes BEFORE pay check
         if any(w in text_l for w in _PAPERWORK_KEYWORDS):
@@ -119,12 +124,7 @@ class TollAuthority(BaseNPC):
                 bus.emit(EVT_NLP_EXPLOIT, npc="toll_authority",
                          exploit_key="PAPERWORK_EXPLOIT")
                 return NPCOutcome.RELEASE
-            # Didn't work — he ranted but didn't wave through; patience still ticks
-            self.patience -= 1
-            if self.patience <= 0:
-                self._barge_called = True
-                return None
-            return None
+            return NPCOutcome.CONTINUE
 
         # Pay with sufficient credits
         for kw in _PAY_KEYWORDS:
@@ -149,12 +149,7 @@ class TollAuthority(BaseNPC):
                 bus.emit(EVT_NLP_EXPLOIT, npc="toll_authority",
                          exploit_key="LOW_BRIBE")
                 return NPCOutcome.RELEASE
-            # Pretends to be insulted; patience still ticks
-            self.patience -= 1
-            if self.patience <= 0:
-                self._barge_called = True
-                return None
-            return None
+            return NPCOutcome.CONTINUE
 
         # Union sympathy — he might wave you through
         if any(w in text_l for w in _UNION_GRIPE_WORDS):
@@ -165,26 +160,21 @@ class TollAuthority(BaseNPC):
                 bus.emit(EVT_NLP_EXPLOIT, npc="toll_authority",
                          exploit_key="UNION_SYMPATHY")
                 return NPCOutcome.RELEASE
-
-        # Patience decay
-        self.patience -= 1
-        if self.patience <= 0:
-            self._barge_called = True
-            return None
+            return NPCOutcome.CONTINUE
 
         self.disposition -= 1
-        return None
+        return NPCOutcome.CONTINUE
 
     # ------------------------------------------------------------------
     # Response assembly
     # ------------------------------------------------------------------
 
-    def get_response(self, parsed: ParsedInput) -> tuple[str, NPCOutcome | None]:
-        outcome = self._evaluate(parsed)
+    def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
+        outcome = self._decide_outcome(parsed)
 
         # Barge call (hostile or timeout)
-        if self._barge_called and outcome is None:
-            return (random.choice([
+        if outcome == NPCOutcome.IMPOUND:
+            return (NPCOutcome.IMPOUND, random.choice([
                 "Right. That's it. Local 404 — I'm calling them in. "
                 "You want to do it the hard way, we do it the hard way. "
                 "Good luck out there.",
@@ -192,12 +182,12 @@ class TollAuthority(BaseNPC):
                 "You've got about ninety seconds before things get complicated.",
                 "Fine. I tried. I really did. Local 404 is on its way. "
                 "I'll file the incident report. I always file the incident report.",
-            ]), NPCOutcome.IMPOUND)
+            ]))
 
         if outcome == NPCOutcome.RELEASE:
             # Paid in full
             if self._paid:
-                return (random.choice([
+                return (NPCOutcome.RELEASE, random.choice([
                     "Payment confirmed. Gate Seven: cleared. "
                     "Move it — you're backing up the queue.",
                     "Transaction logged. You're through. "
@@ -210,11 +200,11 @@ class TollAuthority(BaseNPC):
                     "Next time just lead with the payment, saves us both the drama.",
                     "Logged. Gate open. Move along — I've got eighteen couriers behind you "
                     "and none of them look patient.",
-                ]), NPCOutcome.RELEASE)
+                ]))
 
             # Paperwork rant wave-through
             if self._paperwork and not self._low_bribed:
-                return (random.choice([
+                return (NPCOutcome.RELEASE, random.choice([
                     "Form — don't even get me started on forms. "
                     "Form 14-C, Form 14-C amended, Form 14-C-revised-amended, "
                     "Form 14-C-revised-amended-provisional — "
@@ -228,11 +218,11 @@ class TollAuthority(BaseNPC):
                     "Signed. Dated. Filed in triplicate. "
                     "And Local 404 STILL questioned my authority last Tuesday. "
                     "You know what — go. Gate Seven, open. I need to breathe.",
-                ]), NPCOutcome.RELEASE)
+                ]))
 
             # Low bribe secretly accepted
             if self._low_bribed:
-                return (random.choice([
+                return (NPCOutcome.RELEASE, random.choice([
                     "...that is an insult. That is a genuine insult to this office "
                     "and to the Transit Authority as an institution. "
                     "I am deeply offended. "
@@ -244,10 +234,10 @@ class TollAuthority(BaseNPC):
                     "That barely covers my lunch. This is beneath me. "
                     "I went to two years of checkpoint academy for this. "
                     "...Go. I'm logging this as a 'voluntary compliance reduction'. Move.",
-                ]), NPCOutcome.RELEASE)
+                ]))
 
             # Union sympathy wave-through
-            return (random.choice([
+            return (NPCOutcome.RELEASE, random.choice([
                 "...alright. Look, between you and me, Local 404 took my overtime last month. "
                 "You didn't hear that. Gate Seven: open. Move along before I change my mind.",
                 "You know what? Same. I hate those guys too. "
@@ -262,11 +252,12 @@ class TollAuthority(BaseNPC):
                 "Go. Gate Seven: open. I'm filing a counter-grievance.",
                 "Sixteen months I've been waiting for my Union liaison callback. "
                 "Sixteen months. You know what? You're fine. Gate's open. Move.",
-            ]), NPCOutcome.RELEASE)
+            ]))
 
+        # CONTINUE outcomes below — patience ticks down in base class
         # Paperwork rant — didn't result in release
-        if self._paperwork and outcome is None:
-            return (random.choice([
+        if self._paperwork:
+            return (NPCOutcome.CONTINUE, random.choice([
                 "Paperwork. Right. Paperwork. D'you know I filled out forty-seven forms "
                 "last week? Forty-seven. And half of them were for forms about forms. "
                 "...The toll is still fifteen hundred. Pay it.",
@@ -277,11 +268,11 @@ class TollAuthority(BaseNPC):
                 "Oh, clearance documentation, is it? "
                 "I've got documentation coming out of my ears. "
                 "None of it has ever saved anyone fifteen hundred credits. Pay.",
-            ]), None)
+            ]))
 
         # Low bribe — pretend outrage, didn't release
-        if self._low_bribed and outcome is None:
-            return (random.choice([
+        if self._low_bribed:
+            return (NPCOutcome.CONTINUE, random.choice([
                 "...I'm sorry. I'm sorry, did you just try to bribe a Transit Authority official "
                 "with less than the posted toll? "
                 "That's not even a bribe. That's an insult. Fifteen hundred. Pay it.",
@@ -291,10 +282,10 @@ class TollAuthority(BaseNPC):
                 "I have a mortgage. I have a dependent. I have ambitions. "
                 "And you bring me that? "
                 "Fifteen hundred credits or turn around.",
-            ]), None)
+            ]))
 
         # Generic patience-decay responses
-        return (random.choice([
+        return (NPCOutcome.CONTINUE, random.choice([
             "Still here. Still waiting. Clock's ticking.",
             "That's not fifteen hundred credits. That's words.",
             "I'm logging this delay. It'll show up on your transit record. Pay.",
@@ -311,7 +302,7 @@ class TollAuthority(BaseNPC):
             "One more non-payment response and I escalate this. "
             "That's not a threat. That's procedure. "
             "I love procedure. Fifteen hundred credits.",
-        ]), None)
+        ]))
 
     # ------------------------------------------------------------------
     # Properties / public API

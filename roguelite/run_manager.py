@@ -658,6 +658,15 @@ class RunManager:
                 f"Paid {bribe_paid:,} to get through. Technically negotiation. Technically.",
             ]))
 
+        # Toll authority IMPOUND: he actually calls Local 404 — spawn a chaser
+        if outcome == "impound" and getattr(npc, "barge_called", False):
+            self._spawn_barge(immediate_chase=True)
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "'E wasn't bluffin'. Repo on intercept course. STRAP IN.",
+                "Toll bloke flagged us. Barge incoming. Brilliant. Just brilliant.",
+                "Local 404 is en route. Should've paid. Or not been so polite.",
+            ]))
+
         # Grant debt reduction based on how the negotiation went
         if outcome == "exploit":
             bonus = 9000
