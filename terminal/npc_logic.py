@@ -8,6 +8,8 @@ from terminal.npcs.sandra import Sandra
 from terminal.npcs.pirate import Pirate
 from terminal.npcs.underground_dj import UndergroundDJ
 from terminal.npcs.toll_authority import TollAuthority
+from terminal.npcs.nervous_fence import NervousFence
+from terminal.npcs.cargo_inspector import CargoInspector
 from terminal.npcs.base_npc import BaseNPC
 
 
@@ -23,6 +25,8 @@ def make_npc(npc_type: str, **kwargs) -> BaseNPC:
         "pirate":             Pirate,
         "underground_dj":     UndergroundDJ,
         "toll_authority":     TollAuthority,
+        "nervous_fence":      NervousFence,
+        "cargo_inspector":    CargoInspector,
     }
     cls = registry.get(npc_type)
     if cls is None:

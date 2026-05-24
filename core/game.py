@@ -570,7 +570,7 @@ class Game:
                                       "release", "exploit")
                     if win:
                         # Hold on terminal screen so the player sees the outcome
-                        self._terminal_win_hold_t = 2.2
+                        self._terminal_win_hold_t = 5.0
                         self._terminal_win_str = (
                             "NEGOTIATION SUCCESS" if outcome in ("release", NPCOutcome.RELEASE)
                             else "SYSTEM EXPLOITED"
@@ -958,7 +958,7 @@ class Game:
     def _render_terminal_win_overlay(self):
         """Semi-transparent overlay shown after a terminal win — player sees outcome for 2s."""
         t    = pygame.time.get_ticks() / 1000.0
-        frac = min(1.0, self._terminal_win_hold_t / 2.2)
+        frac = min(1.0, self._terminal_win_hold_t / 5.0)
         # Fade in quickly, hold, fade out near end
         alpha = 200 if frac > 0.15 else int(200 * frac / 0.15)
         ov    = pygame.Surface((S.SCREEN_W, S.SCREEN_H), pygame.SRCALPHA)

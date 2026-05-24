@@ -562,6 +562,8 @@ class RunManager:
         for mod in self._ship.chain.get_active("propulsion"):
             if isinstance(mod, Thruster):
                 mod.inject_fuel_mix(1.5, 8.0)
+        # Small hull patch — emergency sealant in the canister
+        self._ship.repair(12.0)
 
     # ------------------------------------------------------------------
     def _build_run_context(self) -> dict:
@@ -638,13 +640,13 @@ class RunManager:
                 "Right — final exit interview. The whole chapter hinges on this.",
             ]))
         else:
-            pool = ["synthetic_droid", "union_dispatcher", "toll_authority"]
+            pool = ["synthetic_droid", "union_dispatcher", "cargo_inspector"]
             if self._sector_index >= 1:
-                pool.append("underground_dj")    # benign ally, mid-game possible
+                pool.extend(["underground_dj", "nervous_fence"])
             if self._sector_index >= 2:
                 pool.extend(["sandra", "pirate"])
             if self._sector_index >= 3:
-                pool.append("insurance_adjuster")
+                pool.extend(["insurance_adjuster", "cargo_inspector"])
             if self._sector_index >= 5:
                 pool.append("gary")
             npc_type = random.choice(pool)
@@ -694,6 +696,24 @@ class RunManager:
                     "Same tricks work — deal, bribe, sympathy. You know the drill.",
                     "Gary again. Different gate, same bloke. "
                     "At least we know 'is weaknesses. Give 'im somethin' to work with.",
+                ],
+                "nervous_fence": [
+                    "Picking up a grey-market relay. It's a FENCE. Felix. "
+                    "He wants the cargo manifest or some credits. Friendly-ish. "
+                    "Ask about his 'business plans' if you want a laugh.",
+                    "Private relay signal. That's a contact, not a blockade. "
+                    "Felix runs patrol intel — get him talking about his five-year plan.",
+                    "Ooh, it's Felix! Legit-adjacent middleman. "
+                    "Give 'im a manifest reading or talk debt — he's sympathetic. Useful bloke.",
+                ],
+                "cargo_inspector": [
+                    "Cargo inspection checkpoint. Inspector wants a manifest declaration. "
+                    "Tell 'im it's 'standard freight' and he'll tick the box. Easy.",
+                    "Manifest check incoming. STA Inspector Holt. "
+                    "Just sound boring and official — he loves that. "
+                    "Or cite a cargo code. Any code. He won't check.",
+                    "Cargo inspector. Nine years on the job. "
+                    "Be vague three times and he gives up — or just say 'general goods'.",
                 ],
             }
             default_framing = [

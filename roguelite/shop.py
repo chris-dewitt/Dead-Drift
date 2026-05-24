@@ -216,6 +216,12 @@ class ShopScreen:
 
     def handle_key(self, event: pygame.event.Event):
         if self._phase == "intro":
+            if event.key == pygame.K_ESCAPE:
+                from core.event_bus import bus, EVT_SHOP_SKIP
+                if not self._bought:
+                    bus.emit(EVT_SHOP_SKIP)
+                self.is_done = True
+                return
             self._phase = "browse"
             return
         if event.key in (pygame.K_UP, pygame.K_w):

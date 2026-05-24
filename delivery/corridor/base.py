@@ -662,22 +662,83 @@ class Corridor:
         self._result_t = 4.0
 
     def _draw_default_bg(self, surf, t, pal):
-        bg_off = self._cam_x * 0.5
-        # Grid lines
-        for gx in range(0, CORRIDOR_W, 40):
-            pygame.draw.line(surf, pal.get("grid", (12, 22, 14)),
-                             (gx, 0), (gx, CORRIDOR_H), 1)
-        for gy in range(0, CORRIDOR_H, 40):
-            pygame.draw.line(surf, pal.get("grid", (12, 22, 14)),
-                             (0, gy), (CORRIDOR_W, gy), 1)
-        # Ceiling lights
-        light_sp = 180
+        """Atmospheric sci-fi corridor background with parallax layers."""
+        # ── Layer 0: deep background wall panels (slow parallax) ─────────────
+        wall_col   = pal.get("wall_panel", (10, 18, 12))
+        seam_col   = pal.get("wall_seam",  (0, 60, 30))
+        panel_w    = 120
+        bg_off     = int(self._cam_x * 0.15) % panel_w
+        for px in range(-bg_off, CORRIDOR_W + panel_w, panel_w):
+            pygame.draw.rect(surf, wall_col, (px, CEIL_Y, panel_w - 2, FLOOR_Y - CEIL_Y))
+            pygame.draw.line(surf, seam_col, (px, CEIL_Y), (px, FLOOR_Y), 1)
+
+        # ── Layer 1: mid-wall pipes and conduit strips (medium parallax) ──────
+        pipe_off = int(self._cam_x * 0.35) % 200
+        for px in range(-pipe_off, CORRIDOR_W + 200, 200):
+            # Main conduit bar
+            pygame.draw.rect(surf, pal.get("pipe",  (0, 80, 40)),
+                             (px - 4, CEIL_Y + 14, 8, FLOOR_Y - CEIL_Y - 28))
+            # Connector rings
+            for ry in range(CEIL_Y + 30, FLOOR_Y - 20, 40):
+                pygame.draw.rect(surf, pal.get("pipe_ring", (0, 120, 60)),
+                                 (px - 6, ry, 12, 6))
+            # Status blinker (alternating pipes blink)
+            blink_on = int(t * 2.0 + px * 0.005) % 2 == 0
+            if blink_on:
+                pygame.draw.circle(surf, (0, 200, 100), (px, CEIL_Y + 22), 3)
+
+        # ── Layer 2: floor warning stripes (fast parallax — moves with camera) ─
+        stripe_off = int(self._cam_x * 0.7) % 60
+        for sx in range(-stripe_off, CORRIDOR_W + 60, 60):
+            sc = pal.get("stripe", (16, 26, 14))
+            pygame.draw.rect(surf, sc, (sx, FLOOR_Y - 4, 30, 4))
+
+        # ── Layer 3: ceiling cable run ────────────────────────────────────────
+        cable_col = pal.get("cable", (0, 50, 25))
+        cable_off = int(self._cam_x * 0.5) % CORRIDOR_W
+        for cy_i in range(2):
+            cy_y = CEIL_Y + 8 + cy_i * 6
+            # Draw as segmented cable with slight sag
+            seg_w = 40
+            c_off = int(self._cam_x * (0.5 + cy_i * 0.1)) % seg_w
+            for cx_s in range(-c_off, CORRIDOR_W + seg_w, seg_w):
+                sag = int(3 * math.sin(t * 0.8 + cx_s * 0.05))
+                pygame.draw.line(surf, cable_col,
+                                 (cx_s, cy_y + sag), (cx_s + seg_w, cy_y + sag), 1)
+
+        # ── Layer 4: ceiling light panels ─────────────────────────────────────
+        light_sp = 160
         first_l  = int(self._cam_x / light_sp) * light_sp - light_sp
         for lx in range(first_l, int(self._cam_x) + CORRIDOR_W + light_sp, light_sp):
             sx = lx - int(self._cam_x)
-            fl = 1.0 - 0.08 * math.sin(t * 7.3 + lx * 0.01)
-            lc = tuple(int(c * fl) for c in pal.get("light", (0, 180, 80)))
-            pygame.draw.rect(surf, lc, (sx - 12, CEIL_Y + 2, 24, 6))
+            # Flicker — each light has independent phase
+            fl = 1.0 - 0.06 * abs(math.sin(t * 5.8 + lx * 0.03))
+            # Some lights are broken (warm red-amber tint instead of green)
+            broken = (abs(hash(lx)) % 9) == 0
+            if broken:
+                lc = (int(180 * fl), int(60 * fl), int(20 * fl))
+                # Intermittent flicker for broken lights
+                if int(t * 8 + lx) % 7 < 2:
+                    lc = (20, 8, 4)
+            else:
+                lc = tuple(int(c * fl) for c in pal.get("light", (0, 180, 80)))
+            pygame.draw.rect(surf, lc, (sx - 16, CEIL_Y + 2, 32, 8))
+            # Light cone (subtle gradient trapezoid)
+            if not broken:
+                cone_col = (int(lc[0] * 0.08), int(lc[1] * 0.08), int(lc[2] * 0.08))
+                pts = [(sx - 16, CEIL_Y + 10), (sx + 16, CEIL_Y + 10),
+                       (sx + 40, CEIL_Y + 50), (sx - 40, CEIL_Y + 50)]
+                pygame.draw.polygon(surf, cone_col, pts)
+
+        # ── Layer 5: background warning text stencils on wall ─────────────────
+        warn_off = int(self._cam_x * 0.3) % 320
+        f_stencil = pygame.font.SysFont("monospace", 9)
+        for wx in range(-warn_off, CORRIDOR_W + 320, 320):
+            msgs = ["AUTHORISED PERSONNEL ONLY", "SECTION 7-C", "NO CARGO BEYOND THIS POINT",
+                    "TRANSIT ZONE — KEEP MOVING", "UNION LOCALS ONLY", "CLEARANCE REQUIRED"]
+            msg = msgs[(abs(wx) // 320) % len(msgs)]
+            stencil = f_stencil.render(msg, True, pal.get("stencil", (0, 45, 22)))
+            surf.blit(stencil, (wx, FLOOR_Y - 18))
 
     def _draw_player(self, surf, t):
         px       = _PLAYER_X_FIXED

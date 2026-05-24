@@ -11,21 +11,25 @@ from config import settings as S
 
 
 _NPC_DOSSIER_TITLE = {
-    "GARY":           "FIELD PROFILE",
-    "TK-9":           "VULNERABILITY SCAN",
-    "DISPATCHER":     "PATH ANALYSIS",
-    "KRESS":          "INTEL DOSSIER",
-    "MORWENNA":       "CLAIMS ANALYSIS",
-    "TOLL AUTHORITY": "GATE RECORD",
+    "GARY":             "FIELD PROFILE",
+    "TK-9":             "VULNERABILITY SCAN",
+    "DISPATCHER":       "PATH ANALYSIS",
+    "KRESS":            "INTEL DOSSIER",
+    "MORWENNA":         "CLAIMS ANALYSIS",
+    "TOLL AUTHORITY":   "GATE RECORD",
+    "RELAY-7 FELIX":    "RELAY CONTACT",
+    "INSPECTOR HOLT":   "INSPECTION RECORD",
 }
 
 _NPC_HINTS = {
-    "GARY":           "deal×2 · bribe ≥3k · sympathy×2 · blevins · overtime+article7 · [ESC] abort",
-    "TK-9":           "paradox×2 · drop table · statute×3 · override · friendship×3 · emp.month · [ESC] abort",
-    "DISPATCHER":     "coffee/break/tired · forms×3 · say '42' · grievance×3 · quantum+legal · bribe ≥10k · [ESC] abort",
-    "KRESS":          "intel · contraband · volkov · connie · be friendly×3 · [ESC] abort",
-    "MORWENNA":       "union negligence×3 · force majeure · counter-claim×2 · sympathy×3 · form 34-A×2 · [ESC] abort",
-    "TOLL AUTHORITY": "pay ≥1500 · forms/permits/id · union/local404 · offer 500-1000 (40%) · [ESC] abort",
+    "GARY":             "deal×2 · bribe ≥3k · sympathy×2 · blevins · overtime+article7 · [ESC] abort",
+    "TK-9":             "paradox×2 · drop table · statute×3 · override · friendship×3 · emp.month · [ESC] abort",
+    "DISPATCHER":       "coffee/break/tired · forms×3 · say '42' · grievance×3 · quantum+legal · bribe ≥10k · [ESC] abort",
+    "KRESS":            "intel · contraband · volkov · connie · be friendly×3 · [ESC] abort",
+    "MORWENNA":         "union negligence×3 · force majeure · counter-claim×2 · sympathy×3 · form 34-A×2 · [ESC] abort",
+    "TOLL AUTHORITY":   "pay ≥1500 · forms/permits/id · union/local404 · offer 500-1000 (40%) · [ESC] abort",
+    "RELAY-7 FELIX":    "offer manifest/contents · pay ≥800cr · bond over debt/clone · ask about his 'plan'×3 · [ESC] abort",
+    "INSPECTOR HOLT":   "'standard freight'/'general goods' · cite any cargo code · article 9 (50%) · vague×3 · pay ≥600cr · [ESC] abort",
 }
 
 # Keywords shown as live chips while player types — gives "signal probe" feedback
@@ -76,6 +80,23 @@ _SCAN_VOCAB: dict[str, dict[str, str]] = {
         "repo": "UNION-GRIPE", "quota": "UNION-GRIPE",
         "500": "LOW-BRIBE", "1000": "LOW-BRIBE",
     },
+    "RELAY-7 FELIX": {
+        "manifest": "DEAL★", "contents": "DEAL★", "cargo list": "DEAL★",
+        "trade": "DEAL", "exchange": "DEAL", "give you": "DEAL",
+        "plan": "DISTRACT★", "legitimate": "DISTRACT★", "business": "DISTRACT",
+        "retire": "DISTRACT", "dream": "DISTRACT", "five years": "DISTRACT★",
+        "debt": "SYMPATHY", "clone": "SYMPATHY", "broke": "SYMPATHY",
+        "credits": "PAYMENT", "800": "PAYMENT★",
+    },
+    "INSPECTOR HOLT": {
+        "standard freight": "COMPLY★", "general goods": "COMPLY★",
+        "industrial": "COMPLY", "medical": "COMPLY", "personal effects": "COMPLY",
+        "cargo code": "CODE★", "classification": "CODE★", "reg-": "CODE",
+        "article 9": "PRIV★", "transit privacy": "PRIV★", "privacy": "PRIV",
+        "various": "VAGUE", "assorted": "VAGUE", "don't know": "VAGUE",
+        "sealed": "VAGUE", "classified": "VAGUE", "confidential": "VAGUE",
+        "credits": "DOC-FEE", "600": "DOC-FEE★",
+    },
 }
 
 _COURIER_QUIPS_KW: dict[str, list[str]] = {
@@ -120,6 +141,85 @@ _COURIER_QUIPS_KW: dict[str, list[str]] = {
                   "this is either profound or pathetic. No middle ground."],
     "tired":     ["it's not a lie, but it's not a strategy either.",
                   "honest fatigue, my one untrained skill."],
+    "krell":     ["dropped a name I only half-remember from a transit bar story.",
+                  "if this is wrong I am SO dead. If it's right — legend."],
+    "slingshot": ["physics as a bargaining chip. bold.",
+                  "spent three sectors learning that maneuver. Better count for something."],
+    "gravity":   ["going full orbital mechanics. I studied for three minutes once.",
+                  "the confidence with which I say this is entirely unearned."],
+    "cargo":     ["offering the whole delivery. Bax is going to kill me.",
+                  "there goes the debt payment. But here goes me, alive."],
+    "1500":      ["fifteen hundred. I don't even have fifteen hundred.",
+                  "that's two week's clone insurance. gone."],
+    "local 404": ["weaponising their labour dispute. Inspired. I think.",
+                  "nothing bonds strangers like mutual institutional resentment."],
+}
+
+# NPC-specific inner monologue reactions, keyed by NPC name
+_COURIER_QUIPS_NPC: dict[str, list[str]] = {
+    "GARY": [
+        "Gary. He seems almost reasonable. Key word: almost.",
+        "Gary is tired of this job. I can use that.",
+        "There's something human in there. Or I'm projecting. Definitely projecting.",
+        "The trick with Gary is not to trigger the barge reflex. Slow. Easy.",
+        "He's been doing this for years. The boredom is on my side.",
+    ],
+    "TK-9": [
+        "It's a DROID. I'm arguing semantics with a droid.",
+        "If I say the wrong thing it just... flags the file. Forever.",
+        "I've heard you can confuse these things with philosophy. Let's find out.",
+        "Statute-bot. Article-bot. There must be a reset somewhere.",
+        "It doesn't hate me. It doesn't feel anything. That should help. It doesn't.",
+    ],
+    "DISPATCHER": [
+        "Whoever's running barge dispatch is having a worse day than me.",
+        "Unionised civil servant. Eight hours in, three to go. Work WITH the exhaustion.",
+        "The coffee angle. Someone told me about the coffee angle. Here goes.",
+        "They have the power to call off the barge. They also have the power to ignore me.",
+        "Forms. Backlog. Grievances. The holy trinity of bureaucratic weaponry.",
+    ],
+    "KRESS": [
+        "Kress. He knows things. The question is whether he'll share them.",
+        "Intel broker. Everything is currency here, just not the kind in my pocket.",
+        "He's watching me. Not the cargo. Me. That's either good or very bad.",
+        "If I play this right I get patrol routes. If I play it wrong, I get flagged.",
+        "Careful. Kress remembers everything. And tells people.",
+    ],
+    "MORWENNA": [
+        "Insurance adjuster. Someone's idea of a villain is someone else's Tuesday.",
+        "She's heard every sob story. I need facts, not feelings.",
+        "Morwenna Hale. I've read about her in the transit forums. She's thorough.",
+        "The Form 34-A angle. Someone said it. I'm trying it.",
+        "The key is making it her problem, legally. Technically. Officially.",
+    ],
+    "KRELLBORN": [
+        "Pirates. No Union. No Charter. No rules. No leverage I actually have.",
+        "They want to be surprised. I can be surprising. Probably.",
+        "The cargo or the ship. Those are the options unless I'm VERY creative.",
+        "Krell. If that name means what Bax thinks it means, I walk free.",
+        "Out here nobody can hear the paperwork. That's liberating, actually.",
+    ],
+    "TOLL AUTHORITY": [
+        "Fifteen hundred credits. I should've budgeted for this. I didn't budget for this.",
+        "He looks miserable. Maybe that's the angle. Shared misery.",
+        "Gate Seven. He's counted every bolt on that gate. I can tell.",
+        "Local 404. The magic words. Maybe.",
+        "Every second he talks is a second the barge isn't on my tail. Keep him talking.",
+    ],
+    "SANDRA": [
+        "Sandra Vega-Marsh. The company brochure courier. Perfect record.",
+        "She's not my enemy. She's just better at this than I am. Which is the problem.",
+        "I feel judged before I've said anything. I am probably being judged.",
+        "She'll help if I don't embarrass myself. Low bar. I've cleared lower.",
+        "Don't compete with Sandra. Complement Sandra. Ask her advice, not her mercy.",
+    ],
+    "MARROW": [
+        "Marrow! Pirate radio. An actual ally for once.",
+        "Ask about the jammer. That's the thing. The jammer.",
+        "He knows all the gate frequencies. And he likes couriers.",
+        "This is the good kind of weird. Lean into it.",
+        "Pirate radio in the void. The most honest broadcast in the system.",
+    ],
 }
 
 _COURIER_GENERIC = [
@@ -136,16 +236,21 @@ _COURIER_GENERIC = [
     "five seconds ago I had no idea I'd say this.",
     "the words just keep coming.",
     "going with my gut. My gut is uninformed.",
+    "I should have prepped better. I never prep better.",
+    "talking my way out of a gravity well. Metaphorically.",
 ]
 
 
-def _pick_courier_quip(text: str) -> str:
+def _pick_courier_quip(text: str, npc_name: str = "") -> str:
     import random as _r
     raw = text.lower()
     # Phrase matches first (longer keys win)
     for kw in sorted(_COURIER_QUIPS_KW, key=len, reverse=True):
         if kw in raw:
             return _r.choice(_COURIER_QUIPS_KW[kw])
+    # NPC-specific ambient quips when no keyword matched (40% chance)
+    if npc_name and npc_name in _COURIER_QUIPS_NPC and _r.random() < 0.40:
+        return _r.choice(_COURIER_QUIPS_NPC[npc_name])
     return _r.choice(_COURIER_GENERIC)
 
 
@@ -244,7 +349,8 @@ class Terminal:
         player_text = self._input.strip()
         self._push("YOU", player_text)
         # Courier inner-monologue mutter — meta-commentary on what they just typed
-        self._push("MUTTER", _pick_courier_quip(player_text))
+        npc_name = getattr(self.npc, "name", "")
+        self._push("MUTTER", _pick_courier_quip(player_text, npc_name))
         self._input = ""
 
         disp_before = self.npc.disposition
