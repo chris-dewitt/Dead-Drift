@@ -20,10 +20,11 @@ GREY_DEAD   = (60,  60,  60)
 
 # --- Physics ---
 GRAVITY_CONSTANT  = 340.0         # scaled G for gameplay feel — produces ~13 px/s² at 200px from a standard well
-MAX_VELOCITY      = 380.0         # px/s soft cap (was 440 — slowed for better control feel)
+MAX_VELOCITY      = 280.0         # px/s soft cap (was 380 — death-spiral fix: gives the world breathing room)
 DRAG              = 0.0           # true Newtonian: no drag
 ROTATION_SPEED    = 240.0         # degrees/s (was 200 — snappier turns)
-STEER_RCS_DEG     = 90.0          # deg/s velocity redirect toward facing when thrusting (post-integrate)
+STEER_RCS_DEG     = 140.0         # deg/s velocity redirect toward facing when thrusting (was 90 — cuts the "blur" feel)
+HIT_IFRAME_T      = 1.5           # seconds of debris/obstacle invulnerability after any hull damage
 
 # --- Ship ---
 HULL_MAX          = 200.0

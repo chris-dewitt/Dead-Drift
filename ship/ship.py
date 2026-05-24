@@ -29,6 +29,7 @@ class PlayerShip:
         self._life_sup       = LifeSupport()
         self.controls_inverted = False
         self.last_damage_source = "unknown"
+        self._iframe_t       = 0.0   # mercy window after taking hull damage
         self.chain.install(self._life_sup, 0)
         self.chain.install(self._thruster, 1)
 
@@ -36,6 +37,9 @@ class PlayerShip:
     def update(self, dt: float):
         if self._destroyed:
             return
+
+        if self._iframe_t > 0:
+            self._iframe_t = max(0.0, self._iframe_t - dt)
 
         self._read_input(dt)
         self.chain.update(dt)
@@ -92,10 +96,21 @@ class PlayerShip:
         if pos.y < 0:            pos.y = S.SCREEN_H
         elif pos.y > S.SCREEN_H: pos.y = 0
 
+    # Impact damage sources gated by the mercy window. Excludes intentional
+    # damage paths (barge torch, ESC abort, cargo effects) so design-driven
+    # damage still lands during iframes.
+    _IMPACT_SOURCES = frozenset({
+        "debris", "debris_shower", "satellite", "mine",
+        "dead_station", "wreck", "shower",
+    })
+
     # ------------------------------------------------------------------
     def take_damage(self, amount: float, source: str = "unknown"):
+        if source in self._IMPACT_SOURCES and self._iframe_t > 0:
+            return   # mercy window — protected from chain-collisions
         self.hull = max(0.0, self.hull - amount)
         self.last_damage_source = source
+        self._iframe_t = S.HIT_IFRAME_T
         bus.emit(EVT_HULL_DAMAGE, amount=amount, source=source)
         if self.cargo is not None:
             self.cargo.take_damage(amount * 0.4)
@@ -129,6 +144,14 @@ class PlayerShip:
     def is_alive(self) -> bool:
         return not self._destroyed
 
+    @property
+    def iframe_active(self) -> bool:
+        return self._iframe_t > 0.0
+
+    @property
+    def iframe_t(self) -> float:
+        return self._iframe_t
+
     def reset(self):
         self.body              = RigidBody2D(S.SCREEN_W / 2, S.SCREEN_H / 2, mass=S.SHIP_MASS)
         self.hull              = S.HULL_MAX
@@ -137,6 +160,7 @@ class PlayerShip:
         self.controls_inverted = False
         self.cargo             = None
         self.gun               = Gun()
+        self._iframe_t         = 0.0
         # Clear upgrade slots (2–5) so shop purchases don't persist across deaths.
         # Slots 0 (LifeSupport) and 1 (Thruster) are baseline issue — re-set by apply_draft.
         for slot in range(2, self.chain.MAX_SLOTS):

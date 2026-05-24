@@ -36,8 +36,9 @@ class GravityWell:
         eff_sq    = max(dist_sq, soft_sq)
 
         force_mag = S.GRAVITY_CONSTANT * self.mass * body.mass / eff_sq
-        # Cap force at 80% of thrust so a directed burn can always pull free.
-        force_mag = min(force_mag, S.THRUSTER_FORCE * 0.8)
+        # Cap force at 65% of thrust so a directed burn can always pull free
+        # AND post-slingshot velocity stays controllable (was 80%).
+        force_mag = min(force_mag, S.THRUSTER_FORCE * 0.65)
 
         force     = delta.normalized() * force_mag
         body.apply_force(force)
