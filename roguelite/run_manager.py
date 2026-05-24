@@ -33,6 +33,8 @@ from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
                              EVT_RUN_START, EVT_SHOP_ENTER, EVT_SECTOR_START)
 from config import settings as S
 
+SLINGSHOT_CREDIT_BONUS = 800
+
 
 # ---------------------------------------------------------------------------
 _KRESS_LINES = [
@@ -531,7 +533,7 @@ class RunManager:
         self._sector_slingshots += 1
         self._run_slingshots    += 1
         # Credit bonus per clean slingshot
-        bonus = 800
+        bonus = SLINGSHOT_CREDIT_BONUS
         self.meta.pay_off(bonus)
         self._run_debt_reduced += bonus
         self._sector_credits   += bonus
@@ -823,6 +825,8 @@ class RunManager:
             "credits":    self._sector_credits,
             "snaps":      self._sector_snaps,
             "slingshots": self._sector_slingshots,
+            "slingshot_credit_each": SLINGSHOT_CREDIT_BONUS,
+            "slingshot_credits": self._sector_slingshots * SLINGSHOT_CREDIT_BONUS,
             "hull_lost":  hull_lost,
         }
         self._flash_t = 2.8

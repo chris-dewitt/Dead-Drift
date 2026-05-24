@@ -37,7 +37,7 @@ class HUD:
         else:
             self._offset = (0, 0)
 
-    def draw(self, surface: pygame.Surface):
+    def draw(self, surface: pygame.Surface, snap_charge: float | None = None):
         hp  = self.ship.hull
         font = self._get_font()
 
@@ -67,6 +67,7 @@ class HUD:
         surface.blit(cargo_text, (20 + ox, 100 + oy))
 
         self._draw_thruster_heat(surface, ox, oy)
+        self._draw_snap_charge(surface, ox, oy, snap_charge)
 
     def _draw_hull_bar(self, surface: pygame.Surface, ox: int, oy: int):
         font     = self._get_font()
@@ -116,6 +117,30 @@ class HUD:
             if module is not None and "propulsion" in getattr(module, "tags", []):
                 return module
         return None
+
+    def _draw_snap_charge(self, surface: pygame.Surface, ox: int, oy: int,
+                          snap_charge: float | None):
+        if snap_charge is None:
+            return
+        pct = max(0.0, min(1.0, snap_charge))
+        font = self._get_font()
+        color = self._snap_color(pct)
+
+        label = font.render(f"SNAP CHARGE {pct * 100:>3.0f}%", True, self._tint(color))
+        surface.blit(label, (20 + ox, 156 + oy))
+
+        bar_w, bar_h = 200, 8
+        bar_rect = pygame.Rect(20 + ox, 174 + oy, bar_w, bar_h)
+        fill_rect = pygame.Rect(20 + ox, 174 + oy, int(bar_w * pct), bar_h)
+        pygame.draw.rect(surface, S.GREY_DEAD, bar_rect, 1)
+        pygame.draw.rect(surface, self._tint(color), fill_rect)
+
+    def _snap_color(self, pct: float) -> tuple:
+        if pct >= 0.95:
+            return S.GREEN_TERM
+        if pct >= 0.50:
+            return S.AMBER_TERM
+        return S.RED_WARN
 
     def _hull_color(self) -> tuple:
         hp = self.ship.hull

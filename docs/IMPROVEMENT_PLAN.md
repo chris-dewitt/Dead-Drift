@@ -16,15 +16,15 @@
 |------|------|---------|------|-------|
 | **Phase 0** — Trust fixes | 5 | 0 | 0 | Shipped: controls/trust blockers closed |
 | **1** — Code hygiene | 6 | 2 | 2 | Font cache + NLTK lazy still open |
-| **2** — Flight feel | 5 | 2 | 0 | SNAP CHARGE bar missing; thruster heat fixed in Phase 0 |
+| **2** — Flight feel | 7 | 0 | 0 | Flight-feel pass complete |
 | **3** — Sector variety | 2 | 4 | 0 | Hazards via themes; collapsing well / debris cloud unwired |
-| **4** — Corridor | 3 | 4 | 0 | Framework shipped; music + full scoring card open |
-| **5** — Landing | 1 | 2 | 0 | Beat 2 resolved: Chris decision A |
-| **6** — Terminal polish | 0 | 2 | 4 | Keystroke pulse exists; outcomes / portraits need work |
+| **4** — Corridor | 5 | 4 | 0 | Framework shipped; music + full scoring card partial; movement/control bugs fixed |
+| **5** — Landing | 2 | 1 | 0 | Docking graphics shipped; Records/end-card hook remains partial |
+| **6** — Terminal polish | 1 | 2 | 4 | Market graphics shipped; terminal outcomes / portraits need work |
 | **7** — Bax | 1 | 2 | 2 | Lines mostly ported; portrait glow + hull pitch open |
 | **8** — Meta replay | 1 | 0 | 3 | Stepped death done; Records + carousel not built |
 
-**Rough overall:** ~46% complete · ~32% partial · ~22% not started (by checkbox count).
+**Rough overall:** ~54% complete · ~27% partial · ~19% not started (by checkbox count).
 
 ---
 
@@ -37,8 +37,8 @@ Tracked here and in `docs/DOCUMENTATION_STATUS.md`. These override epic list ord
 | All NPC portraits incl. Inspector Holt | Phase 0 + Epic 6 | [x] |
 | Thruster stops working (overheat trap) | Phase 0 + Epic 2 | [x] |
 | ESC leaves the market | Phase 0 | [x] |
-| Improve market graphics | Epic 6 / shop polish | [ ] |
-| Improve docking graphics | Epic 5 | [ ] |
+| Improve market graphics | Epic 6 / shop polish | [x] |
+| Improve docking graphics | Epic 5 | [x] |
 
 ---
 
@@ -199,7 +199,7 @@ The current hard clamp in `RigidBody2D.integrate` instantly drops speed back to 
 - Snap wells to a bounding box (margin from screen edges and the cockpit strip) — if a well would cross the boundary, bounce its velocity component.
 - Wells never spawn inside each other (covered by 1.6); now they can't drift into each other either — a soft repulsion at < 80 px separation suffices.
 
-### 2.4 Slingshot triple-reward (UI + credits + overdrive) — [~]
+### 2.4 Slingshot triple-reward (UI + credits + overdrive) — [x]
 The slingshot is the game's signature skill move. Today it shaves 5s off the jump timer and emits `EVT_SLINGSHOT` for Bax. That's invisible. Make it pop:
 - **UI floater:** when `EVT_SLINGSHOT` fires, draw a 1-second "FREE −5s" floater near the ship in slingshot-yellow. Pulsing chime.
 - **Credit bonus:** +800 cr per clean slingshot. Reduce `meta.debt` via `pay_off`. Surface on the per-sector flash card (the card already has a `slingshots` field — show "+credits per slingshot" beside it).
@@ -207,9 +207,9 @@ The slingshot is the game's signature skill move. Today it shaves 5s off the jum
 
 Stack visible: a clean slingshot = "yes you got the bonus" + "yes you get credits" + "yes the ship actually goes faster."
 
-**May 2026:** Floater, +800 cr, 2s overdrive — done. Sector flash shows slingshot **count**, not per-slots credit breakdown.
+**May 2026:** Floater, +800 cr, 2s overdrive, and sector-flash credit breakdown are done. The clear card now shows slingshots as count x per-sling bonus = total recovered credits.
 
-### 2.5 Tether-snap feedback (diegetic + discrete) — [~]
+### 2.5 Tether-snap feedback (diegetic + discrete) — [x]
 Currently the player has no sense of how close to `SNAP_VELOCITY` their lateral motion is — they just see the tether and hope.
 
 - **Diegetic:** in `renderer/vector_renderer.py`, the tether line itself glows red → amber → green proportional to `lateral_speed / SNAP_VELOCITY`. At ≥ 1.0 it pulses bright green for one frame before the snap fires. Players learn the move visually.
@@ -217,7 +217,7 @@ Currently the player has no sense of how close to `SNAP_VELOCITY` their lateral 
 
 Both. The diegetic version teaches, the discrete version confirms.
 
-**May 2026:** Tether line color by snap charge — done. **SNAP CHARGE HUD bar — not built.**
+**May 2026:** Tether line color by snap charge — done. `SNAP CHARGE` HUD bar now appears only while a tether is active and fills from the same `lateral_speed / SNAP_VELOCITY` signal.
 
 ### 2.6 Adaptive final-sector difficulty — [x]
 `run_manager._load_next_sector` always spawns an extra barge on sector 5 plus an immediate debris rock. Change to a hull-aware heuristic at sector-5 entry:
@@ -436,6 +436,16 @@ Roll these into the chapter's run summary and into Bax's Records (Epic 8).
 
 **May 2026:** Star rating (1–3) at corridor end — yes. Full end-card (time, collectibles/total, secrets, damage, bonus cr) — **not built.** Bax's Records hook — blocked on Epic 8.
 
+### 4.8 Corridor jump locomotion bug — [x]
+Player playtest note: in the corridor, jump currently reads like a vertical up/down hop from the same spot, which can leave the courier with no practical way to get off or across from that location. Jump should preserve normal horizontal movement and allow the player to leave the takeoff position, clear gaps, and exit platforms naturally.
+
+**May 2026 implementation:** Normal horizontal movement remains active while airborne, and `SPACE` now detaches the courier from ladders into jump movement instead of re-grabbing immediately.
+
+### 4.9 Corridor ladder exit / control recovery bug — [x]
+Player playtest note: ladder movement has the same stuck-in-place feel as the jump issue. The courier can climb up/down, but cannot reliably get off the ladder onto nearby platforms; when reaching the bottom, player control can be lost or fail to return cleanly.
+
+**May 2026 implementation:** Ladder capture now requires climb intent unless already climbing, horizontal input steps off ladders, and bottom dismounts restore grounded control instead of repeatedly recapturing the player.
+
 ---
 
 ## Epic 5 — Landing Sequence Overhaul
@@ -467,7 +477,7 @@ Surface this in the corridor end-card and Bax's Records.
 
 **May 2026:** +500 / −200 cr and Bax events wired. Corridor end-card + Records — partial / blocked.
 
-### 5.3 Station visual variety — [~]
+### 5.3 Station visual variety — [x]
 Each chapter has a different station for the landing:
 - **Ch.1:** Underground harbour — improvised cargo dock under a busy commercial structure.
 - **Ch.2:** Sterile biolab outpost — clean white-blue facility on the edge of a planetary ring.
@@ -476,7 +486,7 @@ Each chapter has a different station for the landing:
 
 Each station is a vector illustration rendered procedurally — same constraints as the rest of the renderer (no sprite assets).
 
-**May 2026:** Chapter-themed names/colors via `_STATION_THEMES`; `draw_landing_star_destroyer` shared silhouette. Distinct harbour/biolab/compliance/hotel **silhouettes** — partial (palette swap more than unique art).
+**May 2026:** Chapter-themed station names/colors plus distinct procedural station silhouettes are shipped: Ch.1 cargo harbour, Ch.2 biolab ring outpost, Ch.3 Nova Soma compliance slab, and Ch.4 luxury orbital hotel. Landing/beat-3 bay dressing also changes per chapter.
 
 ---
 
@@ -542,6 +552,11 @@ Each outcome must feel distinct. Right now they all feel like "the terminal ende
 
 ### 6.6 NLP exploit dossier (foreshadows Epic 8) — [ ]
 Add a footer in the terminal close screen: *"Bax filed your method. Review your dossier from the main menu."* This points players at the new Bax's Records screen (Epic 8.3) where their discovered exploits are catalogued.
+
+### 6.7 Black market graphics — [x]
+Chris priority: make the mid-run market feel more like a place and less like a plain menu.
+
+**May 2026:** Browse view now has physical stall dressing behind the vendor, item-specific hardware glyphs for each stock tag, affordability/readiness badges on selected cards, and render smoke coverage for the shop art helpers.
 
 ---
 

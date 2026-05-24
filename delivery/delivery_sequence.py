@@ -14,7 +14,7 @@ import pygame
 from delivery.corridor import make_corridor
 from delivery.corridor.elements import CORRIDOR_W, CORRIDOR_H
 from config import settings as S
-from renderer.sci_fi_ui import draw_space_crawl, draw_landing_star_destroyer
+from renderer.sci_fi_ui import draw_space_crawl
 
 _APPROACH_CRAWL = [
     "Episode MCLXIV: THE DEBT STRIKES BACK (AT YOUR WALLET)",
@@ -64,6 +64,172 @@ _STATION_THEMES = {
     3: ((140, 160, 80), (180, 200, 100), "NOVA SOMA COMPLIANCE HUB 3"),
     4: ((200, 160, 40), (255, 210, 80), "THE MERIDIAN HOTEL — ORBITAL"),
 }
+
+
+def _scaled_rect(cx: int, cy: int, ox: float, oy: float,
+                 w: float, h: float, scale: float) -> pygame.Rect:
+    return pygame.Rect(
+        int(cx + ox * scale - w * scale / 2),
+        int(cy + oy * scale - h * scale / 2),
+        max(1, int(w * scale)),
+        max(1, int(h * scale)),
+    )
+
+
+def _draw_chapter_station_exterior(surface: pygame.Surface, cx: int, cy: int,
+                                   scale: float, t: float, chapter: int) -> None:
+    hull, trim, _name = _STATION_THEMES.get(chapter, _STATION_THEMES[1])
+    dark = tuple(max(0, c // 4) for c in hull)
+    glow = 0.45 + 0.55 * abs(math.sin(t * 2.2))
+    glow_col = tuple(min(255, int(c * glow)) for c in trim)
+
+    if chapter == 2:
+        ring_w = max(20, int(310 * scale))
+        ring_h = max(12, int(142 * scale))
+        pygame.draw.ellipse(surface, dark, (cx - ring_w // 2, cy - ring_h // 2, ring_w, ring_h), 4)
+        pygame.draw.ellipse(surface, trim, (cx - ring_w // 2, cy - ring_h // 2, ring_w, ring_h),
+                            max(1, int(3 * scale)))
+        pygame.draw.rect(surface, hull, _scaled_rect(cx, cy, 0, 0, 150, 54, scale))
+        pygame.draw.rect(surface, trim, _scaled_rect(cx, cy, 0, 0, 150, 54, scale),
+                         max(1, int(2 * scale)))
+        for ox in (-92, -46, 46, 92):
+            pod = _scaled_rect(cx, cy, ox, 0, 28, 76, scale)
+            pygame.draw.ellipse(surface, (12, 30, 38), pod)
+            pygame.draw.ellipse(surface, glow_col, pod, max(1, int(2 * scale)))
+        for ox in (-120, 120):
+            wing = [
+                (cx + int(ox * scale), cy),
+                (cx + int((ox + (38 if ox > 0 else -38)) * scale), cy - int(54 * scale)),
+                (cx + int((ox + (38 if ox > 0 else -38)) * scale), cy + int(54 * scale)),
+            ]
+            pygame.draw.polygon(surface, (18, 48, 60), wing)
+            pygame.draw.polygon(surface, trim, wing, max(1, int(2 * scale)))
+    elif chapter == 3:
+        body = _scaled_rect(cx, cy, 0, 0, 160, 220, scale)
+        pygame.draw.rect(surface, hull, body)
+        pygame.draw.rect(surface, trim, body, max(1, int(3 * scale)))
+        for ox in (-88, 88):
+            tower = _scaled_rect(cx, cy, ox, 8, 54, 170, scale)
+            pygame.draw.rect(surface, dark, tower)
+            pygame.draw.rect(surface, trim, tower, max(1, int(2 * scale)))
+        for row in range(-4, 5):
+            for col in range(-2, 3):
+                if (row + col) % 2 == 0:
+                    win = _scaled_rect(cx, cy, col * 23, row * 22, 9, 7, scale)
+                    pygame.draw.rect(surface, glow_col, win)
+        logo = _scaled_rect(cx, cy, 0, -82, 70, 28, scale)
+        pygame.draw.rect(surface, (8, 16, 8), logo)
+        pygame.draw.rect(surface, trim, logo, 1)
+        if scale > 0.35:
+            font = pygame.font.SysFont("monospace", max(8, int(13 * scale)), bold=True)
+            ns = font.render("NS", True, trim)
+            surface.blit(ns, (logo.centerx - ns.get_width() // 2,
+                              logo.centery - ns.get_height() // 2))
+    elif chapter == 4:
+        for r_i, rr in enumerate((150, 112, 76)):
+            rect = pygame.Rect(cx - int(rr * scale), cy - int((rr * 0.42) * scale),
+                               max(2, int(rr * 2 * scale)), max(2, int(rr * 0.84 * scale)))
+            col = trim if r_i == 0 else glow_col
+            pygame.draw.ellipse(surface, dark, rect, max(1, int(3 * scale)))
+            pygame.draw.ellipse(surface, col, rect, max(1, int(2 * scale)))
+        spine = _scaled_rect(cx, cy, 18, 0, 54, 210, scale)
+        pygame.draw.rect(surface, hull, spine)
+        pygame.draw.rect(surface, trim, spine, max(1, int(2 * scale)))
+        for k in range(8):
+            yy = cy - int(86 * scale) + int(k * 24 * scale)
+            wx = cx + int((18 + math.sin(t * 0.8 + k) * 18) * scale)
+            pygame.draw.circle(surface, glow_col, (wx, yy), max(1, int(3 * scale)))
+        crown = [
+            (cx + int(18 * scale), cy - int(128 * scale)),
+            (cx - int(36 * scale), cy - int(82 * scale)),
+            (cx + int(72 * scale), cy - int(82 * scale)),
+        ]
+        pygame.draw.polygon(surface, (40, 30, 8), crown)
+        pygame.draw.polygon(surface, trim, crown, max(1, int(2 * scale)))
+    else:
+        pier = _scaled_rect(cx, cy, 0, 20, 250, 72, scale)
+        pygame.draw.rect(surface, hull, pier)
+        pygame.draw.rect(surface, trim, pier, max(1, int(3 * scale)))
+        for i, ox in enumerate((-92, -46, 0, 46, 92)):
+            cont = _scaled_rect(cx, cy, ox, -42 - (i % 2) * 28, 42, 26, scale)
+            shade = (max(10, hull[0] - i * 12), max(10, hull[1] - i * 5), max(8, hull[2]))
+            pygame.draw.rect(surface, shade, cont)
+            pygame.draw.rect(surface, trim, cont, 1)
+        for ox, flip in ((-126, 1), (118, -1)):
+            mast_x = cx + int(ox * scale)
+            mast_y = cy - int(74 * scale)
+            pygame.draw.line(surface, trim, (mast_x, mast_y), (mast_x, cy + int(28 * scale)),
+                             max(1, int(2 * scale)))
+            arm_end = (mast_x + flip * int(64 * scale), mast_y + int(10 * scale))
+            pygame.draw.line(surface, trim, (mast_x, mast_y), arm_end, max(1, int(2 * scale)))
+            pygame.draw.line(surface, glow_col, arm_end, (arm_end[0], arm_end[1] + int(24 * scale)), 1)
+        under = _scaled_rect(cx, cy, 0, 72, 280, 22, scale)
+        pygame.draw.rect(surface, (32, 18, 8), under)
+        pygame.draw.rect(surface, trim, under, 1)
+
+    if scale > 0.4:
+        font = pygame.font.SysFont("monospace", max(8, int(9 * scale)), bold=True)
+        label = font.render(_STATION_THEMES.get(chapter, _STATION_THEMES[1])[2].split(" / ")[0],
+                            True, trim)
+        surface.blit(label, (cx - label.get_width() // 2, cy + int(116 * scale)))
+
+
+def _draw_chapter_bay_dressing(surface: pygame.Surface, W: int, H: int,
+                               t: float, chapter: int) -> None:
+    hull, trim, name = _STATION_THEMES.get(chapter, _STATION_THEMES[1])
+    low = tuple(max(3, c // 5) for c in hull)
+    mid = tuple(max(10, c // 2) for c in hull)
+    pulse = 0.45 + 0.55 * abs(math.sin(t * 2.0))
+    lit = tuple(min(255, int(c * pulse)) for c in trim)
+
+    if chapter == 2:
+        for x in (132, W - 172):
+            tank = pygame.Rect(x, 118, 54, 126)
+            pygame.draw.ellipse(surface, low, (tank.x, tank.y - 12, tank.w, 24))
+            pygame.draw.rect(surface, low, tank)
+            pygame.draw.ellipse(surface, mid, (tank.x, tank.bottom - 12, tank.w, 24))
+            pygame.draw.rect(surface, trim, tank, 1)
+            for y in range(tank.y + 20, tank.bottom - 10, 24):
+                pygame.draw.line(surface, lit, (tank.x + 8, y), (tank.right - 8, y), 1)
+        pygame.draw.arc(surface, lit, (W // 2 - 250, 74, 500, 90), 0, math.pi, 2)
+    elif chapter == 3:
+        logo = pygame.Rect(W // 2 - 82, 112, 164, 62)
+        pygame.draw.rect(surface, (8, 12, 8), logo)
+        pygame.draw.rect(surface, trim, logo, 2)
+        font = pygame.font.SysFont("monospace", 24, bold=True)
+        txt = font.render("NOVA SOMA", True, lit)
+        surface.blit(txt, (logo.centerx - txt.get_width() // 2, logo.y + 9))
+        for x in range(116, W - 116, 42):
+            for y in range(198, H - 168, 32):
+                pygame.draw.rect(surface, mid, (x, y, 18, 9))
+    elif chapter == 4:
+        for x in range(116, W - 116, 78):
+            pygame.draw.arc(surface, lit, (x - 18, 92, 58, 150), math.pi, math.tau, 2)
+            pygame.draw.circle(surface, lit, (x + 11, 102), 3)
+        carpet = pygame.Rect(W // 2 - 74, 184, 148, H - 264)
+        pygame.draw.polygon(surface, (38, 22, 8), [
+            (carpet.centerx - 18, carpet.y), (carpet.centerx + 18, carpet.y),
+            (carpet.right, carpet.bottom), (carpet.left, carpet.bottom),
+        ])
+        pygame.draw.line(surface, trim, (carpet.centerx, carpet.y), (carpet.centerx, carpet.bottom), 1)
+    else:
+        for i, x in enumerate((116, 168, W - 198, W - 146)):
+            h = 54 + (i % 2) * 18
+            crate = pygame.Rect(x, H - 228 - h, 44, h)
+            pygame.draw.rect(surface, low, crate)
+            pygame.draw.rect(surface, trim, crate, 1)
+            pygame.draw.line(surface, mid, crate.midleft, crate.midright, 1)
+        for x in (142, W - 154):
+            pygame.draw.line(surface, trim, (x, 88), (x, 204), 2)
+            pygame.draw.line(surface, trim, (x, 88), (x + (46 if x < W // 2 else -46), 124), 2)
+
+    placard = pygame.Rect(W // 2 - 164, 48, 328, 28)
+    pygame.draw.rect(surface, (5, 8, 7), placard)
+    pygame.draw.rect(surface, trim, placard, 1)
+    font = pygame.font.SysFont("monospace", 10, bold=True)
+    txt = font.render(name.upper(), True, lit)
+    surface.blit(txt, (placard.centerx - txt.get_width() // 2,
+                       placard.centery - txt.get_height() // 2))
 
 
 class DeliverySequence:
@@ -309,12 +475,10 @@ class DeliverySequence:
             pygame.draw.circle(surface, (255, 80, 80),
                                (st_cx, ant_base_y - int(24 * station_scale)), 2)
 
-        # Main hull — oversized wedge (Spaceballs energy)
+        # Chapter-specific station silhouette.
         theme = _STATION_THEMES.get(self.chapter, _STATION_THEMES[1])
-        draw_landing_star_destroyer(
-            surface, st_cx, st_cy, station_scale, t,
-            theme[0], theme[1],
-        )
+        _draw_chapter_station_exterior(surface, st_cx, st_cy, station_scale,
+                                       t, self.chapter)
 
         # Signage panels
         if station_scale > 0.35:
@@ -580,6 +744,7 @@ class DeliverySequence:
             pygame.draw.line(surface, (14, 26, 16), (gx, 0), (gx, H), 1)
         for gy in range(0, H, 60):
             pygame.draw.line(surface, (14, 26, 16), (80, gy), (W - 80, gy), 1)
+        _draw_chapter_bay_dressing(surface, W, H, t, self.chapter)
 
         # ── Overhead gantry crane ─────────────────────────────────────────
         gantry_y = 88
@@ -766,6 +931,7 @@ class DeliverySequence:
         """Beat 3: dock-clamp cutscene + fade to corridor."""
         t    = self._clamp_anim_t
         surface.fill((4, 12, 6))
+        _draw_chapter_bay_dressing(surface, W, H, t, self.chapter)
         f    = pygame.font.SysFont("monospace", 14)
         fsm2 = pygame.font.SysFont("monospace", 12)
         cx   = W // 2

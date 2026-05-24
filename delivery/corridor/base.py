@@ -27,6 +27,8 @@ GRAVITY   = 980.0
 JUMP_VY   = -440.0
 RUN_SPEED = 220.0
 CLIMB_SPD = 120.0
+LADDER_REGRAB_COOLDOWN = 0.18
+LADDER_SIDE_STEP_SPEED = RUN_SPEED * 0.75
 
 STAR_3_TIME = 18.0
 STAR_2_TIME = 28.0
@@ -215,6 +217,7 @@ class Corridor:
         self._pvy       = 0.0
         self._grounded  = True
         self._on_ladder  = False
+        self._ladder_release_t = 0.0
         self._cam_x     = 0.0
 
         # Run state
@@ -280,7 +283,7 @@ class Corridor:
                 # Jump off ladder mid-way
                 self._pvy       = JUMP_VY * 0.75
                 self._grounded  = False
-                self._on_ladder = False
+                self._release_ladder()
                 bus.emit(EVT_CORRIDOR_JUMP)
         elif event.key in (pygame.K_s, pygame.K_DOWN):
             pass  # descend on ladder handled by held-key
@@ -308,6 +311,7 @@ class Corridor:
         self._elapsed      += dt
         self._stun_t        = max(0.0, self._stun_t - dt)
         self._invert_t      = max(0.0, self._invert_t - dt)
+        self._ladder_release_t = max(0.0, self._ladder_release_t - dt)
         self._run_speak_t  -= dt
         if self._run_speak_t <= 0:
             self._run_speak_t = 12.0
@@ -316,50 +320,63 @@ class Corridor:
         keys = pygame.key.get_pressed()
         room = self.rooms[self._room_idx]
 
+        climb_up = keys[pygame.K_UP] or keys[pygame.K_w]
+        climb_down = keys[pygame.K_DOWN] or keys[pygame.K_s]
+        wants_ladder = climb_up or climb_down
+
+        # Player-controlled forward movement (D/RIGHT = run, A/LEFT = retreat)
+        # Controls invert when spore-zone is active (Ch.2 mechanic)
+        inverted = self._invert_t > 0
+        move_fwd = keys[pygame.K_d] or keys[pygame.K_RIGHT]
+        move_bck = keys[pygame.K_a] or keys[pygame.K_LEFT]
+        if inverted:
+            move_fwd, move_bck = move_bck, move_fwd
+
         # Ladder check
-        ladder = self._active_ladder()
-        self._on_ladder = ladder is not None and ladder.overlaps(self._px, self._py)
+        ladder = self._active_ladder(wants_ladder, climb_down)
+        self._on_ladder = ladder is not None and (self._on_ladder or wants_ladder)
 
         if self._on_ladder:
-            if keys[pygame.K_UP] or keys[pygame.K_w]:
+            self._pvy = 0.0
+            if climb_up:
                 self._py  -= CLIMB_SPD * dt
-                self._pvy  = 0.0
-            if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+            if climb_down:
                 self._py  += CLIMB_SPD * dt
-                self._pvy  = 0.0
+            if move_fwd:
+                self._px += LADDER_SIDE_STEP_SPEED * dt
+            elif move_bck:
+                min_x = self._cam_x + _PLAYER_X_FIXED * 0.5
+                self._px = max(min_x, self._px - LADDER_SIDE_STEP_SPEED * dt)
 
             # Dismount at top: step off onto the surface above the ladder
             if self._py + PLAYER_H <= ladder.y_top:
                 self._py        = ladder.y_top - PLAYER_H
                 self._pvy       = 0.0
                 self._grounded  = True
-                self._on_ladder = False
+                self._release_ladder()
             # Dismount at bottom: drop to floor
             elif self._py >= ladder.y_bot - PLAYER_H:
                 self._py        = float(FLOOR_Y - PLAYER_H)
                 self._pvy       = 0.0
                 self._grounded  = True
-                self._on_ladder = False
+                self._release_ladder()
+            elif not ladder.overlaps(self._px, self._py):
+                self._pvy       = 0.0
+                self._grounded  = False
+                self._release_ladder()
             else:
-                self._px       = ladder.x
+                if not (move_fwd or move_bck):
+                    self._px   = ladder.x
                 self._grounded = False
         else:
             # Branch choice at branch point
             if (room.branch_x is not None
                     and abs(self._px - room.branch_x) < 30
                     and self._active_path is None):
-                if keys[pygame.K_UP] or keys[pygame.K_w]:
+                if climb_up:
                     self._active_path = "high"
                 else:
                     self._active_path = "low"
-
-            # Player-controlled forward movement (D/RIGHT = run, A/LEFT = retreat)
-            # Controls invert when spore-zone is active (Ch.2 mechanic)
-            inverted = self._invert_t > 0
-            move_fwd = keys[pygame.K_d] or keys[pygame.K_RIGHT]
-            move_bck = keys[pygame.K_a] or keys[pygame.K_LEFT]
-            if inverted:
-                move_fwd, move_bck = move_bck, move_fwd
 
             if move_fwd:
                 self._px += RUN_SPEED * dt
@@ -540,10 +557,23 @@ class Corridor:
                 continue
             yield el
 
-    def _active_ladder(self):
+    def _release_ladder(self) -> None:
+        self._on_ladder = False
+        self._ladder_release_t = LADDER_REGRAB_COOLDOWN
+
+    def _active_ladder(self, wants_ladder: bool = True, climb_down: bool = False):
+        if self._ladder_release_t > 0:
+            return None
         room = self.rooms[self._room_idx]
         for el in self._visible_elements(room):
             if isinstance(el, Ladder) and el.overlaps(self._px, self._py):
+                if self._on_ladder:
+                    return el
+                if not wants_ladder:
+                    continue
+                at_bottom = self._py >= el.y_bot - PLAYER_H - 2
+                if at_bottom and climb_down:
+                    continue
                 return el
         return None
 

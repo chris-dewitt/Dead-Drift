@@ -248,9 +248,11 @@ No combat in corridors. The flight scenes are where ship combat happens. The cor
 When each corridor is content-complete, prioritize this playtest order:
 
 1. **Time-to-complete** — is each corridor 2–3 minutes? Too long is worse than too short.
-2. **Branching path balance** — are players actually picking the high path, or always defaulting to safe?
-3. **Secret discoverability** — how many runs before a player finds at least one secret per corridor?
-4. **NPC encounter pacing** — does the mini-terminal feel like a beat or an interruption?
-5. **Boss room arrival** — does it feel earned? Are players ready for "the moment" by the time they enter?
+2. **Jump locomotion** — can the player jump from a location and move off/across from it, rather than only bobbing up and down in place?
+3. **Ladder exits** — can the player leave ladders onto nearby platforms, and does control return immediately at the bottom?
+4. **Branching path balance** — are players actually picking the high path, or always defaulting to safe?
+5. **Secret discoverability** — how many runs before a player finds at least one secret per corridor?
+6. **NPC encounter pacing** — does the mini-terminal feel like a beat or an interruption?
+7. **Boss room arrival** — does it feel earned? Are players ready for "the moment" by the time they enter?
 
 Tune from there.

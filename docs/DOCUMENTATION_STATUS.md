@@ -28,10 +28,10 @@
 | 1 | **All NPCs have detailed portraits**, including Inspector Holt | **Fixed** — Holt and Relay-7 Felix have procedural busts and CRT backdrops |
 | 2 | **Thruster appears broken** — works for a while, then stops | **Fixed** — heat only rises on thrust, life support absorbs heat, HUD shows heat |
 | 3 | **ESC leaves the market** | **Fixed** — shop ESC routes to `ShopScreen` before pause handling |
-| 4 | **Improve market graphics** | **Open (polish)** |
-| 5 | **Improve docking graphics** | **Open (polish)** |
+| 4 | **Improve market graphics** | **Fixed** — shop browse view has stall dressing, item glyphs, and purchase-state badges |
+| 5 | **Improve docking graphics** | **Fixed** — chapter-specific station silhouettes and bay dressing are procedural |
 
-Phase 0 trust fixes are tracked as shipped in `docs/IMPROVEMENT_PLAN.md`; market/docking graphics remain polish work.
+Phase 0 trust fixes plus market and docking graphics are tracked as shipped in `docs/IMPROVEMENT_PLAN.md`.
 
 ---
 

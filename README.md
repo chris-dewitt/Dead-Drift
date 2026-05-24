@@ -104,7 +104,7 @@ Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sent
 - Appears after sectors **2** and **4**
 - Spend run credits (debt recovered this run) on hull, thrust boost, jammer, intel, cargo stabilizer, ammo, etc.
 - Purchases increase meta debt (you're buying on credit)
-- Intro typewriter vendor line → browse → **J** or **ESC** to leave *(ESC fix pending)*
+- Intro typewriter vendor line → browse → **J** or **ESC** to leave
 
 ---
 

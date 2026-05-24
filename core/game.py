@@ -28,6 +28,19 @@ from delivery.delivery_sequence import DeliverySequence
 from roguelite.shop import ShopScreen
 
 
+def _format_slingshot_flash_value(stats: dict) -> str:
+    slingshots = int(stats.get("slingshots", 0))
+    sling_credits = int(stats.get("slingshot_credits", 0))
+    sling_each = int(stats.get(
+        "slingshot_credit_each",
+        sling_credits // slingshots if slingshots else 0,
+    ))
+
+    if slingshots > 0 and sling_credits > 0:
+        return f"{slingshots} x {sling_each:,} = +{sling_credits:,} cr"
+    return f"{slingshots}"
+
+
 class Game:
     _PAUSEABLE = frozenset({
         GameState.FLIGHT,
@@ -665,7 +678,7 @@ class Game:
 
         if state == GameState.FLIGHT:
             self.vec_renderer.draw(self.run_mgr, self.ship, self._dt)
-            self.hud_renderer.draw(self.ship)
+            self.hud_renderer.draw(self.ship, self.run_mgr)
             self._render_sector_hud()
             if self.run_mgr._flash_t > 0 and self.run_mgr._last_stats:
                 self._render_sector_flash(
@@ -855,13 +868,16 @@ class Game:
         panel.blit(hdr, (W // 2 - hdr.get_width() // 2, 20))
         pygame.draw.line(panel, (0, 130, 60, a), (24, 54), (W - 24, 54), 1)
 
+        slingshots = int(stats.get("slingshots", 0))
+        sling_value = _format_slingshot_flash_value(stats)
+
         rows = [
             ("CREDITS RECOVERED", f"{stats['credits']:,} cr",
              (90, 230, 110) if stats['credits'] > 0 else (140, 140, 140)),
             ("TETHER SNAPS",      f"{stats['snaps']}",
              (255, 180, 50) if stats['snaps'] > 0 else (110, 110, 110)),
-            ("SLINGSHOTS",        f"{stats['slingshots']}",
-             (180, 130, 255) if stats['slingshots'] > 0 else (110, 110, 110)),
+            ("SLINGSHOTS",        sling_value,
+             (180, 130, 255) if slingshots > 0 else (110, 110, 110)),
             ("HULL LOST",         f"{stats['hull_lost']}",
              (220, 90, 90) if stats['hull_lost'] > 0 else (90, 200, 100)),
         ]
