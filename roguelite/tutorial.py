@@ -1,6 +1,7 @@
 from __future__ import annotations
 from core.event_bus import (bus, EVT_BAX_SPEAK, EVT_RUN_START,
-                             EVT_TETHER_HIT, EVT_JUMP_READY, EVT_BARGE_NEARBY)
+                             EVT_TETHER_HIT, EVT_JUMP_READY, EVT_BARGE_NEARBY,
+                             EVT_AISHIP_HAIL)
 from config import settings as S
 
 _CONTROLS = (
@@ -27,6 +28,10 @@ _JUMP_READY = (
     "Jump window's open. Press J — "
     "sector terminal opens, negotiate your exit."
 )
+_AISHIP_HAIL = (
+    "Ship's hailing you. Press E to answer — "
+    "or ignore them and let 'em drift past."
+)
 
 
 class TutorialManager:
@@ -45,6 +50,7 @@ class TutorialManager:
         bus.subscribe(EVT_TETHER_HIT,   self._on_tether_hit)
         bus.subscribe(EVT_JUMP_READY,   self._on_jump_ready)
         bus.subscribe(EVT_BARGE_NEARBY, self._on_barge_nearby)
+        bus.subscribe(EVT_AISHIP_HAIL,  self._on_aiship_hail)
 
     # ------------------------------------------------------------------
     def update(self, dt: float, run_mgr) -> None:
@@ -94,3 +100,9 @@ class TutorialManager:
             self._seen.add("barge_tip")
             # Delay so Bax's existing proximity alert displays first
             self._queue.append((self._t + 3.0, _BARGE))
+
+    def _on_aiship_hail(self, **_) -> None:
+        if "aiship_hail_tip" not in self._seen:
+            self._seen.add("aiship_hail_tip")
+            # Delay so the run_manager's hail line lands first
+            self._queue.append((self._t + 2.0, _AISHIP_HAIL))

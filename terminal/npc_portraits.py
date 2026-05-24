@@ -9,17 +9,20 @@ import pygame
 from config import settings as S
 
 _NAME_TO_KEY = {
-    "GARY":           "gary",
-    "TK-9":           "synthetic_droid",
-    "DISPATCHER":     "union_dispatcher",
-    "KRESS":          "kress",
-    "MORWENNA":       "insurance_adjuster",
-    "SANDRA":         "sandra",
-    "KRELLBORN":      "pirate",
-    "MARROW":         "underground_dj",
-    "TOLL AUTHORITY": "toll_authority",
-    "RELAY-7 FELIX":  "nervous_fence",
-    "INSPECTOR HOLT": "cargo_inspector",
+    "GARY":                    "gary",
+    "TK-9":                    "synthetic_droid",
+    "DISPATCHER":              "union_dispatcher",
+    "KRESS":                   "kress",
+    "MORWENNA":                "insurance_adjuster",
+    "SANDRA":                  "sandra",
+    "KRELLBORN":               "pirate",
+    "MARROW":                  "underground_dj",
+    "TOLL AUTHORITY":          "toll_authority",
+    "RELAY-7 FELIX":           "nervous_fence",
+    "INSPECTOR HOLT":          "cargo_inspector",
+    "DRAY":                    "dray",
+    "NOVA SOMA COLLECTIONS":   "nova_soma_collections",
+    "MIRA VOSS":               "mira_voss",
 }
 
 _REACTION_ACCENTS = {
@@ -34,6 +37,9 @@ _REACTION_ACCENTS = {
     "toll_authority": (220, 170, 40),
     "nervous_fence": (0, 210, 135),
     "cargo_inspector": (0, 190, 125),
+    "dray": (160, 210, 130),
+    "nova_soma_collections": (100, 230, 215),
+    "mira_voss": (240, 140, 50),
     "unknown": S.AMBER_TERM,
 }
 
@@ -2936,3 +2942,553 @@ _DISPATCH["nervous_fence"] = _nervous_fence
 _BACKDROPS["nervous_fence"] = _backdrop_nervous_fence
 _DISPATCH["cargo_inspector"] = _cargo_inspector
 _BACKDROPS["cargo_inspector"] = _backdrop_cargo_inspector
+
+
+# ---------------------------------------------------------------------------
+# DRAY — slacker off-channel courier
+# ---------------------------------------------------------------------------
+
+def _backdrop_dray(surface, inner, t):
+    """Cramped relay bunk: ratty bunk wall, discarded ration wrappers, bored ambience."""
+    font6 = pygame.font.SysFont("monospace", 6, bold=True)
+    cx = inner.centerx
+
+    # Bunk wall — dented, sticker-covered metal panels
+    for i in range(5):
+        y = inner.top + i * 22
+        col = (28, 22, 18) if i % 2 == 0 else (22, 18, 14)
+        pygame.draw.rect(surface, col, (inner.left, y, inner.width, 22))
+        pygame.draw.line(surface, (50, 38, 28), (inner.left, y), (inner.right, y), 1)
+
+    # Random stickers on the wall — tiny colored blobs
+    rng = random.Random(77)
+    for i in range(6):
+        sx = inner.left + rng.randint(8, inner.width - 14)
+        sy = inner.top + rng.randint(6, inner.height // 2)
+        scol = rng.choice([(180, 40, 40), (40, 160, 120), (200, 160, 40), (100, 80, 200)])
+        pygame.draw.rect(surface, scol, (sx, sy, rng.randint(6, 12), rng.randint(5, 9)))
+        pygame.draw.rect(surface, (255, 255, 255, 60), (sx, sy, rng.randint(6, 12), rng.randint(5, 9)), 1)
+
+    # Relay screen top-right — static-y, mostly ignored
+    scr = pygame.Rect(inner.right - 48, inner.top + 8, 38, 26)
+    pygame.draw.rect(surface, (12, 18, 14), scr)
+    pygame.draw.rect(surface, (0, 170, 90), scr, 1)
+    # Static noise on screen
+    rng2 = random.Random(int(t * 4))
+    for _ in range(20):
+        px = rng2.randint(scr.left + 1, scr.right - 2)
+        py = rng2.randint(scr.top + 1, scr.bottom - 2)
+        pygame.draw.circle(surface, (0, 100 + rng2.randint(0, 80), 60), (px, py), 1)
+    tag = font6.render("RELAY OFF", True, (0, 200, 100))
+    surface.blit(tag, (scr.left + 2, scr.top + 2))
+
+    # Ration wrapper on bottom-left — crumpled foil
+    wr_pts = [
+        (inner.left + 4,  inner.bottom - 8),
+        (inner.left + 18, inner.bottom - 14),
+        (inner.left + 26, inner.bottom - 10),
+        (inner.left + 22, inner.bottom - 4),
+        (inner.left + 6,  inner.bottom - 3),
+    ]
+    pygame.draw.polygon(surface, (120, 110, 90), wr_pts)
+    pygame.draw.polygon(surface, (180, 170, 130), wr_pts, 1)
+    wrap_lbl = font6.render("NUTRI-PASTE", True, (90, 80, 60))
+    surface.blit(wrap_lbl, (inner.left + 5, inner.bottom - 12))
+
+    # Signal status light — blinking amber (always borderline signal)
+    blink_on = int(t * 1.8) % 3 != 2
+    sig_col = (220, 160, 30) if blink_on else (60, 44, 8)
+    pygame.draw.circle(surface, sig_col, (cx - 28, inner.top + 10), 3)
+    sig_lbl = font6.render("WEAK SIG", True, (120, 95, 30))
+    surface.blit(sig_lbl, (cx - 22, inner.top + 7))
+
+
+def _dray(surface, cx, cy, s, disposition, t):
+    """Dray: bored slacker in a battered courier helmet, slouched, perpetually unbothered."""
+    skin   = (200, 165, 125)
+    skin_d = (110, 82, 52)
+    helm   = (58, 68, 72)      # scuffed grey-blue helmet shell
+    helm_l = (90, 108, 115)
+    visor  = (10, 48, 60)      # dark tinted visor, cracked edge
+    accent = (160, 210, 130)   # relay-band green
+    collar = (44, 38, 32)      # worn courier jacket
+
+    # Slouched torso
+    torso_pts = [
+        (int(cx - 42 * s), int(cy + 80 * s)),
+        (int(cx + 46 * s), int(cy + 80 * s)),
+        (int(cx + 38 * s), int(cy + 24 * s)),
+        (int(cx - 32 * s), int(cy + 24 * s)),
+    ]
+    pygame.draw.polygon(surface, collar, torso_pts)
+    pygame.draw.polygon(surface, (72, 62, 50), torso_pts, 1)
+    # Courier delivery stripe — faded
+    pygame.draw.line(surface, (70, 70, 50),
+                     (int(cx - 8 * s), int(cy + 26 * s)),
+                     (int(cx - 8 * s), int(cy + 78 * s)), max(2, int(3 * s)))
+
+    # Neck
+    pygame.draw.rect(surface, skin_d,
+                     (int(cx - 10 * s), int(cy + 14 * s),
+                      int(20 * s), int(14 * s)))
+
+    # Helmet shell — round top
+    helm_rect = pygame.Rect(int(cx - 46 * s), int(cy - 58 * s),
+                             int(92 * s), int(82 * s))
+    pygame.draw.ellipse(surface, helm, helm_rect)
+    pygame.draw.ellipse(surface, helm_l, helm_rect, 2)
+
+    # Scuff marks on helmet
+    rng = random.Random(13)
+    for _ in range(5):
+        scx = int(cx + rng.uniform(-34, 34) * s)
+        scy = int(cy + rng.uniform(-48, -6) * s)
+        pygame.draw.line(surface, (38, 46, 50),
+                         (scx, scy), (scx + rng.randint(3, 9), scy + rng.randint(-2, 2)), 1)
+
+    # Visor — takes up most of the face
+    visor_rect = pygame.Rect(int(cx - 38 * s), int(cy - 40 * s),
+                              int(76 * s), int(38 * s))
+    pygame.draw.ellipse(surface, visor, visor_rect)
+    pygame.draw.ellipse(surface, (20, 80, 100), visor_rect, 2)
+    # Visor crack — bottom right corner
+    pygame.draw.line(surface, (60, 100, 120),
+                     (int(cx + 22 * s), int(cy - 8 * s)),
+                     (int(cx + 36 * s), int(cy - 22 * s)), 1)
+    pygame.draw.line(surface, (60, 100, 120),
+                     (int(cx + 22 * s), int(cy - 8 * s)),
+                     (int(cx + 30 * s), int(cy - 4 * s)), 1)
+
+    # Eyes behind visor — barely visible through tint
+    eye_vis = max(30, 80 - max(0, -disposition) * 10)
+    ey = int(cy - 24 * s)
+    eye_surf = pygame.Surface((int(76 * s), int(10 * s)), pygame.SRCALPHA)
+    for ex_off, col in [(-16, (0, 200, 130, eye_vis)), (12, (0, 200, 130, eye_vis))]:
+        pygame.draw.circle(eye_surf,
+                           col,
+                           (int(38 * s + ex_off * s), int(5 * s)),
+                           max(2, int(4 * s)))
+    surface.blit(eye_surf, (int(cx - 38 * s), ey - int(5 * s)))
+
+    # Chin guard below visor
+    chin_rect = pygame.Rect(int(cx - 32 * s), int(cy - 4 * s),
+                             int(64 * s), int(20 * s))
+    pygame.draw.ellipse(surface, helm, chin_rect)
+    pygame.draw.ellipse(surface, helm_l, chin_rect, 1)
+
+    # Relay badge on helmet side — accent pip
+    pygame.draw.circle(surface, accent,
+                       (int(cx + 34 * s), int(cy - 44 * s)), max(3, int(4 * s)))
+    pygame.draw.circle(surface, (10, 60, 40),
+                       (int(cx + 34 * s), int(cy - 44 * s)), max(3, int(4 * s)), 1)
+    blink_pip = int(t * 1.4) % 2 == 0
+    if blink_pip:
+        pygame.draw.circle(surface, (*accent, 180),
+                           (int(cx + 34 * s), int(cy - 44 * s)), max(5, int(6 * s)), 1)
+
+    # Bored posture tilt — head slightly cocked (nudge cx)
+    # (already baked into torso asymmetry above)
+
+    # Comm speaker grille on chin guard
+    for grille_x in range(-12, 14, 5):
+        pygame.draw.line(surface, (40, 55, 60),
+                         (int(cx + grille_x * s), int(cy + 6 * s)),
+                         (int(cx + grille_x * s), int(cy + 12 * s)), 1)
+
+    # Disposition — hostile: visor flickers red tint
+    if disposition <= -3:
+        red_surf = pygame.Surface((int(76 * s), int(38 * s)), pygame.SRCALPHA)
+        pygame.draw.ellipse(red_surf, (200, 30, 30, 60), pygame.Rect(0, 0, int(76 * s), int(38 * s)))
+        surface.blit(red_surf, visor_rect.topleft)
+
+
+# ---------------------------------------------------------------------------
+# NOVA SOMA COLLECTIONS — automated wellness-debt AI
+# ---------------------------------------------------------------------------
+
+def _backdrop_nova_soma_collections(surface, inner, t):
+    """Corporate wellness UI: clean gradients, progress rings, soft pastel branding."""
+    cx = inner.centerx
+    font6 = pygame.font.SysFont("monospace", 6, bold=True)
+    font7 = pygame.font.SysFont("monospace", 7)
+
+    # Background: clean dark blue-grey with subtle grid
+    pygame.draw.rect(surface, (14, 18, 26), inner)
+    for i in range(0, inner.height, 12):
+        alpha = 18 + int(6 * math.sin(t * 0.5 + i * 0.1))
+        line_surf = pygame.Surface((inner.width, 1), pygame.SRCALPHA)
+        line_surf.fill((100, 230, 215, alpha))
+        surface.blit(line_surf, (inner.left, inner.top + i))
+    for i in range(0, inner.width, 16):
+        alpha = 12 + int(5 * math.sin(t * 0.4 + i * 0.08))
+        col_surf = pygame.Surface((1, inner.height), pygame.SRCALPHA)
+        col_surf.fill((100, 230, 215, alpha))
+        surface.blit(col_surf, (inner.left + i, inner.top))
+
+    # Wellness score ring (top-right)
+    ring_cx = inner.right - 28
+    ring_cy = inner.top + 30
+    ring_r = 18
+    pygame.draw.circle(surface, (20, 28, 38), (ring_cx, ring_cy), ring_r)
+    pygame.draw.circle(surface, (40, 55, 65), (ring_cx, ring_cy), ring_r, 2)
+    score_frac = 0.72 + 0.08 * math.sin(t * 0.7)
+    arc_rect = pygame.Rect(ring_cx - ring_r, ring_cy - ring_r, ring_r * 2, ring_r * 2)
+    pygame.draw.arc(surface, (100, 230, 215), arc_rect,
+                    math.pi / 2, math.pi / 2 + score_frac * math.tau, 2)
+    score_lbl = font6.render(f"{int(score_frac * 100)}%", True, (100, 230, 215))
+    surface.blit(score_lbl, (ring_cx - score_lbl.get_width() // 2, ring_cy - 3))
+    wellness_tag = font6.render("WELLNESS", True, (60, 130, 125))
+    surface.blit(wellness_tag, (ring_cx - wellness_tag.get_width() // 2, ring_cy + ring_r + 2))
+
+    # Debt bar (left side)
+    bar_rect = pygame.Rect(inner.left + 8, inner.top + 20, 10, inner.height - 40)
+    pygame.draw.rect(surface, (20, 28, 38), bar_rect)
+    pygame.draw.rect(surface, (40, 55, 65), bar_rect, 1)
+    fill_h = int(bar_rect.height * (0.61 + 0.05 * math.sin(t * 1.2)))
+    fill_rect = pygame.Rect(bar_rect.left + 1, bar_rect.bottom - fill_h - 1,
+                             bar_rect.width - 2, fill_h)
+    pygame.draw.rect(surface, (255, 120, 160), fill_rect)
+    debt_lbl = font6.render("DEBT", True, (200, 90, 130))
+    surface.blit(debt_lbl, (inner.left + 4, inner.bottom - 14))
+
+    # Scrolling marquee at the bottom
+    marquee_txt = "NOVA SOMA COLLECTIONS • YOUR WELLNESS IS OUR PRIORITY • "
+    marquee_font = pygame.font.SysFont("monospace", 6)
+    msurf = marquee_font.render(marquee_txt, True, (80, 200, 190))
+    scroll_x = inner.left + inner.width - int((t * 28) % (inner.width + msurf.get_width()))
+    prev_clip = surface.get_clip()
+    surface.set_clip(pygame.Rect(inner.left, inner.bottom - 12, inner.width, 10))
+    pygame.draw.rect(surface, (10, 16, 22), pygame.Rect(inner.left, inner.bottom - 12, inner.width, 10))
+    surface.blit(msurf, (scroll_x, inner.bottom - 11))
+    surface.set_clip(prev_clip)
+
+    # "CALL IN PROGRESS" tag
+    tag = font7.render("SESSION ACTIVE", True, (100, 230, 215))
+    surface.blit(tag, (cx - tag.get_width() // 2, inner.top + 4))
+
+
+def _nova_soma_collections(surface, cx, cy, s, disposition, t):
+    """
+    Nova Soma Collections AI: not a human face — a corporate UI avatar.
+    Stylized smooth head form, soft geometric "face" with sensor eyes,
+    wellness-pastel color scheme.
+    """
+    bg_col    = (14, 20, 30)       # dark interface fill
+    shell     = (38, 58, 72)       # outer casing
+    shell_l   = (70, 110, 125)     # highlight edge
+    eye_cyan  = (100, 230, 215)    # primary sensor glow
+    eye_pink  = (255, 130, 170)    # secondary accent
+    soft_wht  = (200, 230, 240)
+
+    # Platform / neck stub
+    plat_pts = [
+        (int(cx - 28 * s), int(cy + 80 * s)),
+        (int(cx + 28 * s), int(cy + 80 * s)),
+        (int(cx + 22 * s), int(cy + 40 * s)),
+        (int(cx - 22 * s), int(cy + 40 * s)),
+    ]
+    pygame.draw.polygon(surface, (24, 36, 46), plat_pts)
+    pygame.draw.polygon(surface, shell_l, plat_pts, 1)
+
+    # Clean elliptical head casing
+    head_rect = pygame.Rect(int(cx - 52 * s), int(cy - 60 * s),
+                             int(104 * s), int(108 * s))
+    pygame.draw.ellipse(surface, shell, head_rect)
+    pygame.draw.ellipse(surface, shell_l, head_rect, 2)
+    # Inner lighter face panel
+    face_rect = pygame.Rect(int(cx - 40 * s), int(cy - 46 * s),
+                             int(80 * s), int(82 * s))
+    pygame.draw.ellipse(surface, bg_col, face_rect)
+    pygame.draw.ellipse(surface, (55, 85, 100), face_rect, 1)
+
+    # Sensor eyes — two horizontal capsule shapes
+    pulse = 0.5 + 0.5 * math.sin(t * 2.8)
+    for ex_off, ecol in [(-16, eye_cyan), (16, eye_cyan)]:
+        ew, eh = int(18 * s), max(3, int(6 * s))
+        ex = int(cx + ex_off * s) - ew // 2
+        ey = int(cy - 18 * s) - eh // 2
+        pygame.draw.rect(surface, ecol, pygame.Rect(ex, ey, ew, eh),
+                         border_radius=max(2, int(3 * s)))
+        glow_surf = pygame.Surface((ew + 8, eh + 8), pygame.SRCALPHA)
+        glow_col = (*ecol, int(40 + 50 * pulse))
+        pygame.draw.rect(glow_surf, glow_col,
+                         pygame.Rect(2, 2, ew + 4, eh + 4),
+                         border_radius=max(2, int(3 * s)))
+        surface.blit(glow_surf, (ex - 4, ey - 4))
+
+    # When very hostile — eyes shift to pink alarm
+    if disposition <= -4:
+        for ex_off in (-16, 16):
+            ew, eh = int(18 * s), max(3, int(6 * s))
+            ex = int(cx + ex_off * s) - ew // 2
+            ey = int(cy - 18 * s) - eh // 2
+            alarm = pygame.Surface((ew, eh), pygame.SRCALPHA)
+            alarm.fill((*eye_pink, int(120 + 80 * abs(math.sin(t * 8.0)))))
+            surface.blit(alarm, (ex, ey))
+
+    # "Nose" — single vertical indicator LED strip
+    for i in range(3):
+        led_col = eye_cyan if int(t * 4 + i) % 3 != 0 else (20, 60, 70)
+        pygame.draw.circle(surface, led_col,
+                           (cx, int(cy + (-2 + i * 7) * s)), max(1, int(2 * s)))
+
+    # Mouth — smooth horizontal status bar
+    bar_y = int(cy + 20 * s)
+    bar_w = int(44 * s)
+    bar_h = max(3, int(5 * s))
+    pygame.draw.rect(surface, (24, 36, 46),
+                     pygame.Rect(cx - bar_w // 2, bar_y, bar_w, bar_h),
+                     border_radius=max(2, int(2 * s)))
+    # Fill fraction based on disposition — full cyan when neutral, pink when hostile
+    fill_frac = max(0.1, min(1.0, 0.5 + disposition * 0.06))
+    fill_col  = eye_cyan if disposition >= 0 else eye_pink
+    fill_w    = max(2, int(bar_w * fill_frac))
+    pygame.draw.rect(surface, fill_col,
+                     pygame.Rect(cx - bar_w // 2 + 1, bar_y + 1, fill_w - 2, bar_h - 2),
+                     border_radius=max(1, int(2 * s)))
+
+    # "NOVA SOMA" logotype under the face panel
+    font = pygame.font.SysFont("monospace", max(6, int(6 * s)), bold=True)
+    lbl_a = int(120 + 60 * math.sin(t * 1.5))
+    lbl_surf = font.render("NOVA SOMA", True, (int(eye_cyan[0] * lbl_a / 180),
+                                                int(eye_cyan[1] * lbl_a / 180),
+                                                int(eye_cyan[2] * lbl_a / 180)))
+    surface.blit(lbl_surf, (cx - lbl_surf.get_width() // 2,
+                             int(cy + 32 * s)))
+
+    # Decorative corner panel accents on the casing
+    for corner, dx, dy in [(0, -1, -1), (1, 1, -1), (2, -1, 1), (3, 1, 1)]:
+        acx = int(cx + dx * 44 * s)
+        acy = int(cy + dy * 46 * s)
+        pygame.draw.circle(surface, shell_l, (acx, acy), max(2, int(3 * s)))
+        pygame.draw.circle(surface, eye_cyan, (acx, acy), max(2, int(3 * s)), 1)
+
+
+# ---------------------------------------------------------------------------
+# MIRA VOSS — back-alley hull medic
+# ---------------------------------------------------------------------------
+
+def _backdrop_mira_voss(surface, inner, t):
+    """Industrial repair bay: exposed conduit, tool wall, welding sparks."""
+    font6 = pygame.font.SysFont("monospace", 6, bold=True)
+    font7 = pygame.font.SysFont("monospace", 7)
+    cx = inner.centerx
+
+    # Grimy workshop walls — alternating dark metal plates
+    for i in range(6):
+        y = inner.top + i * 18
+        col = (20, 16, 14) if i % 2 == 0 else (28, 22, 18)
+        pygame.draw.rect(surface, col, (inner.left, y, inner.width, 18))
+        pygame.draw.line(surface, (55, 42, 30), (inner.left, y), (inner.right, y), 1)
+
+    # Tool wall on the right side
+    tool_x = inner.right - 36
+    tool_rect = pygame.Rect(tool_x, inner.top + 8, 28, inner.height - 16)
+    pygame.draw.rect(surface, (24, 20, 16), tool_rect)
+    pygame.draw.rect(surface, (70, 55, 38), tool_rect, 1)
+    # Hanging tools — silhouettes
+    tool_shapes = [(4, 8, 4, 18), (12, 6, 4, 22), (20, 10, 4, 14)]
+    for tx, ty, tw, th in tool_shapes:
+        pygame.draw.rect(surface, (60, 50, 38),
+                         (tool_rect.left + tx, tool_rect.top + ty, tw, th))
+        pygame.draw.line(surface, (90, 72, 50),
+                         (tool_rect.left + tx + tw // 2, tool_rect.top + ty - 3),
+                         (tool_rect.left + tx + tw // 2, tool_rect.top + ty), 1)
+
+    # Hull plate being worked on (left side)
+    plate = pygame.Rect(inner.left + 4, inner.top + 24, 36, 50)
+    pygame.draw.rect(surface, (30, 26, 22), plate)
+    pygame.draw.rect(surface, (80, 65, 46), plate, 1)
+    # Weld seams on the plate
+    for row in range(3):
+        wy = plate.top + 10 + row * 14
+        pygame.draw.line(surface, (110, 80, 40),
+                         (plate.left + 4, wy), (plate.right - 4, wy), 1)
+    # Repair patch — bright spot
+    pygame.draw.circle(surface, (160, 120, 60),
+                       (plate.left + 18, plate.top + 30), 5)
+    pygame.draw.circle(surface, (220, 180, 80),
+                       (plate.left + 18, plate.top + 30), 5, 1)
+
+    # Welding sparks — animated
+    rng = random.Random(int(t * 7))
+    for _ in range(8):
+        spx = plate.left + rng.randint(4, plate.width - 4)
+        spy = plate.top + rng.randint(20, plate.height - 6)
+        spark_r = rng.random()
+        if spark_r > 0.5:
+            scol = (255, int(160 + rng.randint(0, 80)), 20)
+            pygame.draw.circle(surface, scol, (spx, spy), 1)
+
+    # Industrial ceiling pipe
+    pygame.draw.line(surface, (50, 40, 30),
+                     (inner.left, inner.top + 12),
+                     (inner.right, inner.top + 12), 3)
+    for px in range(inner.left + 12, inner.right - 8, 18):
+        pygame.draw.line(surface, (70, 55, 38),
+                         (px, inner.top + 12), (px, inner.top + 20), 2)
+
+    # Status board
+    board = pygame.Rect(cx - 18, inner.top + 4, 36, 10)
+    pygame.draw.rect(surface, (60, 46, 30), board)
+    pygame.draw.rect(surface, (120, 95, 60), board, 1)
+    lbl = font6.render("HULL MEDIC", True, (220, 170, 90))
+    surface.blit(lbl, (board.centerx - lbl.get_width() // 2, board.top + 2))
+
+
+def _mira_voss(surface, cx, cy, s, disposition, t):
+    """Mira Voss: tough hull medic. Welding visor pushed up, grease-marked face, work-hardened."""
+    skin   = (195, 158, 118)
+    skin_d = (105, 75, 48)
+    hair   = (38, 28, 18)      # dark, short and practical
+    suit   = (58, 52, 44)      # worn work coveralls
+    suit_l = (90, 80, 65)
+    visor  = (62, 100, 110)    # welding visor pushed up on forehead
+    visor_l = (100, 150, 160)
+    accent = (240, 140, 50)    # orange-yellow industrial
+
+    # Torso — coveralls with utility pouches
+    torso_pts = [
+        (int(cx - 44 * s), int(cy + 82 * s)),
+        (int(cx + 44 * s), int(cy + 82 * s)),
+        (int(cx + 36 * s), int(cy + 22 * s)),
+        (int(cx - 36 * s), int(cy + 22 * s)),
+    ]
+    pygame.draw.polygon(surface, suit, torso_pts)
+    pygame.draw.polygon(surface, suit_l, torso_pts, 1)
+    # Utility pouch on left chest
+    pouch = pygame.Rect(int(cx - 30 * s), int(cy + 34 * s), int(16 * s), int(12 * s))
+    pygame.draw.rect(surface, (72, 64, 52), pouch)
+    pygame.draw.rect(surface, suit_l, pouch, 1)
+    # Welding badge / certification patch on right
+    badge = pygame.Rect(int(cx + 14 * s), int(cy + 30 * s), int(18 * s), int(12 * s))
+    pygame.draw.rect(surface, (30, 22, 12), badge)
+    pygame.draw.rect(surface, accent, badge, 1)
+    font = pygame.font.SysFont("monospace", max(6, int(6 * s)))
+    badge_lbl = font.render("CERT", True, accent)
+    surface.blit(badge_lbl, (badge.left + 3, badge.top + 2))
+
+    # Neck
+    pygame.draw.rect(surface, skin_d,
+                     (int(cx - 10 * s), int(cy + 12 * s),
+                      int(20 * s), int(14 * s)))
+
+    # Head — practical, strong jaw
+    head_pts = [
+        (int(cx - 36 * s), int(cy - 14 * s)),
+        (int(cx - 28 * s), int(cy - 36 * s)),
+        (int(cx - 8 * s),  int(cy - 46 * s)),
+        (int(cx + 14 * s), int(cy - 44 * s)),
+        (int(cx + 30 * s), int(cy - 28 * s)),
+        (int(cx + 34 * s), int(cy - 8 * s)),
+        (int(cx + 28 * s), int(cy + 14 * s)),
+        (int(cx + 8 * s),  int(cy + 22 * s)),
+        (int(cx - 12 * s), int(cy + 20 * s)),
+        (int(cx - 32 * s), int(cy + 8 * s)),
+    ]
+    pygame.draw.polygon(surface, skin, head_pts)
+    pygame.draw.polygon(surface, skin_d, head_pts, 1)
+
+    # Hair — short, practical cut
+    hair_pts = [
+        (int(cx - 34 * s), int(cy - 14 * s)),
+        (int(cx - 26 * s), int(cy - 38 * s)),
+        (int(cx - 6 * s),  int(cy - 48 * s)),
+        (int(cx + 16 * s), int(cy - 46 * s)),
+        (int(cx + 30 * s), int(cy - 30 * s)),
+        (int(cx + 22 * s), int(cy - 22 * s)),
+        (int(cx - 4 * s),  int(cy - 28 * s)),
+        (int(cx - 22 * s), int(cy - 20 * s)),
+    ]
+    pygame.draw.polygon(surface, hair, hair_pts)
+    pygame.draw.polygon(surface, (18, 14, 8), hair_pts, 1)
+
+    # Welding visor pushed up on forehead — distinctive feature
+    visor_pts = [
+        (int(cx - 34 * s), int(cy - 28 * s)),
+        (int(cx + 28 * s), int(cy - 32 * s)),
+        (int(cx + 26 * s), int(cy - 46 * s)),
+        (int(cx - 30 * s), int(cy - 44 * s)),
+    ]
+    pygame.draw.polygon(surface, visor, visor_pts)
+    pygame.draw.polygon(surface, visor_l, visor_pts, 1)
+    # Visor lens strip — tinted orange
+    lens_pts = [
+        (int(cx - 28 * s), int(cy - 32 * s)),
+        (int(cx + 22 * s), int(cy - 35 * s)),
+        (int(cx + 20 * s), int(cy - 42 * s)),
+        (int(cx - 25 * s), int(cy - 40 * s)),
+    ]
+    pygame.draw.polygon(surface, (60, 36, 12), lens_pts)
+    pygame.draw.polygon(surface, (130, 80, 30), lens_pts, 1)
+
+    # Eyes — focused, no-nonsense
+    eye_y = int(cy - 12 * s)
+    if disposition >= 3:
+        ecol = (200, 240, 200)   # slightly warmer when pleased
+    elif disposition <= -4:
+        ecol = (255, 180, 160)   # hard stare when hostile
+    else:
+        ecol = (220, 215, 205)
+
+    for ex_off in (-12, 14):
+        pygame.draw.ellipse(surface, ecol,
+                            pygame.Rect(int(cx + ex_off * s - int(7 * s)), eye_y - int(4 * s),
+                                        int(14 * s), max(3, int(7 * s))))
+        pygame.draw.circle(surface, (30, 60, 50),
+                           (int(cx + ex_off * s), eye_y), max(2, int(3 * s)))
+
+    # Brows — flat, direct (angle steeper when hostile)
+    brow_angle = max(0, -disposition) * 0.8
+    for side, ex_off in [(-1, -12), (1, 14)]:
+        pygame.draw.line(surface, hair,
+                         (int(cx + ex_off * s - int(8 * s)),
+                          int(cy - 22 * s + side * brow_angle * s)),
+                         (int(cx + ex_off * s + int(8 * s)),
+                          int(cy - 24 * s - side * brow_angle * s)), 2)
+
+    # Grease marks — random soot smears on face
+    rng = random.Random(99)
+    for _ in range(4):
+        gx = int(cx + rng.uniform(-28, 28) * s)
+        gy = int(cy + rng.uniform(-8, 18) * s)
+        grease_surf = pygame.Surface((max(3, int(8 * s)), max(2, int(4 * s))), pygame.SRCALPHA)
+        grease_surf.fill((28, 20, 14, 65))
+        surface.blit(grease_surf, (gx, gy))
+
+    # Nose
+    pygame.draw.line(surface, skin_d,
+                     (int(cx + 2 * s), int(cy - 4 * s)),
+                     (int(cx - 2 * s), int(cy + 8 * s)), 1)
+
+    # Mouth — set, determined
+    mouth_y = int(cy + 14 * s)
+    if disposition >= 3:
+        pygame.draw.arc(surface, skin_d,
+                        pygame.Rect(int(cx - 11 * s), mouth_y - int(8 * s),
+                                    int(22 * s), int(12 * s)),
+                        math.pi, math.tau, 1)
+    elif disposition <= -3:
+        pygame.draw.arc(surface, skin_d,
+                        pygame.Rect(int(cx - 12 * s), mouth_y,
+                                    int(24 * s), int(10 * s)),
+                        0, math.pi, 1)
+    else:
+        pygame.draw.line(surface, skin_d,
+                         (int(cx - 10 * s), mouth_y),
+                         (int(cx + 10 * s), mouth_y), 1)
+
+    # Welding tool holstered at hip — visible bottom of frame
+    pygame.draw.line(surface, accent,
+                     (int(cx - 32 * s), int(cy + 48 * s)),
+                     (int(cx - 24 * s), int(cy + 76 * s)), max(2, int(3 * s)))
+    pygame.draw.circle(surface, (200, 110, 30),
+                       (int(cx - 24 * s), int(cy + 76 * s)), max(3, int(4 * s)))
+
+
+_DISPATCH["dray"]                   = _dray
+_BACKDROPS["dray"]                  = _backdrop_dray
+_DISPATCH["nova_soma_collections"]  = _nova_soma_collections
+_BACKDROPS["nova_soma_collections"] = _backdrop_nova_soma_collections
+_DISPATCH["mira_voss"]              = _mira_voss
+_BACKDROPS["mira_voss"]             = _backdrop_mira_voss
