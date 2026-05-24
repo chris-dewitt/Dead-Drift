@@ -50,9 +50,9 @@ CURSOR_BLINK_MS   = 530
 TYPEWRITER_SPEED  = 44.0          # chars/sec for NPC dialogue reveal
 
 # --- MycoShroom (Ch.2 cargo) ---
-SPORE_INTERVAL_MIN = 22.0          # seconds between inversion triggers
-SPORE_INTERVAL_MAX = 38.0
-SPORE_DURATION     = 3.0           # seconds controls are inverted
+SPORE_INTERVAL_MIN = 10.0          # seconds between inversion triggers
+SPORE_INTERVAL_MAX = 20.0
+SPORE_DURATION     = 6.0           # seconds controls are inverted
 
 # --- Roguelite ---
 SECTORS_PER_RUN   = 5             # the 5-sector sprint
@@ -86,9 +86,9 @@ SHOP_SECTORS          = {1, 3}            # 0-based sector indices that trigger 
 JAMMER_COOLDOWN       = 90.0             # seconds barge intercept suppressed after buying jammer
 
 # --- TriplicateForm (Ch.3 cargo) ---
-FORM_TRIGGER_MIN = 18.0          # seconds between form popup triggers
-FORM_TRIGGER_MAX = 38.0
-FORM_TIMEOUT     = 6.0           # seconds to respond before penalty
+FORM_TRIGGER_MIN = 7.0           # seconds between form popup triggers
+FORM_TRIGGER_MAX = 16.0
+FORM_TIMEOUT     = 4.0           # seconds to respond before penalty
 
 # --- Tether ---
 TETHER_FORCE      = 780.0         # spring constant for EM harpoon

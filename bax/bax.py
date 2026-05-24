@@ -644,9 +644,10 @@ class Bax:
 
     def _on_canister_grab(self, **_):
         self.speak(self._no_repeat_pick("canister_grab", [
-            "Fuel canister! Thruster's singing, mate.",
-            "Nice grab. I've given her a little boost.",
-            "Bit extra in the tank. Don't waste it.",
+            "Fuel canister — thruster singing AND hull sealant in it. Nice grab.",
+            "Got it! Emergency sealant patch in that one. Hull's kissed better.",
+            "Bit extra in the tank AND the hull's had a touch-up. Don't waste it.",
+            "Canister grabbed. Thruster boost plus a wee hull repair. Keep movin'.",
         ]))
 
     def _on_gun_malfunction(self, **_):

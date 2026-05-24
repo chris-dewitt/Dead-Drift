@@ -377,46 +377,71 @@ class VectorRenderer:
                                      (5, line_i + 6, int(fw * 0.25), 3))
             self.surface.blit(frag_surf, (fbase_x, fy))
 
-        # ── Main popup box ────────────────────────────────────────────────────
-        bw, bh = 460, 120
-        bx     = (W - bw) // 2
-        by     = H // 4 - bh // 2
+        # ── Screen-shake border flash when urgent ─────────────────────────────
+        if urgent:
+            shake_a = int(60 * pulse)
+            edge = pygame.Surface((W, H), pygame.SRCALPHA)
+            edge.fill((0, 0, 0, 0))
+            for thickness in (6, 3):
+                r_col = (int(220 * pulse), 0, 0, shake_a)
+                pygame.draw.rect(edge, r_col, (0, 0, W, H), thickness)
+            self.surface.blit(edge, (0, 0))
 
-        border_col = (220, 40, 40) if urgent else (200, 160, 0)
-        bg_col     = (14, 8, 0) if urgent else (8, 12, 4)
+        # ── Main popup box ────────────────────────────────────────────────────
+        bw, bh = 580, 160
+        bx     = (W - bw) // 2
+        by     = H // 2 - bh // 2   # centred on screen for maximum interruption
+
+        border_col = (230, 30, 30) if urgent else (200, 160, 0)
+        bg_col     = (18, 4, 0) if urgent else (8, 14, 4)
+
+        # Dark semi-transparent overlay behind box to block gameplay
+        ov = pygame.Surface((W, H), pygame.SRCALPHA)
+        ov.fill((0, 0, 0, int(130 * pulse) if urgent else 80))
+        self.surface.blit(ov, (0, 0))
 
         pygame.draw.rect(self.surface, bg_col,    (bx, by, bw, bh))
-        pygame.draw.rect(self.surface, border_col, (bx, by, bw, bh), 2)
+        pygame.draw.rect(self.surface, border_col, (bx, by, bw, bh), 3)
+        # Double-border for urgency
         if urgent:
-            pulse_col = (int(220 * pulse), int(40 * pulse), 0)
-            pygame.draw.rect(self.surface, pulse_col, (bx - 2, by - 2, bw + 4, bh + 4), 1)
+            pulse_col = (int(255 * pulse), int(50 * pulse), 0)
+            pygame.draw.rect(self.surface, pulse_col, (bx - 3, by - 3, bw + 6, bh + 6), 2)
+            pygame.draw.rect(self.surface, pulse_col, (bx - 6, by - 6, bw + 12, bh + 12), 1)
 
+        font_xl = pygame.font.SysFont("monospace", 20, bold=True)
         font_lg = pygame.font.SysFont("monospace", 16, bold=True)
-        font_sm = pygame.font.SysFont("monospace", 13)
+        font_sm = pygame.font.SysFont("monospace", 12)
 
-        title = font_lg.render("UNION FORM 27-B — IMMEDIATE COMPLIANCE REQUIRED",
-                               True, (220, 160, 0) if not urgent else (255, 80, 80))
-        self.surface.blit(title, (bx + 12, by + 10))
+        # Header stripe
+        hdr_col = (180, 30, 30) if urgent else (140, 110, 0)
+        pygame.draw.rect(self.surface, hdr_col, (bx, by, bw, 28))
 
-        key_col = (0, 220, 100) if not urgent else (255, 200, 50)
-        key_s   = font_lg.render(f"[ PRESS  {cargo.popup_key_name} ]", True, key_col)
-        self.surface.blit(key_s, (bx + bw // 2 - key_s.get_width() // 2, by + 36))
+        title_txt = "⚠ UNION FORM 27-B — IMMEDIATE COMPLIANCE REQUIRED ⚠" if urgent \
+                    else "UNION FORM 27-B — ADMINISTRATIVE INTERRUPT"
+        title = font_lg.render(title_txt, True, (255, 200, 200) if urgent else (255, 220, 80))
+        self.surface.blit(title, (bx + bw // 2 - title.get_width() // 2, by + 6))
+
+        key_col = (255, 80, 80) if urgent else (0, 255, 120)
+        key_s   = font_xl.render(f"PRESS  [ {cargo.popup_key_name} ]  NOW", True, key_col)
+        self.surface.blit(key_s, (bx + bw // 2 - key_s.get_width() // 2, by + 42))
 
         # Countdown bar
-        bar_w = bw - 24
+        bar_w  = bw - 32
         filled = int(bar_w * frac)
-        bar_col = (180, 40, 40) if urgent else (180, 140, 0)
-        pygame.draw.rect(self.surface, (20, 14, 4), (bx + 12, by + 72, bar_w, 12))
-        pygame.draw.rect(self.surface, bar_col,     (bx + 12, by + 72, filled, 12))
-        pygame.draw.rect(self.surface, border_col,  (bx + 12, by + 72, bar_w, 12), 1)
+        bar_col = (200, 30, 30) if urgent else (180, 140, 0)
+        pygame.draw.rect(self.surface, (25, 10, 4), (bx + 16, by + 96, bar_w, 16))
+        pygame.draw.rect(self.surface, bar_col,     (bx + 16, by + 96, filled, 16))
+        pygame.draw.rect(self.surface, border_col,  (bx + 16, by + 96, bar_w, 16), 1)
 
         secs = cargo.popup_timer
-        timer_s = font_sm.render(f"{secs:.1f}s", True, (160, 130, 60))
-        self.surface.blit(timer_s, (bx + bw - timer_s.get_width() - 12, by + 90))
+        timer_s = font_lg.render(f"{secs:.1f}s", True,
+                                  (255, 60, 60) if urgent else (180, 140, 60))
+        self.surface.blit(timer_s, (bx + bw - timer_s.get_width() - 16, by + 126))
 
-        sub = font_sm.render("Penalty: hull damage.  Subsection 9, Union Charter.  Non-negotiable.",
-                             True, (80, 70, 50))
-        self.surface.blit(sub, (bx + 12, by + 92))
+        sub = font_sm.render(
+            "NON-COMPLIANCE: hull integrity penalty  |  Subsection 9, Union Charter  |  NON-NEGOTIABLE",
+            True, (140, 80, 80) if urgent else (90, 80, 50))
+        self.surface.blit(sub, (bx + bw // 2 - sub.get_width() // 2, by + 132))
 
     def _draw_vip_effect(self, cargo, t: float):
         """SchrodingerVIP — visual state overlay: alive/deceased/unobserved."""
