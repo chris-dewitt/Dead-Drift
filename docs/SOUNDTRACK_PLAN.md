@@ -28,6 +28,71 @@ These are the directional answers backing this plan. Don't re-litigate — imple
 
 ---
 
+## Implementation status (May 2026)
+
+**Chris decision:** Maintain this section alongside the spec roadmap below. Update when audio tasks ship.
+
+**Legend:** `[x]` shipped · `[~]` partial · `[ ]` not shipped
+
+### Foundations (Section 8.1)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| 8.1.1 Tape hum bed (`tape_hum_bed`, `_HUM_CH`) | [x] | `audio/synth.py`, `audio_manager.py` |
+| 8.1.2 `flight_pressure` driver | [x] | `update_pressure()` from `Game.update()` |
+| 8.1.3 Tempo-driven drum/bass tiers (5 BPMs) | [x] | `_DRUM_BPMS`, bar-boundary crossfade |
+| 8.1.4 5-stem mix budget enforcer | [x] | `_enforce_stem_budget()` |
+| 8.1.5 Master FX chain (`master_fx.py`) | [~] | File exists; hull/cargo-driven depth TBD |
+
+### Cohesion (Section 8.2)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| 8.2.1 Chapter-keyed engine drones | [~] | Chapter roots in manager; full `engine_drone(tier, root)` refactor partial |
+| 8.2.2 Blues licks mood tags (30 patterns) | [~] | `blues_licks.py` pool exists; mood API not full spec |
+| 8.2.3 Chapter-keyed pad modes | [~] | `new_wave_pad.py`; dorian/locrian/sus2 + voicing_width partial |
+| 8.2.4 Bax hums (`bax_hum.py`, persistence) | [ ] | Not implemented |
+
+### Reactive (Section 8.3)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| 8.3.1 Slingshot stinger | [x] | `slingshot_stinger()` baked; event wired |
+| 8.3.2 Pad +5th modulation on slingshot | [~] | Stinger plays; full bar-boundary pad re-pitch not full spec |
+| 8.3.3 Tether snap musical resolution | [~] | Snap SFX + credits; bass walk / pad open per spec TBD |
+| 8.3.4 Barge motif (minor 2nd drone) | [x] | `barge_motif()`, `EVT_BARGE_NEARBY` |
+
+### Diegetic (Section 8.4)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| 8.4.1 Cockpit radio (`radio_stations.py`, **R**) | [x] | Scene + cycle in `game.py` |
+| 8.4.2 Decanting printer SFX | [x] | `decanting_printer()` |
+| 8.4.3 Decanting scripted choreography | [~] | Slide notes + printer; full silence/receipt sequence TBD |
+| 8.4.4 Main-menu long-form pad (120s idle) | [x] | `build_long_form_menu_pad()` |
+
+### Per-chapter (Section 8.5)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| `audio/chapter_1.py` … `chapter_4.py` | [x] | Modules exist |
+| `load_chapter(n)` hook | [x] | `audio_manager.load_chapter()` |
+| Cargo alarm → mix hooks | [~] | Partial wiring via `cargo_alarm` param |
+
+### Signature moments (Section 1.4) — player-visible
+
+| Moment | Status |
+|--------|--------|
+| Slingshot release (stinger + pad) | [~] |
+| Barge proximity dread | [x] |
+| Tether snap relief | [~] |
+| Decanting funeral | [~] |
+| Delivery handoff resolve | [~] |
+
+**Rough audio overall:** ~55% spec complete · strong flight/menu/diegetic base · reactive choreography + Bax hums remain.
+
+---
+
 ## Section 1 — Sonic Identity (the pitch)
 
 The award we're chasing is not "Best Music." The award we're chasing is **"Best Use of Audio,"** because we are not writing songs — we are writing a *cockpit*.

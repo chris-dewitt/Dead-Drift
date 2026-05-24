@@ -28,6 +28,19 @@ from delivery.delivery_sequence import DeliverySequence
 from roguelite.shop import ShopScreen
 
 
+def _format_slingshot_flash_value(stats: dict) -> str:
+    slingshots = int(stats.get("slingshots", 0))
+    sling_credits = int(stats.get("slingshot_credits", 0))
+    sling_each = int(stats.get(
+        "slingshot_credit_each",
+        sling_credits // slingshots if slingshots else 0,
+    ))
+
+    if slingshots > 0 and sling_credits > 0:
+        return f"{slingshots} x {sling_each:,} = +{sling_credits:,} cr"
+    return f"{slingshots}"
+
+
 class Game:
     _PAUSEABLE = frozenset({
         GameState.FLIGHT,
@@ -60,6 +73,7 @@ class Game:
         self.meta._after_save = lambda: self.save_mgr.sync_active(self.meta)
         self.run_mgr = RunManager(self.meta)
         self.bax     = Bax(self.ship, self.meta)
+        self.run_mgr._vault = self.bax.vault
 
         self.vec_renderer     = VectorRenderer(self.screen)
         self._menu_vfx        = VisualFX()
@@ -116,6 +130,7 @@ class Game:
         self.meta._after_save = lambda: self.save_mgr.sync_active(self.meta)
         self.run_mgr.meta = self.meta
         self.bax._meta = self.meta
+        self.run_mgr._vault = self.bax.vault
         self.cockpit_renderer._meta = self.meta
 
     def _effective_state(self) -> GameState:
@@ -505,6 +520,11 @@ class Game:
             self._handle_pause_menu_key(event)
             return
 
+        if state == GameState.SHOP and event.key == pygame.K_ESCAPE:
+            if self._shop is not None:
+                self._shop.handle_key(event)
+            return
+
         if state in self._PAUSEABLE:
             if event.key == pygame.K_1:
                 self._pause_game()
@@ -622,17 +642,7 @@ class Game:
                     self.ship._wrap_screen()
                 if terminal.is_done and self._terminal_win_hold_t <= 0:
                     outcome = terminal.outcome
-                    from terminal.npcs.base_npc import NPCOutcome
-                    win = outcome in (NPCOutcome.RELEASE, NPCOutcome.EXPLOIT,
-                                      "release", "exploit")
-                    if win:
-                        # Hold on terminal screen so the player sees the outcome
-                        self._terminal_win_hold_t = 5.0
-                        self._terminal_win_str = (
-                            "NEGOTIATION SUCCESS" if outcome in ("release", NPCOutcome.RELEASE)
-                            else "SYSTEM EXPLOITED"
-                        )
-                    else:
+                    if not self._start_terminal_outcome_hold(outcome):
                         self.run_mgr.on_terminal_complete(terminal.outcome)
                         if self.states.state == GameState.TERMINAL:
                             self._goto(GameState.FLIGHT)
@@ -695,6 +705,24 @@ class Game:
                 hull_pct=self.ship.hull_pct if self.ship else 1.0,
             )
 
+    def _start_terminal_outcome_hold(self, outcome: str) -> bool:
+        """Start a visible terminal outcome beat. Returns False for instant closes."""
+        from terminal.npcs.base_npc import NPCOutcome
+
+        if outcome in (NPCOutcome.RELEASE, "release"):
+            self._terminal_win_hold_t = 5.0
+            self._terminal_win_str = "NEGOTIATION SUCCESS"
+            return True
+        if outcome in (NPCOutcome.EXPLOIT, "exploit"):
+            self._terminal_win_hold_t = 5.0
+            self._terminal_win_str = "SYSTEM EXPLOITED"
+            return True
+        if outcome in (NPCOutcome.IMPOUND, "impound"):
+            self._terminal_win_hold_t = 1.35
+            self._terminal_win_str = "TERMINAL TERMINATED"
+            return True
+        return False
+
     # ------------------------------------------------------------------
     def _render(self):
         self.screen.fill(S.VOID)
@@ -717,7 +745,7 @@ class Game:
 
         if state == GameState.FLIGHT:
             self.vec_renderer.draw(self.run_mgr, self.ship, self._dt)
-            self.hud_renderer.draw(self.ship)
+            self.hud_renderer.draw(self.ship, self.run_mgr)
             self._render_sector_hud()
             if self.run_mgr._flash_t > 0 and self.run_mgr._last_stats:
                 self._render_sector_flash(
@@ -907,13 +935,16 @@ class Game:
         panel.blit(hdr, (W // 2 - hdr.get_width() // 2, 20))
         pygame.draw.line(panel, (0, 130, 60, a), (24, 54), (W - 24, 54), 1)
 
+        slingshots = int(stats.get("slingshots", 0))
+        sling_value = _format_slingshot_flash_value(stats)
+
         rows = [
             ("CREDITS RECOVERED", f"{stats['credits']:,} cr",
              (90, 230, 110) if stats['credits'] > 0 else (140, 140, 140)),
             ("TETHER SNAPS",      f"{stats['snaps']}",
              (255, 180, 50) if stats['snaps'] > 0 else (110, 110, 110)),
-            ("SLINGSHOTS",        f"{stats['slingshots']}",
-             (180, 130, 255) if stats['slingshots'] > 0 else (110, 110, 110)),
+            ("SLINGSHOTS",        sling_value,
+             (180, 130, 255) if slingshots > 0 else (110, 110, 110)),
             ("HULL LOST",         f"{stats['hull_lost']}",
              (220, 90, 90) if stats['hull_lost'] > 0 else (90, 200, 100)),
         ]
@@ -1013,7 +1044,7 @@ class Game:
     }
 
     def _render_terminal_win_overlay(self):
-        """Semi-transparent overlay shown after a terminal win — player sees outcome for 2s."""
+        """Semi-transparent overlay shown after a terminal outcome beat."""
         t    = pygame.time.get_ticks() / 1000.0
         frac = min(1.0, self._terminal_win_hold_t / 5.0)
         # Fade in quickly, hold, fade out near end
@@ -1025,7 +1056,15 @@ class Game:
         cx = S.SCREEN_W // 2
         cy = S.SCREEN_H // 2
         is_exploit = "EXPLOIT" in self._terminal_win_str
-        col = (0, 255, 140) if not is_exploit else (200, 80, 255)
+        is_failure = (
+            "TERMINATED" in self._terminal_win_str or
+            "IMPOUND" in self._terminal_win_str
+        )
+        col = (
+            (255, 55, 55) if is_failure else
+            (200, 80, 255) if is_exploit else
+            (0, 255, 140)
+        )
 
         # Pulsing glow ring
         pulse = 0.7 + 0.3 * math.sin(t * 4.0)
@@ -1039,11 +1078,12 @@ class Game:
         self.screen.blit(title, (cx - title.get_width() // 2, cy - 50))
 
         dim_col = (int(col[0] * 0.6), int(col[1] * 0.6), int(col[2] * 0.6))
-        sub_lines = (
-            ["debt reduced  ·  sector advance", "returning to flight..."]
-            if not is_exploit else
-            ["system compromised  ·  credits rerouted", "they'll find out eventually."]
-        )
+        if is_failure:
+            sub_lines = ["terminal terminated  ·  barge channel hot", "returning to flight..."]
+        elif is_exploit:
+            sub_lines = ["system compromised  ·  credits rerouted", "they'll find out eventually."]
+        else:
+            sub_lines = ["channel closed  ·  sector advance", "returning to flight..."]
         for i, line in enumerate(sub_lines):
             s = fs.render(line, True, dim_col)
             self.screen.blit(s, (cx - s.get_width() // 2, cy + 10 + i * 20))

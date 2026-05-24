@@ -18,11 +18,32 @@ _NAME_TO_KEY = {
     "KRELLBORN":      "pirate",
     "MARROW":         "underground_dj",
     "TOLL AUTHORITY": "toll_authority",
+    "RELAY-7 FELIX":  "nervous_fence",
+    "INSPECTOR HOLT": "cargo_inspector",
 }
+
+_REACTION_ACCENTS = {
+    "gary": (255, 170, 34),
+    "synthetic_droid": (0, 230, 210),
+    "union_dispatcher": (210, 165, 55),
+    "kress": (0, 190, 110),
+    "insurance_adjuster": (230, 210, 120),
+    "sandra": (90, 235, 130),
+    "pirate": (230, 70, 50),
+    "underground_dj": (180, 80, 235),
+    "toll_authority": (220, 170, 40),
+    "nervous_fence": (0, 210, 135),
+    "cargo_inspector": (0, 190, 125),
+    "unknown": S.AMBER_TERM,
+}
+
+_FREEZE_REACTIONS = {"exploit", "paradox", "impound", "abort"}
 
 
 def draw_portrait(surface: pygame.Surface, npc_name: str,
-                  rect: pygame.Rect, disposition: int = 0, t: float = 0.0):
+                  rect: pygame.Rect, disposition: int = 0, t: float = 0.0,
+                  reaction: str = "", reaction_age: float = 0.0,
+                  frozen_t: float | None = None, outcome: str = ""):
     """
     Renders a CRT video-call portrait inside `rect`.
 
@@ -32,23 +53,137 @@ def draw_portrait(surface: pygame.Surface, npc_name: str,
       3. NPC vector portrait
       4. Disposition-driven glitch overlay
     """
-    key   = _NAME_TO_KEY.get(npc_name.upper(), "unknown")
-    inner = _draw_crt_bezel(surface, rect, npc_name, t, disposition)
+    key = _NAME_TO_KEY.get(npc_name.upper(), "unknown")
+    reaction = reaction or outcome or ""
+    draw_disp = _reaction_disposition(disposition, reaction)
+    inner = _draw_crt_bezel(surface, rect, npc_name, t, draw_disp)
 
     backdrop = _BACKDROPS.get(key)
     if backdrop is not None:
         prev_clip = surface.get_clip()
         surface.set_clip(inner)
-        backdrop(surface, inner, t)
+        layer = pygame.Surface((inner.w, inner.h), pygame.SRCALPHA)
+        local = pygame.Rect(0, 0, inner.w, inner.h)
+        layer.fill((4, 10, 6, 255))
+        backdrop(layer, local, t)
+        _draw_ambient_backdrop_life(layer, local, key, t)
+        sway_x = int(math.sin(t * 0.41 + len(key)) * 1.3)
+        sway_y = int(math.sin(t * 0.33 + len(key) * 0.7) * 1.1)
+        surface.blit(layer, (inner.left + sway_x, inner.top + sway_y))
         surface.set_clip(prev_clip)
 
     fn    = _DISPATCH.get(key, _unknown)
-    cx    = inner.centerx
-    cy    = inner.top + int(inner.height * 0.46)
+    shake_x, shake_y = _portrait_shake(reaction, reaction_age, t)
+    cx    = inner.centerx + shake_x
+    cy    = inner.top + int(inner.height * 0.46) + shake_y
     scale = min(inner.width, inner.height * 0.65) / 200.0
-    fn(surface, cx, cy, scale, disposition, t)
+    portrait_t = frozen_t if (frozen_t is not None and reaction in _FREEZE_REACTIONS) else t
+    fn(surface, cx, cy, scale, draw_disp, portrait_t)
 
-    _draw_signal_overlay(surface, inner, t, disposition)
+    _draw_reaction_overlay(surface, inner, key, reaction, reaction_age, t)
+    _draw_signal_overlay(surface, inner, t, draw_disp)
+
+
+def _reaction_disposition(disposition: int, reaction: str) -> int:
+    if reaction in ("friendly", "release"):
+        return max(4, disposition + 3)
+    if reaction == "annoyed":
+        return min(-3, disposition - 2)
+    if reaction in ("furious", "impound", "abort"):
+        return min(-7, disposition - 5)
+    if reaction == "exploit":
+        return min(-6, disposition - 4)
+    if reaction == "paradox":
+        return -10
+    return disposition
+
+
+def _portrait_shake(reaction: str, age: float, t: float) -> tuple[int, int]:
+    if reaction == "furious" and age < 0.30:
+        return int(math.sin(t * 90.0) * 3), int(math.cos(t * 84.0) * 2)
+    if reaction in ("impound", "abort") and age < 0.70:
+        return int(math.sin(t * 70.0) * 4), int(math.sin(t * 57.0) * 2)
+    if reaction == "paradox":
+        return int(math.sin(t * 31.0) * 2), int(math.cos(t * 29.0) * 2)
+    return 0, 0
+
+
+def _draw_ambient_backdrop_life(surface: pygame.Surface, inner: pygame.Rect,
+                                key: str, t: float) -> None:
+    accent = _REACTION_ACCENTS.get(key, S.AMBER_TERM)
+    rng = random.Random(key)
+
+    # Two distant passersby, low-alpha and behind the bust.
+    for idx in range(2):
+        speed = 11 + idx * 7 + (len(key) % 5)
+        phase = (t * speed + rng.randint(0, inner.w)) % (inner.w + 44)
+        x = inner.left - 22 + int(phase)
+        y = inner.bottom - 38 - idx * 12
+        col = (18 + idx * 8, 22 + idx * 6, 18 + idx * 5)
+        pygame.draw.circle(surface, col, (x, y - 9), 4)
+        pygame.draw.line(surface, col, (x, y - 5), (x, y + 8), 3)
+        pygame.draw.line(surface, col, (x - 5, y), (x + 5, y + 2), 2)
+
+    # Dust/data motes drifting upward. Stable seed per NPC keeps it calm.
+    for idx in range(18):
+        base_x = rng.randint(inner.left + 2, inner.right - 3)
+        base_y = rng.randint(inner.top + 10, inner.bottom - 10)
+        x = inner.left + ((base_x - inner.left + int(t * (idx % 5 + 1))) % inner.w)
+        y = inner.top + ((base_y - inner.top - int(t * (idx % 4 + 1) * 0.6)) % inner.h)
+        a = 45 + int(25 * math.sin(t * 1.5 + idx))
+        pygame.draw.circle(surface, (*accent, max(12, a)), (x, y), 1)
+
+    # Small live readout flicker, different position from the main face.
+    readout = pygame.Rect(inner.right - 44, inner.bottom - 24, 36, 12)
+    pulse = 0.55 + 0.45 * math.sin(t * 3.7 + len(key))
+    pygame.draw.rect(surface, (3, 12, 8, 150), readout)
+    pygame.draw.rect(surface, (*accent, int(45 + 70 * pulse)), readout, 1)
+    for row in range(2):
+        width = int(8 + ((t * 9 + row * 13 + len(key)) % 20))
+        pygame.draw.line(surface, (*accent, 90),
+                         (readout.left + 4, readout.top + 4 + row * 5),
+                         (readout.left + 4 + width, readout.top + 4 + row * 5), 1)
+
+
+def _draw_reaction_overlay(surface: pygame.Surface, inner: pygame.Rect,
+                           key: str, reaction: str, age: float, t: float) -> None:
+    if not reaction:
+        return
+    accent = _REACTION_ACCENTS.get(key, S.AMBER_TERM)
+    layer = pygame.Surface((inner.w, inner.h), pygame.SRCALPHA)
+
+    if reaction in ("friendly", "release"):
+        strength = max(0.0, 1.0 - age / 1.2) if reaction == "friendly" else 0.7
+        pygame.draw.rect(layer, (*accent, int(35 + 45 * strength)), layer.get_rect(), 2)
+        pygame.draw.ellipse(layer, (*accent, int(28 * strength)),
+                            pygame.Rect(18, 22, inner.w - 36, inner.h - 48), 2)
+    elif reaction == "annoyed":
+        layer.fill((0, 0, 0, 38))
+        for y in range(0, inner.h, 7):
+            pygame.draw.line(layer, (255, 80, 30, 28), (0, y), (inner.w, y), 1)
+    elif reaction in ("furious", "impound", "abort"):
+        layer.fill((45, 0, 0, 74))
+        for y in range(0, inner.h, 9):
+            off = int(math.sin(t * 16.0 + y) * 5)
+            pygame.draw.line(layer, (255, 35, 35, 88), (off, y), (inner.w + off, y), 2)
+    elif reaction == "exploit":
+        layer.fill((0, 38, 50, 44))
+        rng = random.Random(int(t * 10))
+        for _ in range(7):
+            y = rng.randrange(0, max(1, inner.h - 4))
+            x = rng.randrange(-16, 17)
+            pygame.draw.rect(layer, (0, 230, 255, 95), (x, y, inner.w, rng.randrange(2, 5)))
+    elif reaction == "paradox":
+        layer.fill((35, 0, 45, 58))
+        rng = random.Random(int(t * 22))
+        for _ in range(12):
+            y = rng.randrange(0, max(1, inner.h - 3))
+            h = rng.randrange(1, 6)
+            x = rng.randrange(-24, 25)
+            col = rng.choice([(255, 40, 220, 120), (0, 240, 255, 105), (255, 255, 255, 80)])
+            pygame.draw.rect(layer, col, (x, y, inner.w, h))
+
+    surface.blit(layer, inner.topleft)
 
 
 # ---------------------------------------------------------------------------
@@ -2450,3 +2585,354 @@ def _toll_authority(surface, cx, cy, s, disposition, t):
 
 _DISPATCH["toll_authority"] = _toll_authority
 _BACKDROPS["toll_authority"] = _backdrop_toll_authority
+
+
+# ---------------------------------------------------------------------------
+# Relay-7 Felix -- grey-market relay contact
+# ---------------------------------------------------------------------------
+
+def _backdrop_nervous_fence(surface, inner, t):
+    """Bootleg relay closet: stolen route maps, cables, and half-legal gear."""
+    font6 = pygame.font.SysFont("monospace", 6, bold=True)
+    font7 = pygame.font.SysFont("monospace", 7)
+    cx = inner.centerx
+
+    # Patchwork wall panels
+    for i in range(6):
+        y = inner.top + i * 18
+        col = (18, 18, 24) if i % 2 else (24, 20, 28)
+        pygame.draw.rect(surface, col, (inner.left, y, inner.width, 18))
+        pygame.draw.line(surface, (52, 42, 26), (inner.left, y), (inner.right, y), 1)
+
+    # Left monitor: barge route map
+    mon = pygame.Rect(inner.left + 8, inner.top + 12, 54, 42)
+    pygame.draw.rect(surface, (4, 18, 14), mon)
+    pygame.draw.rect(surface, (0, 180, 100), mon, 1)
+    for i in range(4):
+        y = mon.top + 8 + i * 8
+        pygame.draw.line(surface, (0, 80, 55), (mon.left + 4, y), (mon.right - 4, y), 1)
+    route = [
+        (mon.left + 6, mon.bottom - 7),
+        (mon.left + 19, mon.top + 26),
+        (mon.left + 34, mon.top + 18),
+        (mon.right - 7, mon.top + 9),
+    ]
+    pygame.draw.lines(surface, (0, 245, 150), False, route, 1)
+    blip_x = route[1][0] + int(math.sin(t * 4.0) * 3)
+    pygame.draw.circle(surface, (255, 190, 40), (blip_x, route[1][1]), 2)
+    tag = font6.render("404 ROUTES", True, (0, 210, 120))
+    surface.blit(tag, (mon.left + 3, mon.top + 2))
+
+    # Right monitor: legitimacy plan
+    plan = pygame.Rect(inner.right - 58, inner.top + 16, 48, 48)
+    pygame.draw.rect(surface, (22, 14, 8), plan)
+    pygame.draw.rect(surface, (170, 110, 35), plan, 1)
+    for row, txt in enumerate(["LLC?", "TAX ID", "NO CRIME", "LOGO"]):
+        line = font7.render(txt, True, (210, 155, 70))
+        surface.blit(line, (plan.left + 4, plan.top + 5 + row * 9))
+    pygame.draw.line(surface, (210, 45, 45),
+                     (plan.left + 4, plan.top + 24),
+                     (plan.right - 4, plan.top + 24), 1)
+
+    # Cable mess and signal lights
+    for i in range(7):
+        x0 = inner.left + 6 + i * 18
+        y0 = inner.bottom - 12
+        x1 = inner.left + 20 + i * 15
+        y1 = inner.bottom - 3
+        mid = ((x0 + x1) // 2, y0 - 6 + int(math.sin(t * 1.4 + i) * 2))
+        col = [(80, 40, 120), (30, 95, 90), (130, 90, 30)][i % 3]
+        pygame.draw.lines(surface, col, False, [(x0, y0), mid, (x1, y1)], 1)
+    for i in range(5):
+        lx = cx - 28 + i * 14
+        ly = inner.top + 72
+        on = int(t * (2 + i)) % 3 != 0
+        pygame.draw.circle(surface, (0, 220, 120) if on else (25, 55, 40), (lx, ly), 2)
+
+    # Handwritten sign
+    sign = pygame.Rect(cx - 34, inner.top + 4, 68, 10)
+    pygame.draw.rect(surface, (80, 62, 36), sign)
+    pygame.draw.rect(surface, (140, 110, 64), sign, 1)
+    lbl = font6.render("LEGIT SOON", True, (235, 210, 140))
+    surface.blit(lbl, (sign.centerx - lbl.get_width() // 2, sign.top + 2))
+
+
+def _nervous_fence(surface, cx, cy, s, disposition, t):
+    """Felix: anxious relay broker, oversized headset, always almost caught."""
+    skin = (205, 168, 125)
+    skin_d = (110, 76, 42)
+    hair = (50, 35, 22)
+    jacket = (44, 52, 60)
+    accent = (0, 210, 135)
+    amber = (230, 165, 45)
+
+    # Hunched shoulders and patched vest
+    shoulders = [
+        (int(cx - 44 * s), int(cy + 68 * s)),
+        (int(cx + 44 * s), int(cy + 68 * s)),
+        (int(cx + 34 * s), int(cy + 28 * s)),
+        (int(cx - 34 * s), int(cy + 28 * s)),
+    ]
+    pygame.draw.polygon(surface, jacket, shoulders)
+    pygame.draw.polygon(surface, (95, 115, 115), shoulders, 1)
+    pygame.draw.rect(surface, (70, 40, 30),
+                     (int(cx - 30 * s), int(cy + 42 * s), int(18 * s), int(14 * s)))
+    pygame.draw.rect(surface, amber,
+                     (int(cx + 14 * s), int(cy + 38 * s), int(18 * s), int(8 * s)), 1)
+
+    # Neck
+    pygame.draw.rect(surface, skin_d,
+                     (int(cx - 9 * s), int(cy + 18 * s), int(18 * s), int(17 * s)))
+
+    # Head: narrow, nervous
+    head = [
+        (int(cx - 26 * s), int(cy - 30 * s)),
+        (int(cx - 12 * s), int(cy - 43 * s)),
+        (int(cx + 14 * s), int(cy - 40 * s)),
+        (int(cx + 27 * s), int(cy - 24 * s)),
+        (int(cx + 24 * s), int(cy + 5 * s)),
+        (int(cx + 10 * s), int(cy + 24 * s)),
+        (int(cx - 10 * s), int(cy + 24 * s)),
+        (int(cx - 24 * s), int(cy + 8 * s)),
+    ]
+    pygame.draw.polygon(surface, skin, head)
+    pygame.draw.polygon(surface, skin_d, head, 1)
+
+    # Messy hair
+    hair_pts = [
+        (int(cx - 24 * s), int(cy - 29 * s)),
+        (int(cx - 10 * s), int(cy - 44 * s)),
+        (int(cx + 10 * s), int(cy - 42 * s)),
+        (int(cx + 25 * s), int(cy - 25 * s)),
+        (int(cx + 12 * s), int(cy - 31 * s)),
+        (int(cx + 3 * s), int(cy - 24 * s)),
+        (int(cx - 7 * s), int(cy - 32 * s)),
+    ]
+    pygame.draw.polygon(surface, hair, hair_pts)
+    pygame.draw.polygon(surface, (20, 12, 8), hair_pts, 1)
+    for spike in (-17, -5, 8):
+        pygame.draw.line(surface, hair,
+                         (int(cx + spike * s), int(cy - 36 * s)),
+                         (int(cx + (spike - 5) * s), int(cy - 48 * s)), 2)
+
+    # Oversized headset
+    pygame.draw.arc(surface, (80, 95, 100),
+                    pygame.Rect(int(cx - 34 * s), int(cy - 48 * s),
+                                int(68 * s), int(44 * s)),
+                    0, math.pi, max(1, int(3 * s)))
+    for side in (-1, 1):
+        cup = (int(cx + side * 27 * s), int(cy - 12 * s))
+        pygame.draw.circle(surface, (20, 34, 34), cup, max(4, int(8 * s)))
+        pygame.draw.circle(surface, accent, cup, max(4, int(8 * s)), 1)
+    pygame.draw.line(surface, (80, 95, 100),
+                     (int(cx + 27 * s), int(cy - 10 * s)),
+                     (int(cx + 18 * s), int(cy + 8 * s)), 2)
+    pygame.draw.circle(surface, accent, (int(cx + 18 * s), int(cy + 8 * s)), 2)
+
+    # Wide anxious eyes
+    eye_y = int(cy - 12 * s)
+    for ex in (-10, 12):
+        pygame.draw.ellipse(surface, (232, 240, 225),
+                            pygame.Rect(int(cx + ex * s - 6 * s), eye_y - int(5 * s),
+                                        int(12 * s), int(9 * s)))
+        pygame.draw.circle(surface, (15, 45, 35),
+                           (int(cx + ex * s + math.sin(t * 3.0) * 1), eye_y), 2)
+    # Brows lifted in panic
+    pygame.draw.line(surface, hair,
+                     (int(cx - 18 * s), int(cy - 24 * s)),
+                     (int(cx - 5 * s), int(cy - 28 * s)), 2)
+    pygame.draw.line(surface, hair,
+                     (int(cx + 5 * s), int(cy - 27 * s)),
+                     (int(cx + 20 * s), int(cy - 22 * s)), 2)
+
+    # Nose and mouth
+    pygame.draw.line(surface, skin_d,
+                     (int(cx + 2 * s), int(cy - 6 * s)),
+                     (int(cx - 2 * s), int(cy + 5 * s)), 1)
+    mouth_y = int(cy + 15 * s)
+    if disposition >= 2:
+        pygame.draw.arc(surface, skin_d,
+                        pygame.Rect(int(cx - 9 * s), mouth_y - int(7 * s),
+                                    int(18 * s), int(12 * s)),
+                        0, math.pi, 1)
+    else:
+        pygame.draw.line(surface, skin_d,
+                         (int(cx - 8 * s), mouth_y),
+                         (int(cx + 8 * s), mouth_y + int(2 * s)), 1)
+
+    # Sweat bead / relay badge
+    if disposition <= 0 or int(t * 2.0) % 2 == 0:
+        pygame.draw.circle(surface, (90, 210, 235),
+                           (int(cx + 22 * s), int(cy - 4 * s)), max(1, int(2 * s)))
+    badge = pygame.Rect(int(cx - 7 * s), int(cy + 45 * s), int(14 * s), int(10 * s))
+    pygame.draw.rect(surface, (10, 30, 24), badge)
+    pygame.draw.rect(surface, accent, badge, 1)
+
+
+# ---------------------------------------------------------------------------
+# Inspector Holt -- Sector Transit Authority manifest checker
+# ---------------------------------------------------------------------------
+
+def _backdrop_cargo_inspector(surface, inner, t):
+    """Sterile STA checkpoint office: scanner arch, forms, and manifest board."""
+    font6 = pygame.font.SysFont("monospace", 6, bold=True)
+    font7 = pygame.font.SysFont("monospace", 7)
+    cx = inner.centerx
+
+    # Office wall and harsh light
+    pygame.draw.rect(surface, (20, 26, 28), inner)
+    for y in range(inner.top + 10, inner.bottom, 16):
+        pygame.draw.line(surface, (32, 40, 42), (inner.left, y), (inner.right, y), 1)
+    flicker = 0.7 + 0.3 * (int(t * 11) % 5 != 0)
+    light_col = (int(180 * flicker), int(205 * flicker), int(190 * flicker))
+    pygame.draw.rect(surface, light_col, (cx - 36, inner.top + 5, 72, 4))
+
+    # Cargo scanner arch behind Holt
+    arch = pygame.Rect(cx - 42, inner.top + 28, 84, 82)
+    pygame.draw.arc(surface, (80, 120, 110), arch, math.pi, math.tau, 3)
+    pygame.draw.line(surface, (80, 120, 110), (arch.left, arch.centery), (arch.left, arch.bottom), 3)
+    pygame.draw.line(surface, (80, 120, 110), (arch.right, arch.centery), (arch.right, arch.bottom), 3)
+    scan_y = arch.top + 20 + int((math.sin(t * 2.6) + 1.0) * 24)
+    pygame.draw.line(surface, (0, 230, 140), (arch.left + 8, scan_y), (arch.right - 8, scan_y), 1)
+
+    # Manifest board
+    board = pygame.Rect(inner.left + 7, inner.top + 18, 48, 58)
+    pygame.draw.rect(surface, (8, 18, 16), board)
+    pygame.draw.rect(surface, (0, 160, 100), board, 1)
+    title = font6.render("MANIFEST", True, (0, 220, 130))
+    surface.blit(title, (board.left + 3, board.top + 3))
+    for row, txt in enumerate(["STD FR", "GEN GOODS", "REG-14", "OK"]):
+        col = (0, 185, 110) if row != 3 else (220, 180, 60)
+        surface.blit(font7.render(txt, True, col),
+                     (board.left + 4, board.top + 13 + row * 9))
+
+    # Stacks of forms and stamp pad
+    for i in range(6):
+        fy = inner.bottom - 20 + i * 2
+        pygame.draw.rect(surface, (170, 160, 130),
+                         (inner.right - 48 + i, fy, 34, 2))
+    stamp = pygame.Rect(inner.right - 46, inner.bottom - 12, 18, 8)
+    pygame.draw.rect(surface, (90, 20, 20), stamp)
+    pygame.draw.rect(surface, (160, 70, 40), stamp, 1)
+
+    # Filing cabinet
+    cab = pygame.Rect(inner.right - 54, inner.top + 22, 44, 44)
+    pygame.draw.rect(surface, (42, 48, 52), cab)
+    pygame.draw.rect(surface, (90, 105, 105), cab, 1)
+    for i in range(3):
+        drawer = pygame.Rect(cab.left + 4, cab.top + 5 + i * 12, cab.w - 8, 9)
+        pygame.draw.rect(surface, (30, 36, 40), drawer)
+        pygame.draw.line(surface, (120, 135, 130), drawer.midtop, drawer.midbottom, 1)
+
+
+def _cargo_inspector(surface, cx, cy, s, disposition, t):
+    """Inspector Holt: precise, dry, and weaponized by forms."""
+    skin = (216, 182, 140)
+    skin_d = (120, 84, 50)
+    hair = (55, 42, 32)
+    uniform = (34, 54, 66)
+    trim = (0, 190, 125)
+    paper = (198, 190, 158)
+
+    # Torso and tie
+    torso = [
+        (int(cx - 39 * s), int(cy + 72 * s)),
+        (int(cx + 39 * s), int(cy + 72 * s)),
+        (int(cx + 29 * s), int(cy + 28 * s)),
+        (int(cx - 29 * s), int(cy + 28 * s)),
+    ]
+    pygame.draw.polygon(surface, uniform, torso)
+    pygame.draw.polygon(surface, (85, 120, 120), torso, 1)
+    tie = [
+        (int(cx - 5 * s), int(cy + 30 * s)),
+        (int(cx + 5 * s), int(cy + 30 * s)),
+        (int(cx + 3 * s), int(cy + 60 * s)),
+        (int(cx), int(cy + 67 * s)),
+        (int(cx - 3 * s), int(cy + 60 * s)),
+    ]
+    pygame.draw.polygon(surface, (90, 26, 22), tie)
+    pygame.draw.polygon(surface, (160, 60, 45), tie, 1)
+    pygame.draw.rect(surface, trim,
+                     (int(cx - 26 * s), int(cy + 39 * s), int(18 * s), int(6 * s)), 1)
+
+    # Neck and head
+    pygame.draw.rect(surface, skin_d,
+                     (int(cx - 10 * s), int(cy + 15 * s), int(20 * s), int(18 * s)))
+    head_rect = pygame.Rect(int(cx - 28 * s), int(cy - 39 * s),
+                            int(56 * s), int(58 * s))
+    pygame.draw.ellipse(surface, skin, head_rect)
+    pygame.draw.ellipse(surface, skin_d, head_rect, 1)
+
+    # Neat side-part hair
+    hair_pts = [
+        (int(cx - 27 * s), int(cy - 24 * s)),
+        (int(cx - 17 * s), int(cy - 41 * s)),
+        (int(cx + 15 * s), int(cy - 40 * s)),
+        (int(cx + 28 * s), int(cy - 24 * s)),
+        (int(cx + 18 * s), int(cy - 28 * s)),
+        (int(cx - 2 * s), int(cy - 23 * s)),
+    ]
+    pygame.draw.polygon(surface, hair, hair_pts)
+    pygame.draw.polygon(surface, (24, 18, 12), hair_pts, 1)
+    pygame.draw.line(surface, (24, 18, 12),
+                     (int(cx - 4 * s), int(cy - 39 * s)),
+                     (int(cx - 10 * s), int(cy - 24 * s)), 1)
+
+    # Glasses and careful eyes
+    eye_y = int(cy - 12 * s)
+    for ex in (-12, 12):
+        lens = pygame.Rect(int(cx + ex * s - 9 * s), eye_y - int(6 * s),
+                           int(18 * s), int(10 * s))
+        pygame.draw.rect(surface, (170, 210, 195), lens, 1)
+        pygame.draw.circle(surface, (20, 34, 30), (int(cx + ex * s), eye_y), 2)
+    pygame.draw.line(surface, (170, 210, 195),
+                     (int(cx - 3 * s), eye_y - int(2 * s)),
+                     (int(cx + 3 * s), eye_y - int(2 * s)), 1)
+    brow_drop = max(0, -disposition)
+    pygame.draw.line(surface, hair,
+                     (int(cx - 21 * s), int(cy - 24 * s + brow_drop)),
+                     (int(cx - 5 * s), int(cy - 23 * s)), 2)
+    pygame.draw.line(surface, hair,
+                     (int(cx + 5 * s), int(cy - 23 * s)),
+                     (int(cx + 21 * s), int(cy - 24 * s + brow_drop)), 2)
+
+    # Nose, mouth, and bureaucratic stillness
+    pygame.draw.line(surface, skin_d,
+                     (int(cx + 1 * s), int(cy - 7 * s)),
+                     (int(cx - 2 * s), int(cy + 6 * s)), 1)
+    mouth_y = int(cy + 13 * s)
+    if disposition >= 3:
+        pygame.draw.line(surface, skin_d,
+                         (int(cx - 8 * s), mouth_y),
+                         (int(cx + 8 * s), mouth_y + int(1 * s)), 1)
+    elif disposition <= -3:
+        pygame.draw.arc(surface, skin_d,
+                        pygame.Rect(int(cx - 10 * s), mouth_y - int(2 * s),
+                                    int(20 * s), int(9 * s)),
+                        math.pi, math.tau, 1)
+    else:
+        pygame.draw.line(surface, skin_d,
+                         (int(cx - 9 * s), mouth_y),
+                         (int(cx + 9 * s), mouth_y), 1)
+
+    # Clipboard and pen
+    clip = pygame.Rect(int(cx + 24 * s), int(cy + 8 * s), int(26 * s), int(34 * s))
+    pygame.draw.rect(surface, paper, clip)
+    pygame.draw.rect(surface, (105, 94, 65), clip, 1)
+    pygame.draw.rect(surface, (85, 85, 82),
+                     (clip.left + int(7 * s), clip.top - int(4 * s),
+                      int(12 * s), int(5 * s)))
+    for row in range(5):
+        line_y = clip.top + int((6 + row * 5) * s)
+        pygame.draw.line(surface, (80, 75, 60),
+                         (clip.left + int(4 * s), line_y),
+                         (clip.right - int(4 * s), line_y), 1)
+    pygame.draw.line(surface, trim,
+                     (int(cx - 26 * s), int(cy + 24 * s)),
+                     (int(cx - 42 * s), int(cy + 4 * s)), 2)
+
+
+_DISPATCH["nervous_fence"] = _nervous_fence
+_BACKDROPS["nervous_fence"] = _backdrop_nervous_fence
+_DISPATCH["cargo_inspector"] = _cargo_inspector
+_BACKDROPS["cargo_inspector"] = _backdrop_cargo_inspector

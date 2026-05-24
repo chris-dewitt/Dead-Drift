@@ -5,7 +5,7 @@ import pygame
 from core.event_bus import (
     bus,
     EVT_HULL_DAMAGE, EVT_TETHER_HIT, EVT_TETHER_SNAP,
-    EVT_GUN_FIRE, EVT_TERMINAL_OPEN, EVT_TERMINAL_CLOSE,
+    EVT_GUN_FIRE, EVT_TERMINAL_OPEN, EVT_TERMINAL_CLOSE, EVT_TERMINAL_KEY,
     EVT_SPORE_INVERTED, EVT_SHIP_DESTROYED, EVT_SLINGSHOT,
     EVT_CANISTER_GRAB, EVT_BARGE_NEARBY, EVT_BAX_SPEAK, EVT_COMMS_SPEAK,
     EVT_VOICE_CHAR, EVT_JUMP_READY, EVT_DEBT_DING,
@@ -17,7 +17,8 @@ from audio.synth import (
     engine_drone, ambient_static, gun_shot, hull_impact,
     tether_clang, tether_snap, terminal_beep, spore_sting,
     death_sting, slingshot_whoosh, canister_chime,
-    barge_alert, terminal_drone, jump_ready_charge, debt_ding,
+    barge_alert, terminal_drone, terminal_key_click, terminal_outcome_stinger,
+    jump_ready_charge, debt_ding,
     delivery_footstep, delivery_hit_sting, delivery_door_chime,
     sector_pad, slide_blues_note,
     tape_hum_bed, slingshot_stinger, barge_motif, decanting_printer,
@@ -66,6 +67,20 @@ SCENE_INTERSTITIAL = "interstitial"
 SCENE_DECANTING    = "decanting"
 SCENE_LOADOUT      = "loadout"
 SCENE_RADIO        = "radio"
+
+
+def _terminal_outcome_sfx_key(outcome: str = "", path: str = "",
+                              reaction: str = "") -> str:
+    marker = f"{path} {reaction}".upper()
+    if "PARADOX" in marker:
+        return "term_outcome_paradox"
+    if outcome in ("exploit",):
+        return "term_outcome_exploit"
+    if outcome in ("release",):
+        return "term_outcome_release"
+    if outcome in ("impound", "abort"):
+        return "term_outcome_impound"
+    return ""
 
 # Bluesy minor chord progression — Am, F, G, Em (Hz)
 _PROGRESSION = [220.0, 174.61, 196.0, 164.81]
@@ -351,6 +366,13 @@ class AudioManager:
         self._sfx["clang"]     = tether_clang()
         self._sfx["snap"]      = tether_snap()
         self._sfx["beep"]      = terminal_beep()
+        self._sfx["term_key_normal"] = terminal_key_click("normal")
+        self._sfx["term_key_backspace"] = terminal_key_click("backspace")
+        self._sfx["term_key_enter"] = terminal_key_click("enter")
+        self._sfx["term_outcome_release"] = terminal_outcome_stinger("release")
+        self._sfx["term_outcome_exploit"] = terminal_outcome_stinger("exploit")
+        self._sfx["term_outcome_paradox"] = terminal_outcome_stinger("paradox")
+        self._sfx["term_outcome_impound"] = terminal_outcome_stinger("impound")
         self._sfx["spore"]     = spore_sting()
         self._sfx["death"]     = death_sting()
         self._sfx["slingshot"] = slingshot_whoosh()
@@ -509,6 +531,7 @@ class AudioManager:
         bus.subscribe(EVT_GUN_FIRE,       self._on_gun)
         bus.subscribe(EVT_TERMINAL_OPEN,  self._on_term_open)
         bus.subscribe(EVT_TERMINAL_CLOSE, self._on_term_close)
+        bus.subscribe(EVT_TERMINAL_KEY,   self._on_term_key)
         bus.subscribe(EVT_SPORE_INVERTED, self._on_spore)
         bus.subscribe(EVT_SHIP_DESTROYED, self._on_death)
         bus.subscribe(EVT_SLINGSHOT,      self._on_slingshot)
@@ -1204,6 +1227,11 @@ class AudioManager:
         self._npc_speak_t = max(self._npc_speak_t, 0.55)
         self._play_voice_blip(speaker, self._npc_v_ch)
 
+    def _on_term_key(self, kind: str = "normal", **_):
+        key = f"term_key_{kind if kind in ('normal', 'backspace', 'enter') else 'normal'}"
+        vol = 0.52 if kind == "enter" else 0.34
+        self._play_sfx(key, vol)
+
     def _on_jump_ready(self, **_):  self._play_sfx("jump", 0.82)
     def _on_debt_ding(self, **_):   self._play_sfx("debt_ding", 0.55)
     def _on_d_step(self, **_):      self._play_sfx("d_step", 0.42)
@@ -1254,12 +1282,16 @@ class AudioManager:
         elif npc_cls == "InsuranceAdjuster":
             self._play_sfx("npc_adjuster", 0.50)
 
-    def _on_term_close(self, **_):
+    def _on_term_close(self, outcome: str = "", path: str = "",
+                       reaction: str = "", **_):
         self._in_terminal = False
         if self._amb_ch:
             self._amb_ch.set_volume(self._master * 0.20)
         if self._drone_ch:
             self._drone_ch.stop()
+        sfx_key = _terminal_outcome_sfx_key(outcome, path, reaction)
+        if sfx_key:
+            self._play_sfx(sfx_key, 0.95 if sfx_key.endswith(("impound", "paradox")) else 0.78)
         active_music = self._music_a if self._music_active == 0 else self._music_b
         if active_music:
             active_music.set_volume(self._master * self._music_target_vol)

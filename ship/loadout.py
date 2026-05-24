@@ -68,8 +68,17 @@ class SignalChain:
         return target
 
     def update(self, dt: float):
+        heat_absorption = self._total_heat_absorption()
+        hot_modules = [
+            m for m in self.slots
+            if m is not None and hasattr(m, "set_heat_absorption")
+        ]
+        heat_share = heat_absorption / max(1, len(hot_modules))
+
         for module in self.slots:
             if module is not None:
+                if hasattr(module, "set_heat_absorption"):
+                    module.set_heat_absorption(heat_share)
                 module.update(dt)
 
     # ------------------------------------------------------------------
@@ -78,6 +87,13 @@ class SignalChain:
 
     def total_heat(self) -> float:
         return sum(m.heat_gen for m in self.slots if m and m.active)
+
+    def _total_heat_absorption(self) -> float:
+        return sum(
+            getattr(m, "heat_absorption", 0.0)
+            for m in self.slots
+            if m is not None and m.active and m.is_functional()
+        )
 
     def __repr__(self) -> str:
         chain = " -> ".join(str(m) if m else "[EMPTY]" for m in self.slots)

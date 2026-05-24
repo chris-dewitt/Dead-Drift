@@ -1,6 +1,6 @@
 """
 Mid-run black market between sectors.
-Appears after sectors 3 and 6 (configurable via SHOP_SECTORS).
+Appears after sectors configured in config.settings.SHOP_SECTORS.
 Player spends run credits (recovered debt) on one-time upgrades.
 """
 from __future__ import annotations
@@ -8,8 +8,6 @@ import math
 import random
 import pygame
 from config import settings as S
-
-SHOP_SECTORS = {3, 6}
 
 _INTRO_DURATION  = 3.8   # seconds before items appear; any key skips
 _TYPEWRITER_RATE = 30    # chars per second during intro
@@ -43,6 +41,7 @@ _LOCATIONS = [
 ]
 
 _STEAM_X_FRACS = [0.06, 0.28, 0.72, 0.94]
+_ITEM_ICON_SIZE = 44
 
 # Module-level font cache — avoids re-creating fonts every frame
 _FONT_CACHE: dict[tuple, pygame.font.Font] = {}
@@ -361,6 +360,7 @@ class ShopScreen:
         pygame.draw.rect(surf, (90, 62, 0), panel, 1)
         pygame.draw.rect(surf, (45, 30, 0), panel.inflate(-4, -4), 1)
         _corner_caps(surf, panel, (190, 130, 0))
+        _draw_market_stall(surf, panel, t)
 
         # Header
         hdr = _font(14, bold=True).render(
@@ -391,6 +391,9 @@ class ShopScreen:
             tcol     = _TAG_COL.get(item.tag, (140, 140, 140))
 
             row = pygame.Rect(cx - 390, item_y, 668, 82)
+            icon_rect = pygame.Rect(row.x + 14, row.y + 20,
+                                    _ITEM_ICON_SIZE, _ITEM_ICON_SIZE)
+            text_x = row.x + 74
 
             # Row fill
             bg = (8, 14, 8) if bought else ((20, 16, 6) if selected else (7, 7, 11))
@@ -427,20 +430,23 @@ class ShopScreen:
                       tuple(v // 3 for v in tcol))
             tg = _font(10, bold=True).render(
                 item.tag.upper().replace("_", " "), True, tg_col)
-            surf.blit(tg, (row.x + 14, item_y + 5))
+            surf.blit(tg, (text_x, item_y + 5))
+
+            _draw_item_icon(surf, icon_rect, item.tag, tcol, t,
+                            dim=not can_buy and not bought, bought=bought)
 
             # Item name
             name_col = (55, 115, 55) if bought else (
                 (215, 185, 70) if can_buy else (110, 95, 58))
             ns = _font(14, bold=True).render(
                 ("[SOLD]  " if bought else "") + item.name, True, name_col)
-            surf.blit(ns, (row.x + 14, item_y + 18))
+            surf.blit(ns, (text_x, item_y + 18))
 
             # Description + detail
             ds = _font(12).render(item.desc, True, (155, 140, 95))
-            surf.blit(ds, (row.x + 14, item_y + 38))
+            surf.blit(ds, (text_x, item_y + 38))
             det = _font(11).render(item.detail, True, (75, 75, 98))
-            surf.blit(det, (row.x + 14, item_y + 55))
+            surf.blit(det, (text_x, item_y + 55))
 
             # Cost (right-aligned)
             cost_col = (55, 175, 55) if bought else (
@@ -448,6 +454,13 @@ class ShopScreen:
             cost_str = "PURCHASED" if bought else f"{item.cost:,} cr"
             cs = _font(14).render(cost_str, True, cost_col)
             surf.blit(cs, (row.right - cs.get_width() - 14, item_y + 28))
+            if not bought and not can_buy:
+                short = item.cost - self._balance
+                ss = _font(9, bold=True).render(f"SHORT {short:,}", True, (140, 44, 44))
+                surf.blit(ss, (row.right - ss.get_width() - 14, item_y + 50))
+            elif selected and can_buy:
+                ok = _font(9, bold=True).render("CREDIT LINE OK", True, (55, 150, 72))
+                surf.blit(ok, (row.right - ok.get_width() - 14, item_y + 50))
 
             item_y += 94
 
@@ -475,6 +488,100 @@ class ShopScreen:
 
 # ---------------------------------------------------------------------------
 # Atmospheric background
+
+def _draw_market_stall(surf: pygame.Surface, panel: pygame.Rect, t: float):
+    """Physical stall dressing behind the browse UI."""
+    # Back shelf and side counter behind the vendor column.
+    shelf = pygame.Rect(panel.right - 298, panel.top + 72, 252, 158)
+    pygame.draw.rect(surf, (7, 6, 10), shelf)
+    pygame.draw.rect(surf, (48, 38, 18), shelf, 1)
+    for y in (shelf.y + 42, shelf.y + 88, shelf.y + 126):
+        pygame.draw.line(surf, (56, 42, 18), (shelf.x + 10, y), (shelf.right - 10, y), 2)
+        pygame.draw.line(surf, (18, 14, 8), (shelf.x + 10, y + 2), (shelf.right - 10, y + 2), 1)
+
+    glow = int(40 + 25 * abs(math.sin(t * 2.1)))
+    for i, x in enumerate((shelf.x + 22, shelf.x + 76, shelf.x + 132, shelf.x + 190)):
+        crate = pygame.Rect(x, shelf.y + 100 + (i % 2) * 8, 36, 20)
+        pygame.draw.rect(surf, (14, 11, 7), crate)
+        pygame.draw.rect(surf, (70, 50, 18), crate, 1)
+        pygame.draw.line(surf, (120, 84, 22), crate.midleft, crate.midright, 1)
+
+    # Hanging scan tube over the vendor portrait.
+    tube = pygame.Rect(shelf.x + 52, shelf.y + 18, 148, 13)
+    pygame.draw.rect(surf, (8, 10, 12), tube)
+    pygame.draw.rect(surf, (0, glow + 45, glow + 90), tube, 1)
+    scan_x = tube.x + int((math.sin(t * 3.0) * 0.5 + 0.5) * (tube.w - 8))
+    pygame.draw.rect(surf, (0, 180, 255), (scan_x, tube.y + 2, 6, tube.h - 4))
+
+    counter = pygame.Rect(panel.left + 20, panel.bottom - 102, panel.w - 40, 42)
+    pygame.draw.rect(surf, (9, 6, 4), counter)
+    pygame.draw.rect(surf, (72, 48, 14), counter, 1)
+    for x in range(counter.x + 16, counter.right - 8, 74):
+        pygame.draw.line(surf, (36, 24, 10), (x, counter.y + 4), (x + 28, counter.bottom - 4), 1)
+
+
+def _draw_item_icon(surf: pygame.Surface, rect: pygame.Rect, tag: str,
+                    color: tuple, t: float, *, dim: bool = False,
+                    bought: bool = False):
+    """Draw a tiny diegetic item pictogram for shop stock rows."""
+    scale = 0.34 if dim or bought else 1.0
+    col = tuple(max(18, int(c * scale)) for c in color)
+    hi = tuple(min(255, int(c * (0.7 if dim else 1.25))) for c in color)
+    cx, cy = rect.center
+
+    pygame.draw.rect(surf, (5, 6, 8), rect)
+    pygame.draw.rect(surf, tuple(max(26, c // 2) for c in col), rect, 1)
+    pygame.draw.line(surf, (28, 28, 36), rect.topleft, (rect.right - 1, rect.y), 1)
+
+    pulse = 0.55 + 0.45 * abs(math.sin(t * 2.8 + rect.x * 0.03))
+    glow = tuple(min(255, int(c * pulse)) for c in hi)
+
+    if tag == "hull_patch":
+        pygame.draw.rect(surf, col, (cx - 14, cy - 10, 28, 20), 1)
+        pygame.draw.rect(surf, (12, 20, 15), (cx - 10, cy - 6, 20, 12))
+        pygame.draw.line(surf, glow, (cx - 8, cy), (cx + 8, cy), 2)
+        pygame.draw.line(surf, glow, (cx, cy - 8), (cx, cy + 8), 2)
+    elif tag == "thrust_boost":
+        pygame.draw.polygon(surf, col, [(cx - 13, cy + 11), (cx - 5, cy - 12),
+                                         (cx + 14, cy - 4), (cx + 7, cy + 12)])
+        pygame.draw.polygon(surf, glow, [(cx - 16, cy + 13), (cx - 9, cy + 2),
+                                          (cx - 3, cy + 13)])
+        pygame.draw.line(surf, (220, 220, 180), (cx - 2, cy - 8), (cx + 8, cy - 4), 1)
+    elif tag == "jammer":
+        pygame.draw.circle(surf, col, (cx, cy + 6), 5)
+        pygame.draw.line(surf, glow, (cx, cy + 3), (cx, cy - 13), 2)
+        for r in (10, 16):
+            pygame.draw.arc(surf, glow, (cx - r, cy - r - 8, r * 2, r * 2),
+                            math.radians(210), math.radians(330), 1)
+    elif tag == "intel":
+        pygame.draw.rect(surf, (18, 15, 6), (cx - 12, cy - 14, 24, 28))
+        pygame.draw.rect(surf, col, (cx - 12, cy - 14, 24, 28), 1)
+        for y in (cy - 7, cy - 1, cy + 5):
+            pygame.draw.line(surf, glow, (cx - 7, y), (cx + 8, y), 1)
+        pygame.draw.rect(surf, glow, (cx - 9, cy + 10, 6, 2))
+    elif tag == "repair_drone":
+        pygame.draw.circle(surf, col, (cx, cy), 10, 2)
+        pygame.draw.circle(surf, glow, (cx, cy), 4)
+        for ox, oy in ((-14, -12), (14, -12), (-14, 12), (14, 12)):
+            pygame.draw.circle(surf, col, (cx + ox, cy + oy), 4, 1)
+    elif tag == "cargo_stabilizer":
+        pygame.draw.rect(surf, (15, 12, 6), (cx - 13, cy - 10, 26, 20))
+        pygame.draw.rect(surf, col, (cx - 13, cy - 10, 26, 20), 1)
+        pygame.draw.line(surf, glow, (cx - 17, cy - 15), (cx + 17, cy - 15), 1)
+        pygame.draw.line(surf, glow, (cx - 17, cy + 15), (cx + 17, cy + 15), 1)
+        pygame.draw.line(surf, glow, (cx - 18, cy), (cx - 11, cy), 2)
+        pygame.draw.line(surf, glow, (cx + 11, cy), (cx + 18, cy), 2)
+    elif tag == "scrap_bullets":
+        for i, ox in enumerate((-10, 0, 10)):
+            pygame.draw.rect(surf, col, (cx + ox - 3, cy - 9 + i * 2, 6, 18))
+            pygame.draw.polygon(surf, glow, [(cx + ox - 3, cy - 9 + i * 2),
+                                             (cx + ox + 3, cy - 9 + i * 2),
+                                             (cx + ox, cy - 15 + i * 2)])
+    else:
+        pygame.draw.circle(surf, col, (cx, cy), 12, 2)
+
+    if bought:
+        pygame.draw.line(surf, (45, 105, 45), rect.bottomleft, rect.topright, 2)
 
 def _draw_alley_bg(surf: pygame.Surface, W: int, H: int, t: float,
                    flicker: list[float]):

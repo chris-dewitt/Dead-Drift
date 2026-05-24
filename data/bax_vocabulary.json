@@ -13,7 +13,16 @@
   ],
   "backdoors": {
     "gary": [],
-    "syntheticdroid": [],
-    "uniondispatcher": []
+    "syntheticdroid": [
+      "employee_of_month"
+    ],
+    "uniondispatcher": [],
+    "cargo_inspector": [
+      "code_citation",
+      "CODE_CITATION"
+    ],
+    "insuranceadjuster": [
+      "form_34a"
+    ]
   }
 }

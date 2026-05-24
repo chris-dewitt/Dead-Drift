@@ -62,6 +62,8 @@ class BaseNPC(ABC):
             return NPCOutcome.IMPOUND, self._out_of_patience_line()
 
         outcome, response = self._evaluate(parsed)
+        if outcome == NPCOutcome.CONTINUE:
+            response = self._with_cargo_dialogue(response)
 
         if outcome == NPCOutcome.CONTINUE:
             self._patience -= 1
@@ -71,7 +73,7 @@ class BaseNPC(ABC):
         return outcome, response
 
     def intro(self) -> str:
-        line = self._intro_line()
+        line = self._with_cargo_dialogue(self._intro_line())
         self._log.append((self.name.upper(), line))
         return line
 
@@ -93,6 +95,20 @@ class BaseNPC(ABC):
     def bribe_cost(self) -> int:
         """Credits the player owes for a successful bribe. Override in subclasses."""
         return 0
+
+    def _with_cargo_dialogue(self, line: str) -> str:
+        """Append one cargo-aware flavor line per encounter when context allows."""
+        if getattr(self, "_cargo_dialogue_used", False):
+            return line
+        try:
+            from terminal.npcs.cargo_dialogue import cargo_line_for
+            cargo_line = cargo_line_for(self.name, getattr(self, "_ctx", {}))
+        except Exception:
+            cargo_line = None
+        if not cargo_line:
+            return line
+        self._cargo_dialogue_used = True
+        return f"{line} {cargo_line}"
 
     @property
     def transcript(self) -> list[tuple[str, str]]:

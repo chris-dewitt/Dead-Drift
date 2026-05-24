@@ -33,6 +33,8 @@ from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
                              EVT_RUN_START, EVT_SHOP_ENTER, EVT_SECTOR_START)
 from config import settings as S
 
+SLINGSHOT_CREDIT_BONUS = 800
+
 
 # ---------------------------------------------------------------------------
 _KRESS_LINES = [
@@ -165,6 +167,7 @@ class RunManager:
         self._well_hit_times: dict[int, float] = {}  # per-well core damage cooldown
         self._active_terminal: Terminal | None = None
         self._intercepting_barge = None   # set when a barge opens a mid-flight comm
+        self._vault = None
         self._kress_called_this_sector = False
         self._sector_timer     = 0.0
         self._sector_dur       = 20.0
@@ -531,7 +534,7 @@ class RunManager:
         self._sector_slingshots += 1
         self._run_slingshots    += 1
         # Credit bonus per clean slingshot
-        bonus = 800
+        bonus = SLINGSHOT_CREDIT_BONUS
         self.meta.pay_off(bonus)
         self._run_debt_reduced += bonus
         self._sector_credits   += bonus
@@ -574,8 +577,13 @@ class RunManager:
         if self._ship is not None:
             ctx["hull_pct"] = self._ship.hull / S.HULL_MAX
             cargo = self._ship.cargo
-            if cargo is not None and hasattr(cargo, "state_for_terminal"):
-                ctx["cargo_state"] = cargo.state_for_terminal()
+            if cargo is not None:
+                ctx["cargo_type"] = type(cargo).__name__
+                ctx["cargo_name"] = getattr(cargo, "name", str(cargo))
+                ctx["cargo_integrity"] = getattr(cargo, "integrity", None)
+                ctx["cargo_damaged"] = bool(getattr(cargo, "is_damaged", False))
+                if hasattr(cargo, "state_for_terminal"):
+                    ctx["cargo_state"] = cargo.state_for_terminal()
         if hasattr(self, "meta"):
             ctx["debt"] = self.meta.debt
         return ctx
@@ -586,7 +594,11 @@ class RunManager:
         if npc_type == "mira_voss" and self._ship is not None:
             npc_kwargs.setdefault("ship", self._ship)
         npc = make_npc(npc_type, **npc_kwargs)
-        self._active_terminal = Terminal(npc, blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset())
+        self._active_terminal = Terminal(
+            npc,
+            blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset(),
+            vocabulary_vault=terminal_vault,
+        )
         return self._active_terminal
 
     def open_barge_terminal(self, barge) -> Terminal:
@@ -863,6 +875,8 @@ class RunManager:
             "credits":    self._sector_credits,
             "snaps":      self._sector_snaps,
             "slingshots": self._sector_slingshots,
+            "slingshot_credit_each": SLINGSHOT_CREDIT_BONUS,
+            "slingshot_credits": self._sector_slingshots * SLINGSHOT_CREDIT_BONUS,
             "hull_lost":  hull_lost,
         }
         self._flash_t = 2.8
@@ -1111,6 +1125,7 @@ class RunManager:
         self._active_terminal = Terminal(
             npc,
             blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset(),
+            vocabulary_vault=getattr(self, "_vault", None),
         )
 
     def _spawn_barge(self, immediate_chase: bool = False):
