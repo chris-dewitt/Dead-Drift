@@ -62,30 +62,212 @@ def draw_corporate_pipe(surf: pygame.Surface, sx: int, y: int, h: int,
 
 def draw_courier_sprite(surf: pygame.Surface, px: int, py: int, t: float, *,
                         inv: bool = False, grounded: bool = True) -> None:
-    """Chunky 80s platformer courier in compliance orange."""
-    body = (255, 120, 40) if not inv else (200, 80, 255)
-    suit = (40, 90, 200) if not inv else (120, 40, 200)
-    trim = (255, 240, 180)
-    # Legs
-    if grounded:
-        lp = t * 9.0
-        for side, phase in ((-5, 0), (5, math.pi)):
-            ly = int(8 * math.sin(lp + phase))
-            pygame.draw.rect(surf, suit, (px + side - 3, py + 22, 6, 10 + ly))
+    """
+    Detailed sci-fi courier sprite with walk animation.
+
+    px = horizontal centre.  py = sprite top (caller passes self._py - 8 so the
+    head clears the ceiling; total sprite height is ~40 px).
+
+    Layout from py:
+      py+0  ..  py+10  head / helmet
+      py+10 ..  py+13  neck
+      py+13 ..  py+25  torso  (shoulder pads extend ±4 px)
+      py+25 ..  py+28  hips
+      py+28 ..  py+40  legs + boots  (walk-animated)
+    Arms hang from shoulders and swing with walk cycle.
+    Backpack drawn behind torso (first, so suit overlaps it).
+    """
+    # ── Palette ───────────────────────────────────────────────────────────────
+    if inv:
+        c_suit  = (140, 28, 195)
+        c_armor = (90, 18, 150)
+        c_visor = (255, 80, 255)
+        c_vis2  = (180, 30, 180)
+        c_helm  = (55, 18, 75)
+        c_trim  = (220, 160, 255)
+        c_boot  = (38, 10, 55)
+        c_pack  = (65, 18, 85)
+        c_led   = (255, 100, 255)
+        c_led2  = (100, 20, 100)
     else:
-        pygame.draw.rect(surf, suit, (px - 8, py + 20, 6, 8))
-        pygame.draw.rect(surf, suit, (px + 2, py + 18, 6, 8))
-    # Torso + ID badge
-    pygame.draw.rect(surf, suit, (px - 9, py + 8, 18, 16))
-    pygame.draw.rect(surf, trim, (px - 9, py + 8, 18, 16), 1)
-    pygame.draw.rect(surf, (255, 220, 0), (px - 2, py + 12, 8, 6))
-    # Head + helmet
-    pygame.draw.rect(surf, body, (px - 8, py - 4, 16, 14))
-    pygame.draw.rect(surf, (0, 200, 255), (px - 5, py, 10, 4))
-    pygame.draw.rect(surf, trim, (px - 8, py - 4, 16, 14), 1)
-    # Jetpack crate
-    pygame.draw.rect(surf, (80, 80, 90), (px + 8, py + 10, 6, 12))
-    pygame.draw.rect(surf, (255, 60, 60), (px + 9, py + 12, 4, 2))
+        c_suit  = (32, 78, 185)
+        c_armor = (52, 60, 80)
+        c_visor = (0, 215, 255)
+        c_vis2  = (0, 110, 170)
+        c_helm  = (42, 48, 62)
+        c_trim  = (195, 215, 255)
+        c_boot  = (26, 30, 42)
+        c_pack  = (50, 56, 70)
+        c_led   = (0, 255, 120)
+        c_led2  = (10, 70, 35)
+
+    c_badge = (255, 215, 0)
+    c_glove = (28, 30, 36)
+    c_knee  = (48, 54, 68)
+    c_vent  = (255, 55, 30)
+    c_white = (240, 245, 255)
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+    def r(x, y, w, h, col, bw=0, bc=None):
+        pygame.draw.rect(surf, col, (int(x), int(y), int(w), int(h)))
+        if bw:
+            pygame.draw.rect(surf, bc or c_trim, (int(x), int(y), int(w), int(h)), bw)
+
+    def ln(x1, y1, x2, y2, col, w=1):
+        pygame.draw.line(surf, col, (int(x1), int(y1)), (int(x2), int(y2)), w)
+
+    def circ(cx, cy, rad, col, bw=0, bc=None):
+        pygame.draw.circle(surf, col, (int(cx), int(cy)), rad)
+        if bw:
+            pygame.draw.circle(surf, bc or c_trim, (int(cx), int(cy)), rad, bw)
+
+    def poly(pts, col, bw=0, bc=None):
+        ipts = [(int(x), int(y)) for x, y in pts]
+        pygame.draw.polygon(surf, col, ipts)
+        if bw:
+            pygame.draw.polygon(surf, bc or c_trim, ipts, bw)
+
+    # ── Animation state ───────────────────────────────────────────────────────
+    wp   = t * 9.0
+    blink = int(t * 3.5) % 2 == 0
+    blink2 = int(t * 2.0) % 2 == 0
+
+    if grounded:
+        ll_sw = math.sin(wp)          * 5.5  # left  leg  swing
+        lr_sw = math.sin(wp + math.pi) * 5.5  # right leg  swing
+        al_sw = math.sin(wp + math.pi) * 4.5  # left  arm  (opposite leg)
+        ar_sw = math.sin(wp)          * 4.5  # right arm
+        bob   = int(abs(math.sin(wp * 2)) * 1.5)
+    else:
+        # Tucked jump pose
+        ll_sw, lr_sw = -7.0,  5.0
+        al_sw, ar_sw = -8.0, -6.0
+        bob = 0
+
+    # All y-coords relative to this anchor
+    hy = py + bob   # head top
+
+    # ── BACKPACK (behind body) ─────────────────────────────────────────────────
+    bpx, bpy = px + 8, hy + 15
+    r(bpx,     bpy,     6, 12, c_pack, 1, c_armor)
+    # Vent slats
+    for vi in range(3):
+        r(bpx + 1, bpy + 2 + vi * 3, 4, 2, c_armor)
+    # Nozzle
+    r(bpx + 1, bpy + 9, 4, 3, (38, 42, 52))
+    # Status LED
+    r(bpx + 2, bpy, 2, 2, c_vent if blink else (50, 18, 8))
+
+    # ── LEGS ──────────────────────────────────────────────────────────────────
+    hip_y = hy + 28
+
+    for side, sw in ((-1, ll_sw), (1, lr_sw)):
+        ox  = px + side * 4        # thigh root x
+        # Knee position
+        kx = ox + sw * 0.65
+        ky = hip_y + 6
+        # Ankle
+        ax = kx + sw * 0.20
+        ay = ky + 6
+        # Thigh (fat line)
+        ln(ox, hip_y, kx, ky, c_suit, 5)
+        # Knee pad
+        circ(kx, ky, 4, c_knee, 1, c_armor)
+        # Shin
+        ln(kx, ky, ax, ay, c_suit, 4)
+        # Boot block
+        blx = ax - 4 if side == -1 else ax - 3
+        r(blx, ay, 9, 4, c_boot, 1, c_armor)
+        r(blx, ay + 2, 9, 2, c_armor)  # sole stripe
+
+    # ── TORSO ─────────────────────────────────────────────────────────────────
+    tx, tyw  = px - 8, 16
+    ty, twh  = hy + 13, 13
+
+    # Body suit
+    r(tx, ty, tyw, twh, c_suit, 1, c_trim)
+
+    # Chest armour plate
+    r(tx + 3, ty + 2, 10, 8, c_armor, 1, (75, 85, 105))
+
+    # ID badge  (gold card, 2 data-line details)
+    r(tx + 4, ty + 3, 6, 4, c_badge)
+    ln(tx + 5, ty + 4, tx + 9, ty + 4, (90, 65, 0))
+    ln(tx + 5, ty + 5, tx + 8, ty + 5, (90, 65, 0))
+
+    # Chest indicator LED
+    ci_col = c_led if blink2 else c_led2
+    circ(tx + 12, ty + 3, 2, ci_col)
+
+    # Belt
+    r(tx + 3, ty + twh - 3, 10, 3, c_knee, 1, c_armor)
+    r(tx + 6, ty + twh - 3, 4, 3, c_armor)   # buckle
+
+    # Shoulder pads
+    for side in (-1, 1):
+        spx = (tx - 4) if side == -1 else (tx + tyw)
+        r(spx, ty, 5, 7, c_armor, 1, c_trim)
+        # Shoulder LED (left = green status, right = orange warning)
+        sl_col = (c_led if blink else c_led2) if side == -1 else \
+                 (c_vent if blink2 else (60, 18, 8))
+        circ(spx + 2, ty + 2, 2, sl_col)
+
+    # ── ARMS ──────────────────────────────────────────────────────────────────
+    for side, sw in ((-1, al_sw), (1, ar_sw)):
+        shx = px + side * 9
+        shy = hy + 16
+        # Elbow
+        ex = shx + sw * 0.55 + side
+        ey = shy + 7
+        # Hand
+        hx2 = ex + sw * 0.30
+        hy2 = ey + 6
+        ln(shx, shy, ex, ey, c_suit, 4)          # upper arm
+        circ(ex, ey, 3, c_knee, 1, c_armor)       # elbow
+        ln(ex, ey, hx2, hy2, c_suit, 3)           # forearm
+        circ(hx2, hy2, 3, c_glove, 1, c_trim)     # glove
+
+    # ── NECK / COLLAR ─────────────────────────────────────────────────────────
+    r(px - 3, hy + 10, 6, 4, c_suit)
+    r(px - 4, hy + 12, 8, 2, c_armor)
+
+    # ── HELMET ────────────────────────────────────────────────────────────────
+    hx0, hw0 = px - 8, 16
+    hh0       = 11
+
+    # Dome polygon (hexagonal crown)
+    poly([(hx0 + 3,  hy),
+          (hx0 + hw0 - 3, hy),
+          (hx0 + hw0,     hy + 3),
+          (hx0 + hw0,     hy + hh0),
+          (hx0,           hy + hh0),
+          (hx0,           hy + 3)], c_helm, 1, c_trim)
+
+    # Visor slit
+    vy = hy + 3
+    r(hx0 + 2, vy, hw0 - 4, 5, c_vis2)
+    r(hx0 + 2, vy, hw0 - 4, 2, c_visor)          # bright top strip
+    ln(hx0 + 3, vy + 1, hx0 + 7, vy + 1, c_white) # reflection gleam
+
+    # Chin seal
+    r(hx0 + 2, hy + hh0 - 3, hw0 - 4, 3, c_armor, 1, c_helm)
+
+    # Ear comm-units
+    for side in (-1, 1):
+        ex2 = (hx0 - 3) if side == -1 else (hx0 + hw0)
+        r(ex2, hy + 3, 3, 6, c_armor, 1, c_trim)
+        ec_col = c_led if (int(t * 2.0 + (0 if side == -1 else 1)) % 2 == 0) else c_led2
+        circ(ex2 + 1, hy + 5, 2, ec_col)
+
+    # Antenna (tilted right)
+    ln(hx0 + hw0 - 3, hy, hx0 + hw0 + 2, hy - 7, c_trim)
+    circ(hx0 + hw0 + 2, hy - 7, 2, c_led if blink else c_led2)
+
+    # Centre-top ridge
+    r(px - 1, hy, 2, 3, c_armor)
+
+    # Helmet hazard stripe (thin amber band across front)
+    r(hx0 + 2, hy + hh0 - 5, hw0 - 4, 2, (200, 130, 0))
 
 
 def _rgba(r: int, g: int, b: int, a: int) -> tuple[int, int, int, int]:
