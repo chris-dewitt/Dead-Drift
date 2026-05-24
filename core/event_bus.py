@@ -88,3 +88,5 @@ EVT_CORRIDOR_DEATH  = "corridor_death"  # player hit/died in corridor (respawn)
 EVT_DOCK_APPROACH   = "dock_approach"   # landing Beat 1 begins
 EVT_DOCK_PERFECT    = "dock_perfect"    # both landing inputs hit cleanly
 EVT_DOCK_ROUGH      = "dock_rough"      # both landing inputs missed
+EVT_AISHIP_HAIL     = "aiship_hail"     # NPC ship pulled alongside; payload: ship, npc_type, ship_class
+EVT_AISHIP_DESTROYED = "aiship_destroyed"  # NPC ship shot down; payload: ship

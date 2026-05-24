@@ -176,6 +176,7 @@ class VectorRenderer:
         self._draw_canisters(run_mgr, t)
         self._draw_bullets(ship)
         self._draw_alien(run_mgr, t)
+        self._draw_ai_ships(run_mgr, t)
         self._draw_barges(run_mgr, ship, t)
         self._draw_barge_radar(run_mgr, ship, t)
         self._draw_trail(ship, t)
@@ -1294,6 +1295,309 @@ class VectorRenderer:
         ga = int(35 + 20 * math.sin(t * 5.0))
         pygame.draw.circle(glow_surf, (0, 235, 200, ga), (80, 80), 58)
         surf.blit(glow_surf, (int(alien.pos.x) - 80, int(alien.pos.y) - 80))
+
+    # ------------------------------------------------------------------  AI SHIPS
+    def _draw_ai_ships(self, run_mgr, t: float):
+        ai_ships = getattr(run_mgr, "ai_ships", None)
+        if not ai_ships:
+            return
+        for ship in ai_ships:
+            if not ship.alive:
+                continue
+            self._draw_ai_ship(ship, t)
+            self._draw_ai_ship_status(ship, t)
+
+    def _draw_ai_ship(self, aiship, t: float) -> None:
+        from antagonists.ai_ship import (
+            CLASS_FIGHTER, CLASS_FREIGHTER, CLASS_HAULER,
+            CLASS_GUNBOAT, CLASS_DERELICT,
+        )
+        cls = aiship.ship_class
+        if cls == CLASS_FIGHTER:
+            self._draw_aiship_fighter(aiship, t)
+        elif cls == CLASS_FREIGHTER:
+            self._draw_aiship_freighter(aiship, t)
+        elif cls == CLASS_HAULER:
+            self._draw_aiship_hauler(aiship, t)
+        elif cls == CLASS_GUNBOAT:
+            self._draw_aiship_gunboat(aiship, t)
+        elif cls == CLASS_DERELICT:
+            self._draw_aiship_derelict(aiship, t)
+
+    def _aiship_world_pts(self, aiship, raw_pts):
+        rad = math.radians(aiship.heading)
+        cos_a, sin_a = math.cos(rad), math.sin(rad)
+        return [
+            (int(lx * cos_a - ly * sin_a + aiship.pos.x),
+             int(lx * sin_a + ly * cos_a + aiship.pos.y))
+            for lx, ly in raw_pts
+        ]
+
+    def _aiship_hit_tint(self, aiship, base_col):
+        if aiship._hit_t > 0:
+            mix = aiship._hit_t / 0.18
+            return (
+                min(255, int(base_col[0] + (255 - base_col[0]) * mix)),
+                min(255, int(base_col[1] + (60 - base_col[1]) * mix)),
+                min(255, int(base_col[2] + (60 - base_col[2]) * mix)),
+            )
+        return base_col
+
+    def _aiship_scorches(self, aiship, n_marks: int = 4) -> list[tuple[int, int, int]]:
+        """Deterministic scorch points in local space for the wear overlay."""
+        rng = random.Random(aiship._art_seed)
+        out = []
+        for _ in range(n_marks):
+            lx = rng.uniform(-22, 18)
+            ly = rng.uniform(-10, 10)
+            r = rng.randint(1, 3)
+            out.append((int(lx), int(ly), r))
+        return out
+
+    # ---- FIGHTER --------------------------------------------------------
+    def _draw_aiship_fighter(self, aiship, t: float):
+        # Angular fighter, asymmetric wings — mismatched panels (run down).
+        hull_pts = [(20, 0), (8, -7), (-4, -10), (-14, -8),
+                    (-18, -3), (-18, 3), (-14, 8), (-4, 10), (8, 7)]
+        wing_l = [(2, -10), (6, -22), (-2, -22), (-10, -10)]
+        wing_r = [(2,  10), (6,  22), (-2,  22), (-10,  10)]
+        # Stub gun barrels
+        gun = [(20, 0), (28, 0)]
+
+        wpts = self._aiship_world_pts(aiship, hull_pts)
+        wl   = self._aiship_world_pts(aiship, wing_l)
+        wr   = self._aiship_world_pts(aiship, wing_r)
+        gpts = self._aiship_world_pts(aiship, gun)
+
+        hull_col = self._aiship_hit_tint(aiship, (60, 65, 70))
+        edge_col = self._aiship_hit_tint(aiship, (170, 165, 140))
+        # Asymmetric panel — left wing slightly bleached, right freshly scorched
+        l_wing_col = (50, 80, 70) if int(aiship._art_seed) % 2 == 0 else (75, 60, 50)
+        r_wing_col = (70, 55, 45) if int(aiship._art_seed) % 2 == 0 else (45, 75, 65)
+
+        pygame.draw.polygon(self.surface, l_wing_col, wl)
+        pygame.draw.polygon(self.surface, edge_col,  wl, 1)
+        pygame.draw.polygon(self.surface, r_wing_col, wr)
+        pygame.draw.polygon(self.surface, edge_col,  wr, 1)
+        pygame.draw.polygon(self.surface, hull_col, wpts)
+        pygame.draw.polygon(self.surface, edge_col, wpts, 1)
+        pygame.draw.line(self.surface, edge_col, gpts[0], gpts[1], 2)
+
+        # Cockpit — tiny amber slit
+        cockpit_pts = self._aiship_world_pts(aiship, [(8, -2), (12, -2), (12, 2), (8, 2)])
+        pygame.draw.polygon(self.surface, (220, 140, 30), cockpit_pts)
+
+        # Engine flicker
+        self._aiship_exhaust(aiship, dist=-20, side_off=0, flame_col=(255, 130, 40))
+
+        # Wear scorches
+        self._draw_aiship_wear(aiship, intensity=aiship.wear)
+
+    # ---- FREIGHTER ------------------------------------------------------
+    def _draw_aiship_freighter(self, aiship, t: float):
+        # Boxy mid-size freighter. Big rectangular cargo pod, modular look.
+        hull_pts = [(32, 0), (24, -10), (-26, -14), (-32, -8),
+                    (-32, 8), (-26, 14), (24, 10)]
+        pod = [(-18, -10), (10, -10), (10, 10), (-18, 10)]
+        cockpit = [(20, -5), (28, -3), (28, 3), (20, 5)]
+        # Antenna mast
+        mast = [(-10, -14), (-10, -22)]
+
+        wpts = self._aiship_world_pts(aiship, hull_pts)
+        ppts = self._aiship_world_pts(aiship, pod)
+        cpts = self._aiship_world_pts(aiship, cockpit)
+        mpts = self._aiship_world_pts(aiship, mast)
+
+        hull_col = self._aiship_hit_tint(aiship, (62, 56, 46))
+        edge_col = self._aiship_hit_tint(aiship, (180, 160, 110))
+        pod_col  = (40, 45, 50)
+
+        pygame.draw.polygon(self.surface, hull_col, wpts)
+        pygame.draw.polygon(self.surface, edge_col, wpts, 1)
+        # Cargo pod strapped to the back
+        pygame.draw.polygon(self.surface, pod_col, ppts)
+        pygame.draw.polygon(self.surface, (130, 120, 100), ppts, 1)
+        # Cargo straps
+        for off in (-6, 0, 6):
+            s1 = self._aiship_world_pts(aiship, [(-18, off), (10, off)])
+            pygame.draw.line(self.surface, (90, 75, 50), s1[0], s1[1], 1)
+        # Cockpit window
+        pygame.draw.polygon(self.surface, (230, 195, 80), cpts)
+        # Mast
+        pygame.draw.line(self.surface, edge_col, mpts[0], mpts[1], 1)
+        # Twin engines — back left and right
+        self._aiship_exhaust(aiship, dist=-30, side_off=-8, flame_col=(255, 140, 50))
+        self._aiship_exhaust(aiship, dist=-30, side_off=8,  flame_col=(255, 140, 50))
+
+        self._draw_aiship_wear(aiship, intensity=aiship.wear)
+
+    # ---- HAULER ---------------------------------------------------------
+    def _draw_aiship_hauler(self, aiship, t: float):
+        # Long industrial tug with a grappling arm — Mira Voss type.
+        hull_pts = [(34, 0), (24, -8), (-22, -10), (-34, -6),
+                    (-34, 6), (-22, 10), (24, 8)]
+        # Grappling arm forward
+        arm = [(34, -4), (50, -6), (50, 6), (34, 4)]
+        # Tool sled on top
+        sled = [(0, -12), (14, -12), (14, -16), (0, -16)]
+
+        wpts = self._aiship_world_pts(aiship, hull_pts)
+        apts = self._aiship_world_pts(aiship, arm)
+        spts = self._aiship_world_pts(aiship, sled)
+
+        hull_col = self._aiship_hit_tint(aiship, (78, 60, 40))
+        edge_col = self._aiship_hit_tint(aiship, (220, 150, 50))
+
+        pygame.draw.polygon(self.surface, hull_col, wpts)
+        pygame.draw.polygon(self.surface, edge_col, wpts, 1)
+        pygame.draw.polygon(self.surface, (60, 45, 30), apts)
+        pygame.draw.polygon(self.surface, edge_col, apts, 1)
+        pygame.draw.polygon(self.surface, (40, 40, 40), spts)
+        pygame.draw.polygon(self.surface, (140, 130, 80), spts, 1)
+        # Pulsing welding tip on grappling arm
+        tip = self._aiship_world_pts(aiship, [(50, 0)])[0]
+        pulse = int(180 + 60 * math.sin(t * 5.5 + aiship._art_seed))
+        pygame.draw.circle(self.surface, (pulse, 100, 30), tip, 3)
+        pygame.draw.circle(self.surface, (255, 200, 100), tip, 1)
+        # Cockpit
+        cockpit_pts = self._aiship_world_pts(aiship, [(20, -3), (28, -3), (28, 3), (20, 3)])
+        pygame.draw.polygon(self.surface, (220, 200, 60), cockpit_pts)
+        # Single heavy engine
+        self._aiship_exhaust(aiship, dist=-32, side_off=0, flame_col=(255, 110, 30), scale=1.4)
+
+        self._draw_aiship_wear(aiship, intensity=aiship.wear)
+
+    # ---- GUNBOAT (pirate) ----------------------------------------------
+    def _draw_aiship_gunboat(self, aiship, t: float):
+        # Compact pirate gunboat — twin engines, two forward guns, jagged hull
+        hull_pts = [(22, 0), (14, -8), (-4, -12), (-14, -10),
+                    (-18, -4), (-18, 4), (-14, 10), (-4, 12), (14, 8)]
+        # Twin gun pods extending forward
+        gun_l = [(14, -8), (24, -10), (24, -6), (16, -4)]
+        gun_r = [(14,  8), (24,  10), (24,  6), (16,  4)]
+        # Bridge bulge
+        bridge = [(2, -5), (10, -3), (10, 3), (2, 5)]
+
+        wpts = self._aiship_world_pts(aiship, hull_pts)
+        glpts = self._aiship_world_pts(aiship, gun_l)
+        grpts = self._aiship_world_pts(aiship, gun_r)
+        bpts = self._aiship_world_pts(aiship, bridge)
+
+        hull_col = self._aiship_hit_tint(aiship, (40, 18, 18))
+        edge_col = self._aiship_hit_tint(aiship, (220, 50, 50))
+
+        pygame.draw.polygon(self.surface, hull_col, wpts)
+        pygame.draw.polygon(self.surface, edge_col, wpts, 2)
+        pygame.draw.polygon(self.surface, (28, 15, 15), glpts)
+        pygame.draw.polygon(self.surface, edge_col, glpts, 1)
+        pygame.draw.polygon(self.surface, (28, 15, 15), grpts)
+        pygame.draw.polygon(self.surface, edge_col, grpts, 1)
+        pygame.draw.polygon(self.surface, (80, 25, 25), bpts)
+        # Hostile flash — bridge pulses crimson when in ATTACK
+        from antagonists.ai_ship import ST_ATTACK
+        if aiship.state == ST_ATTACK:
+            pulse = int(120 + 100 * math.sin(t * 11.0))
+            bridge_pulse = self._aiship_world_pts(aiship, [(6, 0)])[0]
+            pygame.draw.circle(self.surface, (255, pulse // 2, pulse // 2), bridge_pulse, 4)
+        # Twin engines, dirty red flame
+        self._aiship_exhaust(aiship, dist=-22, side_off=-5, flame_col=(255, 70, 30))
+        self._aiship_exhaust(aiship, dist=-22, side_off=5,  flame_col=(255, 70, 30))
+
+        # Skull-paint scratch on bridge (deterministic)
+        rng = random.Random(aiship._art_seed + 1)
+        for _ in range(3):
+            lx = rng.uniform(-8, 4)
+            ly = rng.uniform(-2, 2)
+            sp1 = self._aiship_world_pts(aiship, [(lx, ly)])[0]
+            sp2 = self._aiship_world_pts(aiship, [(lx + 3, ly)])[0]
+            pygame.draw.line(self.surface, (200, 200, 200), sp1, sp2, 1)
+
+        self._draw_aiship_wear(aiship, intensity=aiship.wear)
+
+    # ---- DERELICT -------------------------------------------------------
+    def _draw_aiship_derelict(self, aiship, t: float):
+        # Wrecked hulk — broken silhouette, sparking, drifting end-over-end slowly
+        hull_pts = [(22, -2), (14, -10), (-8, -14), (-22, -8),
+                    (-20, 4), (-10, 14), (8, 10), (18, 4)]
+        wpts = self._aiship_world_pts(aiship, hull_pts)
+        # Slowly tumbling — adjust heading visually
+        # (use t-based wobble layered on existing heading by drawing torn panels)
+
+        hull_col = (32, 30, 28)
+        edge_col = (110, 100, 90)
+
+        pygame.draw.polygon(self.surface, hull_col, wpts)
+        pygame.draw.polygon(self.surface, edge_col, wpts, 1)
+
+        # Torn hull plates — random gaps showing void
+        rng = random.Random(aiship._art_seed + 2)
+        for _ in range(3):
+            lx = rng.uniform(-18, 10)
+            ly = rng.uniform(-10, 10)
+            torn = [(lx, ly), (lx + 6, ly - 1), (lx + 5, ly + 4), (lx - 1, ly + 3)]
+            tp = self._aiship_world_pts(aiship, torn)
+            pygame.draw.polygon(self.surface, (8, 6, 4), tp)
+
+        # Random sparks from broken systems
+        if random.random() < 0.30:
+            spark_lx = rng.uniform(-16, 8)
+            spark_ly = rng.uniform(-10, 10)
+            sp = self._aiship_world_pts(aiship, [(spark_lx, spark_ly)])[0]
+            pygame.draw.circle(self.surface, (255, 200, 80), sp, 2)
+            pygame.draw.circle(self.surface, (255, 240, 200), sp, 1)
+
+        # Distress beacon — slow red blink
+        if int(t * 1.2 + aiship._art_seed) % 3 == 0:
+            beacon = self._aiship_world_pts(aiship, [(-8, 0)])[0]
+            pygame.draw.circle(self.surface, (220, 40, 40), beacon, 3)
+            pygame.draw.circle(self.surface, (255, 120, 120), beacon, 1)
+
+    # ---- Shared helpers ------------------------------------------------
+    def _aiship_exhaust(self, aiship, dist: int, side_off: int,
+                        flame_col: tuple[int, int, int], scale: float = 1.0):
+        # Flame anchored at local (-dist, side_off), pointing astern
+        rad = math.radians(aiship.heading)
+        cos_a, sin_a = math.cos(rad), math.sin(rad)
+        ex = aiship.pos.x + dist * cos_a - side_off * sin_a
+        ey = aiship.pos.y + dist * sin_a + side_off * cos_a
+        flame_len = (6 + 4 * random.random()) * scale
+        bx = ex + (-cos_a) * flame_len
+        by = ey + (-sin_a) * flame_len
+        pygame.draw.line(self.surface, flame_col, (int(ex), int(ey)), (int(bx), int(by)),
+                         max(1, int(2 * scale)))
+        pygame.draw.circle(self.surface, flame_col, (int(ex), int(ey)),
+                           max(1, int(2 * scale)))
+
+    def _draw_aiship_wear(self, aiship, intensity: float):
+        if intensity < 0.35:
+            return
+        # Scorch marks scaled by wear
+        n = int(2 + intensity * 6)
+        for lx, ly, r in self._aiship_scorches(aiship, n):
+            wp = self._aiship_world_pts(aiship, [(lx, ly)])[0]
+            scorch_alpha = int(80 + 100 * intensity)
+            s = pygame.Surface((r * 2 + 2, r * 2 + 2), pygame.SRCALPHA)
+            pygame.draw.circle(s, (15, 10, 5, scorch_alpha), (r + 1, r + 1), r)
+            self.surface.blit(s, (wp[0] - r - 1, wp[1] - r - 1))
+
+    def _draw_ai_ship_status(self, aiship, t: float):
+        # Small caption above hailers when in HAIL state
+        from antagonists.ai_ship import ST_HAIL, ST_ATTACK
+        if aiship.state == ST_HAIL:
+            font = pygame.font.SysFont("monospace", 9, bold=True)
+            pulse = 0.5 + 0.5 * math.sin(t * 4.0)
+            col = (int(150 + 105 * pulse), int(220 + 35 * pulse), 80)
+            lbl = font.render("HAIL ▸ PRESS E", True, col)
+            self.surface.blit(lbl,
+                              (int(aiship.pos.x) - lbl.get_width() // 2,
+                               int(aiship.pos.y) - aiship.radius - 18))
+        elif aiship.state == ST_ATTACK:
+            font = pygame.font.SysFont("monospace", 9, bold=True)
+            col = (255, 60, 60)
+            lbl = font.render("! HOSTILE", True, col)
+            self.surface.blit(lbl,
+                              (int(aiship.pos.x) - lbl.get_width() // 2,
+                               int(aiship.pos.y) - aiship.radius - 18))
 
     # ------------------------------------------------------------------  BARGE RADAR
     def _draw_barge_radar(self, run_mgr, ship, t: float):

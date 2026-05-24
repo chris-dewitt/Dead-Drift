@@ -16,6 +16,8 @@ from antagonists.debris import DebrisRock
 from antagonists.fuel_canister import FuelCanister
 from antagonists.satellite import SpinningSatellite
 from antagonists.alien_ship import AlienShip
+from antagonists.ai_ship import (AIShip, ALL_CLASSES, CLASS_DERELICT, CLASS_GUNBOAT,
+                                  BEHAVIOR_HAILER, BEHAVIOR_PIRATE, BEHAVIOR_TRAFFIC)
 from antagonists.wreck import SpaceWreck
 from antagonists.dead_station import DeadStation
 from antagonists.trash_field import TrashField
@@ -30,7 +32,8 @@ from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
                              EVT_COMMS_SPEAK, EVT_TETHER_SNAP, EVT_BAX_SPEAK,
                              EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_DEMO_NOTICE,
                              EVT_JUMP_READY, EVT_WARP_JUMP, EVT_FINAL_SECTOR,
-                             EVT_RUN_START, EVT_SHOP_ENTER, EVT_SECTOR_START)
+                             EVT_RUN_START, EVT_SHOP_ENTER, EVT_SECTOR_START,
+                             EVT_AISHIP_HAIL, EVT_AISHIP_DESTROYED)
 from config import settings as S
 
 SLINGSHOT_CREDIT_BONUS = 800
@@ -150,6 +153,10 @@ class RunManager:
         self._satellites: list[SpinningSatellite] = []
         self._alien: AlienShip | None = None
         self._alien_spoken = False
+        self._ai_ships: list[AIShip] = []
+        self._aiship_hail_pending: AIShip | None = None
+        bus.subscribe(EVT_AISHIP_HAIL, self._on_aiship_hail)
+        bus.subscribe(EVT_AISHIP_DESTROYED, self._on_aiship_destroyed)
         # Theme-based obstacles (Epic 3)
         self._wrecks: list[SpaceWreck]       = []
         self._dead_station: DeadStation | None = None
@@ -232,6 +239,8 @@ class RunManager:
         self._satellites.clear()
         self._alien      = None
         self._alien_spoken = False
+        self._ai_ships.clear()
+        self._aiship_hail_pending = None
         self._shower_rocks.clear()
         self._active_terminal    = None
         self._intercepting_barge = None
@@ -310,6 +319,8 @@ class RunManager:
                 self._satellites.append(SpinningSatellite())
             elif kind == "barge":
                 self._spawn_barge()
+            elif kind == "ai_ship":
+                self._spawn_ai_ship()
         if due:
             self._spawn_queue = [item for item in self._spawn_queue
                                  if item[0] > self._sector_timer]
@@ -380,6 +391,12 @@ class RunManager:
             else:
                 self._alien = None
 
+        # AI ships — update each, prune dead, handle ram damage already in tick
+        for ai in list(self._ai_ships):
+            ai.update(dt, self._ship)
+            if not ai.alive:
+                self._ai_ships.remove(ai)
+
         # Debris shower tick
         if self._shower_t > 0:
             self._shower_t -= dt
@@ -413,12 +430,28 @@ class RunManager:
             self._open_jump_terminal()
         elif event.key == pygame.K_k and not self._kress_called_this_sector:
             self._open_kress_terminal()
+        elif event.key == pygame.K_e and self._aiship_hail_pending is not None:
+            self._open_aiship_terminal()
 
     def _open_kress_terminal(self):
         from core.event_bus import EVT_KRESS_DIALLED
         self._kress_called_this_sector = True
         bus.emit(EVT_KRESS_DIALLED)
         self.open_terminal("kress")
+
+    def _open_aiship_terminal(self):
+        """Open the terminal for a hailing AI ship and consume the pending hail."""
+        hailer = self.take_ai_hail()
+        if hailer is None:
+            return
+        from antagonists.ai_ship import _HAIL_NPC_BY_CLASS, ST_DEPART
+        npc_type = _HAIL_NPC_BY_CLASS.get(hailer.ship_class)
+        if not npc_type:
+            return
+        # Ship leaves once the talk starts
+        hailer.state = ST_DEPART
+        hailer._state_t = 0.0
+        self.open_terminal(npc_type)
 
     # ------------------------------------------------------------------
     def _check_bullets(self):
@@ -468,6 +501,18 @@ class RunManager:
                 if (barge.pos - bullet.pos).length() < 32:
                     bullet.lifetime = -1
                     barge.take_hit()
+                    break
+
+        # Bullet hits on AI ships — hostiles take 6 hits, freighters 4, etc.
+        for bullet in list(bullets):
+            if not bullet.alive:
+                continue
+            for ai in list(self._ai_ships):
+                if not ai.alive:
+                    continue
+                if (ai.pos - bullet.pos).length() < ai.radius + 4:
+                    bullet.lifetime = -1
+                    ai.take_hit(1)
                     break
 
     def _check_slingshot(self):
@@ -969,10 +1014,18 @@ class RunManager:
 
         self._alien       = None
         self._alien_spoken = False
+        self._ai_ships.clear()
+        self._aiship_hail_pending = None
 
         # 22% chance of alien flythrough per sector
         if random.random() < 0.22:
             self._alien = AlienShip()
+
+        # AI ships — 1-3 per sector, queued so the player isn't dogpiled on entry.
+        # First spawn deferred AISHIP_SPAWN_DELAY seconds after sector load.
+        n_ai = random.randint(S.AISHIP_PER_SECTOR_MIN, S.AISHIP_PER_SECTOR_MAX)
+        for i in range(n_ai):
+            self._spawn_queue.append((S.AISHIP_SPAWN_DELAY + i * 7.0, "ai_ship"))
 
         # Barge spawn ramp — sector 1-2 are intro, then escalate.
         # Barges also deferred: first barge at 8s so player can orient.
@@ -1145,6 +1198,50 @@ class RunManager:
             barge.state = BargeState.CHASE
         self._barges.append(barge)
 
+    def _spawn_ai_ship(self):
+        """Spawn a contextual AI ship — pirates rarer early, derelicts capped."""
+        idx = self._sector_index
+        weights = {
+            "fighter":   3,
+            "freighter": 4,
+            "hauler":    3,
+            "gunboat":   1 if idx < 3 else 2,    # pirates rarer in early sectors
+            "derelict":  2 if idx >= 1 else 0,
+        }
+        # Cap derelicts at 1 per sector
+        if any(s.ship_class == "derelict" for s in self._ai_ships):
+            weights["derelict"] = 0
+        # Cap pirates at 1 per sector
+        if any(s.is_pirate for s in self._ai_ships):
+            weights["gunboat"] = 0
+        pool = [k for k, w in weights.items() for _ in range(w)]
+        if not pool:
+            return
+        ship_class = random.choice(pool)
+        self._ai_ships.append(AIShip(ship_class=ship_class))
+
+    def _on_aiship_hail(self, ship=None, npc_type=None, ship_class=None, **_):
+        # Defer terminal opening — let core/game.py poll this and react via E key.
+        if ship is None or npc_type is None:
+            return
+        self._aiship_hail_pending = ship
+        bus.emit(EVT_BAX_SPEAK, line=random.choice([
+            f"Hailer pulling alongside — {ship_class}. Press E to answer.",
+            f"That ship's signalling. {ship_class.title()} build. Talk or don't.",
+            f"Open comm request. {ship_class.title()}. Your call.",
+        ]))
+
+    def _on_aiship_destroyed(self, ship=None, **_):
+        # Awards a small kill bonus when a hostile pirate goes down
+        if ship is None:
+            return
+        if ship.is_pirate:
+            bus.emit(EVT_BAX_SPEAK, priority=True, line=random.choice([
+                "Hostile down. Nice shooting.",
+                "Pirate gunboat scrapped. They had it coming.",
+                "Threat neutralised. Good kill.",
+            ]))
+
     # ------------------------------------------------------------------
     def _difficulty(self) -> float:
         return 1.0 + (self._sector_index / S.SECTORS_PER_RUN)
@@ -1188,6 +1285,16 @@ class RunManager:
     @property
     def alien(self) -> AlienShip | None:
         return self._alien
+
+    @property
+    def ai_ships(self) -> list[AIShip]:
+        return self._ai_ships
+
+    def take_ai_hail(self) -> AIShip | None:
+        """Consume and return the pending hail (if any). Caller opens terminal."""
+        h = self._aiship_hail_pending
+        self._aiship_hail_pending = None
+        return h
 
     @property
     def sector_num(self) -> int:

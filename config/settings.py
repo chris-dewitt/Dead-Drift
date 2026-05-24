@@ -34,6 +34,13 @@ CAMERA_GLIDE_MAX   = 56.0          # px — max offset in either axis
 CAMERA_GLIDE_GAIN  = 0.20          # offset = clamp(vel * gain, ±MAX)
 CAMERA_GLIDE_RATE  = 1.6           # exponential approach rate (per second)
 
+# --- AI ships ---
+# NPC ships that share the sector with the player. See antagonists/ai_ship.py.
+AISHIP_PER_SECTOR_MIN = 1          # always at least one ambient ship
+AISHIP_PER_SECTOR_MAX = 3          # cap so the sector doesn't get crowded
+AISHIP_SPAWN_DELAY    = 6.0        # seconds after sector load before first AI ship
+AISHIP_RAM_DAMAGE     = 18.0       # hull damage per pirate ram
+
 # --- Ship ---
 HULL_MAX          = 200.0
 THRUSTER_FORCE    = 175.0         # Newtons (gameplay units) — was 205, reduced for weightier feel
