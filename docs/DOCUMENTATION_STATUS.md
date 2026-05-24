@@ -48,6 +48,7 @@ Phase 0 trust fixes plus the full Epic 6 terminal polish set are tracked as ship
 | `docs/CORRIDOR_DESIGN.md` | Corridor level design | Mostly current |
 | `docs/BAX_VOICE.md` | Bax line bank | Current as writing spec |
 | `docs/SOUNDTRACK_PLAN.md` | Audio spec + **implementation status** | Current |
+| `docs/BAX_HUMS_IMPL.md` | Bax-hums implementation handoff plan | Historical — feature shipped May 2026 (commit `42a66d3`) |
 | `CLAUDE.md` | Agent pointer | Current (replaces stale monolith) |
 | `docs/CLAUDE_ARCHIVED.md` | Old agent/GDD excerpt | Historical only |
 | `docs/DEAD_DRIFT_GDD_ARCHIVED.md` | Original pitch GDD | Historical only |
@@ -63,9 +64,8 @@ Phase 0 trust fixes plus the full Epic 6 terminal polish set are tracked as ship
 
 ## Minor drift (no design fork — fix when touching code)
 
-| Item | Issue |
-|------|--------|
-| `roguelite/tutorial.py` docstring | Says `clone_count == 1`; live code uses `<= 3` |
+*(none currently tracked — the `roguelite/tutorial.py` docstring drift was
+fixed in the same commit that landed this row update.)*
 
 ---
 
