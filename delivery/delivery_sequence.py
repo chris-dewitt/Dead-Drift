@@ -538,9 +538,14 @@ class DeliverySequence:
                 lc  = (int(80 * lp), int(200 * lp), int(120 * lp))
                 pygame.draw.circle(surface, lc,
                                    (bay_left + max(2, int(4 * station_scale)), led_y), 2)
-        gi = pygame.Surface((max(1, bay_w), max(1, bay_bot - bay_top)), pygame.SRCALPHA)
-        gi.fill((80, 60, 0, int(60 * pulse)))
-        surface.blit(gi, (bay_left, bay_top))
+        if bay_w > 4 and bay_bot > bay_top:
+            gi = pygame.Surface((max(1, bay_w), max(1, bay_bot - bay_top)), pygame.SRCALPHA)
+            gi.fill((80, 60, 0, int(45 * pulse)))
+            # Atmosphere shimmer: horizontal density streaks
+            for sk in range(0, bay_bot - bay_top, max(3, int(5 * station_scale))):
+                sa = int(18 + 22 * abs(math.sin(t * 3.4 + sk * 0.15)))
+                pygame.draw.line(gi, (140, 110, 20, sa), (0, sk), (bay_w - 1, sk), 1)
+            surface.blit(gi, (bay_left, bay_top))
 
         # PAPI glideslope lights visible when close
         if station_scale > 0.5:
@@ -551,6 +556,28 @@ class DeliverySequence:
                 pygame.draw.circle(surface, pc,
                                    (bay_left + int((pi + 1) * bay_w // 5), papi_y2),
                                    max(2, int(3 * station_scale)))
+
+        # ── Bay docking status lights — 3-state panel (red/amber/green) ────
+        if bay_w > 8:
+            sl_x  = bay_left - max(6, int(18 * station_scale))
+            sl_cy = int((bay_top + bay_bot) / 2)
+            sl_h  = max(10, int(38 * station_scale))
+            sl_w  = max(4, int(14 * station_scale))
+            pygame.draw.rect(surface, (8, 14, 10),
+                             (sl_x - sl_w // 2 - 2, sl_cy - sl_h // 2 - 2,
+                              sl_w + 4, sl_h + 4), border_radius=2)
+            pygame.draw.rect(surface, (30, 52, 34),
+                             (sl_x - sl_w // 2 - 2, sl_cy - sl_h // 2 - 2,
+                              sl_w + 4, sl_h + 4), border_radius=2, width=1)
+            angle_abs = abs(self._ship_angle)
+            for li, (lo_c, hi_c, on) in enumerate([
+                ((60, 0, 0),   (220, 40, 40), angle_abs >= 35.0),      # red: off-axis
+                ((50, 35, 0),  (200, 150, 0), 10.0 < angle_abs < 35.0),# amber: aligning
+                ((0, 50, 0),   (0, 220, 80),  angle_abs <= 10.0),       # green: clear
+            ]):
+                ly = sl_cy - sl_h // 3 + li * (sl_h // 3)
+                pygame.draw.circle(surface, hi_c if on else lo_c,
+                                   (sl_x, ly), max(2, int(4 * station_scale)))
 
         # ── Alignment cone guide (target ±30°) ──────────────────────────
         cone_cx = bay_left - 40
@@ -780,6 +807,23 @@ class DeliverySequence:
             pygame.draw.rect(surface, (16, 30, 18), (cxc, cyc, cwc, chc))
             pygame.draw.rect(surface, (0, 80, 40),  (cxc, cyc, cwc, chc), 1)
 
+        # ── Magnetic clamp housing brackets on bay walls ──────────────────
+        for wx, w_sign in ((58, 1), (W - 58, -1)):
+            for cy_brk in (H // 2 - 50, H // 2 + 10):
+                bw = 22 * w_sign
+                bx = wx - (bw if w_sign < 0 else 0)
+                pygame.draw.rect(surface, (12, 26, 14), (bx, cy_brk - 14, abs(bw), 28))
+                pygame.draw.rect(surface, (0, 90, 40),  (bx, cy_brk - 14, abs(bw), 28), 1)
+                # Clamp arm recess
+                arm_x = wx + (w_sign * 2)
+                pygame.draw.rect(surface, (6, 16, 8),
+                                 (arm_x - 5 * (1 if w_sign < 0 else 0),
+                                  cy_brk - 8, 10, 16))
+                # Status indicator
+                cl_p = 0.4 + 0.6 * abs(math.sin(t * 1.5 + cy_brk * 0.02))
+                pygame.draw.circle(surface, (int(180 * cl_p), int(90 * cl_p), 0),
+                                   (wx + w_sign * 8, cy_brk), 2)
+
         # ── Maintenance drone hovering near ceiling ───────────────────────
         drone_x = int(W * 0.7 + 42 * math.sin(t * 0.58))
         drone_y = int(160 + 14 * math.sin(t * 0.87))
@@ -887,45 +931,86 @@ class DeliverySequence:
         fsm2 = pygame.font.SysFont("monospace", 11)
         cx   = W // 2
 
+        # ── Cockpit instrument panel ──────────────────────────────────────
+        inst_w, inst_h = 380, 88
+        inst_x = cx - inst_w // 2
+        inst_y = H // 2 - 58
+        # Outer bezel
+        pygame.draw.rect(surface, (4, 10, 6),
+                         (inst_x - 10, inst_y - 10, inst_w + 20, inst_h + 20),
+                         border_radius=6)
+        pygame.draw.rect(surface, (0, 100, 45),
+                         (inst_x - 10, inst_y - 10, inst_w + 20, inst_h + 20),
+                         border_radius=6, width=2)
+        # Inner face
+        pygame.draw.rect(surface, (6, 16, 8),
+                         (inst_x, inst_y, inst_w, inst_h),
+                         border_radius=4)
+        pygame.draw.rect(surface, (0, 70, 32),
+                         (inst_x, inst_y, inst_w, inst_h),
+                         border_radius=4, width=1)
+        fp8 = pygame.font.SysFont("monospace", 8, bold=True)
+        fp10 = pygame.font.SysFont("monospace", 10)
+
         if self._land_sub == "j_align":
-            surface.blit(f.render(
-                "BEAT 2  ·  TAP  J  WHEN MARKER CENTRES  (ALIGN THRUSTERS)",
-                True, (200, 160, 0)), (cx - 300, 14))
-            gauge_w = 320
-            gx = cx - gauge_w // 2
-            gy = H // 2 - 40
-            pygame.draw.rect(surface, (10, 22, 12), (gx, gy, gauge_w, 22))
-            pygame.draw.rect(surface, (0, 140, 70), (gx, gy, gauge_w, 22), 2)
+            hdr = fp8.render("THRUSTER ALIGN COMPUTER  ·  PRESS  J  TO LOCK",
+                              True, (0, 140, 60))
+            surface.blit(hdr, (cx - hdr.get_width() // 2, inst_y + 5))
+            gauge_w = inst_w - 40
+            gx = inst_x + 20
+            gy = inst_y + 22
+            # Gauge track
+            pygame.draw.rect(surface, (8, 22, 10), (gx, gy, gauge_w, 24),
+                             border_radius=2)
+            pygame.draw.rect(surface, (0, 100, 50), (gx, gy, gauge_w, 24),
+                             border_radius=2, width=1)
+            # Sweet-spot zone
             zone_w = int(gauge_w * 0.18)
-            pygame.draw.rect(surface, (0, 80, 40),
-                             (cx - zone_w // 2, gy + 2, zone_w, 18))
+            pygame.draw.rect(surface, (0, 60, 30),
+                             (cx - zone_w // 2, gy + 2, zone_w, 20))
+            pygame.draw.rect(surface, (0, 160, 70),
+                             (cx - zone_w // 2, gy + 2, zone_w, 20), 1)
+            # Moving marker
             marker_x = gx + int(self._j_marker_pos() * gauge_w)
-            pygame.draw.rect(surface, (255, 220, 60), (marker_x - 3, gy - 4, 6, 30))
+            pygame.draw.rect(surface, (255, 220, 60), (marker_x - 3, gy - 5, 6, 34))
+            # Status row
             remain = max(0.0, self._J_ALIGN_TIMEOUT - self._land_sub_t)
-            surface.blit(fsm2.render(f"WINDOW  {remain:.1f}s", True, (140, 170, 140)),
-                         (cx - 40, gy + 30))
+            win_s = fp10.render(f"WINDOW  {remain:.1f}s", True, (100, 160, 100))
+            surface.blit(win_s, (inst_x + 12, inst_y + 54))
+            in_zone = abs(self._j_marker_pos() - 0.5) <= (0.18 / 2)
+            zs = fp10.render("ZONE: IN" if in_zone else "ZONE: OUT",
+                             True, (0, 220, 100) if in_zone else (180, 130, 0))
+            surface.blit(zs, (inst_x + inst_w - zs.get_width() - 12, inst_y + 54))
         else:
-            surface.blit(f.render(
-                "BEAT 2  ·  HOLD  SPACE  ~1.2s  —  RELEASE AT GREEN  (RETRO BURN)",
-                True, (200, 160, 0)), (cx - 330, 14))
-            bar_w = 280
-            bx = cx - bar_w // 2
-            by = H // 2 - 36
-            pygame.draw.rect(surface, (10, 22, 12), (bx, by, bar_w, 24))
-            pygame.draw.rect(surface, (0, 140, 70), (bx, by, bar_w, 24), 2)
+            hdr = fp8.render("RETRO BURN SYSTEM  ·  HOLD  SPACE  TO FIRE",
+                              True, (0, 140, 60))
+            surface.blit(hdr, (cx - hdr.get_width() // 2, inst_y + 5))
+            bar_w = inst_w - 40
+            bx_b  = inst_x + 20
+            by_b  = inst_y + 22
+            pygame.draw.rect(surface, (8, 22, 10), (bx_b, by_b, bar_w, 26),
+                             border_radius=2)
+            pygame.draw.rect(surface, (0, 100, 50), (bx_b, by_b, bar_w, 26),
+                             border_radius=2, width=1)
             fill_w = int(bar_w * min(1.0, self._burn_fill))
             fill_col = (0, 220, 120) if self._burn_fill >= 1.0 else (200, 140, 0)
-            if fill_w > 0:
-                pygame.draw.rect(surface, fill_col, (bx + 2, by + 2, fill_w - 4, 20))
-            thr_lbl = fsm2.render(
-                "RETROS: ON" if self._burn_holding else "RETROS: hold SPACE",
-                True, (0, 220, 120) if self._burn_holding else (90, 100, 90))
-            surface.blit(thr_lbl, (cx - thr_lbl.get_width() // 2, by + 32))
-            if self._j_hit:
-                ok = fsm2.render("ALIGN: OK", True, (0, 220, 120))
-            else:
-                ok = fsm2.render("ALIGN: MISS", True, (220, 90, 70))
-            surface.blit(ok, (cx - ok.get_width() // 2, by - 22))
+            if fill_w > 4:
+                pygame.draw.rect(surface, fill_col,
+                                 (bx_b + 2, by_b + 2, fill_w - 4, 22),
+                                 border_radius=2)
+            # Target zone mark
+            pygame.draw.line(surface, (0, 200, 100),
+                             (bx_b + bar_w - 2, by_b - 2),
+                             (bx_b + bar_w - 2, by_b + 28), 2)
+            # Status row
+            retro_s = fp10.render(
+                "RETROS: FIRING" if self._burn_holding else "RETROS: ARMED",
+                True, (0, 220, 120) if self._burn_holding else (100, 140, 100))
+            surface.blit(retro_s, (inst_x + 12, inst_y + 57))
+            align_s = fp10.render("ALIGN: OK" if self._j_hit else "ALIGN: MISS",
+                                  True, (0, 220, 100) if self._j_hit else (200, 80, 60))
+            surface.blit(align_s,
+                         (inst_x + inst_w - align_s.get_width() - 12, inst_y + 57))
 
     def _draw_beat3(self, surface: pygame.Surface, W: int, H: int):
         """Beat 3: dock-clamp cutscene + fade to corridor."""
@@ -941,6 +1026,22 @@ class DeliverySequence:
         ship_pts = [(cx, pad_y + 22), (cx - 18, pad_y), (cx + 18, pad_y)]
         pygame.draw.polygon(surface, (20, 200, 200), ship_pts)
         pygame.draw.polygon(surface, (0, 255, 240), ship_pts, 1)
+
+        # Vapor burst at hull contact points — fires first 1.5s of beat3
+        if t < 1.5:
+            contact_y = pad_y + 1
+            burst_fade = max(0.0, 1.0 - t / 1.5)
+            for vbx, vb_dir in ((cx - 18, -1), (cx + 18, 1), (cx, 0)):
+                for vk in range(7):
+                    va = (t * 2.2 + vk * 0.18) % 1.0
+                    vx3 = vbx + int(vb_dir * (vk + 1) * 5 * va)
+                    vy3 = contact_y + int(va * 14)
+                    vr  = max(1, int(3 * (1 - va)))
+                    vsurf = pygame.Surface((vr * 2 + 2, vr * 2 + 2), pygame.SRCALPHA)
+                    va_out = int(burst_fade * 180 * (1 - va))
+                    pygame.draw.circle(vsurf, (190, 215, 230, va_out),
+                                       (vr + 1, vr + 1), vr)
+                    surface.blit(vsurf, (vx3 - vr - 1, vy3 - vr - 1))
 
         # Dock clamps animating in
         clamp_prog = min(1.0, t / 1.5)

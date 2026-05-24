@@ -142,9 +142,9 @@ Tone benchmark: *"GENUINE NOVA SOMA® PARTS IN EVERY CLONE"* — that's the bar.
 **May 2026 status:**
 - 10.1 Shop screen: **COMPLETE** — condition badges (MINT/WORN/SCRAP) on every item card, credits display repositioned to top-right amber, Nova Soma™ branding scratched off right wall, exit door graphic at footer.
 - 10.2 Death/decanting screen: **COMPLETE** — clone tube hospital background with 5 cylindrical tanks (active one glows), rotating taglines per clone count, "ACCEPT CHARGES (non-optional)" button, invoice panel floating over the room.
-- 10.3 Portrait quality: ambient backdrop already provides ≥3 animated elements (passersby, motes, readout flicker) for every NPC. Nova Soma AI face remains to do (alien sensor array per spec).
+- 10.3 Portrait quality: **COMPLETE** — `_nova_soma_collections()` redesigned from humanoid face to asymmetric sensor array (primary offset-left bar, secondary vertical node, tertiary micro-dot cluster, quaternary edge strip). Sweep arc from primary sensor. Readout panel replaces "mouth" — scrolling hex values change rate/content with disposition (hostile=ERR+ALM, friendly=OK+SYN, neutral=raw hex). Emotion via readout state, not expressions.
 - 10.4 Corridor: `delivery/corridor/` system already has per-chapter palettes defined; main render loop in `base.py` uses them. Additional wall panels/parallax/lighting still open.
-- 10.5 Landing: open.
+- 10.5 Landing: **COMPLETE** — Bay status light panel (red/amber/green 3-state, reflects alignment angle); enhanced atmosphere shimmer at bay entrance with animated horizontal density streaks; magnetic clamp housing brackets on bay walls (status LED per bracket); Beat 2 gauge redesigned as cockpit instrument panel with bezel, header label, zone markers; vapor burst particles at hull contact points for first 1.5s of beat3.
 
 **Decision:** every scene must reach flight-scene quality. Same vector renderer vocabulary: panel seams, glow halos, scorch marks, procedural depth. No scene should feel lower-fidelity than another.
 
