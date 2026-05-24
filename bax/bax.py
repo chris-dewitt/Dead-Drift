@@ -20,7 +20,10 @@ from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_BARGE_KILLED,
                              EVT_CORRIDOR_RUN, EVT_CORRIDOR_JUMP,
                              EVT_CORRIDOR_SECRET, EVT_CORRIDOR_DEATH,
-                             EVT_DOCK_APPROACH, EVT_DOCK_PERFECT, EVT_DOCK_ROUGH)
+                             EVT_DOCK_APPROACH, EVT_DOCK_PERFECT, EVT_DOCK_ROUGH,
+                             EVT_CLOSE_CALL, EVT_SKILL_MANEUVER,
+                             EVT_LONG_FIGHT_SURVIVED, EVT_FIRST_TETHER_SNAP,
+                             EVT_TERMINAL_OPEN, EVT_UNLOCK_EARNED)
 
 _IDLE = [
     # Bread-and-butter Cockney banter
@@ -463,6 +466,9 @@ class Bax:
         # Panic under 10% hull — track last hull_pct to detect crossing
         self._last_hull_pct  = 1.0
 
+        # Epic 11.4 — Bax NPC opinions: fired-once per (npc_key, chapter)
+        self._opinion_fired: set[tuple[str, int]] = set()
+
         self._wire_events()
 
     # ── No-repeat pick ─────────────────────────────────────────────────────
@@ -521,6 +527,13 @@ class Bax:
         bus.subscribe(EVT_DOCK_APPROACH,    self._on_dock_approach)
         bus.subscribe(EVT_DOCK_PERFECT,     self._on_dock_perfect)
         bus.subscribe(EVT_DOCK_ROUGH,       self._on_dock_rough)
+        # Epic 11.2 / 11.4 — skill events + NPC opinions on terminal open
+        bus.subscribe(EVT_CLOSE_CALL,          self._on_close_call)
+        bus.subscribe(EVT_SKILL_MANEUVER,      self._on_skill_maneuver)
+        bus.subscribe(EVT_LONG_FIGHT_SURVIVED, self._on_long_fight_survived)
+        bus.subscribe(EVT_FIRST_TETHER_SNAP,   self._on_first_tether_snap)
+        bus.subscribe(EVT_TERMINAL_OPEN,       self._on_terminal_open)
+        bus.subscribe(EVT_UNLOCK_EARNED,       self._on_unlock_earned)
 
     def update(self, dt: float):
         self._t       += dt
@@ -638,6 +651,10 @@ class Bax:
     def _on_exploit_found(self, npc, exploit_key, **_):
         npc_key = npc if isinstance(npc, str) else type(npc).__name__.lower()
         self.vault.add_backdoor(npc_key, exploit_key)
+        # Epic 11.3 — note exploit use in run context
+        ctx = getattr(self, "_run_bax_context", None)
+        if ctx is not None:
+            ctx["exploits_used_run"] = ctx.get("exploits_used_run", 0) + 1
         self.speak(f"FILED THAT. {exploit_key.upper()} works on their lot.")
 
     # ------------------------------------------------------------------
@@ -881,6 +898,22 @@ class Bax:
 
     def _on_sector_start(self, sector_num=1, cargo_type=None, **_):
         self._sector_first_kill = False
+        # Epic 11.3 — past-run reference: if player has died on this sector before,
+        # comment on the pattern. The bax_context is plumbed via run_context to
+        # NPCs, but we also read it directly from a parent reference if set.
+        bax_ctx = getattr(self, "_run_bax_context", None)
+        died_here = 0
+        if bax_ctx is not None:
+            died_here = bax_ctx.get("times_died_this_sector", {}).get(sector_num - 1, 0)
+        if died_here >= 2 and self._ctx_ok("sector_repeat", 90.0):
+            sec_word = ["one", "two", "three", "four", "five"][min(sector_num - 1, 4)]
+            bus.emit(EVT_BAX_SPEAK, line=self._no_repeat_pick("sector_repeat", [
+                f"Sector {sec_word} again. You do love sector {sec_word}.",
+                f"Back in sector {sec_word}. We have a HISTORY here, mate. Mostly bad.",
+                f"Sector {sec_word}. Right. Try it different this time, yeah?",
+            ]))
+            self._speak_cd = 3.2
+            return
         pool = _SECTOR_START_CARGO.get(cargo_type) if cargo_type else None
         if pool:
             line = self._no_repeat_pick(f"sector_start_{cargo_type}", pool).format(n=sector_num)
@@ -888,6 +921,10 @@ class Bax:
             line = self._no_repeat_pick("sector_start", _SECTOR_START_GENERIC)
         bus.emit(EVT_BAX_SPEAK, line=line)
         self._speak_cd = 3.2
+
+    def attach_run_context(self, ctx: dict) -> None:
+        """RunManager calls this once per sector start so Bax can read past-run state."""
+        self._run_bax_context = ctx
 
     # ── New event handlers (Epic 7.2) ─────────────────────────────────────
     def _on_gun_fire(self, **_):
@@ -931,6 +968,139 @@ class Bax:
 
     def _on_dock_rough(self, **_):
         self.speak(self._no_repeat_pick("dock_rough", _DOCK_ROUGH))
+
+    # ── Epic 11.2 — skill reaction handlers ──────────────────────────────
+    def _on_close_call(self, distance=0.0, **_):
+        if not self._ctx_ok("close_call", 18.0):
+            return
+        self.speak(self._no_repeat_pick("close_call", [
+            "That one went right past your ear. Good LORD.",
+            f"Felt the wind off that — {distance:.0f} metres if I'm generous.",
+            "Bit close, mate. Bit close. Did NOT enjoy that.",
+            "I am updating my will. We're fine. But I'm updating it.",
+        ]))
+
+    def _on_skill_maneuver(self, **_):
+        if not self._ctx_ok("skill_maneuver", 22.0):
+            return
+        self.speak(self._no_repeat_pick("skill_maneuver", [
+            "Look at you. Courier school told me you'd be useless. "
+            "Courier school was wrong.",
+            "That was MOVES. Actual moves. I'm filin' it under 'good decisions'.",
+            "Slingshot + redirect inside two seconds. That's textbook. "
+            "If the textbook had a brain.",
+        ]))
+
+    def _on_long_fight_survived(self, **_):
+        if not self._ctx_ok("long_fight", 60.0):
+            return
+        self.speak(self._no_repeat_pick("long_fight", [
+            "Right, he's given up a bit of his soul tonight. Fair play.",
+            "Forty-five seconds and he's still chasing. Respect, kind of.",
+            "He's burnt more fuel chasing us than we've earned this sector. Beautiful.",
+        ]))
+
+    def _on_first_tether_snap(self, **_):
+        # Fired once per run by run_manager
+        self.speak(self._no_repeat_pick("first_snap", [
+            "SEE? Sideways. I told you sideways. Did it feel like sideways? "
+            "It felt like sideways.",
+            "There it is — first snap of the run. That's the muscle memory. "
+            "Don't lose it.",
+            "Cable's gone. Just like I said. Lateral. Always lateral.",
+        ]))
+
+    def _on_unlock_earned(self, key="", label="", **_):
+        self.speak(f"...Oi. You just unlocked somethin'. '{label}'. "
+                   "I'd cheer but I'm bolted in. Mental cheer.")
+
+    # ── Epic 11.4 — Bax opinions on NPCs ─────────────────────────────────
+    # Fires once per (npc_key, chapter) on terminal open. Pre-load lines
+    # the player would actually hear before a conversation starts.
+    _NPC_OPINIONS: dict[str, list[str]] = {
+        "gary": [
+            "Gary. Right. Keep it short — he thinks short conversations mean you "
+            "respect his time. You don't. But act like you do.",
+        ],
+        "cargo_inspector": [
+            "Holt. Don't let him talk about compliance. He'll talk about compliance. "
+            "He loves compliance the way I love a quiet sector — never actually gets one.",
+        ],
+        "nova_soma": [
+            "That's not a person, that's a debt collector wearing a friendly face. "
+            "Every word it says is a legal document.",
+        ],
+        "nova_soma_ai": [
+            "Nova Soma AI. Don't argue with it — it's just looking for words to bill you for.",
+        ],
+        "relay7_felix": [
+            "Felix? Good bloke. Very twitchy. Don't mention the incident — "
+            "he'll know which incident.",
+        ],
+        "nervous_fence": [
+            "Felix? Good bloke. Very twitchy. Don't mention the incident — "
+            "he'll know which incident.",
+        ],
+        "mira_voss": [
+            "Mira. She fixed my left thruster once. Charged me twice. "
+            "Worth every credit. Don't tell her I said that.",
+        ],
+        "kress": [
+            "KRESS. I'll be honest — I don't know what KRESS wants. "
+            "KRESS doesn't know what KRESS wants. Just let KRESS talk.",
+        ],
+        "pirate": [
+            "Right, this one's not here for conversation. Don't philosophise. "
+            "Philosophising with pirates ends badly.",
+        ],
+        "synthetic_droid": [
+            "TK-9. Compliance unit. State exactly what it asks for. Nothing extra. "
+            "It'll find the extra in subsection nine.",
+        ],
+        "underground_dj": [
+            "Marrow. The Roost. Real radio. Be polite — he plays things "
+            "Nova Soma buried and we both miss music.",
+        ],
+        "sandra": [
+            "Sandra Vega-Marsh. Perfect courier. Twelve years. We are not perfect. "
+            "Be brief, be exact, she respects neither of us anyway.",
+        ],
+        "insurance_adjuster": [
+            "Morwenna. Claims. Don't volunteer information. Don't NOT volunteer information. "
+            "Just answer what she asks. Slowly.",
+        ],
+        "toll_authority": [
+            "Toll Authority. Pay or run. There's no third option. Don't think there is. "
+            "There isn't.",
+        ],
+    }
+
+    def _on_terminal_open(self, npc=None, **_):
+        if npc is None:
+            return
+        # Resolve a key — accept string OR an NPC object.
+        key = npc if isinstance(npc, str) else type(npc).__name__.lower()
+        # Loose alias resolution
+        for npc_key in self._NPC_OPINIONS.keys():
+            if npc_key in key:
+                key = npc_key
+                break
+        opinions = self._NPC_OPINIONS.get(key)
+        if not opinions:
+            return
+        chapter = getattr(self._meta, "bax_level", 1)  # rough chapter proxy
+        # Use chapters_completed length as a better proxy if available
+        ch_done = getattr(self._meta, "chapters_completed", [])
+        chapter = len(ch_done) + 1 if ch_done is not None else 1
+        fired = self._opinion_fired
+        if (key, chapter) in fired:
+            return
+        fired.add((key, chapter))
+        # Speak via priority slot — don't wait on speak cooldown so the opinion
+        # actually lands before the terminal text takes over.
+        bus.emit(EVT_BAX_SPEAK, line=self._no_repeat_pick(
+            f"opinion_{key}", opinions))
+        self._speak_cd = 3.2
 
     # ------------------------------------------------------------------
     def radio_blip(self):

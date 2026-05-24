@@ -22,6 +22,8 @@ class MetaProgression:
         "bax_level":          1,
         "reputation":         {},     # npc_id -> int (-10..10)
         "bax_hums_heard":     [],     # list[int] — hum indices the player has heard
+        "unlocks":            [],     # list[str] — earned unlock keys (Epic 12.2)
+        "milestone_counters": {},     # str -> int (e.g. "slingshots_total")
     }
 
     def __init__(self, save_path: Path | str | None = None):
@@ -137,3 +139,30 @@ class MetaProgression:
     def campaign_cleared_at_least_once(self) -> bool:
         """True if the player has completed all 4 chapters at any point."""
         return len(self._data.get("chapters_completed", [])) >= 4
+
+    # ── Unlocks (Epic 12.2) ────────────────────────────────────────────────
+    @property
+    def unlocks(self) -> list[str]:
+        return list(self._data.get("unlocks", []))
+
+    def has_unlock(self, key: str) -> bool:
+        return key in self._data.get("unlocks", [])
+
+    def add_unlock(self, key: str) -> bool:
+        """Add an unlock if not already earned. Returns True if newly earned."""
+        unlocks = self._data.setdefault("unlocks", [])
+        if key in unlocks:
+            return False
+        unlocks.append(key)
+        self.save()
+        from core.event_bus import bus, EVT_UNLOCK_EARNED
+        bus.emit(EVT_UNLOCK_EARNED, key=key, label=key.replace("_", " ").upper())
+        return True
+
+    def inc_milestone(self, key: str, amount: int = 1) -> int:
+        ctr = self._data.setdefault("milestone_counters", {})
+        ctr[key] = ctr.get(key, 0) + amount
+        return ctr[key]
+
+    def milestone(self, key: str) -> int:
+        return self._data.get("milestone_counters", {}).get(key, 0)

@@ -74,6 +74,9 @@ class Game:
         self.run_mgr = RunManager(self.meta)
         self.bax     = Bax(self.ship, self.meta)
         self.run_mgr._vault = self.bax.vault
+        # Epic 11.3 — give Bax a live read on bax_context so handlers can reference past runs.
+        if hasattr(self.bax, "attach_run_context"):
+            self.bax.attach_run_context(self.run_mgr.bax_context)
 
         self.vec_renderer     = VectorRenderer(self.screen)
         self._menu_vfx        = VisualFX()
@@ -131,6 +134,8 @@ class Game:
         self.run_mgr.meta = self.meta
         self.bax._meta = self.meta
         self.run_mgr._vault = self.bax.vault
+        if hasattr(self.bax, "attach_run_context"):
+            self.bax.attach_run_context(self.run_mgr.bax_context)
         self.cockpit_renderer._meta = self.meta
 
     def _effective_state(self) -> GameState:
@@ -193,6 +198,14 @@ class Game:
     def _on_ship_destroyed(self, **_):
         sector_idx = getattr(self.run_mgr, '_sector_index', 0) if self.run_mgr else 0
         self.meta.apply_death_penalty(sector_index=sector_idx)
+        # Epic 11.3 — track died-this-sector for Bax past-run references
+        if self.run_mgr is not None and hasattr(self.run_mgr, 'bax_context'):
+            tds = self.run_mgr.bax_context.setdefault("times_died_this_sector", {})
+            tds[sector_idx] = tds.get(sector_idx, 0) + 1
+            # Update last_sector_reached watermark
+            cur_last = self.run_mgr.bax_context.get("last_sector_reached", 0)
+            if sector_idx > cur_last:
+                self.run_mgr.bax_context["last_sector_reached"] = sector_idx
         self._run_just_completed = False
         # Pick the Bax decanting line once — cached so _render_decanting doesn't
         # re-roll it every frame, which makes the text flash/go crazy.
@@ -856,6 +869,22 @@ class Game:
                     f"(formerly: {sector.formerly})", True, (95, 95, 95))
                 self.screen.blit(fm_surf,
                                  (sec_w // 2 - fm_surf.get_width() // 2, 102))
+            # Epic 12.3 — hazard/opportunity ticker, only first 8s of sector
+            if rm._sector_timer < 8.0 and (sector.hazard_roll or sector.opportunity_roll):
+                from roguelite.procedural import SECTOR_HAZARD_ROLLS, SECTOR_OPPORTUNITY_ROLLS
+                fade = min(1.0, max(0.0, (8.0 - rm._sector_timer) / 8.0))
+                y_off = 118
+                if sector.hazard_roll:
+                    hz_txt = SECTOR_HAZARD_ROLLS.get(sector.hazard_roll, sector.hazard_roll)
+                    hcol = (int(180 * fade), int(70 * fade), int(40 * fade))
+                    hs = font_sm.render(f"HAZARD: {hz_txt}", True, hcol)
+                    self.screen.blit(hs, (sec_w // 2 - hs.get_width() // 2, y_off))
+                    y_off += 14
+                if sector.opportunity_roll:
+                    op_txt = SECTOR_OPPORTUNITY_ROLLS.get(sector.opportunity_roll, sector.opportunity_roll)
+                    ocol = (int(40 * fade), int(160 * fade), int(80 * fade))
+                    os_s = font_sm.render(f"OPPORTUNITY: {op_txt}", True, ocol)
+                    self.screen.blit(os_s, (sec_w // 2 - os_s.get_width() // 2, y_off))
 
         # Debt ticker — bottom-left
         interest_per_sec = max(0.01, self.meta.debt * S.DEBT_INTEREST_RATE)

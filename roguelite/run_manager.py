@@ -10,6 +10,8 @@ from roguelite.procedural import (generate_sector, SectorLayout,
                                    THEME_TOLL_AUTHORITY)
 from roguelite.loadout_draft import LoadoutDraft
 from roguelite.meta_progression import MetaProgression
+from roguelite.mutators import MutatorRegistry
+from roguelite.stats_tracker import StatsTracker
 from roguelite.tutorial import TutorialManager
 from antagonists.repo_barge import RepoBarge
 from antagonists.debris import DebrisRock
@@ -33,7 +35,9 @@ from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
                              EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_DEMO_NOTICE,
                              EVT_JUMP_READY, EVT_WARP_JUMP, EVT_FINAL_SECTOR,
                              EVT_RUN_START, EVT_SHOP_ENTER, EVT_SECTOR_START,
-                             EVT_AISHIP_HAIL, EVT_AISHIP_DESTROYED, EVT_VOICE_CHAR)
+                             EVT_AISHIP_HAIL, EVT_AISHIP_DESTROYED, EVT_VOICE_CHAR,
+                             EVT_MUTATOR_SET, EVT_FIRST_TETHER_SNAP,
+                             EVT_LONG_FIGHT_SURVIVED, EVT_BARGE_KILLED)
 from config import settings as S
 
 SLINGSHOT_CREDIT_BONUS = 800
@@ -236,9 +240,55 @@ class RunManager:
         bus.subscribe(EVT_TETHER_SNAP,   self._on_tether_snap)
         bus.subscribe(EVT_SLINGSHOT,     self._on_slingshot)
 
+        # Epic 12.1 — Run mutators
+        self.mutators = MutatorRegistry()
+
+        # Epic 12.4 — Stats tracker (subscribes to bus internally)
+        self.stats = StatsTracker()
+
+        # Epic 11.3 — bax_context: state Bax reads to reference past runs
+        # Persists across sectors within a run; reset on run start.
+        self.bax_context: dict = {
+            "times_died_this_sector":   {},   # sector_idx -> count
+            "last_sector_reached":      0,
+            "exploits_used_run":        0,
+            "slingshot_used_run":       False,
+            "shops_visited_this_chapter": 0,
+            "chapter_at_session_start": 1,
+        }
+        # Epic 11.4 — NPC opinions fired-once tracker: (npc_key, chapter) set
+        self._bax_opinion_fired: set[tuple[str, int]] = set()
+        # Epic 11.2 — long-fight tracking
+        self._barge_pursuit_t = 0.0
+        self._long_fight_emitted = False
+
     # ------------------------------------------------------------------
     def start_run(self, ship):
+        # Epic 12.1 — roll a mutator. First run of each chapter has none.
+        # Detect "first run of chapter" by checking if the previous chapter is
+        # the highest completed; if no chapters_completed, this is the first
+        # run period (no mutator).
+        first_run_of_chapter = (
+            not self.meta.chapters_completed or
+            (self._current_chapter() - 1) not in self.meta.chapters_completed
+        )
+        self.mutators.roll_for_run(first_run_of_chapter=first_run_of_chapter)
+        bus.emit(EVT_MUTATOR_SET,
+                 mutator_key=self.mutators.active.key if self.mutators.active else None)
+        # Stats tracker resets via its own EVT_RUN_START handler
         bus.emit(EVT_RUN_START)
+        self.stats.set_chapter(self._current_chapter())
+        # Apply mutator-driven debt at run start
+        starting_debt_bonus = self.mutators.starting_debt_bonus()
+        if starting_debt_bonus:
+            self.meta.add_debt(starting_debt_bonus)
+        # Reset bax_context for this run
+        self.bax_context["times_died_this_sector"] = {}
+        self.bax_context["last_sector_reached"]    = 0
+        self.bax_context["exploits_used_run"]      = 0
+        self.bax_context["slingshot_used_run"]     = False
+        self._barge_pursuit_t   = 0.0
+        self._long_fight_emitted = False
         self._run_seed = secrets.randbelow(2 ** 31)
         self._frame_name = ""
         self._sector_index = 0
@@ -272,6 +322,7 @@ class RunManager:
         self._spawn_queue.clear()
         self._ship = ship
         self.draft = LoadoutDraft(chapter=self._current_chapter())
+        self.draft.set_mutator(self.mutators.active)
         self._kress_cd    = random.uniform(S.KRESS_INTERVAL_MIN, S.KRESS_INTERVAL_MAX)
         self._collector_cd = random.uniform(S.COLLECTOR_INTERVAL_MIN, S.COLLECTOR_INTERVAL_MAX)
         ship.reset()
@@ -323,6 +374,16 @@ class RunManager:
         self._sling_cd      = max(0.0, self._sling_cd - dt)
         self._prox_cd       = max(0.0, self._prox_cd  - dt)
         self._flash_t       = max(0.0, self._flash_t  - dt)
+
+        # Epic 11.2 — Long fight survived: if a barge has been alive >45s
+        # without capturing the player, emit once per run.
+        if self._barges and not self._long_fight_emitted:
+            self._barge_pursuit_t += dt
+            if self._barge_pursuit_t >= 45.0:
+                self._long_fight_emitted = True
+                bus.emit(EVT_LONG_FIGHT_SURVIVED)
+        elif not self._barges:
+            self._barge_pursuit_t = 0.0
 
         # Drain deferred spawns
         due = [item for item in self._spawn_queue
@@ -595,24 +656,32 @@ class RunManager:
     def _on_slingshot(self, speed=0, **_):
         self._sector_slingshots += 1
         self._run_slingshots    += 1
-        # Credit bonus per clean slingshot
-        bonus = SLINGSHOT_CREDIT_BONUS
+        # Epic 11.3 — mark slingshot used for bax_context
+        self.bax_context["slingshot_used_run"] = True
+        # Credit bonus per clean slingshot (Epic 12.1 — mutator scale)
+        bonus = int(SLINGSHOT_CREDIT_BONUS * self.mutators.credit_pickup_multiplier())
         self.meta.pay_off(bonus)
         self._run_debt_reduced += bonus
         self._sector_credits   += bonus
-        # Overdrive window: 2 seconds at 1.5× velocity cap
+        # Overdrive window: 2s at 1.5× cap (Epic 12.1 — fragile_frame doubles duration)
         if self._ship and self._ship.is_alive:
-            import math as _math
             self._ship.body._vel_cap_override = S.MAX_VELOCITY * 1.5
-            self._ship.body._overdrive_t      = 2.0
+            self._ship.body._overdrive_t      = 2.0 * self.mutators.slingshot_overdrive_multiplier()
+        # Epic 12.2 — milestone unlock: 10 lifetime slingshots → SLINGSHOT_ONLY mutator
+        total = self.meta.inc_milestone("slingshots_total")
+        if total >= 10 and not self.meta.has_unlock("slingshot_only_mutator"):
+            self.meta.add_unlock("slingshot_only_mutator")
 
     def _on_tether_snap(self, **_):
-        bonus = 1200
+        bonus = int(1200 * self.mutators.credit_pickup_multiplier())
         self.meta.pay_off(bonus)
         self._run_debt_reduced += bonus
         self._sector_snaps     += 1
         self._run_snaps        += 1
         self._sector_credits   += bonus
+        # Epic 11.2 — emit FIRST_TETHER_SNAP once per run
+        if self._run_snaps == 1:
+            bus.emit(EVT_FIRST_TETHER_SNAP)
         bus.emit(EVT_BAX_SPEAK, line=random.choice([
             f"Snap! That's {bonus:,} off your tab. Union's gonna be LIVID.",
             "Beautiful lateral drift! Their claims department can cry about it.",
@@ -648,6 +717,9 @@ class RunManager:
                     ctx["cargo_state"] = cargo.state_for_terminal()
         if hasattr(self, "meta"):
             ctx["debt"] = self.meta.debt
+        # Epic 11.3 — share Bax's run-memory dict so NPCs/Bax can react to it
+        if hasattr(self, "bax_context"):
+            ctx["bax_context"] = dict(self.bax_context)
         return ctx
 
     def open_terminal(self, npc_type: str, **npc_kwargs) -> Terminal:
@@ -997,8 +1069,11 @@ class RunManager:
             return
 
         # Shop stop — signal game.py to open the shop before next sector loads
-        if completed_sector in S.SHOP_SECTORS:
+        # Epic 12.1 — NO_SHOP mutator suppresses shop appearances entirely.
+        if completed_sector in S.SHOP_SECTORS and self.mutators.shops_enabled():
             self._shop_pending = True
+            self.bax_context["shops_visited_this_chapter"] = (
+                self.bax_context.get("shops_visited_this_chapter", 0) + 1)
             bus.emit(EVT_SHOP_ENTER)
             return
 

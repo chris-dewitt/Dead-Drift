@@ -90,3 +90,13 @@ EVT_DOCK_PERFECT    = "dock_perfect"    # both landing inputs hit cleanly
 EVT_DOCK_ROUGH      = "dock_rough"      # both landing inputs missed
 EVT_AISHIP_HAIL     = "aiship_hail"     # NPC ship pulled alongside; payload: ship, npc_type, ship_class
 EVT_AISHIP_DESTROYED = "aiship_destroyed"  # NPC ship shot down; payload: ship
+
+# Epic 11 — Bax skill-reaction events
+EVT_CLOSE_CALL          = "close_call"          # barge/debris passed within 30px without hitting
+EVT_SKILL_MANEUVER      = "skill_maneuver"      # slingshot + velocity redirect within 2s
+EVT_LONG_FIGHT_SURVIVED = "long_fight_survived" # barge in pursuit >45s, no capture
+EVT_FIRST_TETHER_SNAP   = "first_tether_snap"   # tether snapped first time this run
+
+# Epic 12 — Replayability events
+EVT_MUTATOR_SET     = "mutator_set"     # payload: mutator_key (or None)
+EVT_UNLOCK_EARNED   = "unlock_earned"   # payload: key, label

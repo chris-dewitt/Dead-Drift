@@ -204,6 +204,15 @@ The landing sequence should feel like a real docking approach, not a cutscene pl
 
 ## Epic 11 — Bax: Soul of the Game
 
+**May 2026 status (May 24 push):**
+- 11.1a (12 mood-tagged riffs): already shipped — `audio/blues_licks.py` has 30 patterns mood-tagged across cocky/weary/panic/delighted/lonely/sarcastic.
+- 11.1b (player "play along" input): deferred — high effort, low immediate value.
+- 11.1c (harmonica restores hull): deferred — needs input handling + animation work.
+- 11.2 (Bax reacts to skill): **PARTIAL** — added `EVT_CLOSE_CALL`, `EVT_SKILL_MANEUVER`, `EVT_LONG_FIGHT_SURVIVED`, `EVT_FIRST_TETHER_SNAP` to event bus; Bax subscribed with reactive line pools. `EVT_FIRST_TETHER_SNAP` emits from RunManager on first run-snap. `EVT_LONG_FIGHT_SURVIVED` emits when a barge has pursued >45s without capture. `EVT_CLOSE_CALL` and `EVT_SKILL_MANEUVER` emitters still need wiring in gameplay code (Bax handlers ready).
+- 11.3 (references past runs): **COMPLETE** — `bax_context` dict on RunManager tracks `times_died_this_sector`, `last_sector_reached`, `exploits_used_run`, `slingshot_used_run`, `shops_visited_this_chapter`. Game.py updates `times_died_this_sector` on ship destruction. Bax holds a live reference via `attach_run_context()`. `_on_sector_start` reads it: if player died on the same sector ≥2 times, Bax fires a sector-repeat line instead of the default opener.
+- 11.4 (NPC opinions): **COMPLETE** — `_NPC_OPINIONS` table in `bax/bax.py` with lines for Gary, Holt, Nova Soma, Felix, Mira, Kress, Pirate, TK-9, Marrow, Sandra, Morwenna, Toll Authority. Subscribed to `EVT_TERMINAL_OPEN` — fires once per (npc_key, chapter), keyed via `_opinion_fired` set.
+- 11.5 (mournful audibility): **COMPLETE** — `_tick_licks()` in `audio_manager.py` checks `_hull_pct < 0.30`. At low hull, forces mood "weary", boosts volume 1.55×, tightens cadence to 5-9s (vs 8-18s). Signature dying-Bax moment is unmissable.
+
 **Decision:** Bax is the emotional anchor. He needs more range, better music, and he should remember.
 
 ### 11.1 Bax harmonica — all three upgrades
@@ -284,6 +293,14 @@ Checklist:
 ---
 
 ## Epic 12 — Replayability Systems
+
+**May 2026 status (May 24 push):**
+- 12.1 (run mutators): **PARTIAL** — full table of 10 mutators in `roguelite/mutators.py`. `MutatorRegistry` rolls a mutator at run-start (first run of each chapter has no mutator). Banner displayed in loadout draft above the columns. Effects wired for `debt_surge` (credit pickup x2 — slingshot/snap bonuses scale), `fragile_frame` (slingshot overdrive duration x2), `veteran_clone` (+50k starting debt), `no_shop` (suppresses shop appearances). Remaining mutators are banner-only flags (`cold_sector`, `system_glitch`, `slingshot_only`, `quiet_sector`, `novice_pass`).
+- 12.2 (persistent unlocks): **COMPLETE (core)** — `MetaProgression._DEFAULTS` extended with `unlocks: list[str]` and `milestone_counters: dict`. `has_unlock()`, `add_unlock()`, `inc_milestone()`, `milestone()` methods. `EVT_UNLOCK_EARNED` emits when a new unlock is added (Bax reacts with a line). First wired milestone: 10 lifetime slingshots → `slingshot_only_mutator` unlock. Additional unlock check-points still to plumb in shop/loadout.
+- 12.3 (sector hazard/opportunity rolls): **COMPLETE** — `SectorLayout` extended with `hazard_roll` and `opportunity_roll` fields. 5 hazards (gravity_tide, sensor_jamming, scan_infestation, asteroid_shower, comms_blackout) and 5 opportunities (wells_favorable, salvage_cache, friendly_signal, abandoned_station, weak_barge) defined in `procedural.py`. Sector 0 always rolls blank. Display: HUD shows the rolled hazard + opportunity in red/green respectively under the sector name, fading out over the first 8s of the sector. Effect plumbing for individual rolls is display-only for now.
+- 12.4 (stats tracking): **COMPLETE** — `roguelite/stats_tracker.py` with `StatsTracker` class. Two layers: per-run dict (slingshots, snaps, kills, credits_earned, debt_added, best_slingshot_speed, npc_outcomes) and persistent career dict (runs_started/completed, lifetime totals, deepest sector per chapter, best single-run credits, NPC outcomes ledger keyed per-NPC). Persists to `data/saves/stats.json`. Subscribes to `EVT_RUN_START`, `EVT_RUN_END`, `EVT_SECTOR_CLEAR`, `EVT_SLINGSHOT`, `EVT_TETHER_SNAP`, `EVT_BARGE_KILLED`, `EVT_TERMINAL_CLOSE`, `EVT_DEBT_UPDATE`, `EVT_SHIP_DESTROYED` — no plumbing changes needed outside the tracker module. Public helpers `run_summary_lines()` and `career_summary_lines()` for HUD/cards.
+
+
 
 ### 12.1 Run mutators
 

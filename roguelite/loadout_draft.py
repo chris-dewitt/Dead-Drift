@@ -233,6 +233,12 @@ class LoadoutDraft:
         ]
         self._selected  = [0, 0, 0]
         self._chapter   = chapter
+        # Epic 12.1 — active run mutator (Mutator | None); set by RunManager
+        self._mutator = None
+
+    def set_mutator(self, mutator) -> None:
+        """RunManager calls this before render() to attach the run's mutator."""
+        self._mutator = mutator
 
     # ------------------------------------------------------------------
     def handle_key(self, event: pygame.event.Event):
@@ -270,12 +276,46 @@ class LoadoutDraft:
         surface.fill(S.VOID)
         self._draw_background_grid(surface, t)
         self._draw_header(surface, t)
+        self._draw_mutator_banner(surface, t)
         self._draw_columns(surface, t)
         self._draw_bax_panel(surface, t)
         self._draw_hint(surface, t)
         self._draw_propaganda(surface, t)
         self._draw_corner_brackets(surface, t)
         self._draw_scanlines(surface)
+
+    def _draw_mutator_banner(self, surface, t):
+        """Epic 12.1 — full-width banner above the columns showing this run's mutator."""
+        m = self._mutator
+        if m is None:
+            return
+        ban_y = self.HEADER_H + 8
+        ban_h = 32
+        ban_x = self.MARGIN
+        ban_w = S.SCREEN_W - 2 * self.MARGIN
+        pulse = 0.5 + 0.5 * math.sin(t * 1.8)
+        edge  = (180, 60, 0)
+        fill  = (28, 14, 4)
+        pygame.draw.rect(surface, fill, (ban_x, ban_y, ban_w, ban_h))
+        pygame.draw.rect(surface, edge, (ban_x, ban_y, ban_w, ban_h), 2)
+        # Pulsing chevrons
+        for cx_off in (12, ban_w - 24):
+            for ci in range(3):
+                cc = (int(120 + 80 * pulse), int(40 + 30 * pulse), 0)
+                pygame.draw.polygon(surface, cc, [
+                    (ban_x + cx_off + ci * 6, ban_y + 6),
+                    (ban_x + cx_off + ci * 6 + 6, ban_y + 16),
+                    (ban_x + cx_off + ci * 6, ban_y + 26),
+                ])
+        f_lbl = pygame.font.SysFont("monospace", 12, bold=True)
+        f_nm  = pygame.font.SysFont("monospace", 14, bold=True)
+        f_txt = pygame.font.SysFont("monospace", 10)
+        lbl = f_lbl.render("THIS RUN:", True, (200, 130, 0))
+        surface.blit(lbl, (ban_x + 56, ban_y + 4))
+        nm  = f_nm.render(m.name, True, (255, 200, 60))
+        surface.blit(nm, (ban_x + 56 + lbl.get_width() + 10, ban_y + 3))
+        blurb = f_txt.render(m.blurb, True, (180, 140, 60))
+        surface.blit(blurb, (ban_x + 56, ban_y + 19))
 
     # ------------------------------------------------------------------ background
     def _draw_background_grid(self, surface, t):
