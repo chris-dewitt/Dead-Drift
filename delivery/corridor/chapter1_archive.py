@@ -10,6 +10,7 @@ import pygame
 from delivery.corridor.elements import (
     Platform, MovingPlatform, Hazard, MovingHazard, Ladder,
     NPCEncounter, Collectible, Secret, Checkpoint, BossRoomTrigger,
+    SteamVent, Tripwire, SecurityBeam,
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H,
 )
 from delivery.corridor.base import Room, Corridor, STAR_3_TIME, STAR_2_TIME
@@ -439,6 +440,8 @@ def build() -> Corridor:
         Platform(800, FLOOR_Y - 50, 80),
         # Moving platform over wider gap
         MovingPlatform(500, FLOOR_Y - 80, left=440, right=560, speed=50),
+        # Epic 14.1 — Steam vent at the choke between platforms
+        SteamVent(470, FLOOR_Y, phase_offset=0.0),
         # Collectibles — 4 on path
         Collectible(260, FLOOR_Y - 20, 200),
         Collectible(450, FLOOR_Y - 95, 200),
@@ -447,6 +450,9 @@ def build() -> Corridor:
         # 1 collectible on higher detour platform
         Platform(700, FLOOR_Y - 110, 60, path_tag=None),
         Collectible(700, FLOOR_Y - 130, 300),
+        # Epic 14.1 — Tripwire just before the checkpoint (Bax alarm line)
+        Tripwire(870, FLOOR_Y - 18, w=44,
+                 bax_line="Tripwire, mate! Local 404's pinged. Move."),
         # Checkpoint
         Checkpoint(920),
     ]
@@ -480,6 +486,11 @@ def build() -> Corridor:
         Hazard(200, FLOOR_Y - 8, 40, 8, path_tag="low"),  # small gap indicator
         Platform(240, FLOOR_Y - 50, 70, path_tag="low"),
         Platform(380, FLOOR_Y - 55, 70, path_tag="low"),  # collapsing equivalents
+        # Epic 14.1 — Security beam sweeping the low corridor (shadow zones safe)
+        SecurityBeam(700, CEIL_Y + 12, length=260, phase=0.0, path_tag="low"),
+        SecurityBeam(900, CEIL_Y + 12, length=260, phase=math.pi, path_tag="low"),
+        # Steam vent on low path — players must time the crawl
+        SteamVent(820, FLOOR_Y, phase_offset=1.2, path_tag="low"),
         # 3 Collectibles on low path
         Collectible(280, FLOOR_Y - 65, 200, path_tag="low"),
         Collectible(420, FLOOR_Y - 20, 200, path_tag="low"),

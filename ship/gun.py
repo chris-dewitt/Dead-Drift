@@ -27,6 +27,10 @@ class Bullet:
 
 
 class Gun:
+    # Epic 12.1 — class-level multiplier set by RunManager when SYSTEM_GLITCH
+    # mutator is active. 1.0 = baseline, 3.0 = mutator triples malfunction rate.
+    malfunction_multiplier = 1.0
+
     def __init__(self):
         self.bullets: list[Bullet] = []
         self._cooldown = 0.0
@@ -35,7 +39,8 @@ class Gun:
     def fire(self, pos: Vec2, angle_deg: float):
         if self._cooldown > 0 or self._jam_t > 0:
             return
-        if random.random() < S.GUN_MALFUNCTION_CHANCE:
+        chance = min(0.95, S.GUN_MALFUNCTION_CHANCE * self.malfunction_multiplier)
+        if random.random() < chance:
             bus.emit(EVT_GUN_MALFUNCTION)
             self._jam_t    = S.GUN_JAM_DURATION
             self._cooldown = S.GUN_COOLDOWN

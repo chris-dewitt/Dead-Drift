@@ -37,7 +37,8 @@ from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
                              EVT_RUN_START, EVT_SHOP_ENTER, EVT_SECTOR_START,
                              EVT_AISHIP_HAIL, EVT_AISHIP_DESTROYED, EVT_VOICE_CHAR,
                              EVT_MUTATOR_SET, EVT_FIRST_TETHER_SNAP,
-                             EVT_LONG_FIGHT_SURVIVED, EVT_BARGE_KILLED)
+                             EVT_LONG_FIGHT_SURVIVED, EVT_BARGE_KILLED,
+                             EVT_GUN_FIRE, EVT_CLOSE_CALL)
 from config import settings as S
 
 SLINGSHOT_CREDIT_BONUS = 800
@@ -239,6 +240,7 @@ class RunManager:
         bus.subscribe(EVT_CANISTER_GRAB, self._on_canister_grab)
         bus.subscribe(EVT_TETHER_SNAP,   self._on_tether_snap)
         bus.subscribe(EVT_SLINGSHOT,     self._on_slingshot)
+        bus.subscribe(EVT_GUN_FIRE,      self._on_gun_fire)
 
         # Epic 12.1 — Run mutators
         self.mutators = MutatorRegistry()
@@ -261,6 +263,11 @@ class RunManager:
         # Epic 11.2 — long-fight tracking
         self._barge_pursuit_t = 0.0
         self._long_fight_emitted = False
+        # Epic 11.2 — close-call tracking: per-object min-distance witnesses
+        self._close_witness: dict[int, float] = {}  # id(obj) -> last_dist
+        self._close_call_cd = 0.0
+        # Epic 12.1 — NOVICE_PASS first-death-free flag
+        self._novice_pass_consumed = False
 
     # ------------------------------------------------------------------
     def start_run(self, ship):
@@ -275,6 +282,11 @@ class RunManager:
         self.mutators.roll_for_run(first_run_of_chapter=first_run_of_chapter)
         bus.emit(EVT_MUTATOR_SET,
                  mutator_key=self.mutators.active.key if self.mutators.active else None)
+        # Epic 12.1 — apply mutator to Gun's class-level malfunction multiplier
+        from ship.gun import Gun
+        Gun.malfunction_multiplier = (3.0 if self.mutators.is_active("system_glitch")
+                                       else 1.0)
+        self._novice_pass_consumed = False
         # Stats tracker resets via its own EVT_RUN_START handler
         bus.emit(EVT_RUN_START)
         self.stats.set_chapter(self._current_chapter())
@@ -341,7 +353,8 @@ class RunManager:
 
         rng = random.Random(self._run_seed + self._sector_index * 997)
         self._sector    = generate_sector(self._sector_index, self._difficulty(),
-                                          rng=rng, chapter=self._current_chapter())
+                                          rng=rng, chapter=self._current_chapter(),
+                                          force_theme=self._cold_sector_theme(rng))
         self._sector_start_hull = ship.hull
         self._sector_timer      = 0.0
         self._jump_ready_fired  = False
@@ -370,10 +383,37 @@ class RunManager:
         if self._sector is None or self._ship is None:
             return
 
-        self._sector_timer += dt
+        # Epic 12.1 — SLINGSHOT_ONLY: timer only advances via slingshot bonus
+        if not self.mutators.is_active("slingshot_only"):
+            self._sector_timer += dt
         self._sling_cd      = max(0.0, self._sling_cd - dt)
         self._prox_cd       = max(0.0, self._prox_cd  - dt)
         self._flash_t       = max(0.0, self._flash_t  - dt)
+        self._close_call_cd = max(0.0, self._close_call_cd - dt)
+        # Epic 11.2 — close call detection: any barge/debris within 30px that
+        # was further away last frame, without intervening collision = close call
+        if self._ship is not None and self._close_call_cd <= 0:
+            ship_pos = self._ship.pos
+            candidates = list(self._barges)
+            candidates.extend(self._debris)
+            candidates.extend(self._shower_rocks)
+            for obj in candidates:
+                op = getattr(obj, "pos", None)
+                if op is None:
+                    continue
+                obj_id = id(obj)
+                dist = (op - ship_pos).length()
+                prev = self._close_witness.get(obj_id, 9999.0)
+                # Departing from very close range without hit = close call
+                if prev <= 30.0 and dist > 30.0 and dist < 60.0:
+                    bus.emit(EVT_CLOSE_CALL, distance=prev)
+                    self._close_call_cd = 6.0
+                    break
+                self._close_witness[obj_id] = dist
+            # Trim witness table for vanished objects
+            live_ids = {id(o) for o in candidates}
+            self._close_witness = {k: v for k, v in self._close_witness.items()
+                                    if k in live_ids}
 
         # Epic 11.2 — Long fight survived: if a barge has been alive >45s
         # without capturing the player, emit once per run.
@@ -663,6 +703,9 @@ class RunManager:
         self.meta.pay_off(bonus)
         self._run_debt_reduced += bonus
         self._sector_credits   += bonus
+        # Epic 12.1 — SLINGSHOT_ONLY: each slingshot grants ~1/3 of jump timer.
+        if self.mutators.is_active("slingshot_only"):
+            self._sector_timer += self._sector_dur / 3.0
         # Overdrive window: 2s at 1.5× cap (Epic 12.1 — fragile_frame doubles duration)
         if self._ship and self._ship.is_alive:
             self._ship.body._vel_cap_override = S.MAX_VELOCITY * 1.5
@@ -671,6 +714,14 @@ class RunManager:
         total = self.meta.inc_milestone("slingshots_total")
         if total >= 10 and not self.meta.has_unlock("slingshot_only_mutator"):
             self.meta.add_unlock("slingshot_only_mutator")
+
+    def _on_gun_fire(self, **_):
+        # Epic 12.1 — SYSTEM_GLITCH: each successful shot pays +50 cr
+        if self.mutators.is_active("system_glitch"):
+            bonus = 50
+            self.meta.pay_off(bonus)
+            self._run_debt_reduced += bonus
+            self._sector_credits   += bonus
 
     def _on_tether_snap(self, **_):
         bonus = int(1200 * self.mutators.credit_pickup_multiplier())
@@ -1082,7 +1133,8 @@ class RunManager:
     def _load_next_sector(self):
         rng = random.Random(self._run_seed + self._sector_index * 997)
         self._sector       = generate_sector(self._sector_index, self._difficulty(),
-                                             rng=rng, chapter=self._current_chapter())
+                                             rng=rng, chapter=self._current_chapter(),
+                                             force_theme=self._cold_sector_theme(rng))
         self._sector_timer = 0.0
         self._jump_ready_fired = False
         self._barges.clear()
@@ -1314,6 +1366,19 @@ class RunManager:
         self._install_terminal(terminal)
 
     def _spawn_barge(self, immediate_chase: bool = False):
+        # Epic 12.1 — QUIET_SECTOR: suppress sectors 0-2, double up sectors 3-4
+        if self.mutators.is_active("quiet_sector"):
+            if self._sector_index <= 2:
+                return
+            # Sectors 3-4: spawn a second barge immediately on the first call
+            from antagonists.repo_barge import BargeState as _BS
+            side  = random.choice(["left", "right", "top", "bottom"])
+            pos_x = {"left": 0, "right": S.SCREEN_W}.get(side, random.randint(0, S.SCREEN_W))
+            pos_y = {"top":  0, "bottom": S.SCREEN_H}.get(side, random.randint(0, S.SCREEN_H))
+            extra = RepoBarge(pos_x, pos_y, self)
+            if immediate_chase:
+                extra.state = _BS.CHASE
+            self._barges.append(extra)
         from antagonists.repo_barge import BargeState
         side  = random.choice(["left", "right", "top", "bottom"])
         pos_x = {"left": 0, "right": S.SCREEN_W}.get(side, random.randint(0, S.SCREEN_W))
@@ -1377,6 +1442,13 @@ class RunManager:
             if ch not in completed:
                 return ch
         return 4
+
+    def _cold_sector_theme(self, rng: random.Random) -> str | None:
+        """Epic 12.1 — COLD_SECTOR mutator forces every sector to FROZEN_TRAIL
+        or MINE_STRIP. Returns None when the mutator is inactive."""
+        if not self.mutators.is_active("cold_sector"):
+            return None
+        return rng.choice([THEME_FROZEN_TRAIL, THEME_MINE_STRIP])
 
     # ------------------------------------------------------------------
     @property
@@ -1498,6 +1570,7 @@ class RunManager:
         self._sector = generate_sector(
             self._sector_index, self._difficulty(),
             rng=rng, chapter=self._current_chapter(),
+            force_theme=self._cold_sector_theme(rng),
         )
         self._sector_timer = 0.0
         self._jump_ready_fired = False

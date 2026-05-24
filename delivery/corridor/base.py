@@ -18,6 +18,7 @@ from delivery.corridor.elements import (
     Hazard, MovingHazard, ToggleBeam, OneWayWall,
     NPCEncounter, Collectible, Secret, Checkpoint, StealthZone,
     BossRoomTrigger, SporeZone, QuantumDoor,
+    SteamVent, Tripwire, SecurityBeam,
 )
 from core.event_bus import (bus, EVT_BAX_SPEAK, EVT_DELIVERY_DONE,
                             EVT_CORRIDOR_RUN, EVT_CORRIDOR_JUMP,
@@ -586,6 +587,15 @@ class Corridor:
                 hit = el.collides(self._px, self._py)
             elif isinstance(el, ToggleBeam):
                 hit = el.collides(self._px, self._py, self._elapsed)
+            elif isinstance(el, SteamVent):
+                hit = el.collides(self._px, self._py)
+            elif isinstance(el, SecurityBeam):
+                hit = el.collides(self._px, self._py, self._elapsed)
+            elif isinstance(el, Tripwire):
+                if el.collides(self._px, self._py):
+                    # Tripwire: alarm only, not damage. Trigger and continue.
+                    el.trigger()
+                    continue
             if hit:
                 self._take_hit()
                 break

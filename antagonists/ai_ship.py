@@ -22,7 +22,7 @@ import math
 import random
 from physics.body import Vec2
 from config import settings as S
-from core.event_bus import bus, EVT_AISHIP_HAIL, EVT_AISHIP_DESTROYED
+from core.event_bus import bus, EVT_AISHIP_HAIL, EVT_AISHIP_DESTROYED, EVT_BAX_SPEAK
 
 
 # Silhouette classes — drive the renderer's shape selection
@@ -220,6 +220,23 @@ class AIShip:
         dist = to_player.length()
         if dist < 0.01:
             return
+
+        # Epic 14.3 — Pilot give-up rule. Non-pirates that have spent 8s in
+        # APPROACH at dist > 480px disengage. Pirates never give up.
+        if self.behavior != BEHAVIOR_PIRATE:
+            if dist > 480.0:
+                self._approach_far_t = getattr(self, "_approach_far_t", 0.0) + dt
+            else:
+                self._approach_far_t = 0.0
+            if getattr(self, "_approach_far_t", 0.0) >= 8.0:
+                self.state = ST_DEPART
+                self._state_t = 0.0
+                self._approach_far_t = 0.0
+                if not getattr(self, "_gave_up_fired", False):
+                    self._gave_up_fired = True
+                    bus.emit(EVT_BAX_SPEAK,
+                             line="Lost interest. Lucky.")
+                return
 
         # Steer velocity toward player but with the ship's own max thrust
         accel = 80.0 if self.behavior == BEHAVIOR_HAILER else 120.0

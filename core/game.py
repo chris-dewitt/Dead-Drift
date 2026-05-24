@@ -197,7 +197,20 @@ class Game:
 
     def _on_ship_destroyed(self, **_):
         sector_idx = getattr(self.run_mgr, '_sector_index', 0) if self.run_mgr else 0
-        self.meta.apply_death_penalty(sector_index=sector_idx)
+        # Epic 12.1 — NOVICE_PASS: first death of run skips the debt penalty
+        novice_skip = (self.run_mgr is not None and
+                       getattr(self.run_mgr, "mutators", None) is not None and
+                       self.run_mgr.mutators.is_active("novice_pass") and
+                       not getattr(self.run_mgr, "_novice_pass_consumed", False))
+        if novice_skip:
+            self.run_mgr._novice_pass_consumed = True
+            # Skip debt penalty but still increment clone_count for the death
+            self.meta._data["clone_count"] = self.meta.clone_count + 1
+            self.meta.save()
+            bus.emit(EVT_BAX_SPEAK, line="NOVICE PASS used — this clone's on the house. "
+                     "Don't get used to it.")
+        else:
+            self.meta.apply_death_penalty(sector_index=sector_idx)
         # Epic 11.3 — track died-this-sector for Bax past-run references
         if self.run_mgr is not None and hasattr(self.run_mgr, 'bax_context'):
             tds = self.run_mgr.bax_context.setdefault("times_died_this_sector", {})
@@ -1284,6 +1297,43 @@ class Game:
             surf = f.render(text, True, col)
             self.screen.blit(surf, (cx - surf.get_width() // 2, y))
             y += f.get_linesize() + 2
+
+        # Epic 12.4 — Career stats panel (right side of invoice)
+        stats_tracker = getattr(self.run_mgr, "stats", None) if self.run_mgr else None
+        if stats_tracker is not None:
+            stats_x = panel_x + panel_w + 28
+            stats_w = 220
+            stats_h = 200
+            stats_y = panel_y + 10
+            if stats_x + stats_w < S.SCREEN_W - 16:
+                stats_panel = pygame.Surface((stats_w, stats_h), pygame.SRCALPHA)
+                stats_panel.fill((4, 8, 14, 200))
+                self.screen.blit(stats_panel, (stats_x, stats_y))
+                pygame.draw.rect(self.screen, (35, 50, 70),
+                                 (stats_x, stats_y, stats_w, stats_h), 1)
+                f_hdr = pygame.font.SysFont("monospace", 10, bold=True)
+                f_body = pygame.font.SysFont("monospace", 9)
+                hdr = f_hdr.render("CAREER LEDGER", True, (95, 150, 180))
+                self.screen.blit(hdr, (stats_x + 10, stats_y + 8))
+                # Run + career summaries combined
+                rows = stats_tracker.career_summary_lines()[:8]
+                ry = stats_y + 26
+                for row in rows:
+                    s = f_body.render(row, True, (140, 160, 180))
+                    self.screen.blit(s, (stats_x + 10, ry))
+                    ry += 13
+                # Unlocks earned this run/session
+                if self.meta.unlocks:
+                    pygame.draw.line(self.screen, (40, 60, 80),
+                                     (stats_x + 8, ry + 4), (stats_x + stats_w - 8, ry + 4), 1)
+                    ul = f_hdr.render("UNLOCKS EARNED", True, (180, 140, 60))
+                    self.screen.blit(ul, (stats_x + 10, ry + 8))
+                    ry += 22
+                    for uk in self.meta.unlocks[:3]:
+                        s = f_body.render(f"• {uk.replace('_', ' ')}",
+                                          True, (200, 170, 90))
+                        self.screen.blit(s, (stats_x + 10, ry))
+                        ry += 12
 
         # Bax wake-up line — use the line cached at death time (not re-rolled each frame)
         bax_line = self._decant_bax_line or random.choice(self._DECANT_BAX).format(

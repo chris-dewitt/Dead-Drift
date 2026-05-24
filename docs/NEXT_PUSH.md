@@ -467,6 +467,15 @@ Settings stored in `meta`. Difficulty tag shown in all run stats. No content loc
 
 ## Epic 14 — Corridor + Landing Upgrade
 
+**May 2026 status (May 24 push, continued):**
+- 14.1 (corridor hazards + boss room): **PARTIAL/COMPLETE** — three new hazard classes (`SteamVent`, `Tripwire`, `SecurityBeam`) added to `delivery/corridor/elements.py`. Wired into `_check_hazards()` in `base.py`. Distributed across chapters 1, 2, 3 as live samples — steam vents at choke points (telegraphed by pressure-gauge needle), tripwires that trigger a Bax alarm line, security beams that sweep ceiling-down cones (shadow zones safe). Collapsing-floor pattern already exists (`CollapsingPlatform`). Boss-room *structure* is already in place across all 4 chapters (final room with `BossRoomTrigger` + chapter NPC); content polish (Gary doing something absurd, Mycelium chamber control inversion, Tribunal stillness, Quantum observation deck) remains as a follow-up content pass.
+- 14.2 (landing overhaul): **COMPLETE** — Beat 2 fully replaced. Old J-tap + SPACE-hold QTE deleted (`_resolve_j_align`, `_finish_beat2`, `_j_marker_pos`, `_J_ALIGN_TIMEOUT`, `_BURN_HOLD_S`, etc. all removed). New continuous speed-dock minigame: ~8s approach with W/S throttle, A/D pitch (auto-trim within ±20°, ABORT outside). Speed gauge has green sweet-spot band, amber idle zone, red overshoot zone. Distance bar tracks descent. Accuracy % displayed live. Overshoot count + idle accumulator drive scoring. New cockpit panel renders bezel + gauge + distance bar + accuracy readout + overshoot tally + artificial horizon strip with ±20° tolerance marks. Retro flames on the descending ship now scale with throttle (orange = nominal, red = overshooting). Same `EVT_DOCK_PERFECT` / `EVT_DOCK_ROUGH` events, same `_land_score` outputs to Beat 3.
+- 14.3 (pilot give-up rule): **COMPLETE** — `_tick_approach()` in `antagonists/ai_ship.py` accumulates `_approach_far_t` when distance > 480px. After 8s sustained, `HAILER` and `TRAFFIC` ships transition to `ST_DEPART` and emit a one-shot `"Lost interest. Lucky."` Bax line. `PIRATE` ships skip the check entirely.
+
+**Plus from Epic 11/12 carry-over (this push):**
+- 11.2 emitters wired: `EVT_CLOSE_CALL` fires from RunManager update loop when any barge/debris/shower-rock departs from within 30px without an intervening hit (6s cooldown to avoid spam).
+- 12.1 remaining mutator effects all plumbed: `cold_sector` overrides theme to FROZEN_TRAIL/MINE_STRIP via new `force_theme` arg on `generate_sector`; `system_glitch` triples gun malfunction rate via `Gun.malfunction_multiplier` class attribute + RunManager subscribes to `EVT_GUN_FIRE` to award +50cr per shot; `slingshot_only` blocks sector-time timer accumulation and bumps the timer by `_sector_dur/3` per slingshot; `quiet_sector` suppresses barge spawns in sectors 0-2 and doubles them in 3-4; `novice_pass` skips the first death's debt penalty (still increments clone count) with a Bax acknowledgement line.
+
 ### 14.1 Corridor hazards
 
 **New hazards (in addition to existing obstacles):**

@@ -122,18 +122,20 @@ _FORMERLY_NAMES = [
 
 def generate_sector(index: int, difficulty: float = 1.0,
                     rng: random.Random | None = None,
-                    chapter: int = 1) -> SectorLayout:
+                    chapter: int = 1,
+                    force_theme: str | None = None) -> SectorLayout:
     """
     Procedurally generate a sector layout.
     difficulty scales 1.0 (sector 1) → 2.0 (sector 10).
     Pass a seeded rng for deterministic/replay runs.
     chapter selects the curated theme pool.
+    force_theme overrides the theme pick (Epic 12.1 — COLD_SECTOR mutator).
     """
     if rng is None:
         rng = random.Random()
 
     gravity = _generate_gravity(index, difficulty, rng)
-    theme   = _pick_theme(index, chapter, rng)
+    theme   = force_theme or _pick_theme(index, chapter, rng)
     hazards = _hazards_for_theme(theme, index, difficulty, rng)
     budget  = max(1, int(1 + difficulty * 1.5))
     ambush  = index >= 5 and rng.random() < 0.25 * difficulty

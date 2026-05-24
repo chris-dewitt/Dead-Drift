@@ -11,6 +11,7 @@ from delivery.corridor.elements import (
     Platform, MovingPlatform, CollapsingPlatform, Ladder,
     OneWayWall, NPCEncounter, Collectible, Secret, Checkpoint,
     BossRoomTrigger,
+    SteamVent, Tripwire, SecurityBeam,
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H,
 )
 from delivery.corridor.base import Room, Corridor
@@ -638,6 +639,11 @@ def build() -> Corridor:
         Collectible(480, FLOOR_Y - 20, 200),
         Collectible(650, FLOOR_Y - 20, 200),
         Collectible(780, FLOOR_Y - 20, 200),
+        # Epic 14.1 — Security beam scanning the bureaucratic hellscape;
+        # tripwire pings the compliance system if you brush it.
+        SecurityBeam(540, CEIL_Y + 12, length=240, phase=0.0),
+        Tripwire(820, FLOOR_Y - 16, w=40,
+                 bax_line="Nova Soma compliance scanner pinged. You're on a list now."),
         Checkpoint(900),
     ]
     room1 = Room(
