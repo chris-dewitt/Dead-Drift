@@ -73,6 +73,7 @@ class Game:
         self.meta._after_save = lambda: self.save_mgr.sync_active(self.meta)
         self.run_mgr = RunManager(self.meta)
         self.bax     = Bax(self.ship, self.meta)
+        self.run_mgr._vault = self.bax.vault
 
         self.vec_renderer     = VectorRenderer(self.screen)
         self._menu_vfx        = VisualFX()
@@ -123,6 +124,7 @@ class Game:
         self.meta._after_save = lambda: self.save_mgr.sync_active(self.meta)
         self.run_mgr.meta = self.meta
         self.bax._meta = self.meta
+        self.run_mgr._vault = self.bax.vault
         self.cockpit_renderer._meta = self.meta
 
     def _effective_state(self) -> GameState:
@@ -583,17 +585,7 @@ class Game:
                     self.ship._wrap_screen()
                 if terminal.is_done and self._terminal_win_hold_t <= 0:
                     outcome = terminal.outcome
-                    from terminal.npcs.base_npc import NPCOutcome
-                    win = outcome in (NPCOutcome.RELEASE, NPCOutcome.EXPLOIT,
-                                      "release", "exploit")
-                    if win:
-                        # Hold on terminal screen so the player sees the outcome
-                        self._terminal_win_hold_t = 5.0
-                        self._terminal_win_str = (
-                            "NEGOTIATION SUCCESS" if outcome in ("release", NPCOutcome.RELEASE)
-                            else "SYSTEM EXPLOITED"
-                        )
-                    else:
+                    if not self._start_terminal_outcome_hold(outcome):
                         self.run_mgr.on_terminal_complete(terminal.outcome)
                         if self.states.state == GameState.TERMINAL:
                             self._goto(GameState.FLIGHT)
@@ -655,6 +647,24 @@ class Game:
                 ship_speed, dt,
                 hull_pct=self.ship.hull_pct if self.ship else 1.0,
             )
+
+    def _start_terminal_outcome_hold(self, outcome: str) -> bool:
+        """Start a visible terminal outcome beat. Returns False for instant closes."""
+        from terminal.npcs.base_npc import NPCOutcome
+
+        if outcome in (NPCOutcome.RELEASE, "release"):
+            self._terminal_win_hold_t = 5.0
+            self._terminal_win_str = "NEGOTIATION SUCCESS"
+            return True
+        if outcome in (NPCOutcome.EXPLOIT, "exploit"):
+            self._terminal_win_hold_t = 5.0
+            self._terminal_win_str = "SYSTEM EXPLOITED"
+            return True
+        if outcome in (NPCOutcome.IMPOUND, "impound"):
+            self._terminal_win_hold_t = 1.35
+            self._terminal_win_str = "TERMINAL TERMINATED"
+            return True
+        return False
 
     # ------------------------------------------------------------------
     def _render(self):
@@ -977,7 +987,7 @@ class Game:
     }
 
     def _render_terminal_win_overlay(self):
-        """Semi-transparent overlay shown after a terminal win — player sees outcome for 2s."""
+        """Semi-transparent overlay shown after a terminal outcome beat."""
         t    = pygame.time.get_ticks() / 1000.0
         frac = min(1.0, self._terminal_win_hold_t / 5.0)
         # Fade in quickly, hold, fade out near end
@@ -989,7 +999,15 @@ class Game:
         cx = S.SCREEN_W // 2
         cy = S.SCREEN_H // 2
         is_exploit = "EXPLOIT" in self._terminal_win_str
-        col = (0, 255, 140) if not is_exploit else (200, 80, 255)
+        is_failure = (
+            "TERMINATED" in self._terminal_win_str or
+            "IMPOUND" in self._terminal_win_str
+        )
+        col = (
+            (255, 55, 55) if is_failure else
+            (200, 80, 255) if is_exploit else
+            (0, 255, 140)
+        )
 
         # Pulsing glow ring
         pulse = 0.7 + 0.3 * math.sin(t * 4.0)
@@ -1003,11 +1021,12 @@ class Game:
         self.screen.blit(title, (cx - title.get_width() // 2, cy - 50))
 
         dim_col = (int(col[0] * 0.6), int(col[1] * 0.6), int(col[2] * 0.6))
-        sub_lines = (
-            ["debt reduced  ·  sector advance", "returning to flight..."]
-            if not is_exploit else
-            ["system compromised  ·  credits rerouted", "they'll find out eventually."]
-        )
+        if is_failure:
+            sub_lines = ["terminal terminated  ·  barge channel hot", "returning to flight..."]
+        elif is_exploit:
+            sub_lines = ["system compromised  ·  credits rerouted", "they'll find out eventually."]
+        else:
+            sub_lines = ["channel closed  ·  sector advance", "returning to flight..."]
         for i, line in enumerate(sub_lines):
             s = fs.render(line, True, dim_col)
             self.screen.blit(s, (cx - s.get_width() // 2, cy + 10 + i * 20))

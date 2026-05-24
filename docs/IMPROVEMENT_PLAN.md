@@ -20,11 +20,11 @@
 | **3** — Sector variety | 2 | 4 | 0 | Hazards via themes; collapsing well / debris cloud unwired |
 | **4** — Corridor | 5 | 4 | 0 | Framework shipped; music + full scoring card partial; movement/control bugs fixed |
 | **5** — Landing | 2 | 1 | 0 | Docking graphics shipped; Records/end-card hook remains partial |
-| **6** — Terminal polish | 1 | 2 | 5 | Market graphics shipped; terminal outcomes / portraits / cargo-specific dialogue need work |
+| **6** — Terminal polish | 8 | 0 | 0 | Complete: keystrokes, portraits, backdrops, outcome beats, chips, dossier, market, and cargo dialogue |
 | **7** — Bax | 1 | 2 | 2 | Lines mostly ported; portrait glow + hull pitch open |
 | **8** — Meta replay | 1 | 0 | 3 | Stepped death done; Records + carousel not built |
 
-**Rough overall:** ~53% complete · ~26% partial · ~21% not started (by checkbox count).
+**Rough overall:** ~63% complete · ~22% partial · ~14% not started (by checkbox count).
 
 ---
 
@@ -39,7 +39,9 @@ Tracked here and in `docs/DOCUMENTATION_STATUS.md`. These override epic list ord
 | ESC leaves the market | Phase 0 | [x] |
 | Improve market graphics | Epic 6 / shop polish | [x] |
 | Improve docking graphics | Epic 5 | [x] |
-| Cargo-specific dialogue for all NPCs | Epic 6 / terminal polish | [ ] |
+| Cargo-specific dialogue for all NPCs | Epic 6 / terminal polish | [x] |
+| Terminal outcome reveal visual pass | Epic 6 / terminal polish | [x] |
+| Terminal keyword chips reflect known exploits | Epic 6 / terminal polish | [x] |
 
 ---
 
@@ -495,7 +497,7 @@ Each station is a vector illustration rendered procedurally — same constraints
 
 **Goal:** The terminal is mechanically great but visually & tactilely underweighted. Player input should feel weighty. NPC reactions should pop. Backdrops should breathe. Outcomes should land like a hammer.
 
-### 6.1 Keystroke weight — [~]
+### 6.1 Keystroke weight — [x]
 On every printable keystroke in the terminal input:
 - Soft click sound (low-pitched, distinct from typewriter blips that already play on NPC speech).
 - 0.08-second amber pulse on the input line border.
@@ -509,9 +511,9 @@ On ENTER (submit):
 - Heavier click.
 - Brief 0.2-second screen-edge amber bloom.
 
-**May 2026:** Input border pulse + ENTER bloom — yes (`terminal.py`). **Keystroke click SFX + 1px input-box shake — not verified.**
+**May 2026:** Shipped. Printable keys, backspace, and ENTER now emit terminal-key events into `AudioManager`; the audio layer plays distinct low/high/heavy clicks, the input border pulses, ENTER blooms the screen edge, and the input box does a tiny 1px shake.
 
-### 6.2 NPC portrait emotional swings — [ ]
+### 6.2 NPC portrait emotional swings — [x]
 Today portrait disposition shifts are subtle. Crank them up:
 - **Compliant / friendly:** portrait color saturates by 20%, brief soft glow, NPC may smile (cargo subroutines in `npc_portraits.py` per character).
 - **Annoyed:** portrait dims 15%, scanlines get harsher, NPC visibly frowns or looks away.
@@ -520,9 +522,9 @@ Today portrait disposition shifts are subtle. Crank them up:
 
 Each NPC needs explicit per-disposition portrait variants — not just universal overlay treatment.
 
-**May 2026:** Universal disposition overlay exists. Per-NPC smile/frown/shake — not cranked up. Holt/Felix base portraits shipped in Phase 0.3.
+**May 2026:** Shipped. `draw_portrait` now receives explicit reaction/freeze hints from the terminal. Friendly/release states push the disposition into bright soft-glow variants, annoyed/furious states dim, frown, shake, and tear scanlines, and exploit/paradox/impound outcomes freeze or jitter the portrait with per-NPC accent overlays. Existing NPC-specific portrait disposition geometry is driven harder rather than replaced.
 
-### 6.3 Ambient backdrop motion — [ ]
+### 6.3 Ambient backdrop motion — [x]
 Backdrops in `npc_portraits.py` are currently mostly static scenes. Each backdrop needs ≥ 2 ambient motion elements:
 - Background NPCs walking past (silhouette at far distance).
 - Flickering signs or readouts.
@@ -531,7 +533,9 @@ Backdrops in `npc_portraits.py` are currently mostly static scenes. Each backdro
 
 Constraint: nothing should be visually distracting from the focal NPC. Ambient = atmosphere, not focus competition.
 
-### 6.4 Slim the keyword chip strip — [~]
+**May 2026:** Shipped. Portrait backdrops now render through a subtle motion layer with per-NPC microsway, distant silhouette passersby, drifting dust/data motes, and small live readout flickers behind the bust.
+
+### 6.4 Slim the keyword chip strip — [x]
 `_SCAN_VOCAB` chips along the top of the terminal are currently dense — a wall of label text. Three changes:
 - Show **max 4 chips at a time**. Cycle in/out as the player types.
 - Chips representing already-discovered exploits (per VocabularyVault) render dim with a small "★" — they're known territory.
@@ -539,9 +543,9 @@ Constraint: nothing should be visually distracting from the focal NPC. Ambient =
 
 Result: the strip becomes a signal probe ("what's working right now?") rather than a cheat sheet ("here's everything").
 
-**May 2026:** Max 4 chips (`_live_scan`) — yes. Vault-discovered dim + ★ — verify against VocabularyVault in draw path.
+**May 2026:** Shipped. `_live_scan` shows max 4 chips, RunManager passes Bax's `VocabularyVault` into terminals, discovered exploit paths render as dim chips with a small ★, and newly discovered backdoors are saved through the vault.
 
-### 6.5 Outcome reveal beats — [ ]
+### 6.5 Outcome reveal beats — [x]
 The final moment of every terminal — success or failure — needs a real beat:
 
 - **EXPLOIT outcome:** screen fills with a brief data-stream cascade (vertical lines of garbage characters falling). Loud "GOT 'EM" stinger. NPC portrait freezes mid-expression. "TRANSACTION REROUTED — {amount} cr" overlays in big neon green for 1 second.
@@ -551,15 +555,19 @@ The final moment of every terminal — success or failure — needs a real beat:
 
 Each outcome must feel distinct. Right now they all feel like "the terminal ended."
 
-### 6.6 NLP exploit dossier (foreshadows Epic 8) — [ ]
+**May 2026:** Shipped. Terminal close now holds briefly for release, exploit, and impound outcomes; exploit gets a data-stream cascade and reroute caption, release gets a channel-close effect, impound/abort get a red terminal-failure flash, paradox crashes get their own corruption layer and `SYSTEM ERROR` caption, `AudioManager` plays distinct outcome stingers/klaxons, and portraits freeze or swing into outcome-specific expressions.
+
+### 6.6 NLP exploit dossier (foreshadows Epic 8) — [x]
 Add a footer in the terminal close screen: *"Bax filed your method. Review your dossier from the main menu."* This points players at the new Bax's Records screen (Epic 8.3) where their discovered exploits are catalogued.
+
+**May 2026:** Verified. The terminal dossier panel shows the Bax footer after terminal close.
 
 ### 6.7 Black market graphics — [x]
 Chris priority: make the mid-run market feel more like a place and less like a plain menu.
 
 **May 2026:** Browse view now has physical stall dressing behind the vendor, item-specific hardware glyphs for each stock tag, affordability/readiness badges on selected cards, and render smoke coverage for the shop art helpers.
 
-### 6.8 Cargo-specific NPC dialogue — [ ]
+### 6.8 Cargo-specific NPC dialogue — [x]
 Chris priority: every terminal NPC should react to what cargo the courier is carrying, not just generic run state.
 
 Implementation direction:
@@ -567,6 +575,8 @@ Implementation direction:
 - Add cargo-aware flavor lines for every existing NPC: Gary, Kress, Sandra, TK-9, Union Dispatcher, Insurance Adjuster / Morwenna, Toll Authority, Relay-7 Felix, Inspector Holt, Cargo Inspector, Pirate, and Underground DJ.
 - Keep lines in each NPC's voice and mechanically harmless; cargo flavor should not change win/fail conditions unless a later design item explicitly calls for it.
 - Include enough character/background texture in the new lines that cargo references feel authored rather than generic substitutions.
+
+**May 2026:** Shipped. Terminal run context now includes cargo identity/integrity/state, and `BaseNPC` appends one authored cargo-specific flavor line per encounter for the full NPC roster.
 
 ---
 

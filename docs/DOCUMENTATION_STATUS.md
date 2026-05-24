@@ -30,9 +30,12 @@
 | 3 | **ESC leaves the market** | **Fixed** — shop ESC routes to `ShopScreen` before pause handling |
 | 4 | **Improve market graphics** | **Fixed** — shop browse view has stall dressing, item glyphs, and purchase-state badges |
 | 5 | **Improve docking graphics** | **Fixed** — chapter-specific station silhouettes and bay dressing are procedural |
-| 6 | **Cargo-specific dialogue for all NPCs** | **Planned** — added to Epic 6 as an open terminal polish item; no code work started |
+| 6 | **Cargo-specific dialogue for all NPCs** | **Fixed** — terminal run context carries cargo identity and every NPC has authored cargo-specific flavor |
+| 7 | **Terminal outcome reveal visual pass** | **Fixed** — release/exploit/impound/paradox outcomes now have visual holds, stingers, portrait freezes, and distinct captions |
+| 8 | **NLP exploit dossier footer** | **Fixed** — terminal close shows Bax's filed-method footer in the dossier panel |
+| 9 | **Terminal keyword chips reflect known exploits** | **Fixed** — terminals receive Bax's vault and discovered paths render as dim ★ chips |
 
-Phase 0 trust fixes plus market and docking graphics are tracked as shipped in `docs/IMPROVEMENT_PLAN.md`. Cargo-specific NPC dialogue is tracked there as planned work.
+Phase 0 trust fixes plus the full Epic 6 terminal polish set are tracked as shipped in `docs/IMPROVEMENT_PLAN.md`.
 
 ---
 

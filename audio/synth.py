@@ -180,6 +180,65 @@ def terminal_beep() -> pygame.mixer.Sound:
     return _to_sound(_adsr(w, 0.003, 0.018, 0.5, 0.025))
 
 
+def terminal_key_click(kind: str = "normal") -> pygame.mixer.Sound:
+    """Short tactile clicks for terminal input keys."""
+    profiles = {
+        "normal": (520.0, 0.030, 0.25),
+        "backspace": (930.0, 0.034, 0.28),
+        "enter": (230.0, 0.080, 0.44),
+    }
+    freq, dur, amp = profiles.get(kind, profiles["normal"])
+    t = _t(dur)
+    click = np.exp(-t * 120.0) * amp
+    w = np.sin(_2PI * freq * t) * click
+    w += np.sin(_2PI * freq * 2.01 * t) * click * 0.22
+    w += _noise(dur, amp=0.05 if kind == "enter" else 0.025) * np.exp(-t * 90.0)
+    return _to_sound(w.clip(-1.0, 1.0))
+
+
+def terminal_outcome_stinger(kind: str = "release") -> pygame.mixer.Sound:
+    """One-shot terminal result stingers for release, exploit, failure, and paradox."""
+    kind = (kind or "release").lower()
+    if kind == "release":
+        notes = [330.0, 392.0, 494.0]
+        segs = []
+        for freq in notes:
+            dur = 0.105
+            w = _sine(freq, dur, amp=0.28) + _sine(freq * 2, dur, amp=0.08)
+            segs.append(_adsr(w, 0.004, 0.026, 0.62, 0.055))
+            segs.append(np.zeros(int(SAMPLE_RATE * 0.018)))
+        return _to_sound(np.concatenate(segs).clip(-1.0, 1.0))
+
+    if kind == "exploit":
+        dur = 0.52
+        t = _t(dur)
+        sweep = np.linspace(180.0, 1560.0, len(t))
+        phase = np.cumsum(_2PI * sweep / SAMPLE_RATE)
+        w = np.sin(phase) * 0.38
+        w += np.sign(np.sin(phase * 0.5)) * 0.12
+        w += _noise(dur, amp=0.04)
+        return _to_sound(_adsr(w, 0.002, 0.06, 0.55, 0.18).clip(-1.0, 1.0))
+
+    if kind == "paradox":
+        dur = 0.62
+        t = _t(dur)
+        f_a = np.linspace(880.0, 110.0, len(t))
+        f_b = np.linspace(140.0, 1180.0, len(t))
+        p_a = np.cumsum(_2PI * f_a / SAMPLE_RATE)
+        p_b = np.cumsum(_2PI * f_b / SAMPLE_RATE)
+        gate = (np.sin(_2PI * 18.0 * t) > -0.15).astype(float)
+        w = (np.sin(p_a) * 0.34 + np.sin(p_b) * 0.28 + _noise(dur, 0.08)) * gate
+        return _to_sound(_adsr(w, 0.001, 0.05, 0.45, 0.20).clip(-1.0, 1.0))
+
+    # impound / abort: klaxon-like descending minor second.
+    dur = 0.58
+    t = _t(dur)
+    alarm = (np.sin(_2PI * 7.0 * t) > 0).astype(float)
+    w = _sine(196.0, dur, amp=0.40) + _sine(207.65, dur, amp=0.32)
+    w += _noise(dur, amp=0.05)
+    return _to_sound((w * alarm * np.exp(-t * 0.55)).clip(-1.0, 1.0))
+
+
 def spore_sting() -> pygame.mixer.Sound:
     """Psychedelic warble played when controls invert."""
     dur = 0.55

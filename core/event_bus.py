@@ -41,6 +41,7 @@ EVT_MODULE_UNBOLTED = "module_unbolted"  # payload: module
 EVT_CARGO_DAMAGED  = "cargo_damaged"     # payload: cargo, severity
 EVT_TERMINAL_OPEN  = "terminal_open"     # payload: npc
 EVT_TERMINAL_CLOSE = "terminal_close"    # payload: outcome
+EVT_TERMINAL_KEY   = "terminal_key"      # payload: kind (normal/backspace/enter)
 EVT_NLP_EXPLOIT    = "nlp_exploit"       # payload: npc, exploit_key
 EVT_RUN_START      = "run_start"
 EVT_RUN_END        = "run_end"           # payload: success

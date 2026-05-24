@@ -22,9 +22,28 @@ _NAME_TO_KEY = {
     "INSPECTOR HOLT": "cargo_inspector",
 }
 
+_REACTION_ACCENTS = {
+    "gary": (255, 170, 34),
+    "synthetic_droid": (0, 230, 210),
+    "union_dispatcher": (210, 165, 55),
+    "kress": (0, 190, 110),
+    "insurance_adjuster": (230, 210, 120),
+    "sandra": (90, 235, 130),
+    "pirate": (230, 70, 50),
+    "underground_dj": (180, 80, 235),
+    "toll_authority": (220, 170, 40),
+    "nervous_fence": (0, 210, 135),
+    "cargo_inspector": (0, 190, 125),
+    "unknown": S.AMBER_TERM,
+}
+
+_FREEZE_REACTIONS = {"exploit", "paradox", "impound", "abort"}
+
 
 def draw_portrait(surface: pygame.Surface, npc_name: str,
-                  rect: pygame.Rect, disposition: int = 0, t: float = 0.0):
+                  rect: pygame.Rect, disposition: int = 0, t: float = 0.0,
+                  reaction: str = "", reaction_age: float = 0.0,
+                  frozen_t: float | None = None, outcome: str = ""):
     """
     Renders a CRT video-call portrait inside `rect`.
 
@@ -34,23 +53,137 @@ def draw_portrait(surface: pygame.Surface, npc_name: str,
       3. NPC vector portrait
       4. Disposition-driven glitch overlay
     """
-    key   = _NAME_TO_KEY.get(npc_name.upper(), "unknown")
-    inner = _draw_crt_bezel(surface, rect, npc_name, t, disposition)
+    key = _NAME_TO_KEY.get(npc_name.upper(), "unknown")
+    reaction = reaction or outcome or ""
+    draw_disp = _reaction_disposition(disposition, reaction)
+    inner = _draw_crt_bezel(surface, rect, npc_name, t, draw_disp)
 
     backdrop = _BACKDROPS.get(key)
     if backdrop is not None:
         prev_clip = surface.get_clip()
         surface.set_clip(inner)
-        backdrop(surface, inner, t)
+        layer = pygame.Surface((inner.w, inner.h), pygame.SRCALPHA)
+        local = pygame.Rect(0, 0, inner.w, inner.h)
+        layer.fill((4, 10, 6, 255))
+        backdrop(layer, local, t)
+        _draw_ambient_backdrop_life(layer, local, key, t)
+        sway_x = int(math.sin(t * 0.41 + len(key)) * 1.3)
+        sway_y = int(math.sin(t * 0.33 + len(key) * 0.7) * 1.1)
+        surface.blit(layer, (inner.left + sway_x, inner.top + sway_y))
         surface.set_clip(prev_clip)
 
     fn    = _DISPATCH.get(key, _unknown)
-    cx    = inner.centerx
-    cy    = inner.top + int(inner.height * 0.46)
+    shake_x, shake_y = _portrait_shake(reaction, reaction_age, t)
+    cx    = inner.centerx + shake_x
+    cy    = inner.top + int(inner.height * 0.46) + shake_y
     scale = min(inner.width, inner.height * 0.65) / 200.0
-    fn(surface, cx, cy, scale, disposition, t)
+    portrait_t = frozen_t if (frozen_t is not None and reaction in _FREEZE_REACTIONS) else t
+    fn(surface, cx, cy, scale, draw_disp, portrait_t)
 
-    _draw_signal_overlay(surface, inner, t, disposition)
+    _draw_reaction_overlay(surface, inner, key, reaction, reaction_age, t)
+    _draw_signal_overlay(surface, inner, t, draw_disp)
+
+
+def _reaction_disposition(disposition: int, reaction: str) -> int:
+    if reaction in ("friendly", "release"):
+        return max(4, disposition + 3)
+    if reaction == "annoyed":
+        return min(-3, disposition - 2)
+    if reaction in ("furious", "impound", "abort"):
+        return min(-7, disposition - 5)
+    if reaction == "exploit":
+        return min(-6, disposition - 4)
+    if reaction == "paradox":
+        return -10
+    return disposition
+
+
+def _portrait_shake(reaction: str, age: float, t: float) -> tuple[int, int]:
+    if reaction == "furious" and age < 0.30:
+        return int(math.sin(t * 90.0) * 3), int(math.cos(t * 84.0) * 2)
+    if reaction in ("impound", "abort") and age < 0.70:
+        return int(math.sin(t * 70.0) * 4), int(math.sin(t * 57.0) * 2)
+    if reaction == "paradox":
+        return int(math.sin(t * 31.0) * 2), int(math.cos(t * 29.0) * 2)
+    return 0, 0
+
+
+def _draw_ambient_backdrop_life(surface: pygame.Surface, inner: pygame.Rect,
+                                key: str, t: float) -> None:
+    accent = _REACTION_ACCENTS.get(key, S.AMBER_TERM)
+    rng = random.Random(key)
+
+    # Two distant passersby, low-alpha and behind the bust.
+    for idx in range(2):
+        speed = 11 + idx * 7 + (len(key) % 5)
+        phase = (t * speed + rng.randint(0, inner.w)) % (inner.w + 44)
+        x = inner.left - 22 + int(phase)
+        y = inner.bottom - 38 - idx * 12
+        col = (18 + idx * 8, 22 + idx * 6, 18 + idx * 5)
+        pygame.draw.circle(surface, col, (x, y - 9), 4)
+        pygame.draw.line(surface, col, (x, y - 5), (x, y + 8), 3)
+        pygame.draw.line(surface, col, (x - 5, y), (x + 5, y + 2), 2)
+
+    # Dust/data motes drifting upward. Stable seed per NPC keeps it calm.
+    for idx in range(18):
+        base_x = rng.randint(inner.left + 2, inner.right - 3)
+        base_y = rng.randint(inner.top + 10, inner.bottom - 10)
+        x = inner.left + ((base_x - inner.left + int(t * (idx % 5 + 1))) % inner.w)
+        y = inner.top + ((base_y - inner.top - int(t * (idx % 4 + 1) * 0.6)) % inner.h)
+        a = 45 + int(25 * math.sin(t * 1.5 + idx))
+        pygame.draw.circle(surface, (*accent, max(12, a)), (x, y), 1)
+
+    # Small live readout flicker, different position from the main face.
+    readout = pygame.Rect(inner.right - 44, inner.bottom - 24, 36, 12)
+    pulse = 0.55 + 0.45 * math.sin(t * 3.7 + len(key))
+    pygame.draw.rect(surface, (3, 12, 8, 150), readout)
+    pygame.draw.rect(surface, (*accent, int(45 + 70 * pulse)), readout, 1)
+    for row in range(2):
+        width = int(8 + ((t * 9 + row * 13 + len(key)) % 20))
+        pygame.draw.line(surface, (*accent, 90),
+                         (readout.left + 4, readout.top + 4 + row * 5),
+                         (readout.left + 4 + width, readout.top + 4 + row * 5), 1)
+
+
+def _draw_reaction_overlay(surface: pygame.Surface, inner: pygame.Rect,
+                           key: str, reaction: str, age: float, t: float) -> None:
+    if not reaction:
+        return
+    accent = _REACTION_ACCENTS.get(key, S.AMBER_TERM)
+    layer = pygame.Surface((inner.w, inner.h), pygame.SRCALPHA)
+
+    if reaction in ("friendly", "release"):
+        strength = max(0.0, 1.0 - age / 1.2) if reaction == "friendly" else 0.7
+        pygame.draw.rect(layer, (*accent, int(35 + 45 * strength)), layer.get_rect(), 2)
+        pygame.draw.ellipse(layer, (*accent, int(28 * strength)),
+                            pygame.Rect(18, 22, inner.w - 36, inner.h - 48), 2)
+    elif reaction == "annoyed":
+        layer.fill((0, 0, 0, 38))
+        for y in range(0, inner.h, 7):
+            pygame.draw.line(layer, (255, 80, 30, 28), (0, y), (inner.w, y), 1)
+    elif reaction in ("furious", "impound", "abort"):
+        layer.fill((45, 0, 0, 74))
+        for y in range(0, inner.h, 9):
+            off = int(math.sin(t * 16.0 + y) * 5)
+            pygame.draw.line(layer, (255, 35, 35, 88), (off, y), (inner.w + off, y), 2)
+    elif reaction == "exploit":
+        layer.fill((0, 38, 50, 44))
+        rng = random.Random(int(t * 10))
+        for _ in range(7):
+            y = rng.randrange(0, max(1, inner.h - 4))
+            x = rng.randrange(-16, 17)
+            pygame.draw.rect(layer, (0, 230, 255, 95), (x, y, inner.w, rng.randrange(2, 5)))
+    elif reaction == "paradox":
+        layer.fill((35, 0, 45, 58))
+        rng = random.Random(int(t * 22))
+        for _ in range(12):
+            y = rng.randrange(0, max(1, inner.h - 3))
+            h = rng.randrange(1, 6)
+            x = rng.randrange(-24, 25)
+            col = rng.choice([(255, 40, 220, 120), (0, 240, 255, 105), (255, 255, 255, 80)])
+            pygame.draw.rect(layer, col, (x, y, inner.w, h))
+
+    surface.blit(layer, inner.topleft)
 
 
 # ---------------------------------------------------------------------------

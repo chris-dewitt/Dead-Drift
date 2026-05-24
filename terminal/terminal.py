@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dataclasses import dataclass
 import math
 import random
 import pygame
@@ -6,7 +7,14 @@ from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import NLPParser
 from terminal.npc_portraits import draw_portrait
 from renderer.sci_fi_ui import draw_terminal_backdrop
-from core.event_bus import bus, EVT_TERMINAL_OPEN, EVT_TERMINAL_CLOSE, EVT_VOICE_CHAR
+from core.event_bus import (
+    bus,
+    EVT_BAX_SPEAK,
+    EVT_TERMINAL_KEY,
+    EVT_TERMINAL_OPEN,
+    EVT_TERMINAL_CLOSE,
+    EVT_VOICE_CHAR,
+)
 from config import settings as S
 
 
@@ -34,6 +42,21 @@ _NPC_HINTS = {
 
 # Keywords shown as live chips while player types — gives "signal probe" feedback
 # ★ = high-value / one-shot trigger   (shown brighter)
+@dataclass(frozen=True)
+class ScanChip:
+    label: str
+    hot: bool = False
+    known: bool = False
+
+    @property
+    def display(self) -> str:
+        if self.known:
+            return f"{self.label} ★"
+        if self.hot:
+            return f"{self.label}★"
+        return self.label
+
+
 _SCAN_VOCAB: dict[str, dict[str, str]] = {
     "GARY": {
         "blevins": "BLEVINS★", "article 7": "ARTICLE-7★", "sandra": "SANDRA?",
@@ -97,6 +120,80 @@ _SCAN_VOCAB: dict[str, dict[str, str]] = {
         "sealed": "VAGUE", "classified": "VAGUE", "confidential": "VAGUE",
         "credits": "DOC-FEE", "600": "DOC-FEE★",
     },
+}
+
+_SCAN_KNOWN_LABELS: dict[str, dict[str, tuple[str, ...]]] = {
+    "GARY": {
+        "BLEVINS": ("middle_management",),
+        "ARTICLE-7": ("overtime",),
+        "OVERTIME": ("overtime",),
+        "BRIBE": ("bribe",),
+        "DEAL": ("deal_offer",),
+        "SYMPATHY": ("sympathy",),
+        "SANDRA?": ("sympathy",),
+    },
+    "TK-9": {
+        "SQL-INJECT": ("sql_inject",),
+        "OVERRIDE": ("override_code",),
+        "EMP-MONTH": ("employee_of_month",),
+        "PARADOX": ("paradox_crash",),
+        "FORMAL": ("formal_loophole",),
+        "FRIEND": ("friendship",),
+    },
+    "DISPATCHER": {
+        "BREAK": ("coffee_break",),
+        "THE-42": ("the_42_path",),
+        "BACKLOG": ("bureaucratic_overwhelm",),
+        "LEGAL": ("legal_pressure",),
+        "QUANTUM": ("ontological_escape",),
+        "BRIBE": ("corruption",),
+    },
+    "KRESS": {
+        "VOLKOV": ("old_debt",),
+        "CONNIE": ("previous_pilot",),
+        "INTEL": ("regular",),
+        "CONTRABAND": ("regular",),
+    },
+    "MORWENNA": {
+        "SQL-INJECT": ("sql_inject",),
+        "34-A": ("form_34a",),
+        "COUNTER": ("counter_claim",),
+        "UNION-NEG": ("union_negligence",),
+        "FORCE-MAJ": ("force_majeure",),
+        "EXHAUST": ("exhaustion",),
+    },
+    "TOLL AUTHORITY": {
+        "PAY": ("PAID_TOLL", "paid_toll"),
+        "PAPERWORK": ("PAPERWORK_EXPLOIT", "paperwork_exploit"),
+        "UNION-GRIPE": ("UNION_SYMPATHY", "union_sympathy"),
+        "LOW-BRIBE": ("LOW_BRIBE", "low_bribe"),
+    },
+    "RELAY-7 FELIX": {
+        "DEAL": ("MANIFEST_DEAL", "cargo_manifest"),
+        "DISTRACT": ("DISTRACTION", "distraction"),
+        "SYMPATHY": ("SHARED_OUTSIDER", "shared_outsider"),
+        "PAYMENT": ("CREDIT_DEAL", "credit_deal"),
+    },
+    "INSPECTOR HOLT": {
+        "COMPLY": ("COMPLIANT", "compliant_declaration"),
+        "CODE": ("CODE_CITATION", "code_citation"),
+        "PRIV": ("TRANSIT_PRIVACY", "transit_privacy"),
+        "VAGUE": ("ARTFUL_VAGUENESS", "artful_vagueness"),
+        "DOC-FEE": ("DOC_FEE", "documentation_fee"),
+    },
+}
+
+_NPC_VAULT_KEYS = {
+    "GARY": ("gary",),
+    "TK-9": ("syntheticdroid", "synthetic_droid", "tk_9"),
+    "DISPATCHER": ("uniondispatcher", "union_dispatcher", "dispatcher"),
+    "KRESS": ("kress",),
+    "MORWENNA": ("insuranceadjuster", "insurance_adjuster", "morwenna"),
+    "TOLL AUTHORITY": ("tollauthority", "toll_authority"),
+    "RELAY-7 FELIX": ("nervousfence", "nervous_fence", "relay_7_felix"),
+    "INSPECTOR HOLT": ("cargoinspector", "cargo_inspector", "inspector_holt"),
+    "KRELLBORN": ("pirate", "krellborn"),
+    "MARROW": ("undergrounddj", "underground_dj", "marrow"),
 }
 
 _COURIER_QUIPS_KW: dict[str, list[str]] = {
@@ -266,6 +363,19 @@ _OUTCOME_LABEL = {
     NPCOutcome.EXPLOIT: "EXPLOIT CONFIRMED — SYSTEM COMPROMISED",
     "abort":            "CONNECTION SEVERED — HULL INTEGRITY PENALTY",
 }
+_OUTCOME_DETAIL = {
+    NPCOutcome.RELEASE: "CHANNEL CLOSED - PROCEED",
+    NPCOutcome.IMPOUND: "TERMINAL TERMINATED - BARGE INBOUND",
+    NPCOutcome.EXPLOIT: "TRANSACTION REROUTED - 9,000 CR",
+    "abort":            "STATIC BURST - DAMAGE APPLIED",
+}
+
+_OUTCOME_BAX_LINE = {
+    NPCOutcome.RELEASE: "BAX: Good. Channel's closing. Keep moving before they remember procedure.",
+    NPCOutcome.EXPLOIT: "BAX: Got 'em. I felt that one in the accounting stack.",
+    NPCOutcome.IMPOUND: "BAX: Bad chord. They're hot now. Hands back on the stick.",
+    "abort":            "BAX: You cut the line. Dramatic, yes. Expensive, also yes.",
+}
 
 
 class Terminal:
@@ -283,7 +393,8 @@ class Terminal:
     """
 
     def __init__(self, npc: BaseNPC,
-                 blocked_paths: frozenset[str] = frozenset()):
+                 blocked_paths: frozenset[str] = frozenset(),
+                 vocabulary_vault=None):
         self.npc      = npc
         self._history: list[tuple[str, str]] = []
         self._input   = ""
@@ -291,6 +402,7 @@ class Terminal:
         self._outcome = NPCOutcome.CONTINUE
         self._blocked_paths   = blocked_paths
         self._hardened_once   = False   # block fires at most once per terminal
+        self._vault           = vocabulary_vault or getattr(npc, "_vault", None)
 
         self._cursor_visible = True
         self._cursor_timer   = 0.0
@@ -300,6 +412,12 @@ class Terminal:
 
         self._disp_flash: tuple[int, float] | None = None
         self._exploit_flash: float | None = None
+        self._outcome_t: float | None = None
+        self._input_shake_t = 0.0
+        self._portrait_reaction = ""
+        self._portrait_reaction_t = 0.0
+        self._portrait_freeze_t: float | None = None
+        self._portrait_outcome = ""
 
         # Keystroke feedback state (Epic 6.1)
         self._key_pulse_t   = 0.0
@@ -328,22 +446,23 @@ class Terminal:
             return
         if event.key == pygame.K_ESCAPE:
             self._push("SYSTEM", "[connection severed — static burst through hull plating]")
-            self._done    = True
-            self._outcome = "abort"
-            bus.emit(EVT_TERMINAL_CLOSE, outcome=self._outcome)
+            self._finish("abort")
         elif event.key == pygame.K_RETURN and self._input.strip():
-            self._key_type    = "enter"
-            self._key_pulse_t = 0.2
+            self._trigger_key_feedback("enter")
             self._submit()
         elif event.key == pygame.K_BACKSPACE:
-            self._key_type    = "backspace"
-            self._key_pulse_t = 0.08
+            self._trigger_key_feedback("backspace")
             self._input = self._input[:-1]
         elif event.unicode and event.unicode.isprintable():
             if len(self._input) < 78:
-                self._key_type    = "normal"
-                self._key_pulse_t = 0.08
+                self._trigger_key_feedback("normal")
                 self._input += event.unicode
+
+    def _trigger_key_feedback(self, kind: str) -> None:
+        self._key_type = kind
+        self._key_pulse_t = 0.2 if kind == "enter" else 0.08
+        self._input_shake_t = 0.045
+        bus.emit(EVT_TERMINAL_KEY, kind=kind)
 
     def _submit(self):
         player_text = self._input.strip()
@@ -383,6 +502,11 @@ class Terminal:
         delta = disp_after - disp_before
         if delta != 0:
             self._disp_flash = (delta, pygame.time.get_ticks() / 1000.0)
+            self._mark_portrait_reaction(
+                "friendly" if delta > 0 else
+                "furious" if delta <= -2 else
+                "annoyed"
+            )
 
         analysis = self._make_analysis(delta)
         if analysis:
@@ -395,8 +519,54 @@ class Terminal:
         self._outcome = outcome
 
         if outcome != NPCOutcome.CONTINUE:
-            self._done = True
-            bus.emit(EVT_TERMINAL_CLOSE, outcome=outcome)
+            self._finish(outcome)
+
+    def _finish(self, outcome: str) -> None:
+        self._done = True
+        self._outcome = outcome
+        self._outcome_t = pygame.time.get_ticks() / 1000.0
+        path = self.winning_path or getattr(self.npc, "_current_path", "")
+        self._portrait_outcome = self._outcome_reaction(outcome, path)
+        self._portrait_freeze_t = self._outcome_t
+        self._mark_portrait_reaction(self._portrait_outcome)
+
+        bax_line = self._outcome_bax_line(outcome, path)
+        if bax_line:
+            self._push("BAX", bax_line)
+            bus.emit(EVT_BAX_SPEAK, line=bax_line)
+
+        bus.emit(
+            EVT_TERMINAL_CLOSE,
+            outcome=outcome,
+            path=path,
+            npc=self.npc.name,
+            reaction=self._portrait_outcome,
+        )
+
+    def _mark_portrait_reaction(self, reaction: str) -> None:
+        self._portrait_reaction = reaction
+        self._portrait_reaction_t = pygame.time.get_ticks() / 1000.0
+
+    @staticmethod
+    def _outcome_reaction(outcome: str, path: str = "") -> str:
+        path_n = (path or "").upper()
+        if "PARADOX" in path_n:
+            return "paradox"
+        if outcome in (NPCOutcome.EXPLOIT, "exploit"):
+            return "exploit"
+        if outcome in (NPCOutcome.RELEASE, "release"):
+            return "release"
+        if outcome in (NPCOutcome.IMPOUND, "impound"):
+            return "impound"
+        if outcome == "abort":
+            return "abort"
+        return ""
+
+    @staticmethod
+    def _outcome_bax_line(outcome: str, path: str = "") -> str:
+        if "PARADOX" in (path or "").upper():
+            return "BAX: That's a paradox crash. Beautiful. Terrible. Mostly beautiful."
+        return _OUTCOME_BAX_LINE.get(outcome, "")
 
     def _make_analysis(self, disp_delta: int) -> str:
         """Build a compact analysis string from the last parsed input + NPC state."""
@@ -432,26 +602,64 @@ class Terminal:
 
         return " · ".join(parts) if parts else ""
 
-    def _live_scan(self) -> list[str]:
+    def _live_scan(self) -> list[ScanChip]:
         """Real-time keyword chips shown as the player types."""
         raw = self._input.lower()
         if len(raw) < 2:
             return []
         vocab = _SCAN_VOCAB.get(self.npc.name.upper(), {})
-        hits: list[str] = []
+        hits: list[ScanChip] = []
         seen_labels: set[str] = set()
         # Multi-word phrases first (longer matches win)
         for kw in sorted(vocab, key=len, reverse=True):
             if kw in raw:
-                label = vocab[kw]
+                raw_label = vocab[kw]
+                hot = raw_label.endswith("â˜…") or raw_label.endswith("★")
+                label = raw_label.rstrip("â˜…★")
                 if label not in seen_labels:
-                    hits.append(label)
+                    hits.append(ScanChip(
+                        label=label,
+                        hot=hot,
+                        known=self._chip_is_known(label, kw),
+                    ))
                     seen_labels.add(label)
         return hits[:4]
+
+    def _chip_is_known(self, label: str, keyword: str) -> bool:
+        known = self._known_backdoors()
+        if not known:
+            return False
+        label_n = self._scan_norm(label)
+        keyword_n = self._scan_norm(keyword)
+        for candidate in _SCAN_KNOWN_LABELS.get(self.npc.name.upper(), {}).get(label, ()):
+            if self._scan_norm(candidate) in known:
+                return True
+        return (
+            label_n in known or keyword_n in known or
+            any(label_n in item or item in label_n or
+                keyword_n in item or item in keyword_n for item in known)
+        )
+
+    def _known_backdoors(self) -> set[str]:
+        vault = self._vault
+        if vault is None or not hasattr(vault, "get_backdoors"):
+            return set()
+        known: set[str] = set()
+        keys = _NPC_VAULT_KEYS.get(self.npc.name.upper(), ())
+        keys += (type(self.npc).__name__.lower(),)
+        for key in keys:
+            for item in vault.get_backdoors(key):
+                known.add(self._scan_norm(item))
+        return known
+
+    @staticmethod
+    def _scan_norm(value: str) -> str:
+        return "".join(ch for ch in value.lower() if ch.isalnum())
 
     # ------------------------------------------------------------------
     def update(self, dt: float):
         self._key_pulse_t = max(0.0, self._key_pulse_t - dt)
+        self._input_shake_t = max(0.0, self._input_shake_t - dt)
         self._cursor_timer += dt
         if self._cursor_timer >= S.CURSOR_BLINK_MS / 1000.0:
             self._cursor_visible = not self._cursor_visible
@@ -588,7 +796,18 @@ class Terminal:
         pygame.draw.rect(surface, (8, 20, 12), p_rect)
         pygame.draw.rect(surface, (255, 140, 50), p_rect, 2)
         pygame.draw.rect(surface, (0, 220, 120), p_rect.inflate(-4, -4), 1)
-        draw_portrait(surface, self.npc.name, p_rect, self.npc.disposition, t)
+        reaction_age = max(0.0, t - self._portrait_reaction_t)
+        draw_portrait(
+            surface,
+            self.npc.name,
+            p_rect,
+            self.npc.disposition,
+            t,
+            reaction=self._portrait_reaction,
+            reaction_age=reaction_age,
+            frozen_t=self._portrait_freeze_t,
+            outcome=self._portrait_outcome,
+        )
 
         if not hasattr(self, '_p_scan') or self._p_scan.get_size() != (p_rect.w, p_rect.h):
             self._p_scan = pygame.Surface((p_rect.w, p_rect.h), pygame.SRCALPHA)
@@ -716,7 +935,13 @@ class Terminal:
 
         # ── Input box ──────────────────────────────────────────────────
         inp_y    = H - BTM_H + 8
-        inp_rect = pygame.Rect(M, inp_y, W - 2 * M, 32)
+        shake_dx = 0
+        shake_dy = 0
+        if self._input_shake_t > 0:
+            phase = int(t * 120.0)
+            shake_dx = -1 if phase % 2 else 1
+            shake_dy = 1 if phase % 3 == 0 else 0
+        inp_rect = pygame.Rect(M + shake_dx, inp_y + shake_dy, W - 2 * M, 32)
         pygame.draw.rect(surface, (0, 14, 4), inp_rect)
 
         # Keystroke pulse border (Epic 6.1)
@@ -744,7 +969,7 @@ class Terminal:
         cursor = "█" if self._cursor_visible else " "
         surface.blit(
             font.render(f"  INJECT // {self._input}{cursor}", True, (0, 236, 94)),
-            (M + 8, inp_y + 6))
+            (M + 8 + shake_dx, inp_y + 6 + shake_dy))
 
         # ── Live keyword scan strip ──────────────────────────────────
         scan_y = inp_y + 38
@@ -755,6 +980,25 @@ class Terminal:
             surface.blit(prefix, (cx, scan_y))
             cx += prefix.get_width() + 8
             for chip in chips:
+                if isinstance(chip, ScanChip):
+                    if chip.known:
+                        bg_col = (8, 24, 14)
+                        fg_col = (45, 92, 58)
+                    elif chip.hot:
+                        bg_col = (0, 60, 30)
+                        fg_col = (0, 255, 140)
+                    else:
+                        bg_col = (0, 30, 15)
+                        fg_col = (0, 175, 80)
+                    chip_surf = font_sm.render(f" {chip.display} ", True, fg_col)
+                    cw = chip_surf.get_width()
+                    pygame.draw.rect(surface, bg_col,
+                                     (cx - 1, scan_y - 1, cw + 2, lh_sm + 2))
+                    pygame.draw.rect(surface, fg_col,
+                                     (cx - 1, scan_y - 1, cw + 2, lh_sm + 2), 1)
+                    surface.blit(chip_surf, (cx, scan_y))
+                    cx += cw + 6
+                    continue
                 is_hot = chip.endswith("★")
                 bg_col = (0, 60, 30) if is_hot else (0, 30, 15)
                 fg_col = (0, 255, 140) if is_hot else (0, 175, 80)
@@ -853,7 +1097,9 @@ class Terminal:
     def _draw_outcome_banner(self, surface: pygame.Surface, W: int, H: int, t: float):
         ocol = _OUTCOME_COLOR.get(self._outcome, S.AMBER_TERM)
         olbl = _OUTCOME_LABEL.get(self._outcome, "[ DISCONNECTED ]")
+        detail = _OUTCOME_DETAIL.get(self._outcome, "[ RETURNING TO FLIGHT ]")
         is_win = self._outcome in (NPCOutcome.RELEASE, NPCOutcome.EXPLOIT)
+        outcome_age = 0.0 if self._outcome_t is None else max(0.0, t - self._outcome_t)
 
         if is_win and self._exploit_flash is not None:
             age = t - self._exploit_flash
@@ -862,6 +1108,17 @@ class Terminal:
                 aura  = pygame.Surface((W, H), pygame.SRCALPHA)
                 aura.fill((*ocol, int(60 * pulse * max(0, 1.0 - age / 3.0))))
                 surface.blit(aura, (0, 0))
+
+        if self._outcome == NPCOutcome.EXPLOIT:
+            if self._portrait_outcome == "paradox":
+                detail = "SYSTEM ERROR - PROCEED"
+                self._draw_paradox_break(surface, W, H, t, outcome_age)
+            else:
+                self._draw_exploit_cascade(surface, W, H, t, outcome_age)
+        elif self._outcome == NPCOutcome.RELEASE:
+            self._draw_channel_close(surface, W, H, t, outcome_age)
+        elif self._outcome in (NPCOutcome.IMPOUND, "abort"):
+            self._draw_terminal_failure(surface, W, H, t, outcome_age)
 
         ofont = pygame.font.SysFont("monospace", 19, bold=True)
         osurf = ofont.render(olbl, True, ocol)
@@ -881,11 +1138,79 @@ class Terminal:
         surface.blit(osurf, (ox, oy))
 
         sub_font = pygame.font.SysFont("monospace", 14)
-        sub_lbl  = "[ press any key ]" if is_win else "[ IMPOUND PROCEEDING — ESC TO VIEW FEES ]"
+        sub_lbl  = detail
         sub_col  = tuple(int(c * 0.7) for c in ocol)
         sub      = sub_font.render(sub_lbl, True, sub_col)
         surface.blit(sub, (W // 2 - sub.get_width() // 2,
                            oy + osurf.get_height() + 8))
+
+    def _draw_exploit_cascade(self, surface: pygame.Surface, W: int, H: int,
+                              t: float, age: float) -> None:
+        layer = pygame.Surface((W, H), pygame.SRCALPHA)
+        font = pygame.font.SysFont("monospace", 12, bold=True)
+        glyphs = "01#%$X"
+        alpha = int(155 * max(0.25, min(1.0, 1.2 - age * 0.16)))
+        for x in range(18, W, 28):
+            drift = int((t * 112 + x * 3) % (H + 80)) - 80
+            for n in range(0, H, 54):
+                y = (drift + n) % (H + 36) - 18
+                glyph = glyphs[(x // 28 + n // 54 + int(t * 7)) % len(glyphs)]
+                col = (0, 220, 255, alpha) if n % 108 == 0 else (0, 120, 180, alpha // 2)
+                layer.blit(font.render(glyph, True, col), (x, y))
+        surface.blit(layer, (0, 0))
+
+    def _draw_paradox_break(self, surface: pygame.Surface, W: int, H: int,
+                            t: float, age: float) -> None:
+        self._draw_exploit_cascade(surface, W, H, t * 1.7, age)
+        layer = pygame.Surface((W, H), pygame.SRCALPHA)
+        rng = random.Random(int(t * 18))
+        alpha = int(140 * max(0.35, 1.0 - age * 0.12))
+        for _ in range(18):
+            y = rng.randrange(18, max(19, H - 18))
+            h = rng.randrange(2, 9)
+            x_off = rng.randrange(-32, 33)
+            col = rng.choice([
+                (255, 40, 220, alpha),
+                (0, 245, 255, alpha),
+                (255, 255, 255, alpha // 2),
+            ])
+            pygame.draw.rect(layer, col, (x_off, y, W, h))
+        font = pygame.font.SysFont("monospace", 13, bold=True)
+        for i, txt in enumerate(("ERR:SELF_REF", "STACK:////", "CAUSE:PARADOX")):
+            x = 38 + i * 150 + int(math.sin(t * 9 + i) * 6)
+            y = 74 + i * 42
+            layer.blit(font.render(txt, True, (255, 80, 230, alpha)), (x, y))
+        surface.blit(layer, (0, 0))
+
+    def _draw_channel_close(self, surface: pygame.Surface, W: int, H: int,
+                            t: float, age: float) -> None:
+        layer = pygame.Surface((W, H), pygame.SRCALPHA)
+        close_pct = min(1.0, age / 1.4)
+        gap = int((H // 2 - 46) * (1.0 - close_pct))
+        col = (28, 225, 106, 92)
+        pygame.draw.line(layer, col, (40, H // 2 - gap), (W - 40, H // 2 - gap), 2)
+        pygame.draw.line(layer, col, (40, H // 2 + gap), (W - 40, H // 2 + gap), 2)
+        for i in range(3):
+            y = H // 2 - gap - 18 - i * 18
+            pygame.draw.line(layer, (28, 225, 106, 35), (70, y), (W - 70, y), 1)
+            y2 = H // 2 + gap + 18 + i * 18
+            pygame.draw.line(layer, (28, 225, 106, 35), (70, y2), (W - 70, y2), 1)
+        if int(t * 8) % 2 == 0:
+            pygame.draw.rect(layer, (28, 225, 106, 24), (32, 32, W - 64, H - 64), 2)
+        surface.blit(layer, (0, 0))
+
+    def _draw_terminal_failure(self, surface: pygame.Surface, W: int, H: int,
+                               t: float, age: float) -> None:
+        layer = pygame.Surface((W, H), pygame.SRCALPHA)
+        flash = 0.5 + 0.5 * math.sin(t * 18.0)
+        alpha = int(88 * flash * max(0.25, 1.0 - age * 0.35))
+        layer.fill((210, 0, 0, alpha))
+        for y in range(0, H, 34):
+            jitter = int(math.sin(t * 19.0 + y) * 10)
+            pygame.draw.line(layer, (255, 35, 35, 75),
+                             (jitter, y), (W + jitter, y), 2)
+        pygame.draw.rect(layer, (255, 45, 45, 120), (18, 18, W - 36, H - 36), 4)
+        surface.blit(layer, (0, 0))
 
     # ------------------------------------------------------------------
     def _push(self, speaker: str, text: str):

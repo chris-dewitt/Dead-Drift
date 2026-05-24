@@ -636,7 +636,8 @@ class Bax:
         self.speak(f"They've torched the {module.name}! {status}")
 
     def _on_exploit_found(self, npc, exploit_key, **_):
-        self.vault.add_backdoor(type(npc).__name__.lower(), exploit_key)
+        npc_key = npc if isinstance(npc, str) else type(npc).__name__.lower()
+        self.vault.add_backdoor(npc_key, exploit_key)
         self.speak(f"FILED THAT. {exploit_key.upper()} works on their lot.")
 
     # ------------------------------------------------------------------

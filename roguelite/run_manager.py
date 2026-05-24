@@ -167,6 +167,7 @@ class RunManager:
         self._well_hit_times: dict[int, float] = {}  # per-well core damage cooldown
         self._active_terminal: Terminal | None = None
         self._intercepting_barge = None   # set when a barge opens a mid-flight comm
+        self._vault = None
         self._kress_called_this_sector = False
         self._sector_timer     = 0.0
         self._sector_dur       = 20.0
@@ -576,16 +577,34 @@ class RunManager:
         if self._ship is not None:
             ctx["hull_pct"] = self._ship.hull / S.HULL_MAX
             cargo = self._ship.cargo
-            if cargo is not None and hasattr(cargo, "state_for_terminal"):
-                ctx["cargo_state"] = cargo.state_for_terminal()
+            if cargo is not None:
+                ctx["cargo_type"] = type(cargo).__name__
+                ctx["cargo_name"] = getattr(cargo, "name", str(cargo))
+                ctx["cargo_integrity"] = getattr(cargo, "integrity", None)
+                ctx["cargo_damaged"] = bool(getattr(cargo, "is_damaged", False))
+                if hasattr(cargo, "state_for_terminal"):
+                    ctx["cargo_state"] = cargo.state_for_terminal()
         if hasattr(self, "meta"):
             ctx["debt"] = self.meta.debt
         return ctx
 
     def open_terminal(self, npc_type: str, **npc_kwargs) -> Terminal:
-        npc_kwargs.setdefault("run_context", self._build_run_context())
+        if "run_context" not in npc_kwargs:
+            npc_kwargs["run_context"] = self._build_run_context()
+        terminal_vault = npc_kwargs.pop("vocabulary_vault", self._vault)
+        if npc_type in {
+            "union_dispatcher",
+            "toll_authority",
+            "nervous_fence",
+            "cargo_inspector",
+        } and terminal_vault is not None:
+            npc_kwargs.setdefault("vocabulary_vault", terminal_vault)
         npc = make_npc(npc_type, **npc_kwargs)
-        self._active_terminal = Terminal(npc, blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset())
+        self._active_terminal = Terminal(
+            npc,
+            blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset(),
+            vocabulary_vault=terminal_vault,
+        )
         return self._active_terminal
 
     def open_barge_terminal(self, barge) -> Terminal:
@@ -1075,6 +1094,7 @@ class RunManager:
         self._active_terminal = Terminal(
             npc,
             blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset(),
+            vocabulary_vault=getattr(self, "_vault", None),
         )
 
     def _spawn_barge(self, immediate_chase: bool = False):

@@ -37,6 +37,7 @@ class VocabularyVault:
     def add_term(self, word: str):
         if word not in self._data["terms"]:
             self._data["terms"].append(word)
+            self.save()
 
     def add_terms(self, words: list[str]):
         for w in words:
@@ -47,6 +48,11 @@ class VocabularyVault:
             self._data["backdoors"][npc_type] = []
         if phrase not in self._data["backdoors"][npc_type]:
             self._data["backdoors"][npc_type].append(phrase)
+            self.save()
+
+    def record(self, npc_type: str, phrase: str):
+        """Compatibility alias for NPCs that record discovered paths directly."""
+        self.add_backdoor(npc_type, phrase)
 
     # ------------------------------------------------------------------
     def get_all_terms(self) -> list[str]:
