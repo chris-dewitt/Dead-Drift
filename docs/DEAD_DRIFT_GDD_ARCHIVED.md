@@ -1,5 +1,9 @@
 # GAME DESIGN DOCUMENT: DEAD DRIFT
 
+> **ARCHIVED — May 2026.** Historical pitch document. **Not current implementation spec.**  
+> Live game: 5 sectors × 4 chapters, renamed cargo types, full audio, shop, delivery corridors.  
+> See [README.md](../README.md) and [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md).
+
 > **TAGLINE:** *God is dead, but the Repo Men still want your thrusters.*
 
 **GENRE:** 2D Minimalist Inertia-Survival / NLP-Driven Roguelite  
