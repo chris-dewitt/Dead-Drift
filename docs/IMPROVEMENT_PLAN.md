@@ -14,7 +14,7 @@
 
 | Epic | Done | Partial | Open | Notes |
 |------|------|---------|------|-------|
-| **Phase 0** — Trust fixes | 0 | 0 | 9 | Chris priorities + live playtest findings |
+| **Phase 0** — Trust fixes | 0 | 0 | 10 | Chris priorities + live playtest findings |
 | **1** — Code hygiene | 6 | 2 | 2 | Font cache + NLTK lazy still open |
 | **2** — Flight feel | 5 | 2 | 0 | SNAP CHARGE bar missing; thruster heat is Phase 0 |
 | **3** — Sector variety | 2 | 4 | 0 | Hazards via themes; collapsing well / debris cloud unwired |
@@ -43,6 +43,7 @@ Tracked here and in `docs/DOCUMENTATION_STATUS.md`. These override epic list ord
 | Barge intercept = Gary / Union only | Phase 0.7 | [ ] |
 | Dock Union identity (Gary, Local 404) | Phase 0.8 + Epic 5.4 | [ ] |
 | Non-Union NPCs → distinct ship hulls | Phase 0.9 + Epic 3.7 | [ ] |
+| Ch.3 Paperwork corridor broken / wrong | Phase 0.10 + Epic 4.8 | [ ] |
 
 ---
 
@@ -120,6 +121,25 @@ Dead constant `{3, 6}`; live config is `settings.SHOP_SECTORS = {1, 3}`.
 - Define a small **hull registry** in `renderer/vector_renderer.py` (or `antagonists/vessels/`) — e.g. `PirateSkiff`, `BroadcastRelay`, `ComplianceCourier` (Sandra), `OuterBeltHauler` (Kress).
 - Wire spawn paths: pirate hail → pirate skiff enters range or trails player; **K** / DJ events → relay dish ship; keep **repo barge** silhouette exclusive to Local 404.
 - Jump-terminal NPCs can stay voice-only until ship is on-screen, but the visual rule is: **if you see a ship, its hull matches the faction.**
+
+### 0.10 Ch.3 Paperwork corridor — broken in play — [ ]
+**Playtest (Chris, May 2026):** Problem in the **document chapter** delivery corridor (`delivery/corridor/chapter3_paperwork.py`). *(Exact symptom — soft-lock, skips clerks, can't finish Room 2, etc. — add to playtest log when confirmed.)*
+
+**Code review findings (confirmed bugs / gaps):**
+
+1. **`OneWayWall` collision not wired** — `elements.py` defines `OneWayWall.blocks()` for cubicle zigzag (Room 1), but `base.py` **never calls it** during movement. Walls are drawn only; player walks straight through. Design in `CORRIDOR_DESIGN.md` § Ch.3 Room 1 requires forced zigzag past Margaret / Howard / Brenda.
+
+2. **Clerk penalty delays not enforced** — `_CorridorDialog` shows `outcome: "penalty"` text ("5-second delay") but does not block progress or apply a timer; immediate pass-through after dialog closes.
+
+3. **Only one checkpoint in entire corridor** — Room 1 exit at x=900; Room 2 vertical file climb has **no** mid-room checkpoint (design target: 2 per corridor). Fall / stumble in File Room 4 respawns at Room 1 exit.
+
+4. **Branch path filter quirk (Room 2)** — When `_active_path is None`, `_visible_elements` shows **both** high- and low-path tagged elements simultaneously (filter only applies once a path is chosen). Can clutter collision / confuse vertical routing.
+
+**Fix direction (Epic 4.8):**
+- Wire `OneWayWall.blocks(px, py, vx)` in `Corridor.update()` before applying horizontal movement (mirror platform collision loop).
+- Enforce clerk penalty delay (5 s dialog lock or stun) when `outcome == "penalty"`.
+- Add Room 2 checkpoint ~mid file room; verify vertical platform chain is completable on both branches.
+- Default branch choice: treat "keep running" as `low` at `converge_x`, or hide path-tagged elements until branch resolves.
 
 ---
 
@@ -440,7 +460,7 @@ The Corridor must support every one of these as first-class concepts:
 - **Bax voice-over** — Bax narrates contextually throughout. Coach-mode commentary on jumps, panic on stealth-near-misses, glee on secrets. Lines drafted in `docs/BAX_VOICE.md` under "corridor" contexts.
 - **Boss room** — last 10–15 seconds of every corridor: small "act" before the cargo handover. The contact NPC is present (Gary for Ch.1, the lab tech for Ch.2, the dispatcher for Ch.3, the hotel concierge for Ch.4). Brief exchange, money changes hands, cargo drops.
 
-**May 2026:** Scrolling camera, checkpoints, branching, collectibles, secrets, NPC encounters, stealth zones, Bax lines — largely shipped. **Black wipe + "ENTERING: &lt;ROOM NAME&gt;" caption — not implemented.** Mini-terminal UX may need polish pass.
+**May 2026:** Scrolling camera, checkpoints, branching, collectibles, secrets, NPC encounters, stealth zones, Bax lines — largely shipped. **Black wipe + "ENTERING: &lt;ROOM NAME&gt;" caption — not implemented.** Mini-terminal UX may need polish pass. **`OneWayWall` — class exists, collision never wired (breaks Ch.3 Room 1).** See Phase 0.10 / Epic 4.8.
 
 ### 4.3 Visual style (hybrid) — [~]
 
@@ -496,6 +516,17 @@ At corridor completion, show a brief end-card:
 Roll these into the chapter's run summary and into Bax's Records (Epic 8).
 
 **May 2026:** Star rating (1–3) at corridor end — yes. Full end-card (time, collectibles/total, secrets, damage, bonus cr) — **not built.** Bax's Records hook — blocked on Epic 8.
+
+### 4.8 Ch.3 Paperwork corridor — fix pass — [ ]
+**Playtest + code review (May 2026).** Content file exists (`chapter3_paperwork.py` — Intake Floor, File Room 4, Executive Processing) but framework gaps make the chapter feel broken.
+
+| Room | Design intent | Current gap |
+|------|---------------|-------------|
+| **1 — Intake Floor** | `OneWayWall` cubicle zigzag → 3 mandatory clerks | Walls decorative; collision unwired |
+| **2 — File Room 4** | Vertical climb, high/low branch, 2 secrets | No mid-room checkpoint; branch filter shows both paths pre-choice |
+| **3 — Executive Processing** | Union Dispatcher boss handoff | Verify dialog keywords + room end trigger |
+
+See **Phase 0.10** for fix list. Test end-to-end after `OneWayWall` wiring before polish pass.
 
 ---
 

@@ -37,6 +37,7 @@
 | 7 | **Barge intercept = Gary / Union only** | **Open (design violation)** — `open_barge_terminal()` randomizes Gary ~30%; pirates can appear on barge comm |
 | 8 | **Dock Union identity (Gary, Local 404)** | **Open (polish)** — generic dock crew; Gary not at landing per corridor spec |
 | 9 | **Non-Union NPCs → distinct ship hulls** | **Open** — pirates/DJs/etc. terminal-only; only player + barge + alien in flight |
+| 10 | **Ch.3 Paperwork corridor** | **Open (bug)** — playtest issue; `OneWayWall` collision not wired in framework |
 
 Tracked in `docs/IMPROVEMENT_PLAN.md` → **Phase 0**.
 
@@ -52,6 +53,7 @@ Add rows as you play; agents update Phase 0 / epics from here.
 | May 2026 | Repo barges should always be Gary — **only Union** on barges; no pirates on barge comm | Phase 0.7 |
 | May 2026 | Update the docks — Union / Gary identity at landing | Phase 0.8, Epic 5.4 |
 | May 2026 | Pirates, radio DJs, etc. need **different spaceship types** (not barges) | Phase 0.9, Epic 3.7 |
+| May 2026 | **Ch.3 document / Paperwork corridor** — problem in delivery corridor (see Phase 0.10) | Phase 0.10, Epic 4.8 |
 
 ---
 
@@ -83,6 +85,7 @@ Add rows as you play; agents update Phase 0 / epics from here.
 |------|--------|
 | `roguelite/tutorial.py` docstring | Says `clone_count == 1`; live code uses `<= 3` |
 | `roguelite/shop.py` line 12 | Dead `SHOP_SECTORS = {3, 6}`; live `{1, 3}` in `settings.py` |
+| `delivery/corridor/base.py` | `OneWayWall` imported but **never used for collision** — Ch.3 cubicle zigzag non-functional |
 
 ---
 
