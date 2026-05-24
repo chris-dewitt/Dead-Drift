@@ -51,6 +51,8 @@ Items are ordered — top is most urgent. Each has a **felt test**: can a strang
 
 **Decision (planning committee):** every NPC must be brought to full depth. Some new NPCs have skeletal keyword sets and no humor. This is a visible quality gap that undermines the whole terminal system.
 
+**May 2026 status:** 9.1 — partial (cross-NPC refs + dossier parity shipped for the four priority NPCs); 9.2 — shipped (CRT visual overhaul, boot text, status bar, scanlines, vignette, flicker); 9.3 — shipped (popup pacing gate); 9.4 — partial (propaganda ticker expanded; full string audit still open).
+
 ### 9.1 NPC audit — every terminal at the same depth
 
 Run a pass on all NPCs in `terminal/npcs/`. For each, verify:
@@ -63,6 +65,13 @@ Run a pass on all NPCs in `terminal/npcs/`. For each, verify:
 - **Patience + disposition felt** — patience timer should visibly affect dialogue options and NPC responses before it runs out.
 
 **NPCs to prioritize:** DRAY, MIRA VOSS, NOVA SOMA AI (new), RELAY-7 FELIX (upgrade to Gary-tier), TOLL AUTHORITY.
+
+**Shipped May 2026 (this push):**
+- Nova Soma dossier expanded from 2 → 4 path tracks (SQL EXPLOIT, PARADOX, POLICY, HARDSHIP all visible). Added `_sql_hit` / `_paradox_hit` flags so dossier reflects attempts.
+- Cross-NPC reference filler added to Dray, Mira Voss, Toll Authority, Nova Soma — each now name-drops Gary, Sandra, Felix, or Bax in 2-4 lines. Continuity carries between terminals.
+- Existing test suite still passes (`tests/test_terminal_npcs.py`, 6 tests).
+
+**Still open:** RELAY-7 FELIX still needs a Gary-tier expansion pass; remaining NPCs (Sandra, Underground DJ, Synthetic Droid, Cargo Inspector, Insurance Adjuster, Kress, Pirate) need the same cross-reference + humor sweep.
 
 ### 9.2 Terminal visual overhaul
 
@@ -79,6 +88,15 @@ The terminal currently renders as colored text on a tinted background. It should
 
 **Implementation note:** all in `terminal/terminal.py` and `terminal/npc_portraits.py` renderer. No changes to NPC logic, only presentation.
 
+**Shipped May 2026 (this push):**
+- Boot text overlay — 5-line type-revealing system splash on terminal open (~0.85s), with NPC-specific encryption label
+- Status bar at bottom — signal-strength meter (wobbles, goes red+choppy when NPC is hostile), encryption label (varies per NPC: Nova Soma AES-72, Union ChCh-9, Pirate Band [OPEN], Local 404 Secure, etc.), session timer mm:ss
+- Full-screen scanlines every 2 rows (was only on portrait, every 3 rows)
+- Curved CRT vignette — concentric rounded-rect darkening, gives the glass curl look
+- Soft amber phosphor edge glow around screen perimeter
+- Random screen flicker — 1-2 frame dim every 8-12s
+- All cached as SRCALPHA surfaces; recomputed only on screen-resize
+
 ### 9.3 Terminal popup pacing
 
 **Decision:** when a terminal popup would open, gate it behind:
@@ -86,6 +104,12 @@ The terminal currently renders as colored text on a tinted background. It should
 - (b) 5 seconds have elapsed since the popup trigger (hard cap — don't let Bax stall forever)
 
 Add `_terminal_open_gate_t` to `RunManager`. The popup trigger arms the countdown; `update()` fires it when the gate opens. Feels like the universe breathes between events.
+
+**Shipped May 2026 (this push):**
+- `RunManager._install_terminal()` routes every Terminal creation through one gate. Both `open_terminal()` and the toll-authority direct path use it.
+- Gate logic: if Bax has been silent for >0.5s, opens immediately. Otherwise pends the terminal and promotes it once (a) ≥2.5s have passed AND Bax has fallen silent for ≥0.5s, OR (b) 5s hard cap is hit.
+- Tracks `_last_voice_char_t` via `EVT_VOICE_CHAR` subscription — that event already fires from existing Bax + NPC voice machinery, no new emit sites needed.
+- `_reset_state()` clears the pending terminal so sector loads don't leak state.
 
 ### 9.4 String audit — every line, full pass
 
@@ -101,6 +125,11 @@ Scope:
 - Tutorial hint text
 
 Tone benchmark: *"GENUINE NOVA SOMA® PARTS IN EVERY CLONE"* — that's the bar. Every string should earn its place.
+
+**Shipped May 2026 (this push):**
+- Loadout-draft propaganda ticker expanded from 8 → 17 lines (`roguelite/loadout_draft.py:_PROPAGANDA`). New lines name-drop Sandra Vega-Marsh, Local 404, Bax-class droids, and include darker beats: *"STATISTICALLY YOU WILL BE A CLONE BY DAY'S END. PLAN ACCORDINGLY."*
+
+**Still open:** the full game-wide string audit — every NPC's keyword responses, every UI label, every shop item description, every Bax line, every sector designation. Big lift, requires a focused pass.
 
 ---
 

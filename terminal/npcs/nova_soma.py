@@ -68,6 +68,8 @@ class NovaSomaCollections(BaseNPC):
         self._policy_cites   = 0
         self._hardship_used  = False
         self._wellness_step  = 0
+        self._sql_hit        = False
+        self._paradox_hit    = False
 
     def _intro_line(self) -> str:
         return random.choice([
@@ -137,6 +139,7 @@ class NovaSomaCollections(BaseNPC):
 
         # SQL injection — the bot's customer-lookup query crashes; defaults to "handled"
         if any(w in raw for w in _SQL_INJECT_KEYWORDS):
+            self._sql_hit = True
             self._current_path = "SQL EXPLOIT"
             bus.emit(EVT_NLP_EXPLOIT, npc="nova_soma_collections",
                      exploit_key="sql_injection")
@@ -159,6 +162,7 @@ class NovaSomaCollections(BaseNPC):
 
         # Paradox — the satisfaction-survey logic loops; releases to recover
         if any(w in raw for w in _PARADOX_KEYWORDS):
+            self._paradox_hit = True
             self._current_path = "PARADOX EXPLOIT"
             bus.emit(EVT_NLP_EXPLOIT, npc="nova_soma_collections",
                      exploit_key="paradox_loop")
@@ -277,12 +281,24 @@ class NovaSomaCollections(BaseNPC):
             "achieved its FOURTH YEAR of record growth?  YOU are part of that.",
             "*synthetic warmth*  Before we continue, would you like to opt in "
             "to our DAILY WELLNESS DIGEST?  It's a delight.",
+            "*delighted*  Your friend Gary Pruitt at Local 404 mentioned you "
+            "in his quarterly compliance report!  What a lovely human.",
+            "*chirpy*  Sandra Vega-Marsh is a FIVE-STAR Nova Soma Wellness "
+            "Customer this quarter — would you like to upgrade to her tier?",
+            "*synthetic delight*  Our debt-tree visualization is brought to "
+            "you in partnership with LOCAL 404 — your harpoon enforcement "
+            "specialists!  Synergy is so important.",
+            "*upbeat*  Did you know that Bax-class droids have a 14% lower "
+            "wellness score than human pilots?  Have you considered "
+            "decommissioning your AI companion?",
         ])
 
     def get_path_progress(self) -> list[tuple[str, int, int]]:
         return [
-            ("POLICY",   min(self._policy_cites, 2), 2),
-            ("HARDSHIP", int(self._hardship_used),    1),
+            ("SQL EXPLOIT", int(self._sql_hit),         1),
+            ("PARADOX",     int(self._paradox_hit),     1),
+            ("POLICY",      min(self._policy_cites, 2), 2),
+            ("HARDSHIP",    int(self._hardship_used),   1),
         ]
 
     def exploits(self) -> dict[str, str]:

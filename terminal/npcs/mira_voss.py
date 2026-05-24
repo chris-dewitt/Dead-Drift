@@ -243,6 +243,12 @@ class MiraVoss(BaseNPC):
             "I'm not going to ask three times.  Credits, intel, or cargo?",
             "*flat*  Mm-hm.  Are we doing this or not?",
             "Other ships are queueing.  Decide.",
+            "*sigh*  Dray's on the relay band today if you need a pep talk.  "
+            "I just need a decision.",
+            "Gary Pruitt tried to bill ME for a 'service call' last week.  "
+            "I told him to file a form.  He's still waiting.  Offer.  Now.",
+            "Felix sends me his ships every other Tuesday.  Wonderful fence, "
+            "cannot weld a soup can.  Are you Felix?  ...Offer.  Now.",
         ])
 
     def get_path_progress(self) -> list[tuple[str, int, int]]:

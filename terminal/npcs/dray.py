@@ -226,6 +226,14 @@ class Dray(BaseNPC):
             "This frequency gets boring. Give me something.",
             "I was going to go quiet but you seem like you might actually have a story.",
             "Three more minutes before I drift out of range. Use them.",
+            "Gary's been quiet on the repo band today. Must be eating. He eats a lot.",
+            "Mira at bay nine charges double if you sound desperate. Sound less desperate.",
+            "Felix — Relay-7 Felix? — he's parked in sector four, twitching. "
+            "Fence work if you need it.",
+            "Sandra Vega-Marsh passed me on the comm yesterday. Smug. Beautiful sector clear. "
+            "I'm not bitter. I'm slightly bitter.",
+            "Heard a Bax-class droid on a passing courier last week. They get weirdly attached. "
+            "You got one?",
         ])
 
     def get_path_progress(self) -> list[tuple[str, int, int]]:

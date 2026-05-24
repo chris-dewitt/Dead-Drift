@@ -33,7 +33,7 @@ from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
                              EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_DEMO_NOTICE,
                              EVT_JUMP_READY, EVT_WARP_JUMP, EVT_FINAL_SECTOR,
                              EVT_RUN_START, EVT_SHOP_ENTER, EVT_SECTOR_START,
-                             EVT_AISHIP_HAIL, EVT_AISHIP_DESTROYED)
+                             EVT_AISHIP_HAIL, EVT_AISHIP_DESTROYED, EVT_VOICE_CHAR)
 from config import settings as S
 
 SLINGSHOT_CREDIT_BONUS = 800
@@ -174,6 +174,15 @@ class RunManager:
         self._well_hit_times: dict[int, float] = {}  # per-well core damage cooldown
         self._active_terminal: Terminal | None = None
         self._intercepting_barge = None   # set when a barge opens a mid-flight comm
+
+        # Terminal popup pacing (Epic 9.3) — defer opening until Bax's line settles.
+        # Gate logic: pending terminal becomes active when (a) ≥2.5s elapsed AND
+        # Bax has stopped emitting voice chars for ≥0.5s, OR (b) 5s hard cap.
+        self._t                 = 0.0
+        self._pending_terminal: Terminal | None = None
+        self._terminal_arm_t    = -1.0
+        self._last_voice_char_t = -10.0
+        bus.subscribe(EVT_VOICE_CHAR, self._on_voice_char)
         self._vault = None
         self._kress_called_this_sector = False
         self._sector_timer     = 0.0
@@ -243,6 +252,8 @@ class RunManager:
         self._aiship_hail_pending = None
         self._shower_rocks.clear()
         self._active_terminal    = None
+        self._pending_terminal   = None
+        self._terminal_arm_t     = -1.0
         self._intercepting_barge = None
         self._pending_advance    = False
         self._jump_ready_fired   = False
@@ -301,6 +312,10 @@ class RunManager:
 
     # ------------------------------------------------------------------
     def update(self, dt: float):
+        # Walltime tick — used by terminal popup gate even before a sector loads.
+        self._t += dt
+        self._tick_terminal_gate()
+
         if self._sector is None or self._ship is None:
             return
 
@@ -646,12 +661,40 @@ class RunManager:
         if npc_type == "mira_voss" and self._ship is not None:
             npc_kwargs.setdefault("ship", self._ship)
         npc = make_npc(npc_type, **npc_kwargs)
-        self._active_terminal = Terminal(
+        terminal = Terminal(
             npc,
             blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset(),
             vocabulary_vault=getattr(self, "_vault", None),
         )
-        return self._active_terminal
+        self._install_terminal(terminal)
+        return terminal
+
+    # ------------------------------------------------------------------
+    def _install_terminal(self, terminal: Terminal) -> None:
+        """Route every Terminal creation through here so the popup gate fires.
+        Defers `_active_terminal` assignment until Bax's priority line settles."""
+        silent = (self._t - self._last_voice_char_t) > 0.5
+        if silent:
+            self._active_terminal = terminal
+            self._pending_terminal = None
+            self._terminal_arm_t = -1.0
+        else:
+            self._pending_terminal = terminal
+            self._terminal_arm_t = self._t
+
+    def _tick_terminal_gate(self) -> None:
+        if self._pending_terminal is None or self._active_terminal is not None:
+            return
+        elapsed = self._t - self._terminal_arm_t
+        silent  = (self._t - self._last_voice_char_t) > 0.5
+        # Hard cap = 5s. Soft promote at ≥2.5s once Bax is quiet.
+        if elapsed >= 5.0 or (elapsed >= 2.5 and silent):
+            self._active_terminal = self._pending_terminal
+            self._pending_terminal = None
+            self._terminal_arm_t = -1.0
+
+    def _on_voice_char(self, **_) -> None:
+        self._last_voice_char_t = self._t
 
     def open_barge_terminal(self, barge) -> Terminal:
         """Mid-flight intercept: repo comm — Gary is common but not guaranteed."""
@@ -1182,11 +1225,12 @@ class RunManager:
         npc = make_npc("toll_authority",
                        vocabulary_vault=getattr(self, "_vault", None),
                        run_context=self._build_run_context())
-        self._active_terminal = Terminal(
+        terminal = Terminal(
             npc,
             blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset(),
             vocabulary_vault=getattr(self, "_vault", None),
         )
+        self._install_terminal(terminal)
 
     def _spawn_barge(self, immediate_chase: bool = False):
         from antagonists.repo_barge import BargeState

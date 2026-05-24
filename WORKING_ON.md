@@ -13,6 +13,10 @@ After committing your work, remove your row.
 |-----------|--------|------------|-----------|
 | *(none)* | | | |
 
+### Recent releases
+
+- 2026-05-24: terminal + dray/mira_voss/nova_soma/toll_authority + run_manager (popup gate) — Epic 9.1-9.3 + partial 9.4 shipped. Branch `claude/improve-game-mechanics-RkgJV`.
+
 ---
 
 ## Subsystem map
