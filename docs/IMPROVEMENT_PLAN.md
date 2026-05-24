@@ -1,10 +1,71 @@
 # DEAD DRIFT — Improvement Plan
 
-**Milestone:** Steam Next Fest
-**Audience:** Dead Drift implementation team
-**Scope:** Pre-Next-Fest polish pass — flight feel, sector variety, the Mario-courier corridor overhaul, terminal polish, and Bax fleshed out as a real asset.
+**Milestone:** Steam Next Fest  
+**Audience:** Dead Drift implementation team  
+**Scope:** Pre-Next-Fest polish pass — flight feel, sector variety, the Mario-courier corridor overhaul, terminal polish, and Bax fleshed out as a real asset.  
+**Last status pass:** May 2026 (code review + checkbox audit)  
+**Companion:** `docs/DOCUMENTATION_STATUS.md` — stale docs, team priorities, **decision forks for Chris**
 
-> **How to read this doc.** Eight themed epics. Work them top-to-bottom — every item is equally critical and needs immediate completion. No priority labels. Each item is implementation-agnostic: what it does, why it matters, design constraints. Acceptance criteria are self-scoped by the implementing dev. Line numbers and method names are referenced only where it eliminates ambiguity.
+> **How to read this doc.** Eight themed epics plus **Phase 0** (trust fixes). Checkbox legend: `[x]` done · `[~]` partial · `[ ]` not done. Items marked `[~]` have notes inline — read before re-implementing. Design forks (theme order, landing Beat 2, MAX_VELOCITY) are **not** decided here; see `DOCUMENTATION_STATUS.md`.
+
+---
+
+## Completion summary (May 2026)
+
+| Epic | Done | Partial | Open | Notes |
+|------|------|---------|------|-------|
+| **Phase 0** — Trust fixes | 0 | 0 | 5 | Chris priorities — do first |
+| **1** — Code hygiene | 6 | 2 | 2 | Font cache + NLTK lazy still open |
+| **2** — Flight feel | 5 | 2 | 0 | SNAP CHARGE bar missing; thruster heat is Phase 0 |
+| **3** — Sector variety | 2 | 4 | 0 | Hazards via themes; collapsing well / debris cloud unwired |
+| **4** — Corridor | 3 | 4 | 0 | Framework shipped; music + full scoring card open |
+| **5** — Landing | 1 | 2 | 0 | Beat 2 differs from spec — **decision needed** |
+| **6** — Terminal polish | 0 | 2 | 4 | Keystroke pulse exists; outcomes / portraits need work |
+| **7** — Bax | 1 | 2 | 2 | Lines mostly ported; portrait glow + hull pitch open |
+| **8** — Meta replay | 1 | 0 | 3 | Stepped death done; Records + carousel not built |
+
+**Rough overall:** ~40% complete · ~25% partial · ~35% not started (by checkbox count).
+
+---
+
+## Team priorities (Chris — May 2026)
+
+Tracked here and in `docs/DOCUMENTATION_STATUS.md`. These override epic list order until closed.
+
+| Priority | Epic / Phase | Checkbox |
+|----------|--------------|----------|
+| All NPC portraits incl. Inspector Holt | Phase 0 + Epic 6 | [ ] |
+| Thruster stops working (overheat trap) | Phase 0 + Epic 2 | [ ] |
+| ESC leaves the market | Phase 0 | [ ] |
+| Improve market graphics | Epic 6 / shop polish | [ ] |
+| Improve docking graphics | Epic 5 | [ ] |
+
+---
+
+## Phase 0 — Trust Fixes (do before Epic polish)
+
+**Goal:** Remove bugs that make the game feel broken. Sourced from May 2026 playtest + code review.
+
+### 0.1 Thruster overheat trap — [ ]
+`ship/modules/thruster.py`: heat rises while module is powered (not only while thrusting). At 100° → `force = 0` with **no recovery** while thruster stays active. `LifeSupport.heat_absorption` never applied in `SignalChain`. No HUD heat readout.
+
+**Fix direction:** Wire heat absorption · heat only on thrust · cooldown while powered-but-idle · HUD bar + Bax first-overheat line.
+
+### 0.2 Shop ESC opens pause instead of leave — [ ]
+`core/game.py`: `_PAUSEABLE` includes `SHOP`; ESC hits `_pause_game()` before `ShopScreen.handle_key()`. Shop already maps ESC → leave.
+
+**Fix direction:** Route shop ESC before pause handler, or exclude `SHOP` from pause-on-ESC.
+
+### 0.3 Missing NPC portraits (Inspector Holt, Relay-7 Felix) — [ ]
+`terminal/npc_portraits.py`: `_NAME_TO_KEY` has 9 entries; Holt and Felix fall through to `_unknown` (`?`).
+
+**Fix direction:** Add keys, vector busts, backdrops matching existing CRT portrait pipeline.
+
+### 0.4 Ice field thrust penalty unwired — [ ]
+`antagonists/ice_field.py`: `thrust_penalty` (30%) defined; only slick acceleration applied.
+
+### 0.5 Remove stale `SHOP_SECTORS` in `roguelite/shop.py` — [ ]
+Dead constant `{3, 6}`; live config is `settings.SHOP_SECTORS = {1, 3}`.
 
 ---
 
@@ -18,7 +79,7 @@ These are the directional answers backing this plan. Don't re-litigate — imple
 - **Acceptance criteria:** self-scoped by the implementing dev.
 - **Audience context:** team is fluent in the GDD — no preamble per ticket.
 - **Code refs:** implementation-agnostic. Line numbers cited only when needed for disambiguation.
-- **Stale `dead-drift/` directory:** confirmed safe to delete.
+- **Stale `dead-drift/` directory:** confirmed safe to delete. **Done May 2026.**
 - **Refactor depth:** keep `core/game.py` intact for now (no full state-controller refactor); land everything else.
 - **Three-body gravity:** implement mutual attraction between wells.
 - **NLTK bootstrap:** lazy, on first terminal open, with a splash.
@@ -47,35 +108,37 @@ These are the directional answers backing this plan. Don't re-litigate — imple
 
 **Goal:** Land every cheap, high-confidence code fix so subsequent work isn't built on rot. Pure infrastructure — no design risk.
 
-### 1.1 Delete the stale `dead-drift/` directory
+### 1.1 Delete the stale `dead-drift/` directory — [x]
 The `/dead-drift/` subtree is a ~3,500-LOC near-duplicate of the live root, including an older `main.py` whose NLTK bootstrap uses the broken pre-`punkt_tab` paths. Nothing in the live game imports it. **Delete the entire directory.** Pre-flight: run a project-wide grep for any string referencing the path (build scripts, CI configs, README links) and clear them before the rm.
 
-### 1.2 Font caching helper
+### 1.2 Font caching helper — [~]
 At least 40 `pygame.font.SysFont(...)` calls live inside per-frame draw paths in `core/game.py` (with smaller pockets in `terminal/terminal.py`, `delivery/delivery_sequence.py`, `roguelite/shop.py`, `renderer/cockpit_renderer.py`, `roguelite/loadout_draft.py`, `delivery/platformer.py`, `delivery/obstacles.py`, `play.py`, `ship/hud.py`). Each call is a font lookup; at 60 FPS, this is hundreds of redundant constructions per second.
 
 Land a single `Game._font(size: int, bold: bool = False, italic: bool = False)` helper that memoizes by `(size, bold, italic)`. Route every existing `pygame.font.SysFont("monospace", …)` through it. Keep the API tight — one helper, used everywhere.
 
-### 1.3 Event bus fixes
+**May 2026:** `core/text.py` `get_font()` + `install_font_patch()` exist; `roguelite/shop.py` has local cache. `core/game.py`, `delivery/delivery_sequence.py`, and others still call raw `SysFont` in draw paths.
+
+### 1.3 Event bus fixes — [x]
 `core/event_bus.py` has two latent issues:
 - `_listeners` is a `defaultdict(list)` — calling `bus.emit("never_subscribed")` creates a permanent empty-list entry. Use a plain `dict` with `.get(event, ())`.
 - The dispatch loop iterates `_listeners[event]` directly. A callback that unsubscribes itself (or another listener) during dispatch will skip an entry. Snapshot the list before iterating.
 
-### 1.4 Subscriber lifecycle helper
+### 1.4 Subscriber lifecycle helper — [ ]
 Every renderer / manager / Bax / audio system subscribes in `__init__` but never unsubscribes. Today that's latent because `Game` constructs once — but `RunManager.start_run` and `_dev_start_flight` both partially rebuild state and would cause double-fire if either ever spun up a fresh `RunManager` or `VectorRenderer`. Introduce a tiny `Subscriber` mixin (or context manager) that tracks owned subscriptions and exposes `unsubscribe_all()`. Adopt across all current `bus.subscribe(...)` callers.
 
-### 1.5 Procedural RNG threading (seeded-runs ready)
+### 1.5 Procedural RNG threading (seeded-runs ready) — [x]
 `roguelite/procedural.py:generate_sector` creates `rng = random.Random()` but then `_generate_gravity` uses module-level `random.randint`/`random.uniform`. The seeded `rng` is decorative. Thread it properly through every sub-helper so passing `generate_sector(index, difficulty, rng=...)` actually produces deterministic output. This unlocks daily/weekly seeded challenges later — no commitment to ship that feature now, just stop blocking it.
 
-### 1.6 Gravity well spawn safety
+### 1.6 Gravity well spawn safety — [x]
 `_generate_gravity` uses `(100, SCREEN_H - 100)` for y-bounds (should be `FLIGHT_H`), has no minimum well-to-well separation, and never checks distance from the ship's spawn point at `(SCREEN_W / 2, SCREEN_H / 2)`. On rare seeds the player materializes inside a force singularity. Fix:
 - Use `FLIGHT_H` for y-bounds.
 - Reject-sample well positions until each is ≥ 180 px from every other well.
 - Reject-sample until each well is ≥ 220 px from the ship spawn.
 
-### 1.7 `PlayerShip.reset()` chain rebuild
+### 1.7 `PlayerShip.reset()` chain rebuild — [x]
 `reset()` does not touch `self.chain` beyond what it does today, so shop upgrades and ad-hoc installs in slots 2–5 silently persist across deaths and runs. Change behavior: on reset, **clear slots 2–5**. Keep slot 0 (LifeSupport) and slot 1 (Thruster) installed — these are baseline issue and are re-set by `apply_draft` anyway.
 
-### 1.8 Squared-distance optimization
+### 1.8 Squared-distance optimization — [~]
 Replace `(a - b).length()` comparisons with `length_sq()` against `RANGE * RANGE` in:
 - `run_manager._check_slingshot` (per-well, per-frame)
 - `run_manager._check_proximity` (per-barge, per-frame)
@@ -84,18 +147,21 @@ Replace `(a - b).length()` comparisons with `length_sq()` against `RANGE * RANGE
 
 Don't bother below ~10 calls/frame paths; the rest aren't hot.
 
-### 1.9 Move `random` import to module top in `ship/loadout.py`
-`unbolt_random` does a function-level `import random`. Module-top import.
+**May 2026:** Done in `run_manager` (slingshot, proximity), `physics/tether.py`, several antagonists. `repo_barge.py` ship-distance checks may still use `.length()`.
 
-### 1.10 NLTK lazy bootstrap with splash
+### 1.9 Move `random` import to module top in `ship/loadout.py` — [x]
+
+### 1.10 NLTK lazy bootstrap with splash — [ ]
 Today `main.py` blocks at startup downloading NLTK data with zero in-game feedback. Move the bootstrap behind a lazy load triggered on first terminal-open. While packages download, render an in-game splash overlay ("LINGUISTIC PROCESSOR INITIALIZING — STAND BY") with a brief Bax line: *"Right, give us a sec — the comms array's still warmin' up."* Boot to main menu instantly; defer the download.
 
-### 1.11 EpistemologicalShrooms passive growth bug
+### 1.11 EpistemologicalShrooms passive growth bug — [x]
 `cargo/epi_shrooms.py:update` grows `spore_level` purely on time (`+= dt * 0.018`), reaching max in ~55 seconds regardless of damage. The docstring claims damage drives it. Either:
 - Remove time-based growth, make damage the sole driver, OR
 - Keep time-based growth but document it explicitly as "pressure curve" — and ensure the doctring matches.
 
 Pick one — devs's call. The current code lies about what it does, that's the only thing that matters.
+
+**May 2026:** Resolved — dual driver (time pressure curve + damage) documented explicitly in `cargo/epi_shrooms.py` docstring.
 
 ---
 
@@ -103,7 +169,7 @@ Pick one — devs's call. The current code lies about what it does, that's the o
 
 **Goal:** The ship feels heavier, more controllable, more like the GDD's "courier saddled with a rust-bucket" than a twitchy arcade craft. Slingshot becomes a satisfying skill move with real payoff. The three-body chaos the GDD promises actually exists.
 
-### 2.1 Control tuning constants
+### 2.1 Control tuning constants — [~]
 In `config/settings.py`:
 - `ROTATION_SPEED 200.0 → 240.0` (20% snappier turn rate)
 - Reverse thrust multiplier (currently the hard-coded `0.4` in `ship/ship.py:_read_input`) → `0.6`
@@ -112,16 +178,18 @@ In `config/settings.py`:
 
 Net effect: less top-speed, slower acceleration, snappier rotation, stronger reverse — ship has weight but you have more say in where it points.
 
-### 2.2 Soft drag above velocity cap (no more hard clamp)
+**May 2026:** Rotation 240, thrust 175, reverse 0.6 — done. `MAX_VELOCITY` is **280** in code (not 380) — **decision needed** (see `DOCUMENTATION_STATUS.md`).
+
+### 2.2 Soft drag above velocity cap (no more hard clamp) — [x]
 The current hard clamp in `RigidBody2D.integrate` instantly drops speed back to `MAX_VELOCITY`. Replace with a soft-drag formula: when `speed > MAX_VELOCITY`, multiply velocity by `(1 - excess_pct * dt * decay_constant)` so the ship gently sheds excess speed over a half-second or so. Effect: slingshots and fuel-canister boosts can briefly punch through the cap without immediately being undone. See 2.4 for the slingshot interaction.
 
-### 2.3 Three-body mutual attraction (the GDD promise)
+### 2.3 Three-body mutual attraction (the GDD promise) — [x]
 `physics/gravity.py:ThreeBodySystem.update` is a `pass` with a TODO. Implement it. Each well exerts gravity on every other well at **~15% strength** of the player attraction, applied each tick. Wells drift slowly during a sector — not catastrophically — adding genuine variance to late-run sectors without becoming unfightable. Constraints:
 - Cap relative well velocity at 30 px/s so they don't accelerate off-screen.
 - Snap wells to a bounding box (margin from screen edges and the cockpit strip) — if a well would cross the boundary, bounce its velocity component.
 - Wells never spawn inside each other (covered by 1.6); now they can't drift into each other either — a soft repulsion at < 80 px separation suffices.
 
-### 2.4 Slingshot triple-reward (UI + credits + overdrive)
+### 2.4 Slingshot triple-reward (UI + credits + overdrive) — [~]
 The slingshot is the game's signature skill move. Today it shaves 5s off the jump timer and emits `EVT_SLINGSHOT` for Bax. That's invisible. Make it pop:
 - **UI floater:** when `EVT_SLINGSHOT` fires, draw a 1-second "FREE −5s" floater near the ship in slingshot-yellow. Pulsing chime.
 - **Credit bonus:** +800 cr per clean slingshot. Reduce `meta.debt` via `pay_off`. Surface on the per-sector flash card (the card already has a `slingshots` field — show "+credits per slingshot" beside it).
@@ -129,7 +197,9 @@ The slingshot is the game's signature skill move. Today it shaves 5s off the jum
 
 Stack visible: a clean slingshot = "yes you got the bonus" + "yes you get credits" + "yes the ship actually goes faster."
 
-### 2.5 Tether-snap feedback (diegetic + discrete)
+**May 2026:** Floater, +800 cr, 2s overdrive — done. Sector flash shows slingshot **count**, not per-slots credit breakdown.
+
+### 2.5 Tether-snap feedback (diegetic + discrete) — [~]
 Currently the player has no sense of how close to `SNAP_VELOCITY` their lateral motion is — they just see the tether and hope.
 
 - **Diegetic:** in `renderer/vector_renderer.py`, the tether line itself glows red → amber → green proportional to `lateral_speed / SNAP_VELOCITY`. At ≥ 1.0 it pulses bright green for one frame before the snap fires. Players learn the move visually.
@@ -137,15 +207,19 @@ Currently the player has no sense of how close to `SNAP_VELOCITY` their lateral 
 
 Both. The diegetic version teaches, the discrete version confirms.
 
-### 2.6 Adaptive final-sector difficulty
+**May 2026:** Tether line color by snap charge — done. **SNAP CHARGE HUD bar — not built.**
+
+### 2.6 Adaptive final-sector difficulty — [x]
 `run_manager._load_next_sector` always spawns an extra barge on sector 5 plus an immediate debris rock. Change to a hull-aware heuristic at sector-5 entry:
 - `hull_pct > 0.7`: spawn the extra barge + extra debris (current behavior — earned punishment for healthy runs).
 - `hull_pct ≤ 0.7`: spawn nothing extra — final sector ramps via barge intensity and timer pressure alone.
 
 Result: runs that arrive at sector 5 fragile aren't curb-stomped; clean runs still get the gauntlet.
 
-### 2.7 Tutorial reach
+### 2.7 Tutorial reach — [x]
 `TutorialManager` only constructs when `meta.clone_count == 1`. Bump to `meta.clone_count ≤ 3`. First-timers who die in 30 seconds will still see the hints on their second and third clones. (Don't add a main-menu "replay tutorial" option — keep it auto-driven so it doesn't bloat the menu.)
+
+**May 2026:** `run_manager.py` uses `clone_count <= 3`. `tutorial.py` module docstring still says `== 1` (stale comment only).
 
 ---
 
@@ -153,7 +227,7 @@ Result: runs that arrive at sector 5 fragile aren't curb-stomped; clean runs sti
 
 **Goal:** Every sector in a run feels genuinely different. The Nova Soma corporate-renaming flavor text gets to mean something — when a sector says "OPTIMISED COMPLIANCE ZONE, formerly THE WIDOW'S CROSSING," the gameplay there is recognizable. Crucial constraint: **the player must not feel overwhelmed.** Variety, not density. Each sector picks one or two signature elements and leans into them.
 
-### 3.1 Wire the five existing hazards
+### 3.1 Wire the five existing hazards — [~]
 `SectorLayout.hazards` is generated each sector and never read. Wire each into a real sector modifier (read by `RunManager` and `VectorRenderer`):
 
 - **`asteroid_field`** — `DEBRIS_COUNT × 1.6`, debris HP slightly higher (more shootable). Visual: denser dust haze, more drifting micro-particles in background.
@@ -164,7 +238,9 @@ Result: runs that arrive at sector 5 fragile aren't curb-stomped; clean runs sti
 
 Lock: maximum **two hazards per sector**. The hazard count cap in `_pick_hazards` should be reduced from `1 + int(difficulty)` (currently scales up to 3) to **`min(2, 1 + (difficulty > 1.5))`** — i.e. one hazard at low difficulty, two at high. Difference-by-design, not chaos-by-default.
 
-### 3.2 Six new obstacle classes
+**May 2026:** Obstacle logic is **theme-driven** in `run_manager`, not read from `SectorLayout.hazards`. Solar flare + toll — partial/full via themes. **`collapsing_gravity_well` and `debris_cloud` — not wired.** Asteroid density via Junk-Belt debris boost only.
+
+### 3.2 Six new obstacle classes — [~]
 
 Wire as `antagonists/wreck.py`, `antagonists/dead_station.py`, `antagonists/trash_field.py`, `antagonists/mine_field.py`, `antagonists/ice_field.py`, `antagonists/comet_trail.py`. Each is a top-level renderable + collidable; each registers itself with the sector renderer and `RunManager` for per-frame update.
 
@@ -207,7 +283,9 @@ Zone visualization: faint blue crystalline lattice overlay, slow-drifting ice mo
 #### Frozen comet trails (`comet_trail.py`)
 Linear streams of small ice fragments traveling perpendicular to the sector axis at moderate speed (180 px/s). 2–3 streams per sector when present, each a "lane" of ice that chip-damages the ship if hit. Players naturally weave between the lanes. Visual: streaming white-cyan trail with motion-blur tails.
 
-### 3.3 Eight sector themes
+**May 2026:** All six modules exist and spawn by theme. Wreck subtypes (blocker/explorable/interactive) — yes. Interactive wreck → hidden NPC comm — verify in `wreck.py` (payout path exists; full NPC comm may be partial). Ice **thrust penalty** — see Phase 0.4.
+
+### 3.3 Eight sector themes — [x]
 
 A theme is a coherent visual + obstacle + ambient mood preset. Pool of 8:
 
@@ -220,7 +298,7 @@ A theme is a coherent visual + obstacle + ambient mood preset. Pool of 8:
 7. **Flare Corridor** — `solar_flare` hazard active. Sun-side parallax glow in the background. Visual: occasional orange flare bloom from off-screen.
 8. **Toll Authority** — `toll_checkpoint` hazard. Visual: a corporate gate structure visible mid-sector (decorative). Otherwise mostly empty void — the encounter is the obstacle.
 
-### 3.4 Chapter-tied signature themes
+### 3.4 Chapter-tied signature themes — [~]
 
 Each chapter draws 5 sectors from the 8-theme pool. Each chapter has a **signature set** so the chapters feel distinct in playthroughs and replays:
 
@@ -231,7 +309,9 @@ Each chapter draws 5 sectors from the 8-theme pool. Each chapter has a **signatu
 
 Within a chapter, sector order is fixed (so a player on their nth Ch.1 run knows what's coming) but the layout within each themed sector is procedurally regenerated by Epic 1.5's seeded RNG.
 
-### 3.5 New NPC: Toll Authority
+**May 2026:** Fixed chapter theme lists in `procedural.py` — **drift from this section** (Ch.1 sector 5, Ch.3 double toll). **Decision needed** — see `DOCUMENTATION_STATUS.md`.
+
+### 3.5 New NPC: Toll Authority — [x]
 
 For `toll_checkpoint` hazards in Epic 3.1. New NPC type in `terminal/npcs/toll_authority.py` (subclass `BaseNPC`). Personality: bored, jobs-worth, hates everyone but mostly hates Local 404 because they steal his quota. Patience meter is short. Outcomes:
 - **Pay** (input contains a credit amount ≥ 1500): waved through. Lose the credits, gain free passage.
@@ -240,7 +320,7 @@ For `toll_checkpoint` hazards in Epic 3.1. New NPC type in `terminal/npcs/toll_a
 
 Brief — 20-second negotiation max. Keep him as a flavor break, not a chapter-anchoring NPC.
 
-### 3.6 Sector intro card
+### 3.6 Sector intro card — [x]
 When a sector loads (currently `EVT_SECTOR_START`), draw a 2-second sector-intro card in the upper-left:
 - Sector theme name (e.g. "WRECKAGE BELT")
 - Sector designation (existing — "POST-PROFITABILITY WASTE FIELD")
@@ -257,7 +337,7 @@ Fades out after 2 seconds. Reinforces the "every sector feels different" promise
 
 **See `docs/CORRIDOR_DESIGN.md` for the per-chapter design specs.** This epic is the structural framework that all four corridors share.
 
-### 4.1 Restructure `delivery/` module
+### 4.1 Restructure `delivery/` module — [x]
 
 Today `delivery/delivery_sequence.py` (683 LOC), `delivery/platformer.py` (481), and `delivery/obstacles.py` (206) are tightly coupled and chapter-agnostic. Restructure:
 
@@ -271,7 +351,7 @@ Today `delivery/delivery_sequence.py` (683 LOC), `delivery/platformer.py` (481),
 
 Each chapter file is data-heavy — define the level layout as a list of element constructors at module level, plus chapter-specific subclasses where needed (e.g. `Chapter1JukeboxHazard`).
 
-### 4.2 Core mechanics (shared framework)
+### 4.2 Core mechanics (shared framework) — [~]
 
 The Corridor must support every one of these as first-class concepts:
 
@@ -286,13 +366,17 @@ The Corridor must support every one of these as first-class concepts:
 - **Bax voice-over** — Bax narrates contextually throughout. Coach-mode commentary on jumps, panic on stealth-near-misses, glee on secrets. Lines drafted in `docs/BAX_VOICE.md` under "corridor" contexts.
 - **Boss room** — last 10–15 seconds of every corridor: small "act" before the cargo handover. The contact NPC is present (Gary for Ch.1, the lab tech for Ch.2, the dispatcher for Ch.3, the hotel concierge for Ch.4). Brief exchange, money changes hands, cargo drops.
 
-### 4.3 Visual style (hybrid)
+**May 2026:** Scrolling camera, checkpoints, branching, collectibles, secrets, NPC encounters, stealth zones, Bax lines — largely shipped. **Black wipe + "ENTERING: &lt;ROOM NAME&gt;" caption — not implemented.** Mini-terminal UX may need polish pass.
+
+### 4.3 Visual style (hybrid) — [~]
 
 Open brutalist — the moment the corridor begins, it should feel continuous with the flight scene (same palette, vector line art, void-black background, neon accents). As the courier progresses deeper into the station, the style **progressively shifts** to more colorful, layered, almost cartoony. By the boss room, the visual language is fully "corporate sci-fi hellscape illustration" — saturated, dense, exaggerated character art (still vector-based, no sprite assets).
 
 Implementation: each room's render style is configurable; the `Corridor` framework supports a per-room palette + line-weight + saturation curve. Room 1 is brutalist (current flight aesthetic), Room 2 is mid-shift, Room 3 (boss room) is full saturation.
 
-### 4.4 Courier avatar
+**May 2026:** Per-room palettes in chapter files — yes. Full saturation shift in boss rooms — partial.
+
+### 4.4 Courier avatar — [x]
 
 The courier currently in `delivery/platformer.py` is a basic colored rect. Replace with a vector-drawn courier figure:
 - Standing pose: rough humanoid silhouette with a courier satchel slung across the body.
@@ -303,7 +387,9 @@ The courier currently in `delivery/platformer.py` is a basic colored rect. Repla
 
 Vector-only, brutalist line work, ~36 px tall. Color: cyan accent ("our courier"). Match the ship's signature cyan glow so visual identity carries from flight to corridor.
 
-### 4.5 Cargo silhouette
+**May 2026:** `renderer/sci_fi_ui.draw_courier_sprite` used by corridor framework.
+
+### 4.5 Cargo silhouette — [x]
 The cargo being carried is visible on the courier's back/shoulder. Each chapter's cargo is rendered as a distinct silhouette:
 - **Ch.1 (Archive):** a crate full of vinyl/data spools sticking out the top.
 - **Ch.2 (Shrooms):** a glass jar with bioluminescent contents (subtle hue pulse).
@@ -312,7 +398,9 @@ The cargo being carried is visible on the courier's back/shoulder. Each chapter'
 
 When the courier is hit, the cargo silhouette flashes. When the cargo takes a "real" hit (large hazard), the cargo silhouette visibly tilts/breaks (Ch.1 vinyl cracks visible, Ch.2 jar gets a crack, etc.). This is the diegetic version of the cargo damage system.
 
-### 4.6 Corridor music
+**May 2026:** Per-chapter silhouettes in `corridor/base.py`. Hit flash — partial; crack-on-big-hit — verify per chapter.
+
+### 4.6 Corridor music — [ ]
 Each chapter's corridor has a unique audio cue track that plays only during corridor execution. The track is a longer, melodic blues-jazz piece (procedurally generated using the existing `audio/synth.py` infrastructure) themed to that chapter:
 - **Ch.1:** distorted vinyl-warm bassline + dirty harmonica
 - **Ch.2:** sparse off-kilter percussion with reverb-drowned synths
@@ -321,7 +409,9 @@ Each chapter's corridor has a unique audio cue track that plays only during corr
 
 Music swells on entry, ducks during NPC dialogue, peaks in the boss room.
 
-### 4.7 Corridor scoring
+**May 2026:** Delivery scene audio exists; dedicated per-chapter corridor tracks per spec — not verified as complete.
+
+### 4.7 Corridor scoring — [~]
 At corridor completion, show a brief end-card:
 - Time elapsed.
 - Collectibles found / total.
@@ -331,13 +421,15 @@ At corridor completion, show a brief end-card:
 
 Roll these into the chapter's run summary and into Bax's Records (Epic 8).
 
+**May 2026:** Star rating (1–3) at corridor end — yes. Full end-card (time, collectibles/total, secrets, damage, bonus cr) — **not built.** Bax's Records hook — blocked on Epic 8.
+
 ---
 
 ## Epic 5 — Landing Sequence Overhaul
 
 **Goal:** The moment after flight where the ship docks with the station is currently a brief animation. Make it interactive, cinematic, fun — something the player engages with rather than waits through.
 
-### 5.1 Three-beat hybrid sequence
+### 5.1 Three-beat hybrid sequence — [~]
 
 After the final sector clears (post-`EVT_RUN_END(success=True)` and Bax's "we did it" line), trigger the landing sequence — between FLIGHT and DELIVERY states.
 
@@ -351,14 +443,18 @@ The sequence has three beats, each with one input moment, totaling ~15 seconds:
 
 **Beat 3 — Touchdown (6s):** Pure cutscene now — the ship enters the airlock proper. Dock clamps swing in (vector animation), magnetic locks engage with a satisfying low thunk (audio cue). Ground crew silhouettes in the background, going about their business. Camera holds on the ship for two seconds while Bax delivers a chapter-appropriate landing line. Fade to corridor start.
 
-### 5.2 Performance scoring
+**May 2026:** Beats 1–3 exist in `delivery_sequence.py`. Beat 1 alignment — yes. Beat 2 is **SPACE retro physics only** (no J gauge, no hold-to-fill bar). **Decision needed** — see `DOCUMENTATION_STATUS.md`. **Chris priority:** improve docking graphics (Phase 0 / team table).
+
+### 5.2 Performance scoring — [x]
 - Both Beat 2 inputs hit perfectly: "PERFECT DOCK — courier rating +1" floater, +500 cr bonus.
 - One hit, one miss: standard touchdown.
 - Both missed: "ROUGH LANDING — dock fees deducted" -200 cr.
 
 Surface this in the corridor end-card and Bax's Records.
 
-### 5.3 Station visual variety
+**May 2026:** +500 / −200 cr and Bax events wired. Corridor end-card + Records — partial / blocked.
+
+### 5.3 Station visual variety — [~]
 Each chapter has a different station for the landing:
 - **Ch.1:** Underground harbour — improvised cargo dock under a busy commercial structure.
 - **Ch.2:** Sterile biolab outpost — clean white-blue facility on the edge of a planetary ring.
@@ -367,13 +463,15 @@ Each chapter has a different station for the landing:
 
 Each station is a vector illustration rendered procedurally — same constraints as the rest of the renderer (no sprite assets).
 
+**May 2026:** Chapter-themed names/colors via `_STATION_THEMES`; `draw_landing_star_destroyer` shared silhouette. Distinct harbour/biolab/compliance/hotel **silhouettes** — partial (palette swap more than unique art).
+
 ---
 
 ## Epic 6 — Terminal Polish
 
 **Goal:** The terminal is mechanically great but visually & tactilely underweighted. Player input should feel weighty. NPC reactions should pop. Backdrops should breathe. Outcomes should land like a hammer.
 
-### 6.1 Keystroke weight
+### 6.1 Keystroke weight — [~]
 On every printable keystroke in the terminal input:
 - Soft click sound (low-pitched, distinct from typewriter blips that already play on NPC speech).
 - 0.08-second amber pulse on the input line border.
@@ -387,7 +485,9 @@ On ENTER (submit):
 - Heavier click.
 - Brief 0.2-second screen-edge amber bloom.
 
-### 6.2 NPC portrait emotional swings
+**May 2026:** Input border pulse + ENTER bloom — yes (`terminal.py`). **Keystroke click SFX + 1px input-box shake — not verified.**
+
+### 6.2 NPC portrait emotional swings — [ ]
 Today portrait disposition shifts are subtle. Crank them up:
 - **Compliant / friendly:** portrait color saturates by 20%, brief soft glow, NPC may smile (cargo subroutines in `npc_portraits.py` per character).
 - **Annoyed:** portrait dims 15%, scanlines get harsher, NPC visibly frowns or looks away.
@@ -396,7 +496,9 @@ Today portrait disposition shifts are subtle. Crank them up:
 
 Each NPC needs explicit per-disposition portrait variants — not just universal overlay treatment.
 
-### 6.3 Ambient backdrop motion
+**May 2026:** Universal disposition overlay exists. Per-NPC smile/frown/shake — not cranked up. **Holt/Felix missing entirely** — Phase 0.3.
+
+### 6.3 Ambient backdrop motion — [ ]
 Backdrops in `npc_portraits.py` are currently mostly static scenes. Each backdrop needs ≥ 2 ambient motion elements:
 - Background NPCs walking past (silhouette at far distance).
 - Flickering signs or readouts.
@@ -405,7 +507,7 @@ Backdrops in `npc_portraits.py` are currently mostly static scenes. Each backdro
 
 Constraint: nothing should be visually distracting from the focal NPC. Ambient = atmosphere, not focus competition.
 
-### 6.4 Slim the keyword chip strip
+### 6.4 Slim the keyword chip strip — [~]
 `_SCAN_VOCAB` chips along the top of the terminal are currently dense — a wall of label text. Three changes:
 - Show **max 4 chips at a time**. Cycle in/out as the player types.
 - Chips representing already-discovered exploits (per VocabularyVault) render dim with a small "★" — they're known territory.
@@ -413,7 +515,9 @@ Constraint: nothing should be visually distracting from the focal NPC. Ambient =
 
 Result: the strip becomes a signal probe ("what's working right now?") rather than a cheat sheet ("here's everything").
 
-### 6.5 Outcome reveal beats
+**May 2026:** Max 4 chips (`_live_scan`) — yes. Vault-discovered dim + ★ — verify against VocabularyVault in draw path.
+
+### 6.5 Outcome reveal beats — [ ]
 The final moment of every terminal — success or failure — needs a real beat:
 
 - **EXPLOIT outcome:** screen fills with a brief data-stream cascade (vertical lines of garbage characters falling). Loud "GOT 'EM" stinger. NPC portrait freezes mid-expression. "TRANSACTION REROUTED — {amount} cr" overlays in big neon green for 1 second.
@@ -423,7 +527,7 @@ The final moment of every terminal — success or failure — needs a real beat:
 
 Each outcome must feel distinct. Right now they all feel like "the terminal ended."
 
-### 6.6 NLP exploit dossier (foreshadows Epic 8)
+### 6.6 NLP exploit dossier (foreshadows Epic 8) — [ ]
 Add a footer in the terminal close screen: *"Bax filed your method. Review your dossier from the main menu."* This points players at the new Bax's Records screen (Epic 8.3) where their discovered exploits are catalogued.
 
 ---
@@ -434,7 +538,7 @@ Add a footer in the terminal close screen: *"Bax filed your method. Review your 
 
 **See `docs/BAX_VOICE.md` for the full line bank, tone guide, and per-context drafts.**
 
-### 7.1 Cockpit portrait hull-damage glow
+### 7.1 Cockpit portrait hull-damage glow — [ ]
 
 Bax's portrait in the cockpit strip currently doesn't react visually to ship damage. Make it:
 
@@ -442,7 +546,7 @@ Bax's portrait in the cockpit strip currently doesn't react visually to ship dam
 - **Diegetic deterioration on hits:** every `EVT_HULL_DAMAGE` event triggers a brief portrait reaction — eyes widen for 0.4 seconds, scanlines on the portrait glitch harder for 0.6 seconds, antenna sparks for 0.3 seconds. Repeated hits compound the glitch intensity (cooldown of 1.5 seconds before glitch resets).
 - **At < 10% hull:** portrait holds a "panic" expression statically — eyes wide, mouth open, antenna fully sparking. Bax's voice pitch shifts subtly higher in the audio system (see 7.4).
 
-### 7.2 New voice contexts (~100 lines drafted)
+### 7.2 New voice contexts (~100 lines drafted) — [~]
 
 Twelve lines per context, drafted in `docs/BAX_VOICE.md`. Contexts:
 
@@ -459,7 +563,9 @@ Twelve lines per context, drafted in `docs/BAX_VOICE.md`. Contexts:
 - `dock_perfect` — both landing inputs hit cleanly.
 - `dock_rough` — both landing inputs missed.
 
-### 7.3 New voice modes
+**May 2026:** Most lists in `bax/bax.py` with event wiring. **`first_kill_of_sector`** — flag set on barge kill, no dedicated line pool from `BAX_VOICE.md`.
+
+### 7.3 New voice modes — [~]
 
 Bax's voice gets three explicit modes that nuance line selection:
 
@@ -470,11 +576,15 @@ Bax's voice gets three explicit modes that nuance line selection:
 
 Implementation: each line in the bank is tagged with mode. The `Bax` system picks lines weighted by current context's preferred mode.
 
-### 7.4 Audio pitch shift
+**May 2026:** Modes described in `BAX_VOICE.md`; code uses context pools but not explicit per-line mode tags + pitch.
+
+### 7.4 Audio pitch shift — [ ]
 `audio_manager.py`'s Bax voice channel uses pre-built blips. Add a one-line pitch shift on the blip channel mapped to hull%: 100% hull = neutral pitch; < 30% = +5% pitch; < 10% = +12% pitch. Same effect Bax has when he's stressed in fiction — voice goes higher.
 
-### 7.5 Bax line cycling without immediate repeats
+### 7.5 Bax line cycling without immediate repeats — [x]
 Today `random.choice` can pick the same line twice in a row, which kills the illusion. Update `Bax._speak` to track the last 3 lines spoken per context and reject-sample to avoid repetition until those slots cycle out. Trivial change, large player-perceptible quality gain.
+
+**May 2026:** `_no_repeat_pick()` used across contexts.
 
 ---
 
@@ -482,7 +592,7 @@ Today `random.choice` can pick the same line twice in a row, which kills the ill
 
 **Goal:** The game gives players reasons to come back after their first campaign clear. Bax's Records becomes a curiosity hub. Chapter replay is a visual delight, not a checkbox.
 
-### 8.1 Stepped death penalty
+### 8.1 Stepped death penalty — [x]
 In `roguelite/meta_progression.py:apply_death_penalty`, scale `WRECKAGE_TOW_FEE` by sector reached at time of death:
 - Sectors 1–2: current value (8000).
 - Sectors 3–4: 1.5× (12,000).
@@ -490,7 +600,7 @@ In `roguelite/meta_progression.py:apply_death_penalty`, scale `WRECKAGE_TOW_FEE`
 
 `CLONE_FLUID_FEE` and `BASE_CLONE_DEBT` stay flat. Net effect: early deaths are recoverable; late deaths bite hard. Tracks the GDD's "the deeper you go, the more they own you" tone.
 
-### 8.2 Cargo dossier carousel (chapter replay)
+### 8.2 Cargo dossier carousel (chapter replay) — [ ]
 
 Replace the current "linear-list main menu" approach with a visual carousel:
 
@@ -500,7 +610,7 @@ Replace the current "linear-list main menu" approach with a visual carousel:
 
 Cards for unfinished chapters render dimmed with a "??? — uncovered" stamp. Players see progress at a glance.
 
-### 8.3 Bax's Records screen
+### 8.3 Bax's Records screen — [ ]
 
 New main-menu entry: **"BAX'S RECORDS"**. Opens a multi-tab interface:
 
@@ -511,7 +621,7 @@ New main-menu entry: **"BAX'S RECORDS"**. Opens a multi-tab interface:
 
 Aesthetically: file-cabinet metaphor. Each tab is a manila folder being pulled out. Diegetic, low-fi.
 
-### 8.4 Chapter retry — hardcore variant (stretch)
+### 8.4 Chapter retry — hardcore variant (stretch) — [ ]
 *If time allows pre-Next-Fest:* unlock a "HARDCORE" toggle per chapter after first clear. Modifiers: tighter sector timers, more barges, only 1 checkpoint in corridor, no shop stops. Pure-pride mode. Best HARDCORE clear time per chapter shown in the cargo dossier card.
 
 If time is short, defer to post-Next-Fest.
@@ -533,6 +643,8 @@ Captured here so devs don't re-relitigate:
 
 ## What "ship-ready for Next Fest" looks like
 
+**May 2026 note:** Several bullets below are **already true** (slingshot weight, sector themes, corridor framework, stepped death). Others remain open — see checkbox summary above and Phase 0.
+
 When this entire plan is implemented:
 
 - **Code base** is one tree, fonts are cached, the event bus is hardened, wells don't spawn under the ship, and the slingshot has weight.
@@ -544,3 +656,15 @@ When this entire plan is implemented:
 - **Players who finish the campaign** open Bax's Records, see their stats, find lore fragments they missed, and reload Chapter 2 because they remember how good the biolab corridor was.
 
 That's the demo.
+
+---
+
+## Related docs
+
+| Doc | Role |
+|-----|------|
+| `docs/DOCUMENTATION_STATUS.md` | Stale-doc tracker, **Chris decision forks**, team priority status |
+| `docs/CORRIDOR_DESIGN.md` | Per-chapter corridor content spec |
+| `docs/BAX_VOICE.md` | Bax line bank + tone rules |
+| `docs/SOUNDTRACK_PLAN.md` | Procedural audio spec (roadmap) |
+| `README.md` | Player quick start (needs update — see DOCUMENTATION_STATUS) |
