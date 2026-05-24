@@ -20,11 +20,11 @@
 | **3** — Sector variety | 2 | 4 | 0 | Hazards via themes; collapsing well / debris cloud unwired |
 | **4** — Corridor | 5 | 4 | 0 | Framework shipped; music + full scoring card partial; movement/control bugs fixed |
 | **5** — Landing | 2 | 1 | 0 | Docking graphics shipped; Records/end-card hook remains partial |
-| **6** — Terminal polish | 1 | 2 | 4 | Market graphics shipped; terminal outcomes / portraits need work |
+| **6** — Terminal polish | 1 | 2 | 5 | Market graphics shipped; terminal outcomes / portraits / cargo-specific dialogue need work |
 | **7** — Bax | 1 | 2 | 2 | Lines mostly ported; portrait glow + hull pitch open |
 | **8** — Meta replay | 1 | 0 | 3 | Stepped death done; Records + carousel not built |
 
-**Rough overall:** ~54% complete · ~27% partial · ~19% not started (by checkbox count).
+**Rough overall:** ~53% complete · ~26% partial · ~21% not started (by checkbox count).
 
 ---
 
@@ -39,6 +39,7 @@ Tracked here and in `docs/DOCUMENTATION_STATUS.md`. These override epic list ord
 | ESC leaves the market | Phase 0 | [x] |
 | Improve market graphics | Epic 6 / shop polish | [x] |
 | Improve docking graphics | Epic 5 | [x] |
+| Cargo-specific dialogue for all NPCs | Epic 6 / terminal polish | [ ] |
 
 ---
 
@@ -557,6 +558,15 @@ Add a footer in the terminal close screen: *"Bax filed your method. Review your 
 Chris priority: make the mid-run market feel more like a place and less like a plain menu.
 
 **May 2026:** Browse view now has physical stall dressing behind the vendor, item-specific hardware glyphs for each stock tag, affordability/readiness badges on selected cards, and render smoke coverage for the shop art helpers.
+
+### 6.8 Cargo-specific NPC dialogue — [ ]
+Chris priority: every terminal NPC should react to what cargo the courier is carrying, not just generic run state.
+
+Implementation direction:
+- Extend terminal run context with cargo identity (`Acoustic Archive`, `Epistemological Shrooms`, `Sentient Paperwork`, `Schrodinger VIP`) plus cargo state where available.
+- Add cargo-aware flavor lines for every existing NPC: Gary, Kress, Sandra, TK-9, Union Dispatcher, Insurance Adjuster / Morwenna, Toll Authority, Relay-7 Felix, Inspector Holt, Cargo Inspector, Pirate, and Underground DJ.
+- Keep lines in each NPC's voice and mechanically harmless; cargo flavor should not change win/fail conditions unless a later design item explicitly calls for it.
+- Include enough character/background texture in the new lines that cargo references feel authored rather than generic substitutions.
 
 ---
 

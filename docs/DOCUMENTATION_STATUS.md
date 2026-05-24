@@ -30,8 +30,9 @@
 | 3 | **ESC leaves the market** | **Fixed** — shop ESC routes to `ShopScreen` before pause handling |
 | 4 | **Improve market graphics** | **Fixed** — shop browse view has stall dressing, item glyphs, and purchase-state badges |
 | 5 | **Improve docking graphics** | **Fixed** — chapter-specific station silhouettes and bay dressing are procedural |
+| 6 | **Cargo-specific dialogue for all NPCs** | **Planned** — added to Epic 6 as an open terminal polish item; no code work started |
 
-Phase 0 trust fixes plus market and docking graphics are tracked as shipped in `docs/IMPROVEMENT_PLAN.md`.
+Phase 0 trust fixes plus market and docking graphics are tracked as shipped in `docs/IMPROVEMENT_PLAN.md`. Cargo-specific NPC dialogue is tracked there as planned work.
 
 ---
 
