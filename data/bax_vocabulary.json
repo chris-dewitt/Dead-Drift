@@ -12,17 +12,38 @@
     "cargo"
   ],
   "backdoors": {
-    "gary": [],
-    "syntheticdroid": [
-      "employee_of_month"
+    "gary": [
+      "overtime"
     ],
-    "uniondispatcher": [],
+    "syntheticdroid": [
+      "employee_of_month",
+      "override_code",
+      "friendship"
+    ],
+    "uniondispatcher": [
+      "the_42_path",
+      "coffee_break",
+      "bureaucratic_overwhelm",
+      "legal_pressure"
+    ],
     "cargo_inspector": [
       "code_citation",
       "CODE_CITATION"
     ],
     "insuranceadjuster": [
       "form_34a"
+    ],
+    "nova_soma_collections": [
+      "policy_citation"
+    ],
+    "dray": [
+      "intel_trade"
+    ],
+    "nervous_fence": [
+      "cargo_manifest"
+    ],
+    "toll_authority": [
+      "PAPERWORK_EXPLOIT"
     ]
   }
 }
