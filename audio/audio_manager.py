@@ -22,6 +22,7 @@ from audio.synth import (
     delivery_footstep, delivery_hit_sting, delivery_door_chime,
     sector_pad, slide_blues_note,
     tape_hum_bed, slingshot_stinger, barge_motif, decanting_printer,
+    npc_sig_dispatcher, npc_sig_adjuster, torch_slow_clap,
     _to_sound, _2PI,
     drum_kick, drum_snare_gated, drum_hihat, drum_clap,
     synth_bass_note,
@@ -49,9 +50,10 @@ _BASS_CH    = 23   # walking sub-bass loop
 _GTR_CH     = 24   # acoustic guitar phrases (one-shot)
 _ARP_CH     = 25   # new-wave arpeggio pad
 _SLIDE_CH   = 26   # mournful slide-blues notes
-_HUM_CH     = 27   # tape hum bed (subliminal glue layer)
-_BARGE_CH   = 28   # barge motif drone
-_SFX_POOL   = 10   # channels 10-19: one-shot SFX pool
+_HUM_CH       = 27   # tape hum bed (subliminal glue layer)
+_BARGE_CH     = 28   # barge motif drone
+_HUM_VOICE_CH = 29   # Bax hums (§7.4) — own channel so voice-duck doesn't grab it
+_SFX_POOL     = 10   # channels 10-19: one-shot SFX pool
 
 _BAX_CHARS_PER_SEC = 32.0
 
@@ -222,6 +224,8 @@ class AudioManager:
         self._drone_ch: pygame.mixer.Channel | None = None
         self._hum_ch:   pygame.mixer.Channel | None = None
         self._barge_ch: pygame.mixer.Channel | None = None
+        self._hum_voice_ch: pygame.mixer.Channel | None = None
+        self._bax_hums: list[pygame.mixer.Sound] = []
         self._licks:    list[pygame.mixer.Sound] = []
         self._sfx:      dict[str, pygame.mixer.Sound] = {}
         self._voices:   dict[str, list[pygame.mixer.Sound]] = {}
@@ -309,6 +313,11 @@ class AudioManager:
 
         # Lick mood filter — set by Bax event handler
         self._next_lick_mood: str | None = None
+        # Edge-trigger cooldowns so repeating events don't queue the same mood every frame
+        self._barge_mood_cd:   float = 0.0
+        self._hull_crit_mood_cd: float = 0.0
+        # Idle harp alternates lonely / weary so two consecutive licks aren't the same mood
+        self._idle_mood_toggle: int = 0
 
         # Master FX (hull degradation)
         self._master_fx = None
@@ -378,6 +387,9 @@ class AudioManager:
         self._sfx["sling_stinger"] = slingshot_stinger()
         self._sfx["printer"]       = decanting_printer()
         self._sfx["tape_hum"]      = tape_hum_bed()
+        self._sfx["npc_dispatcher"] = npc_sig_dispatcher()
+        self._sfx["npc_adjuster"]   = npc_sig_adjuster()
+        self._sfx["torch_clap"]     = torch_slow_clap()
         self._barge_motif_snd      = barge_motif()
 
         print("[audio] generating blues licks…", flush=True)
@@ -385,6 +397,10 @@ class AudioManager:
 
         print("[audio] generating character voices…", flush=True)
         self._voices = prebuild_voices()
+
+        print("[audio] generating Bax hums…", flush=True)
+        from audio.bax_hum import prebuild_all_hums
+        self._bax_hums = prebuild_all_hums()
 
         print("[audio] generating sector pads…", flush=True)
         from config import settings as S
@@ -500,6 +516,11 @@ class AudioManager:
             self._barge_ch.set_volume(0.0)
             self._barge_ch.play(self._barge_motif_snd, loops=-1)
 
+        # Bax hum voice channel (§7.4) — own channel so voice-duck logic
+        # (which handles speaking blips) doesn't squash the hum.
+        self._hum_voice_ch = pygame.mixer.Channel(_HUM_VOICE_CH)
+        self._hum_voice_ch.set_volume(0.0)
+
         # Radio piggybacks on the slide channel (only one ever active at a time)
         self._radio_ch = self._slide_ch
 
@@ -525,6 +546,10 @@ class AudioManager:
         bus.subscribe(EVT_DELIVERY_HIT,   self._on_d_hit)
         bus.subscribe(EVT_DELIVERY_DONE,  self._on_d_done)
         bus.subscribe(EVT_SECTOR_CLEAR,   self._on_sector_clear)
+        from core.event_bus import EVT_HULL_CRITICAL, EVT_MODULE_UNBOLTED, EVT_TORCH_ACTIVE
+        bus.subscribe(EVT_HULL_CRITICAL,  self._on_hull_critical)
+        bus.subscribe(EVT_MODULE_UNBOLTED, self._on_module_unbolted)
+        bus.subscribe(EVT_TORCH_ACTIVE,   self._on_torch_active)
         bus.subscribe(EVT_RUN_START,      self._on_run_start)
 
     # ------------------------------------------------------------------
@@ -538,6 +563,12 @@ class AudioManager:
 
         self._update_pressure(speed)
         self._tick_bar(dt)
+
+        # Edge-trigger cooldowns for repeating mood-queue events
+        if self._barge_mood_cd > 0.0:
+            self._barge_mood_cd -= dt
+        if self._hull_crit_mood_cd > 0.0:
+            self._hull_crit_mood_cd -= dt
 
         if not self._in_terminal:
             self._update_engine(speed)
@@ -554,6 +585,9 @@ class AudioManager:
         self._tick_decanting(dt)
         self._tick_menu_idle(dt)
         self._tick_chapter_cargo(dt)
+        # Plan §2.4 — keep the active stem count at or below 5 by ducking the
+        # lowest-priority hot stem when a 6th wants in.
+        self._enforce_stem_budget()
 
         if self._master_fx:
             self._master_fx.update(hull_pct, cargo_alarm)
@@ -751,13 +785,16 @@ class AudioManager:
             self._voice_duck_target = self._VOICE_DUCK_FLOOR
         else:
             self._voice_duck_target = 1.0
-        rate = 7.0
-        if self._voice_duck < self._voice_duck_target:
-            self._voice_duck = min(self._voice_duck_target,
-                                   self._voice_duck + rate * dt)
-        elif self._voice_duck > self._voice_duck_target:
+        # Asymmetric attack/release so duck-in is gentle (~200 ms) but
+        # duck-out is brisk (~170 ms) — music breathes back fast after a line.
+        if self._voice_duck > self._voice_duck_target:
+            rate = 3.0   # attack (going down)
             self._voice_duck = max(self._voice_duck_target,
                                    self._voice_duck - rate * dt)
+        elif self._voice_duck < self._voice_duck_target:
+            rate = 6.0   # release (going up)
+            self._voice_duck = min(self._voice_duck_target,
+                                   self._voice_duck + rate * dt)
         self._refresh_ducked_loops()
 
     def _refresh_ducked_loops(self) -> None:
@@ -769,7 +806,8 @@ class AudioManager:
         if self._hum_ch:
             self._hum_ch.set_volume(m * (0.038 / self._master) if self._master else 0)
         if self._lick_ch and self._lick_ch.get_busy():
-            self._lick_ch.set_volume(m * (1.0 / self._master) if self._master else 0)
+            # Plan §2.4 — harp is the 5th-priority voice, sits *under* the band.
+            self._lick_ch.set_volume(m * (0.55 / self._master) if self._master else 0)
         if self._gtr_ch and self._gtr_ch.get_busy():
             vol = 0.55 if self._scene == SCENE_DELIVERY else 0.42
             self._gtr_ch.set_volume(m * (vol / self._master) if self._master else 0)
@@ -777,7 +815,8 @@ class AudioManager:
             vol = 0.65 if self._scene == SCENE_DECANTING else 0.40
             self._slide_ch.set_volume(m * (vol / self._master) if self._master else 0)
         if self._barge_ch and self._barge_ch.get_busy():
-            self._barge_ch.set_volume(m * (0.28 / self._master) if self._master else 0)
+            # Plan §6.2 target: -24 dBFS drone, not a foreground harp.
+            self._barge_ch.set_volume(m * (0.09 / self._master) if self._master else 0)
 
     def _apply_band_volumes(self):
         m = self._music_gain()
@@ -858,8 +897,13 @@ class AudioManager:
                 lick = generate_lick(mood=self._next_lick_mood)
                 self._next_lick_mood = None
             else:
-                lick = random.choice(self._licks)
-            self._lick_ch.set_volume(self._music_gain() * (1.0 / self._master) if self._master else 0)
+                # Idle ambient — alternate lonely / weary so the score's resting
+                # texture is melancholy, not random.  (Plan §7.3.)
+                idle_mood = "lonely" if self._idle_mood_toggle == 0 else "weary"
+                self._idle_mood_toggle ^= 1
+                lick = generate_lick(mood=idle_mood)
+            # Plan §2.4 — harp is the 5th-priority voice, sits *under* the band.
+            self._lick_ch.set_volume(self._music_gain() * (0.55 / self._master) if self._master else 0)
             self._lick_ch.play(lick)
             if self._scene == SCENE_TERMINAL:
                 self._lick_cd = random.uniform(18.0, 32.0)
@@ -910,7 +954,8 @@ class AudioManager:
         """Fade barge motif drone in/out based on proximity."""
         if self._barge_ch is None:
             return
-        target_vol = self._music_gain() * 0.28 if self._barge_nearby else 0.0
+        # Plan §6.2: -24 dBFS drone — under the bandstand, not over it.
+        target_vol = self._music_gain() * 0.09 if self._barge_nearby else 0.0
         cur = self._barge_ch.get_volume()
         step = 0.016 * 0.4   # ~2.5s fade
         if cur < target_vol:
@@ -1049,6 +1094,20 @@ class AudioManager:
         except Exception:
             pass
 
+    def play_bax_hum(self, idx: int) -> None:
+        """Play one of the 8 prebuilt Bax hums on a dedicated channel.
+        Ducks the bandstand (drum/bass/arp targets × 0.25) so the hum is the
+        clear foreground.  Bandstand restores naturally on next set_scene().
+        Plan §7.4.
+        """
+        if not 0 <= idx < len(self._bax_hums) or self._hum_voice_ch is None:
+            return
+        # Duck the band so the hum is the foreground voice
+        self._vol_targets = {k: v * 0.25 for k, v in self._vol_targets.items()}
+        self._hum_voice_ch.stop()
+        self._hum_voice_ch.set_volume(self._master * 0.62)
+        self._hum_voice_ch.play(self._bax_hums[idx])
+
     def _restore_pad_transposition(self):
         """Return pad to root transposition after slingshot key change."""
         if self._arp_ch and self._sling_pad_tiers:
@@ -1084,18 +1143,21 @@ class AudioManager:
         if amount > 5:
             self._play_sfx("hull", 0.82)
 
-    def _on_clang(self, **_):   self._play_sfx("clang")
+    def _on_clang(self, **_):   self._play_sfx("clang", 0.72)
     def _on_gun(self, **_):     self._play_sfx("gun", 0.62)
-    def _on_canister(self, **_): self._play_sfx("canister", 0.70)
+    def _on_canister(self, **_):
+        self._play_sfx("canister", 0.70)
+        self._next_lick_mood = "cocky"
     def _on_spore(self, active, **_):
         if active:
             self._play_sfx("spore", 0.75)
 
     def _on_snap(self, **_):
-        self._play_sfx("snap")
+        self._play_sfx("snap", 0.78)
         # Schedule musical resolution: snare flam on next sub-beat, then pad opens
         self._snap_resolve_t = self._bar_dur * 0.25   # quarter-bar ahead
         self._snap_beats_left = 2
+        self._next_lick_mood = "cocky"
 
     def _on_death(self, **_):
         self._play_sfx("death", 0.90)
@@ -1125,6 +1187,25 @@ class AudioManager:
         ch = self._bax_v_ch
         if ch and not ch.get_busy():
             self._play_sfx("barge", 0.65)
+        # Edge-trigger: queue a sarcastic harp lick only once per ~15s window,
+        # not every frame the barge is in range.
+        if self._barge_mood_cd <= 0.0:
+            self._next_lick_mood = "sarcastic"
+            self._barge_mood_cd  = 15.0
+
+    def _on_hull_critical(self, hp=0, **_):
+        # Fires repeatedly while hull is critical — cooldown keeps it from spamming.
+        if self._hull_crit_mood_cd <= 0.0:
+            self._next_lick_mood = "panic"
+            self._hull_crit_mood_cd = 10.0
+
+    def _on_module_unbolted(self, **_):
+        self._next_lick_mood = "weary"
+
+    def _on_torch_active(self, **_):
+        # Plays each time the barge re-cycles its torch (every ~5s).  Already
+        # spaced by the emitter, so no cooldown needed here.
+        self._play_sfx("torch_clap", 0.50)
 
     def _on_bax_speak(self, line: str = "", **_):
         if not line:
@@ -1179,7 +1260,7 @@ class AudioManager:
         self._music_active = 0
         self._music_xfade  = 0.0
 
-    def _on_term_open(self, **_):
+    def _on_term_open(self, npc=None, **_):
         self._in_terminal = True
         for ch in self._eng_ch:
             ch.set_volume(0.0)
@@ -1194,6 +1275,12 @@ class AudioManager:
         if self._drone_ch and self._sfx.get("drone"):
             self._drone_ch.set_volume(self._master * 0.32)
             self._drone_ch.play(self._sfx["drone"], loops=-1)
+        # NPC-specific sonic signatures (plan §7.2)
+        npc_cls = type(npc).__name__ if npc is not None else ""
+        if npc_cls == "UnionDispatcher":
+            self._play_sfx("npc_dispatcher", 0.55)
+        elif npc_cls == "InsuranceAdjuster":
+            self._play_sfx("npc_adjuster", 0.50)
 
     def _on_term_close(self, outcome: str = "", path: str = "",
                        reaction: str = "", **_):

@@ -796,3 +796,58 @@ def terminal_drone(duration: float = 6.0) -> pygame.mixer.Sound:
     w[:fade]  *= np.linspace(0.0, 1.0, fade)
     w[-fade:] *= np.linspace(1.0, 0.0, fade)
     return _to_sound((w * 0.65).clip(-1.0, 1.0))
+
+
+def npc_sig_dispatcher(root: float = 220.0, duration: float = 1.4) -> pygame.mixer.Sound:
+    """Union Dispatcher signature — tritone substitution pad swell.
+    Plan §7.2: root pad chord → its tritone (♭5) substitute, briefly.
+    """
+    t = _t(duration)
+    tri_freq  = root * (2.0 ** (6 / 12.0))   # +6 semitones = tritone
+    fifth_lo  = root * (2.0 ** (-5 / 12.0))  # P4 below root (low body)
+    env = 0.5 - 0.5 * np.cos(_2PI * (t / duration))   # bell-shape attack/decay
+    w  = _sine(root,      duration, amp=0.22) * env
+    w += _sine(tri_freq,  duration, amp=0.28) * env
+    w += _sine(tri_freq * 1.005, duration, amp=0.18) * env   # detuned twin
+    w += _sine(fifth_lo,  duration, amp=0.14) * env
+    return _to_sound(w.clip(-1.0, 1.0))
+
+
+def npc_sig_adjuster(duration: float = 1.2) -> pygame.mixer.Sound:
+    """Insurance Adjuster signature — single pure 880 Hz sine, perfectly in tune.
+    Plan §7.2: 'the only in-tune thing in the game'.  No detune, no vibrato.
+    """
+    t = _t(duration)
+    # Soft attack so it isn't a click, soft release so it isn't a cut.
+    n   = len(t)
+    env = np.ones(n)
+    a   = int(SAMPLE_RATE * 0.12)
+    r   = int(SAMPLE_RATE * 0.25)
+    env[:a]   = np.linspace(0.0, 1.0, a)
+    env[-r:]  = np.linspace(1.0, 0.0, r)
+    w = _sine(880.0, duration, amp=0.42) * env
+    return _to_sound(w)
+
+
+def torch_slow_clap(duration: float = 2.8) -> pygame.mixer.Sound:
+    """Repo Barge TORCH state signature — two slow ironic claps on the off-beat.
+    Plan §7.2: 'Add a slow clap on the off-beat'.
+    """
+    n = int(SAMPLE_RATE * duration)
+    buf = np.zeros(n, dtype=np.float32)
+    # Clap = short noise burst + tiny pitched body
+    def _one_clap(at_s: float, amp: float = 0.55):
+        start = int(SAMPLE_RATE * at_s)
+        clap_dur = 0.09
+        clap_n = int(SAMPLE_RATE * clap_dur)
+        if start + clap_n > n:
+            return
+        noise = np.random.uniform(-1.0, 1.0, clap_n).astype(np.float32)
+        env = np.exp(-np.linspace(0.0, 6.0, clap_n))
+        body = _sine(1200.0, clap_dur, amp=0.25) * env
+        hit = (noise * env + body) * amp
+        buf[start:start + clap_n] += hit
+    # Two claps, spaced like an ironic "...clap.  ...clap."  on off-beats.
+    _one_clap(0.40, 0.62)
+    _one_clap(1.65, 0.55)
+    return _to_sound(buf.clip(-1.0, 1.0))

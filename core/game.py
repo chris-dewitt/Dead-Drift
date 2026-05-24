@@ -115,6 +115,12 @@ class Game:
         # Death hold — brief black screen before DECANTING to let the explosion register
         self._death_hold_t: float = 0.0   # >0 = holding on death flash before transition
 
+        # Bax hum trigger (§7.4) — once per run on first delivery success
+        self._hum_played_this_run: bool = False
+
+        # Jukebox menu state — only enterable after a campaign clear
+        self._jukebox_cursor: int = 0
+
         self._wire_events()
 
     def _bind_meta_from_active_slot(self) -> None:
@@ -136,6 +142,9 @@ class Game:
         bus.subscribe(EVT_SHIP_DESTROYED, self._on_ship_destroyed)
         bus.subscribe(EVT_RUN_END,        self._on_run_end)
         bus.subscribe(EVT_TORCH_ACTIVE,   self._on_torch_active)
+        from core.event_bus import EVT_DELIVERY_DONE, EVT_RUN_START
+        bus.subscribe(EVT_DELIVERY_DONE,  self._on_delivery_done)
+        bus.subscribe(EVT_RUN_START,      self._on_bax_hum_run_start)
 
     # ------------------------------------------------------------------
     # State → musical scene mapping. Drives AudioManager.set_scene().
@@ -214,6 +223,34 @@ class Game:
             self.meta.save()
             self._run_just_completed = False
             self._goto(GameState.MAIN_MENU)
+
+    # ------------------------------------------------------------------
+    # Bax hum (§7.4) — one per run on first delivery success.
+    def _on_bax_hum_run_start(self, **_):
+        self._hum_played_this_run = False
+
+    def _on_delivery_done(self, **_):
+        if self._hum_played_this_run:
+            return
+        self._hum_played_this_run = True
+        if self.audio is None:
+            return
+        from audio.bax_hum import CAMPAIGN_CLEAR_HUM_IDX, hum_count
+        heard = set(self.meta.bax_hums_heard)
+        # Hum 7 is reserved for Chapter 4 deliveries.
+        if self._delivery_chapter == 4:
+            idx = CAMPAIGN_CLEAR_HUM_IDX
+        else:
+            # Pick the first unheard non-7 hum; fall back to a random replay.
+            unheard = [i for i in range(hum_count())
+                       if i not in heard and i != CAMPAIGN_CLEAR_HUM_IDX]
+            if unheard:
+                idx = unheard[0]
+            else:
+                non_seven = [i for i in range(hum_count()) if i != CAMPAIGN_CLEAR_HUM_IDX]
+                idx = random.choice(non_seven)
+        self.meta.mark_hum_heard(idx)
+        self.audio.play_bax_hum(idx)
 
     # ------------------------------------------------------------------
     def run(self, start_state: GameState = None, start_sector: int = 0):
@@ -308,8 +345,11 @@ class Game:
         rows.extend([
             ("NEW GAME", True, "new"),
             ("LOAD GAME", True, "load"),
-            ("QUIT", True, "quit"),
         ])
+        # Jukebox unlocks after the player has completed all 4 chapters at least once
+        if self.meta.campaign_cleared_at_least_once:
+            rows.append(("BAX'S TAPES", True, "jukebox"))
+        rows.append(("QUIT", True, "quit"))
         return rows
 
     def _menu_activate(self) -> None:
@@ -364,6 +404,9 @@ class Game:
         elif action == "load":
             self._menu_mode = "pick_load"
             self._slot_cursor = 0
+        elif action == "jukebox":
+            self._menu_mode = "jukebox"
+            self._jukebox_cursor = 0
         elif action == "quit":
             self.running = False
 
@@ -429,6 +472,20 @@ class Game:
             elif event.key == pygame.K_ESCAPE:
                 self._menu_mode = "main"
                 self._pending_slot = None
+            return
+
+        if self._menu_mode == "jukebox":
+            from audio.bax_hum import hum_count
+            if event.key in (pygame.K_UP, pygame.K_w):
+                self._jukebox_cursor = (self._jukebox_cursor - 1) % hum_count()
+            elif event.key in (pygame.K_DOWN, pygame.K_s):
+                self._jukebox_cursor = (self._jukebox_cursor + 1) % hum_count()
+            elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                heard = set(self.meta.bax_hums_heard)
+                if self._jukebox_cursor in heard and self.audio:
+                    self.audio.play_bax_hum(self._jukebox_cursor)
+            elif event.key == pygame.K_ESCAPE:
+                self._menu_mode = "main"
             return
 
         rows = self._main_menu_rows()
@@ -1521,6 +1578,63 @@ class Game:
         self.screen.blit(s2, (panel.left + 8, panel.bottom - 12))
 
     # ------------------------------------------------------------------
+    def _render_jukebox_panel(self, t: float, py: int,
+                               font_h: pygame.font.Font,
+                               font_row: pygame.font.Font,
+                               font_sm: pygame.font.Font) -> None:
+        """Bax's Tapes — Bax-clipboard layout, hum titles only revealed once heard."""
+        from audio.bax_hum import hum_count, hum_title
+        cx = S.SCREEN_W // 2
+        heard = set(self.meta.bax_hums_heard)
+
+        title = "BAX'S TAPES — CLONE-TANK B-SIDES"
+        ts = font_h.render(title, True, (210, 170, 60))
+        self.screen.blit(ts, (cx - ts.get_width() // 2, py - 12))
+
+        sub = font_sm.render(
+            f"{len(heard)} / {hum_count()} hums on the clipboard.  "
+            "Eight in total.  He won't say where the rest are.",
+            True, (110, 130, 150),
+        )
+        self.screen.blit(sub, (cx - sub.get_width() // 2, py + 10))
+
+        row_y = py + 36
+        # Soft scanline cycle on the selected row
+        scan_phase = (t * 1.6) % 1.0
+        for i in range(hum_count()):
+            is_sel    = (i == self._jukebox_cursor)
+            was_heard = (i in heard)
+            label = hum_title(i) if was_heard else "■■■■■■■■■■"
+            glyph = "○" if was_heard else "✕"
+            num   = f"{i + 1:02d}"
+            row_text = f"  {num}   {glyph}   {label}"
+            if was_heard:
+                col = (230, 190, 70) if is_sel else (180, 150, 60)
+            else:
+                col = (90, 70, 40) if is_sel else (60, 55, 70)
+            if is_sel:
+                # Amber selection chevron + faint backdrop strip
+                strip = pygame.Surface((460, 28), pygame.SRCALPHA)
+                strip.fill((40, 30, 8, 130))
+                self.screen.blit(strip, (cx - 230, row_y - 4))
+                pygame.draw.rect(self.screen, (200, 150, 50),
+                                 (cx - 230, row_y - 4, 460, 28), 1)
+                chev = font_row.render(">", True, (255, 200, 80))
+                self.screen.blit(chev, (cx - 222, row_y))
+                # Scanline glow line drifting through the row
+                sy = int(row_y + 20 * scan_phase)
+                pygame.draw.line(self.screen, (255, 200, 80, 80),
+                                 (cx - 226, sy), (cx + 226, sy), 1)
+            rs = font_row.render(row_text, True, col)
+            self.screen.blit(rs, (cx - rs.get_width() // 2, row_y))
+            row_y += 32
+
+        hint = font_sm.render(
+            "↑↓ select   ENTER play heard hum   ESC back",
+            True, (90, 90, 110),
+        )
+        self.screen.blit(hint, (cx - hint.get_width() // 2, row_y + 8))
+
     def _render_main_menu_actions(self, t: float) -> None:
         cx = S.SCREEN_W // 2
         py = int(S.SCREEN_H * 0.54)
@@ -1569,6 +1683,10 @@ class Game:
                 col = (220, 140, 60) if i == 0 else (140, 140, 160)
                 s = font_row.render(line, True, col)
                 self.screen.blit(s, (cx - s.get_width() // 2, py + i * 28))
+            return
+
+        if self._menu_mode == "jukebox":
+            self._render_jukebox_panel(t, py, font_h, font_row, font_sm)
             return
 
         if self._menu_mode in ("pick_new", "pick_load"):

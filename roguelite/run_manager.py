@@ -589,16 +589,10 @@ class RunManager:
         return ctx
 
     def open_terminal(self, npc_type: str, **npc_kwargs) -> Terminal:
-        if "run_context" not in npc_kwargs:
-            npc_kwargs["run_context"] = self._build_run_context()
-        terminal_vault = npc_kwargs.pop("vocabulary_vault", self._vault)
-        if npc_type in {
-            "union_dispatcher",
-            "toll_authority",
-            "nervous_fence",
-            "cargo_inspector",
-        } and terminal_vault is not None:
-            npc_kwargs.setdefault("vocabulary_vault", terminal_vault)
+        npc_kwargs.setdefault("run_context", self._build_run_context())
+        # Mira Voss needs a ship reference so she can call ship.repair() on success.
+        if npc_type == "mira_voss" and self._ship is not None:
+            npc_kwargs.setdefault("ship", self._ship)
         npc = make_npc(npc_type, **npc_kwargs)
         self._active_terminal = Terminal(
             npc,
@@ -663,11 +657,11 @@ class RunManager:
         else:
             pool = ["synthetic_droid", "union_dispatcher", "cargo_inspector"]
             if self._sector_index >= 1:
-                pool.extend(["underground_dj", "nervous_fence"])
+                pool.extend(["underground_dj", "nervous_fence", "dray"])
             if self._sector_index >= 2:
-                pool.extend(["sandra", "pirate"])
+                pool.extend(["sandra", "pirate", "nova_soma_collections"])
             if self._sector_index >= 3:
-                pool.extend(["insurance_adjuster", "cargo_inspector"])
+                pool.extend(["insurance_adjuster", "cargo_inspector", "mira_voss"])
             if self._sector_index >= 5:
                 pool.append("gary")
             npc_type = random.choice(pool)
@@ -735,6 +729,43 @@ class RunManager:
                     "Or cite a cargo code. Any code. He won't check.",
                     "Cargo inspector. Nine years on the job. "
                     "Be vague three times and he gives up — or just say 'general goods'.",
+                ],
+                "dray": [
+                    "Open relay — that's Dray. Fellow courier, sector three. "
+                    "He's bored, he's bitter, he hates Nova Soma — same as us. "
+                    "Gripe with him about the job and he'll trade gate intel. "
+                    "Whatever you do, DON'T sound like Compliance.",
+                    "Dray on the comm. Slacker. Lazy in the best way. "
+                    "He's got tip-offs but you've got to earn 'em with sympathy. "
+                    "Talk debt, talk barges, talk burnout. Don't talk procedure.",
+                    "Courier-to-courier channel. Dray. "
+                    "Bloke's been on the job four years and still only one warning. "
+                    "Match his energy — bitter, bored, badly paid. He'll hook us up.",
+                ],
+                "nova_soma_collections": [
+                    "Oh. OH. That's Nova Soma — the debt department. "
+                    "Automated. It's a BOT, mate. Wellness chatbot reading from a script. "
+                    "Hit it with a paradox or an SQL inject — it'll crash and route to handled. "
+                    "DON'T swear. DON'T threaten. It escalates to a human, who calls a barge.",
+                    "Nova Soma Collections AI on the line. "
+                    "Corporate wellness script. Fully exploitable — drop tables, paradoxes, "
+                    "policy citations all work. Be polite about it. The bot logs hostility.",
+                    "Debt bot incoming. 'Hi there, valued customer.' Gag me. "
+                    "Logic flaws everywhere — paradoxes, SQL, fake form numbers. "
+                    "Hardship clause works too — pretend you're in crisis. "
+                    "It's literally programmed to back off.",
+                ],
+                "mira_voss": [
+                    "Bay nine medic — that's MIRA VOSS. Off-books hull tech. "
+                    "Used to work Local 404 maintenance, got fired, now she's freelance. "
+                    "Pay her or trade intel or share cargo. She'll seal the hull. "
+                    "Don't waste her time — she'll close the comm.",
+                    "Voss on the channel. Hull medic, no questions, no paperwork. "
+                    "Cash, gate intel, or cargo cuts — pick one. "
+                    "If you know any actual welding terms, drop 'em. She'll patch for free.",
+                    "Repair stand opening up — Mira Voss. Best off-books mechanic in the sector. "
+                    "She doesn't care who you are. Just don't be rude and "
+                    "have something to offer. Don't ramble — she's working.",
                 ],
             }
             default_framing = [
