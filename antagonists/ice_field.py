@@ -31,6 +31,8 @@ class IceField:
         """Call each frame. Applies ice physics if ship is inside. Returns True if inside."""
         if not self.contains(ship.pos):
             return False
+        if hasattr(ship, "apply_thrust_scale"):
+            ship.apply_thrust_scale(1.0 - _THRUST_PENALTY)
         vel = ship.body.vel
         spd = vel.length()
         if spd > 0.5:

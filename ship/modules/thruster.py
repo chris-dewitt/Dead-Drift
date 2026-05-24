@@ -1,6 +1,12 @@
 from __future__ import annotations
 from ship.modules.base_module import BaseModule
 from config import settings as S
+from core.event_bus import bus, EVT_THRUSTER_OVERHEAT
+
+
+_IDLE_COOLDOWN = 24.0
+_OFFLINE_COOLDOWN = 18.0
+_RECOVERY_HEAT = 58.0
 
 
 class Thruster(BaseModule):
@@ -27,6 +33,8 @@ class Thruster(BaseModule):
         self.overheated      = False
         self._buff_mult      = 1.0
         self._buff_remaining = 0.0
+        self._firing         = False
+        self._heat_absorption = 0.0
 
     @property
     def force(self) -> float:
@@ -42,14 +50,32 @@ class Thruster(BaseModule):
                 self._buff_mult = 1.0
 
         if not self.active or not self.is_functional():
-            self.heat = max(0.0, self.heat - 15.0 * dt)
-            if self.heat <= 0.0:
+            self.heat = max(0.0, self.heat - _OFFLINE_COOLDOWN * dt)
+            if self.heat <= _RECOVERY_HEAT:
                 self.overheated = False
+            self._firing = False
             return
 
-        self.heat += self.heat_gen * dt
-        if self.heat >= 100.0:
+        if self._firing:
+            self.heat += max(0.0, self.heat_gen - self._heat_absorption) * dt
+        else:
+            self.heat = max(0.0, self.heat - (_IDLE_COOLDOWN + self._heat_absorption) * dt)
+
+        self.heat = min(100.0, self.heat)
+        if self.heat >= 100.0 and not self.overheated:
             self.overheated = True
+            bus.emit(EVT_THRUSTER_OVERHEAT, thruster=self, heat=self.heat)
+        elif self.heat <= _RECOVERY_HEAT:
+            self.overheated = False
+
+        self._firing = False
+
+    def mark_firing(self):
+        """Called by PlayerShip when this thruster actually applies force."""
+        self._firing = True
+
+    def set_heat_absorption(self, amount: float):
+        self._heat_absorption = max(0.0, amount)
 
     def inject_fuel_mix(self, buff_multiplier: float, duration: float):
         """Bax's mixologist injects a volatile concoction."""

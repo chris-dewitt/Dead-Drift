@@ -1,6 +1,6 @@
 """
 Mid-run black market between sectors.
-Appears after sectors 3 and 6 (configurable via SHOP_SECTORS).
+Appears after sectors configured in config.settings.SHOP_SECTORS.
 Player spends run credits (recovered debt) on one-time upgrades.
 """
 from __future__ import annotations
@@ -8,8 +8,6 @@ import math
 import random
 import pygame
 from config import settings as S
-
-SHOP_SECTORS = {3, 6}
 
 _INTRO_DURATION  = 3.8   # seconds before items appear; any key skips
 _TYPEWRITER_RATE = 30    # chars per second during intro

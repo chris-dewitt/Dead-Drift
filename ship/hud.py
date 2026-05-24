@@ -66,6 +66,8 @@ class HUD:
         cargo_text = font.render(f"CARGO  {cargo_label}", True, self._tint(cargo_color))
         surface.blit(cargo_text, (20 + ox, 100 + oy))
 
+        self._draw_thruster_heat(surface, ox, oy)
+
     def _draw_hull_bar(self, surface: pygame.Surface, ox: int, oy: int):
         font     = self._get_font()
         bar_w    = 200
@@ -80,6 +82,40 @@ class HUD:
         fill_rect  = pygame.Rect(20 + ox, 38 + oy, filled, bar_h)
         pygame.draw.rect(surface, S.GREY_DEAD, bar_rect, 1)
         pygame.draw.rect(surface, color, fill_rect)
+
+    def _draw_thruster_heat(self, surface: pygame.Surface, ox: int, oy: int):
+        thruster = self._primary_thruster()
+        if thruster is None:
+            return
+        font = self._get_font()
+        heat = max(0.0, min(100.0, getattr(thruster, "heat", 0.0)))
+        overheated = bool(getattr(thruster, "overheated", False))
+        if overheated:
+            color = S.RED_WARN
+            status = "OVR"
+        elif heat >= 70.0:
+            color = S.AMBER_TERM
+            status = "HOT"
+        else:
+            color = S.GREEN_TERM
+            status = "OK "
+
+        label = font.render(f"THRST {heat:>5.1f}C {status}", True, self._tint(color))
+        surface.blit(label, (20 + ox, 124 + oy))
+
+        bar_w, bar_h = 200, 8
+        bar_rect = pygame.Rect(20 + ox, 142 + oy, bar_w, bar_h)
+        fill_rect = pygame.Rect(20 + ox, 142 + oy, int(bar_w * heat / 100.0), bar_h)
+        pygame.draw.rect(surface, S.GREY_DEAD, bar_rect, 1)
+        pygame.draw.rect(surface, color, fill_rect)
+
+    def _primary_thruster(self):
+        chain = getattr(self.ship, "chain", None)
+        slots = getattr(chain, "slots", [])
+        for module in slots:
+            if module is not None and "propulsion" in getattr(module, "tags", []):
+                return module
+        return None
 
     def _hull_color(self) -> tuple:
         hp = self.ship.hull

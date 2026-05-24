@@ -2,8 +2,8 @@
 
 **Last reviewed:** May 2026  
 **Maintainer:** Chris / Dead Drift team  
-**Purpose:** Track which docs are accurate, which are stale, and which decisions still need a human call.  
-**Rule:** Factual drift is recorded here. **Do not resolve open design forks without Chris’s answer.**
+**Purpose:** Track which docs are accurate, which are stale, and which decisions have been made.  
+**Rule:** Factual drift is recorded here. **Do not reopen resolved design forks unless Chris asks.**
 
 ---
 
@@ -25,13 +25,13 @@
 
 | # | Priority | Status in code (May 2026) |
 |---|----------|---------------------------|
-| 1 | **All NPCs have detailed portraits**, including Inspector Holt | **Open** — Holt and Relay-7 Felix render `?` placeholder |
-| 2 | **Thruster appears broken** — works for a while, then stops | **Open (bug)** — overheat trap; heat absorption not wired |
-| 3 | **ESC leaves the market** | **Open (bug)** — ESC opens pause before shop leave handler |
+| 1 | **All NPCs have detailed portraits**, including Inspector Holt | **Fixed** — Holt and Relay-7 Felix have procedural busts and CRT backdrops |
+| 2 | **Thruster appears broken** — works for a while, then stops | **Fixed** — heat only rises on thrust, life support absorbs heat, HUD shows heat |
+| 3 | **ESC leaves the market** | **Fixed** — shop ESC routes to `ShopScreen` before pause handling |
 | 4 | **Improve market graphics** | **Open (polish)** |
 | 5 | **Improve docking graphics** | **Open (polish)** |
 
-Tracked in `docs/IMPROVEMENT_PLAN.md` → **Phase 0**.
+Phase 0 trust fixes are tracked as shipped in `docs/IMPROVEMENT_PLAN.md`; market/docking graphics remain polish work.
 
 ---
 
@@ -39,8 +39,8 @@ Tracked in `docs/IMPROVEMENT_PLAN.md` → **Phase 0**.
 
 | Doc | Role | Accuracy |
 |-----|------|----------|
-| `docs/IMPROVEMENT_PLAN.md` | Master implementation plan + checkboxes | Current (May 2026 pass) |
-| `docs/DECISION_BRIEFS.md` | Open forks §3–§4 detail | Current — pending Chris |
+| `docs/IMPROVEMENT_PLAN.md` | Master implementation plan + checkboxes | Current (Phase 0 shipped May 2026) |
+| `docs/DECISION_BRIEFS.md` | Historical decision briefs §3–§4 | Current — resolved May 2026 |
 | `docs/CORRIDOR_DESIGN.md` | Corridor level design | Mostly current |
 | `docs/BAX_VOICE.md` | Bax line bank | Current as writing spec |
 | `docs/SOUNDTRACK_PLAN.md` | Audio spec + **implementation status** | Current |
@@ -51,7 +51,7 @@ Tracked in `docs/IMPROVEMENT_PLAN.md` → **Phase 0**.
 
 ---
 
-## Open decisions — do not implement until Chris replies
+## Design decisions — resolved
 
 **All design forks resolved May 2026.** Historical detail: [DECISION_BRIEFS.md](DECISION_BRIEFS.md) (superseded options kept for record).
 
@@ -62,12 +62,11 @@ Tracked in `docs/IMPROVEMENT_PLAN.md` → **Phase 0**.
 | Item | Issue |
 |------|--------|
 | `roguelite/tutorial.py` docstring | Says `clone_count == 1`; live code uses `<= 3` |
-| `roguelite/shop.py` line 12 | Dead `SHOP_SECTORS = {3, 6}`; live `{1, 3}` in `settings.py` |
 
 ---
 
 ## How to use this file
 
-1. Resolve open items in **DECISION_BRIEFS.md** before changing themes or landing Beat 2.  
-2. After Phase 0 ships, update the **Team-tracked priorities** table.  
+1. Treat **DECISION_BRIEFS.md** as historical unless Chris explicitly reopens a fork.  
+2. After future Phase/Epic work ships, update the **Team-tracked priorities** table when doc accuracy changes.  
 3. When IMPROVEMENT_PLAN checkboxes move, update here only if doc accuracy changes.

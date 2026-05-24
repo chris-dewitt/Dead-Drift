@@ -4,9 +4,9 @@
 **Audience:** Dead Drift implementation team  
 **Scope:** Pre-Next-Fest polish pass — flight feel, sector variety, the Mario-courier corridor overhaul, terminal polish, and Bax fleshed out as a real asset.  
 **Last status pass:** May 2026 (code review + checkbox audit)  
-**Companion:** `docs/DOCUMENTATION_STATUS.md` — stale docs, team priorities, **decision forks for Chris**
+**Companion:** `docs/DOCUMENTATION_STATUS.md` — stale docs, team priorities, resolved decision log
 
-> **How to read this doc.** Eight themed epics plus **Phase 0** (trust fixes). Checkbox legend: `[x]` done · `[~]` partial · `[ ]` not done. Items marked `[~]` have notes inline — read before re-implementing. Design forks (theme order, landing Beat 2, MAX_VELOCITY) are **not** decided here; see `DOCUMENTATION_STATUS.md`.
+> **How to read this doc.** Eight themed epics plus **Phase 0** (trust fixes). Checkbox legend: `[x]` done · `[~]` partial · `[ ]` not done. Items marked `[~]` have notes inline — read before re-implementing. Design forks (theme order, landing Beat 2, MAX_VELOCITY) are resolved; see `DOCUMENTATION_STATUS.md`.
 
 ---
 
@@ -14,17 +14,17 @@
 
 | Epic | Done | Partial | Open | Notes |
 |------|------|---------|------|-------|
-| **Phase 0** — Trust fixes | 0 | 0 | 5 | Chris priorities — do first |
+| **Phase 0** — Trust fixes | 5 | 0 | 0 | Shipped: controls/trust blockers closed |
 | **1** — Code hygiene | 6 | 2 | 2 | Font cache + NLTK lazy still open |
-| **2** — Flight feel | 5 | 2 | 0 | SNAP CHARGE bar missing; thruster heat is Phase 0 |
+| **2** — Flight feel | 5 | 2 | 0 | SNAP CHARGE bar missing; thruster heat fixed in Phase 0 |
 | **3** — Sector variety | 2 | 4 | 0 | Hazards via themes; collapsing well / debris cloud unwired |
 | **4** — Corridor | 3 | 4 | 0 | Framework shipped; music + full scoring card open |
-| **5** — Landing | 1 | 2 | 0 | Beat 2 differs from spec — **decision needed** |
+| **5** — Landing | 1 | 2 | 0 | Beat 2 resolved: Chris decision A |
 | **6** — Terminal polish | 0 | 2 | 4 | Keystroke pulse exists; outcomes / portraits need work |
 | **7** — Bax | 1 | 2 | 2 | Lines mostly ported; portrait glow + hull pitch open |
 | **8** — Meta replay | 1 | 0 | 3 | Stepped death done; Records + carousel not built |
 
-**Rough overall:** ~40% complete · ~25% partial · ~35% not started (by checkbox count).
+**Rough overall:** ~46% complete · ~32% partial · ~22% not started (by checkbox count).
 
 ---
 
@@ -34,9 +34,9 @@ Tracked here and in `docs/DOCUMENTATION_STATUS.md`. These override epic list ord
 
 | Priority | Epic / Phase | Checkbox |
 |----------|--------------|----------|
-| All NPC portraits incl. Inspector Holt | Phase 0 + Epic 6 | [ ] |
-| Thruster stops working (overheat trap) | Phase 0 + Epic 2 | [ ] |
-| ESC leaves the market | Phase 0 | [ ] |
+| All NPC portraits incl. Inspector Holt | Phase 0 + Epic 6 | [x] |
+| Thruster stops working (overheat trap) | Phase 0 + Epic 2 | [x] |
+| ESC leaves the market | Phase 0 | [x] |
 | Improve market graphics | Epic 6 / shop polish | [ ] |
 | Improve docking graphics | Epic 5 | [ ] |
 
@@ -46,26 +46,36 @@ Tracked here and in `docs/DOCUMENTATION_STATUS.md`. These override epic list ord
 
 **Goal:** Remove bugs that make the game feel broken. Sourced from May 2026 playtest + code review.
 
-### 0.1 Thruster overheat trap — [ ]
+### 0.1 Thruster overheat trap — [x]
 `ship/modules/thruster.py`: heat rises while module is powered (not only while thrusting). At 100° → `force = 0` with **no recovery** while thruster stays active. `LifeSupport.heat_absorption` never applied in `SignalChain`. No HUD heat readout.
 
 **Fix direction:** Wire heat absorption · heat only on thrust · cooldown while powered-but-idle · HUD bar + Bax first-overheat line.
 
-### 0.2 Shop ESC opens pause instead of leave — [ ]
+**Shipped May 2026:** Thrusters now heat only while actually firing, life support shares heat absorption through `SignalChain`, overheated thrusters recover after cooling, HUD shows thruster heat, and Bax fires a first-overheat warning.
+
+### 0.2 Shop ESC opens pause instead of leave — [x]
 `core/game.py`: `_PAUSEABLE` includes `SHOP`; ESC hits `_pause_game()` before `ShopScreen.handle_key()`. Shop already maps ESC → leave.
 
 **Fix direction:** Route shop ESC before pause handler, or exclude `SHOP` from pause-on-ESC.
 
-### 0.3 Missing NPC portraits (Inspector Holt, Relay-7 Felix) — [ ]
-`terminal/npc_portraits.py`: `_NAME_TO_KEY` has 9 entries; Holt and Felix fall through to `_unknown` (`?`).
+**Shipped May 2026:** Shop ESC is routed to `ShopScreen.handle_key()` before pause handling.
+
+### 0.3 Missing NPC portraits (Inspector Holt, Relay-7 Felix) — [x]
+Previously, `terminal/npc_portraits.py` had no keys for Holt or Felix, so both fell through to `_unknown` (`?`).
 
 **Fix direction:** Add keys, vector busts, backdrops matching existing CRT portrait pipeline.
 
-### 0.4 Ice field thrust penalty unwired — [ ]
+**Shipped May 2026:** Inspector Holt and Relay-7 Felix now have portrait keys, procedural busts, and dedicated CRT backdrops.
+
+### 0.4 Ice field thrust penalty unwired — [x]
 `antagonists/ice_field.py`: `thrust_penalty` (30%) defined; only slick acceleration applied.
 
-### 0.5 Remove stale `SHOP_SECTORS` in `roguelite/shop.py` — [ ]
+**Shipped May 2026:** Ice fields now apply the 30% thrust penalty to the ship for the next flight input tick while the ship is inside the zone.
+
+### 0.5 Remove stale `SHOP_SECTORS` in `roguelite/shop.py` — [x]
 Dead constant `{3, 6}`; live config is `settings.SHOP_SECTORS = {1, 3}`.
+
+**Shipped May 2026:** Removed the stale local constant and pointed shop documentation at `config.settings.SHOP_SECTORS`.
 
 ---
 
@@ -283,7 +293,7 @@ Zone visualization: faint blue crystalline lattice overlay, slow-drifting ice mo
 #### Frozen comet trails (`comet_trail.py`)
 Linear streams of small ice fragments traveling perpendicular to the sector axis at moderate speed (180 px/s). 2–3 streams per sector when present, each a "lane" of ice that chip-damages the ship if hit. Players naturally weave between the lanes. Visual: streaming white-cyan trail with motion-blur tails.
 
-**May 2026:** All six modules exist and spawn by theme. Wreck subtypes (blocker/explorable/interactive) — yes. Interactive wreck → hidden NPC comm — verify in `wreck.py` (payout path exists; full NPC comm may be partial). Ice **thrust penalty** — see Phase 0.4.
+**May 2026:** All six modules exist and spawn by theme. Wreck subtypes (blocker/explorable/interactive) — yes. Interactive wreck → hidden NPC comm — verify in `wreck.py` (payout path exists; full NPC comm may be partial). Ice **thrust penalty** shipped in Phase 0.4.
 
 ### 3.3 Eight sector themes — [x]
 
@@ -499,7 +509,7 @@ Today portrait disposition shifts are subtle. Crank them up:
 
 Each NPC needs explicit per-disposition portrait variants — not just universal overlay treatment.
 
-**May 2026:** Universal disposition overlay exists. Per-NPC smile/frown/shake — not cranked up. **Holt/Felix missing entirely** — Phase 0.3.
+**May 2026:** Universal disposition overlay exists. Per-NPC smile/frown/shake — not cranked up. Holt/Felix base portraits shipped in Phase 0.3.
 
 ### 6.3 Ambient backdrop motion — [ ]
 Backdrops in `npc_portraits.py` are currently mostly static scenes. Each backdrop needs ≥ 2 ambient motion elements:
