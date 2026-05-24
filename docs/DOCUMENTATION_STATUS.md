@@ -54,6 +54,7 @@ Add rows as you play; agents update Phase 0 / epics from here.
 | May 2026 | Update the docks — Union / Gary identity at landing | Phase 0.8, Epic 5.4 |
 | May 2026 | Pirates, radio DJs, etc. need **different spaceship types** (not barges) | Phase 0.9, Epic 3.7 |
 | May 2026 | **Ch.3 document / Paperwork corridor** — problem in delivery corridor (see Phase 0.10) | Phase 0.10, Epic 4.8 |
+| May 2026 | **Ch.3 repro detail:** at ladder / documents → all keys dead (incl. ESC/pause). Likely clerk dialog modal lock | Phase 0.10 |
 
 ---
 

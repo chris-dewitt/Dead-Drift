@@ -123,23 +123,31 @@ Dead constant `{3, 6}`; live config is `settings.SHOP_SECTORS = {1, 3}`.
 - Jump-terminal NPCs can stay voice-only until ship is on-screen, but the visual rule is: **if you see a ship, its hull matches the faction.**
 
 ### 0.10 Ch.3 Paperwork corridor — broken in play — [ ]
-**Playtest (Chris, May 2026):** Problem in the **document chapter** delivery corridor (`delivery/corridor/chapter3_paperwork.py`). *(Exact symptom — soft-lock, skips clerks, can't finish Room 2, etc. — add to playtest log when confirmed.)*
+**Playtest (Chris, May 2026):** Problem in the **document chapter** delivery corridor (`delivery/corridor/chapter3_paperwork.py`).
 
-**Code review findings (confirmed bugs / gaps):**
+**Chris repro (May 2026):** In **File Room 4** (at the **ladder**, paper/documents visible), input suddenly died — **movement, ESC, pause (1), everything unresponsive**.
 
-1. **`OneWayWall` collision not wired** — `elements.py` defines `OneWayWall.blocks()` for cubicle zigzag (Room 1), but `base.py` **never calls it** during movement. Walls are drawn only; player walks straight through. Design in `CORRIDOR_DESIGN.md` § Ch.3 Room 1 requires forced zigzag past Margaret / Howard / Brenda.
+**Likely cause (code review):** A **clerk `NPCEncounter` mini-dialog** (`_CorridorDialog`) opened — Form 27-B / purpose-of-visit / Brenda prompt (reads as a “document” blocking the screen). While `_dialog is not None`:
+- `Corridor.update()` **returns early** — no ladder climb, no movement.
+- `Corridor.handle_key()` sends keys **only** to the dialog (typing + ENTER); **ESC is swallowed** with no dismiss.
+- `GameState.DELIVERY` is **not** in `Game._PAUSEABLE` — ESC / **1** never open pause during the corridor run.
 
-2. **Clerk penalty delays not enforced** — `_CorridorDialog` shows `outcome: "penalty"` text ("5-second delay") but does not block progress or apply a timer; immediate pass-through after dialog closes.
+So the game is not frozen; it is **modal-locked** waiting for typed input + RETURN, with no escape hatch and no pause. If the dialog overlay was missed or didn’t read as interactive, it feels like a hard lock.
 
-3. **Only one checkpoint in entire corridor** — Room 1 exit at x=900; Room 2 vertical file climb has **no** mid-room checkpoint (design target: 2 per corridor). Fall / stumble in File Room 4 respawns at Room 1 exit.
+**Other confirmed gaps (same chapter):**
 
-4. **Branch path filter quirk (Room 2)** — When `_active_path is None`, `_visible_elements` shows **both** high- and low-path tagged elements simultaneously (filter only applies once a path is chosen). Can clutter collision / confuse vertical routing.
+1. **`OneWayWall` collision not wired** — Room 1 cubicle zigzag is decorative only (`elements.py` has `blocks()`; `base.py` never calls it).
+2. **Clerk penalty delays** — `outcome: "penalty"` is text-only (no 5 s wait).
+3. **Only one checkpoint** — Room 1 exit; File Room 4 has none.
+4. **Branch path filter** — high + low elements visible until branch chosen.
 
 **Fix direction (Epic 4.8):**
-- Wire `OneWayWall.blocks(px, py, vx)` in `Corridor.update()` before applying horizontal movement (mirror platform collision loop).
-- Enforce clerk penalty delay (5 s dialog lock or stun) when `outcome == "penalty"`.
-- Add Room 2 checkpoint ~mid file room; verify vertical platform chain is completable on both branches.
-- Default branch choice: treat "keep running" as `low` at `converge_x`, or hide path-tagged elements until branch resolves.
+- **ESC** in corridor dialog → skip with penalty pass (or open pause menu).
+- Add **`GameState.DELIVERY` to `_PAUSEABLE`** (or forward ESC from corridor to pause).
+- On-screen hint: `TYPE RESPONSE · ENTER · ESC TO SKIP`.
+- Optional: **defer NPC trigger** until courier is grounded (not `_on_ladder`).
+- Wire `OneWayWall.blocks()` before horizontal movement.
+- Room 2 mid-room checkpoint + vertical route QA.
 
 ---
 
@@ -527,6 +535,8 @@ Roll these into the chapter's run summary and into Bax's Records (Epic 8).
 | **3 — Executive Processing** | Union Dispatcher boss handoff | Verify dialog keywords + room end trigger |
 
 See **Phase 0.10** for fix list. Test end-to-end after `OneWayWall` wiring before polish pass.
+
+**Modal dialog lock (Chris repro):** Clerk encounters freeze movement and block pause until the player types a response and presses ENTER. ESC must dismiss or pause must work in `DELIVERY` — see Phase 0.10.
 
 ---
 
