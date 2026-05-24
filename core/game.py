@@ -285,14 +285,24 @@ class Game:
         else:
             cont_label = "CONTINUE"
             cont_ok = active.exists
-        return [
+        rows: list[tuple[str, bool, str]] = [
             (cont_label, cont_ok, "continue"),
+        ]
+        if has_ckpt:
+            rows.append(("DELETE RUN", True, "delete_run"))
+        rows.extend([
             ("NEW GAME", True, "new"),
             ("LOAD GAME", True, "load"),
             ("QUIT", True, "quit"),
-        ]
+        ])
+        return rows
 
     def _menu_activate(self) -> None:
+        if self._menu_mode == "confirm_delete_run":
+            self.save_mgr.delete_run_checkpoint()
+            self._menu_mode = "main"
+            return
+
         if self._menu_mode == "confirm_overwrite":
             sid = self._pending_slot
             if sid is None:
@@ -331,6 +341,8 @@ class Game:
             return
         if action == "continue":
             self._continue_from_menu()
+        elif action == "delete_run":
+            self._menu_mode = "confirm_delete_run"
         elif action == "new":
             self._menu_mode = "pick_new"
             self._slot_cursor = self.save_mgr.active_slot_id - 1
@@ -377,6 +389,13 @@ class Game:
         self._goto(GameState.LOADOUT_DRAFT)
 
     def _handle_main_menu_key(self, event: pygame.event.Event) -> None:
+        if self._menu_mode == "confirm_delete_run":
+            if event.key in (pygame.K_y, pygame.K_RETURN):
+                self._menu_activate()
+            elif event.key in (pygame.K_n, pygame.K_ESCAPE):
+                self._menu_mode = "main"
+            return
+
         if self._menu_mode == "confirm_overwrite":
             if event.key in (pygame.K_y, pygame.K_RETURN):
                 self._menu_activate()
@@ -409,7 +428,7 @@ class Game:
 
     def _handle_pause_menu_key(self, event: pygame.event.Event) -> None:
         items = ("RESUME", "SAVE & RETURN TO MENU")
-        if event.key in (pygame.K_p, pygame.K_ESCAPE) and self._pause_menu_cursor == 0:
+        if event.key in (pygame.K_1, pygame.K_ESCAPE) and self._pause_menu_cursor == 0:
             self._resume_game()
             return
         if event.key == pygame.K_UP:
@@ -430,7 +449,7 @@ class Game:
             return
 
         if state in self._PAUSEABLE:
-            if event.key == pygame.K_p:
+            if event.key == pygame.K_1:
                 self._pause_game()
                 return
             if event.key == pygame.K_ESCAPE and state != GameState.TERMINAL:
@@ -1323,11 +1342,9 @@ class Game:
         # --- Wireframe rotating ship hull "studio" panel (mid-left) ---
         self._render_menu_ship_studio(t)
 
-        # --- Save slots / main menu actions ---
-        self._render_main_menu_actions(t)
-
-        # --- Cargo dossier cards (Epic 8.2) ---
-        self._render_menu_cargo_dossier(t)
+        # Chapter cards only on the main list (slot picker / confirms need a clear center)
+        if self._menu_mode == "main":
+            self._render_menu_cargo_dossier(t)
 
         # --- Lore strap line (above bottom bar) ---
         font_lore = pygame.font.SysFont("monospace", 13)
@@ -1338,13 +1355,16 @@ class Game:
         for i, line in enumerate(lore_lines):
             s = font_lore.render(line, True, (75, 75, 95))
             self.screen.blit(s, (cx - s.get_width() // 2,
-                                  S.SCREEN_H - bar_h - 60 + i * 18))
+                                  S.SCREEN_H - bar_h - 34 + i * 18))
 
         # --- Bottom bar: scrolling Nova Soma propaganda ticker ---
         self._render_menu_propaganda(t)
 
         # --- Bax mini portrait (bottom right) ---
         self._render_menu_bax_portrait(t)
+
+        # Run controls last so nothing paints over RESUME / NEW GAME / etc.
+        self._render_main_menu_actions(t)
 
         # --- Outer corner brackets + scanlines ---
         self._render_menu_corner_brackets()
@@ -1383,7 +1403,7 @@ class Game:
 
     # ------------------------------------------------------------------
     def _render_menu_spec_panel(self, t: float):
-        panel = pygame.Rect(S.SCREEN_W - 300, 80, 280, 80)
+        panel = pygame.Rect(S.SCREEN_W - 300, 80, 280, 98)
         pygame.draw.rect(self.screen, (4, 6, 8), panel)
         pygame.draw.rect(self.screen, (60, 130, 180), panel, 1)
         for c, sx, sy in ((panel.topleft, 1, 1), (panel.topright, -1, 1),
@@ -1407,8 +1427,8 @@ class Game:
         for i, (k, v) in enumerate(rows):
             ks = font_v.render(f"{k:<10}", True, (90, 140, 180))
             vs = font_v.render(v, True, (180, 220, 240))
-            self.screen.blit(ks, (panel.left + 12, panel.top + 26 + i * 16))
-            self.screen.blit(vs, (panel.left + 110, panel.top + 26 + i * 16))
+            self.screen.blit(ks, (panel.left + 12, panel.top + 28 + i * 17))
+            self.screen.blit(vs, (panel.left + 110, panel.top + 28 + i * 17))
 
     # ------------------------------------------------------------------
     def _render_menu_ship_studio(self, t: float):
@@ -1463,7 +1483,7 @@ class Game:
     # ------------------------------------------------------------------
     def _render_main_menu_actions(self, t: float) -> None:
         cx = S.SCREEN_W // 2
-        py = S.SCREEN_H // 2 + 58
+        py = int(S.SCREEN_H * 0.54)
         font_h = pygame.font.SysFont("monospace", 13, bold=True)
         font_row = pygame.font.SysFont("monospace", 20, bold=True)
         font_sm = pygame.font.SysFont("monospace", 11)
@@ -1471,18 +1491,20 @@ class Game:
 
         sid = self.save_mgr.active_slot_id
         active = self.save_mgr.slot_info(sid)
-        hdr = font_sm.render(
+        hdr_text = (
             f"ACTIVE SAVE: SLOT {sid}  —  {active.chapter_display}  "
-            f"//  {active.debt:,} cr  //  CLONE #{active.clone_count}",
-            True, (120, 120, 150),
+            f"//  {active.debt:,} cr  //  CLONE #{active.clone_count}"
         )
-        self.screen.blit(hdr, (cx - hdr.get_width() // 2, py - 28))
+        hdr = font_sm.render(hdr_text, True, (120, 120, 150))
 
         if self._run_just_completed:
             font_c = pygame.font.SysFont("monospace", 14, bold=True)
             cs = font_c.render("// RUN COMPLETE //  DEBT REDUCED  //",
                                True, S.GREEN_TERM)
             self.screen.blit(cs, (cx - cs.get_width() // 2, py - 48))
+
+        if self._menu_mode != "main":
+            self.screen.blit(hdr, (cx - hdr.get_width() // 2, py - 28))
 
         if self._menu_mode == "confirm_overwrite":
             slot = self._pending_slot or 1
@@ -1493,6 +1515,18 @@ class Game:
             ]
             for i, line in enumerate(lines):
                 col = (220, 80, 80) if i == 0 else (140, 140, 160)
+                s = font_row.render(line, True, col)
+                self.screen.blit(s, (cx - s.get_width() // 2, py + i * 28))
+            return
+
+        if self._menu_mode == "confirm_delete_run":
+            lines = [
+                "DELETE MID-RUN CHECKPOINT?",
+                "Campaign save stays. You will start fresh on next run.",
+                "[ Y / ENTER ]  confirm     [ N / ESC ]  cancel",
+            ]
+            for i, line in enumerate(lines):
+                col = (220, 140, 60) if i == 0 else (140, 140, 160)
                 s = font_row.render(line, True, col)
                 self.screen.blit(s, (cx - s.get_width() // 2, py + i * 28))
             return
@@ -1516,8 +1550,29 @@ class Game:
             self.screen.blit(hint, (cx - hint.get_width() // 2, py + 22 + S.MAX_SAVE_SLOTS * 30 + 8))
             return
 
+        n_rows = len(self._main_menu_rows())
+        foot = font_sm.render(
+            "[ 1 ] pause in-run  //  [ ESC ] pause (not at terminal)  //  data/saves/",
+            True, (60, 60, 80),
+        )
         hint_top = font_sm.render("↑↓ select   ENTER confirm", True, (80, 80, 100))
-        self.screen.blit(hint_top, (cx - hint_top.get_width() // 2, py - 8))
+
+        hdr_y = py - 32
+        hint_y = py - 10
+        row_y0 = py + 20
+        foot_y = row_y0 + n_rows * 32 + 8
+        panel_top = hdr_y - 14
+        panel_bottom = foot_y + foot.get_height() + 14
+        content_w = max(hdr.get_width(), hint_top.get_width(), foot.get_width(), 320)
+        panel_w = content_w + 56
+        panel = pygame.Rect(cx - panel_w // 2, panel_top, panel_w, panel_bottom - panel_top)
+        backdrop = pygame.Surface((panel.w, panel.h), pygame.SRCALPHA)
+        backdrop.fill((4, 6, 12, 235))
+        self.screen.blit(backdrop, panel.topleft)
+        pygame.draw.rect(self.screen, (120, 90, 30), panel, 1)
+
+        self.screen.blit(hdr, (cx - hdr.get_width() // 2, hdr_y))
+        self.screen.blit(hint_top, (cx - hint_top.get_width() // 2, hint_y))
 
         for i, (label, enabled, _action) in enumerate(self._main_menu_rows()):
             sel = i == self._menu_cursor
@@ -1530,10 +1585,9 @@ class Game:
                 col = (130, 130, 150)
             text = f"{prefix}  {label}"
             rs = font_row.render(text, True, col)
-            self.screen.blit(rs, (cx - rs.get_width() // 2, py + 18 + i * 32))
+            self.screen.blit(rs, (cx - rs.get_width() // 2, row_y0 + i * 32))
 
-        foot = font_sm.render("[ P ] pause in-run  //  [ ESC ] pause (except terminal)  //  data/saves/", True, (60, 60, 80))
-        self.screen.blit(foot, (cx - foot.get_width() // 2, py + 18 + len(self._main_menu_rows()) * 32 + 6))
+        self.screen.blit(foot, (cx - foot.get_width() // 2, foot_y))
 
     def _render_pause_overlay(self) -> None:
         ov = pygame.Surface((S.SCREEN_W, S.SCREEN_H), pygame.SRCALPHA)
@@ -1557,7 +1611,7 @@ class Game:
             rs = font_r.render(f"{prefix}  {label}", True, col)
             self.screen.blit(rs, (cx - rs.get_width() // 2, cy + 50 + i * 36))
 
-        sub = font_s.render("↑↓ select   ENTER   //   ESC or P — resume", True, (80, 80, 100))
+        sub = font_s.render("↑↓ select   ENTER   //   ESC or 1 — resume", True, (80, 80, 100))
         self.screen.blit(sub, (cx - sub.get_width() // 2, cy + 140))
 
     # ------------------------------------------------------------------
@@ -1582,11 +1636,12 @@ class Game:
              (200, 160, 40), (255, 210, 80)),
         ]
         completed = set(self.meta.chapters_completed)
-        card_w, card_h = 240, 80
-        gap  = 16
+        card_w, card_h = 220, 72
+        gap  = 12
         total_w = len(_CARGO_CARDS) * card_w + (len(_CARGO_CARDS) - 1) * gap
         x0   = (S.SCREEN_W - total_w) // 2
-        cy   = S.SCREEN_H // 2 + 115   # below begin prompt
+        bar_h = 56
+        cy   = S.SCREEN_H - bar_h - 118   # lower on screen, below main menu box
 
         font_h  = pygame.font.SysFont("monospace", 10, bold=True)
         font_sm = pygame.font.SysFont("monospace", 9)
@@ -1664,17 +1719,26 @@ class Game:
         self.screen.blit(sl, (0, 0))
 
     def _render_menu_bax_portrait(self, t: float):
-        px = S.SCREEN_W - 110
-        py = S.SCREEN_H - 120
-        head = [(px-14,py-22),(px+14,py-22),(px+18,py-4),(px-18,py-4)]
-        pygame.draw.polygon(self.screen, (20, 20, 30), head)
-        pygame.draw.polygon(self.screen, (55, 44, 0), head, 1)
-        glow   = 0.4 + 0.3 * abs(math.sin(t * 0.9))
-        ec     = (int(180 * glow), int(110 * glow), 0)
-        pygame.draw.circle(self.screen, ec, (px-5, py-14), 3)
-        pygame.draw.circle(self.screen, ec, (px+5, py-14), 3)
-        pygame.draw.line(self.screen, (55, 44, 0), (px+12, py-22), (px+16, py-32), 1)
-        pygame.draw.circle(self.screen, (80, 60, 0), (px+16, py-33), 2)
-        body = [(px-16,py-4),(px+16,py-4),(px+14,py+20),(px-14,py+20)]
-        pygame.draw.polygon(self.screen, (18, 18, 28), body)
-        pygame.draw.polygon(self.screen, (55, 44, 0), body, 1)
+        from renderer.bax_doodle import draw_bax_droid
+
+        hull_top = S.SCREEN_H // 2 + 30
+        panel = pygame.Rect(S.SCREEN_W - 210, hull_top, 195, 248)
+        pygame.draw.rect(self.screen, (6, 8, 12), panel)
+        pygame.draw.rect(self.screen, (140, 100, 35), panel, 1)
+        for c, sx, sy in ((panel.topleft, 1, 1), (panel.topright, -1, 1),
+                          (panel.bottomleft, 1, -1), (panel.bottomright, -1, -1)):
+            pygame.draw.line(self.screen, (200, 150, 50), c, (c[0] + sx * 14, c[1]), 2)
+            pygame.draw.line(self.screen, (200, 150, 50), c, (c[0], c[1] + sy * 14), 2)
+
+        font_h = pygame.font.SysFont("monospace", 11, bold=True)
+        font_s = pygame.font.SysFont("monospace", 10)
+        hdr = font_h.render("BAX // NAV-MORALE", True, (255, 190, 50))
+        sub = font_s.render("bolt-on advisor droid", True, (110, 100, 80))
+        self.screen.blit(hdr, (panel.centerx - hdr.get_width() // 2, panel.top + 10))
+        self.screen.blit(sub, (panel.centerx - sub.get_width() // 2, panel.top + 26))
+
+        speaking = abs(math.sin(t * 1.4)) > 0.92
+        draw_bax_droid(
+            self.screen, panel.centerx, panel.centery + 18, t,
+            scale=2.35, speaking=speaking,
+        )

@@ -26,7 +26,7 @@ from audio.synth import (
     synth_bass_note,
 )
 from audio.blues_licks import prebuild_all, generate_lick
-from audio.voices import prebuild_voices
+from audio.voices import prebuild_voices, resolve_voice_key
 from audio.new_wave_pad import build_new_wave_pad, build_long_form_menu_pad
 from audio.guitar_phrases import prebuild_phrases
 
@@ -233,8 +233,8 @@ class AudioManager:
         self._voice_duck         = 1.0
         self._voice_duck_target  = 1.0
         self._npc_speak_t        = 0.0
-        self._VOICE_DUCK_FLOOR   = 0.18   # music at ~18% during dialogue
-        self._VOICE_BLIP_VOL     = 0.88   # voice loud enough over bed
+        self._VOICE_DUCK_FLOOR   = 0.52   # gentle duck — keep music audible
+        self._VOICE_BLIP_VOL     = 0.52   # blips present but not overpowering
 
         # Bandstand channels
         self._scene: str = SCENE_MENU
@@ -1046,8 +1046,8 @@ class AudioManager:
             ch.play(snd)
 
     def _play_voice_blip(self, speaker: str, channel: pygame.mixer.Channel | None):
-        key   = speaker.lower().lstrip("[").rstrip("]").strip()
-        blips = self._voices.get(key) or self._voices.get("bax")
+        key   = resolve_voice_key(speaker or "")
+        blips = self._voices.get(key) or self._voices.get("default")
         if not blips or channel is None:
             return
         snd = random.choice(blips)

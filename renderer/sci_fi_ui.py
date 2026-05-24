@@ -88,21 +88,23 @@ def draw_courier_sprite(surf: pygame.Surface, px: int, py: int, t: float, *,
     pygame.draw.rect(surf, (255, 60, 60), (px + 9, py + 12, 4, 2))
 
 
+def _rgba(r: int, g: int, b: int, a: int) -> tuple[int, int, int, int]:
+    """Clamp channel values for pygame SRCALPHA fills."""
+    return (
+        max(0, min(255, int(r))),
+        max(0, min(255, int(g))),
+        max(0, min(255, int(b))),
+        max(0, min(255, int(a))),
+    )
+
+
 def draw_terminal_backdrop(surface: pygame.Surface, t: float) -> None:
-    """Phosphor CRT wash — amber/green/cyan alive machine."""
+    """Subtle phosphor wash — no full-screen stripe overlays (terminal draws its own scanlines)."""
     w, h = surface.get_size()
-    grad = pygame.Surface((w, h), pygame.SRCALPHA)
-    for y in range(0, h, 4):
-        pulse = 0.5 + 0.5 * math.sin(t * 0.7 + y * 0.02)
-        a = int(12 + 10 * pulse)
-        hue_shift = int(8 * math.sin(t * 0.4 + y * 0.01))
-        grad.fill((4 + hue_shift, 18, 8, a), (0, y, w, 4))
-    surface.blit(grad, (0, 0))
-    # Vertical banding (cheap CRT)
-    band = pygame.Surface((w, h), pygame.SRCALPHA)
-    for x in range(0, w, 48):
-        band.fill((255, 200, 80, 6), (x, 0, 24, h))
-    surface.blit(band, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+    pulse = 0.5 + 0.5 * math.sin(t * 0.6)
+    wash = pygame.Surface((w, h), pygame.SRCALPHA)
+    wash.fill(_rgba(14, 48, 26, int(5 + 3 * pulse)))
+    surface.blit(wash, (0, 0))
     # Corner status LEDs
     for i, (lx, ly) in enumerate([(12, 12), (w - 20, 12), (12, h - 20), (w - 20, h - 20)]):
         on = math.sin(t * 2.5 + i) > 0.2

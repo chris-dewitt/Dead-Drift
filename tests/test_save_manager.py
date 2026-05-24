@@ -45,6 +45,17 @@ def test_set_active_and_list_slots(save_env):
     assert slots == {1: True, 2: False, 3: True}
 
 
+def test_delete_run_checkpoint(save_env):
+    mgr = SaveManager()
+    mgr.create_fresh_save(1)
+    ckpt = mgr.run_checkpoint_path(1)
+    ckpt.write_text("{}", encoding="utf-8")
+    assert mgr.has_run_checkpoint(1)
+    mgr.delete_run_checkpoint(1)
+    assert not mgr.has_run_checkpoint(1)
+    assert not ckpt.is_file()
+
+
 def test_migrate_legacy_run_history(save_env, monkeypatch):
     legacy = Path(S.RUN_HISTORY_FILE)
     legacy.parent.mkdir(parents=True, exist_ok=True)
