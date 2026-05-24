@@ -185,8 +185,9 @@ class VectorRenderer:
         self._draw_embers()
         self._update_explosions(dt)
         self._draw_explosions()
-        self._draw_ship(ship, t)
-        self._draw_exhaust(ship, t)
+        frame_name = getattr(run_mgr, '_frame_name', '')
+        self._draw_ship(ship, t, frame_name)
+        self._draw_exhaust(ship, t, frame_name)
         self._draw_proximity_alarm(run_mgr, ship, t)
         self._draw_flash(dt)
         self._draw_sector_intro_card(dt)
@@ -1722,137 +1723,312 @@ class VectorRenderer:
                          (rx - int(px_*3), ry - int(py_*3)),
                          (rx + int(px_*3), ry + int(py_*3)), 1)
 
-    def _draw_ship(self, ship, t: float = 0.0):
+    def _draw_ship(self, ship, t: float = 0.0, frame_name: str = ""):
         if not ship.is_alive:
             return
-        # Mercy-window flicker — skip drawing on alternating fast frames so
-        # the ship visibly strobes when invulnerable. Cheap and instantly readable.
         if getattr(ship, "iframe_active", False):
             if int(t * 18.0) % 2 == 0:
                 return
+
         pos   = ship.pos
         angle = ship.angle
-        raw   = [(18,0),(5,-9),(-14,-7),(-14,9),(5,10)]
-        pts   = [self._rotate_pt(p, angle, pos) for p in raw]
+        hp    = ship.hull_pct
 
-        hp = ship.hull_pct
+        if frame_name == "SCRAP DELTA-7":
+            self._draw_ship_delta7(ship, pos, angle, hp, t)
+        elif frame_name == "REINFORCED JUNK MK2":
+            self._draw_ship_junk_mk2(ship, pos, angle, hp, t)
+        else:
+            self._draw_ship_rustbucket(ship, pos, angle, hp, t)
 
-        # Engine ambient glow halo (below ship outline)
-        thrust_pulse = 0.7 + 0.3 * math.sin(t * 8.0)
-        ambient_glow_r = int(28 + 6 * thrust_pulse)
-        glow_surf = pygame.Surface((ambient_glow_r * 2, ambient_glow_r * 2), pygame.SRCALPHA)
-        glow_hue = 0.58 + (1.0 - hp) * 0.20
-        ag_col = _hsv(glow_hue, 0.5, 0.8)
-        for layer in range(3):
-            la = max(0, 28 - layer * 9)
-            pygame.draw.circle(glow_surf, (*ag_col, la),
-                               (ambient_glow_r, ambient_glow_r),
-                               ambient_glow_r - layer * 6)
-        self.surface.blit(glow_surf,
-                          (int(pos.x) - ambient_glow_r, int(pos.y) - ambient_glow_r))
-
-        # Damage glow (red halo when low HP)
-        glow_r   = int((1.0 - hp) * 60)
-        glow_col = (glow_r, max(0, 55 - int((1-hp)*42)), max(0, 115 - int((1-hp)*85)))
-        pygame.draw.polygon(self.surface, glow_col, pts, 4)
-
-        # Hull fill — darker blue interior, like ship is solid
-        hull_fill = (8, 14, 28)
-        pygame.draw.polygon(self.surface, hull_fill, pts)
-
-        # Hull outline — slightly thicker, brighter on intact ship
-        outline_col = S.WHITE_VEC if hp > 0.4 else (200, 180, 180)
-        pygame.draw.polygon(self.surface, outline_col, pts, 2)
-
-        # Panel/plate seams — subdivide hull
-        seam_col = (60, 60, 90)
-        seam_pts = [
-            ((10, -5), (-8, -5)),    # top panel seam
-            ((10, 6),  (-8, 6)),     # bottom panel seam
-            ((5, -9),  (5, 10)),     # mid vertical seam
-            ((-2, -7), (-2, 9)),     # rear vertical seam
-        ]
-        for a, b in seam_pts:
-            pa = self._rotate_pt(a, angle, pos)
-            pb = self._rotate_pt(b, angle, pos)
-            pygame.draw.line(self.surface, seam_col, pa, pb, 1)
-
-        # Cockpit window — cyan glow on the nose
-        cockpit_pts = [(15, -2), (10, -4), (5, -3), (5, 4), (10, 5), (15, 3)]
-        cpt = [self._rotate_pt(p, angle, pos) for p in cockpit_pts]
-        cockpit_pulse = 0.6 + 0.4 * math.sin(t * 1.8)
-        cockpit_col = (int(20 + 80 * cockpit_pulse),
-                       int(140 + 80 * cockpit_pulse),
-                       int(180 + 60 * cockpit_pulse))
-        pygame.draw.polygon(self.surface, (4, 30, 60), cpt)
-        pygame.draw.polygon(self.surface, cockpit_col, cpt, 1)
-        # Cockpit glint
-        glint_pt = self._rotate_pt((12, -1), angle, pos)
-        pygame.draw.circle(self.surface, (180, 240, 255), glint_pt, 1)
-
-        # Engine nozzle (rear) — darker housing with hot core
-        nozzle = [self._rotate_pt(p, angle, pos) for p in
-                  ((-14,-5),(-20,-3),(-20,5),(-14,7))]
-        pygame.draw.polygon(self.surface, (0, 22, 50), nozzle)
-        pygame.draw.polygon(self.surface, (75, 95, 130), nozzle, 1)
-        # Inner nozzle heat ring
-        nozzle_inner_pulse = 0.6 + 0.4 * math.sin(t * 14.0)
-        nz_inner = self._rotate_pt((-17, 0), angle, pos)
-        nz_col = (int(200 * nozzle_inner_pulse),
-                  int(140 * nozzle_inner_pulse),
-                  int(40 * nozzle_inner_pulse))
-        pygame.draw.circle(self.surface, nz_col, nz_inner, 2)
-
-        # RCS port dots — slight pulse
-        rcs_pulse = 0.4 + 0.4 * math.sin(t * 6.0)
-        rcs_col = (int(40 + 60 * rcs_pulse), int(40 + 60 * rcs_pulse), int(80 + 50 * rcs_pulse))
-        for lx, ly in ((8,-8),(8,10),(-10,-6),(-10,8)):
-            rpt = self._rotate_pt((lx, ly), angle, pos)
-            pygame.draw.circle(self.surface, rcs_col, rpt, 1)
-
-        # Wing tip nav lights — red left, green right (constant)
-        nav_l = self._rotate_pt((-14, -7), angle, pos)
-        nav_r = self._rotate_pt((-14, 9), angle, pos)
-        pygame.draw.circle(self.surface, (255, 60, 60), nav_l, 2)
-        pygame.draw.circle(self.surface, (60, 255, 100), nav_r, 2)
-
-        # Battle damage scars — appear on low HP
+        # Shared: battle damage scars across all frames
         if hp < 0.6:
-            # Deterministic scar positions based on ship's "scar seed"
-            n_scars = int((0.6 - hp) * 10)
+            n_scars = int((0.6 - hp) * 14)
             rng = random.Random(id(ship) & 0xFFFF)
-            for i in range(n_scars):
-                sx = rng.uniform(-12, 14)
-                sy = rng.uniform(-7, 8)
-                slen = rng.uniform(2, 4)
+            for _ in range(n_scars):
+                sx = rng.uniform(-20, 14)
+                sy = rng.uniform(-14, 14)
+                slen = rng.uniform(2, 5)
                 sang = rng.uniform(0, math.tau)
                 p1 = self._rotate_pt((sx, sy), angle, pos)
-                p2 = self._rotate_pt((sx + math.cos(sang) * slen,
-                                     sy + math.sin(sang) * slen), angle, pos)
+                p2 = self._rotate_pt((sx + math.cos(sang)*slen,
+                                      sy + math.sin(sang)*slen), angle, pos)
                 pygame.draw.line(self.surface, (180, 60, 50), p1, p2, 1)
-
-            # Sparking scar — flickers
             if hp < 0.3 and int(t * 6) % 2 == 0:
-                spk = self._rotate_pt((rng.uniform(-10, 8), rng.uniform(-5, 5)), angle, pos)
+                rng2 = random.Random(id(ship) & 0xFF00)
+                spk = self._rotate_pt((rng2.uniform(-16, 10), rng2.uniform(-10, 10)), angle, pos)
                 pygame.draw.circle(self.surface, (255, 220, 80), spk, 2)
                 pygame.draw.circle(self.surface, (255, 80, 30), spk, 1)
 
-        # Gun barrel indicator
-        if hasattr(ship, "gun") and not ship.gun.is_jammed:
-            barrel_tip  = self._rotate_pt((24, 0), angle, pos)
-            barrel_base = self._rotate_pt((16, 0), angle, pos)
-            pygame.draw.line(self.surface, (130, 130, 160), barrel_base, barrel_tip, 2)
-            pygame.draw.line(self.surface, (100, 230, 130), barrel_base, barrel_tip, 1)
-            # Muzzle dot
-            pygame.draw.circle(self.surface, (60, 180, 90), barrel_tip, 1)
-        elif hasattr(ship, "gun") and ship.gun.is_jammed:
-            jam_pulse = 0.5 + 0.5 * abs(math.sin(t * 8))
-            jam_col   = (int(200 * jam_pulse), 0, 0)
-            barrel_tip  = self._rotate_pt((24, 0), angle, pos)
-            barrel_base = self._rotate_pt((16, 0), angle, pos)
-            pygame.draw.line(self.surface, jam_col, barrel_base, barrel_tip, 2)
+    # ---- RUSTBUCKET ALPHA -----------------------------------------------
+    def _draw_ship_rustbucket(self, ship, pos, angle, hp, t):
+        """Standard courier hull — beat-up postal shuttle, balanced."""
+        hull = [(20,0),(12,-9),(-3,-11),(-18,-8),(-18,8),(-3,11),(12,9)]
+        wing_l = [(-2,-11),(4,-14),(-4,-14)]
+        wing_r = [(-2, 11),(4, 14),(-4, 14)]
+        pts = [self._rotate_pt(p, angle, pos) for p in hull]
+        wl  = [self._rotate_pt(p, angle, pos) for p in wing_l]
+        wr  = [self._rotate_pt(p, angle, pos) for p in wing_r]
 
-    def _draw_exhaust(self, ship, t: float):
+        # Engine ambient glow halo
+        glow_r = int(30 + 5 * (0.7 + 0.3 * math.sin(t * 8.0)))
+        glow_surf = pygame.Surface((glow_r*2, glow_r*2), pygame.SRCALPHA)
+        ag_col = _hsv(0.58 + (1.0-hp)*0.20, 0.5, 0.8)
+        for layer in range(3):
+            pygame.draw.circle(glow_surf, (*ag_col, max(0, 28-layer*9)),
+                               (glow_r, glow_r), max(1, glow_r-layer*7))
+        self.surface.blit(glow_surf, (int(pos.x)-glow_r, int(pos.y)-glow_r))
+
+        # Damage glow outline
+        dr = int((1.0-hp)*60)
+        pygame.draw.polygon(self.surface,
+                            (dr, max(0,55-int((1-hp)*42)), max(0,115-int((1-hp)*85))),
+                            pts, 5)
+
+        # Wing nubs (nav light mounts)
+        pygame.draw.polygon(self.surface, (10, 16, 30), wl)
+        pygame.draw.polygon(self.surface, (10, 16, 30), wr)
+        ol = S.WHITE_VEC if hp > 0.4 else (200, 180, 180)
+        pygame.draw.polygon(self.surface, ol, wl, 1)
+        pygame.draw.polygon(self.surface, ol, wr, 1)
+
+        # Hull fill + outline
+        pygame.draw.polygon(self.surface, (8, 14, 28), pts)
+        pygame.draw.polygon(self.surface, ol, pts, 2)
+
+        # Cargo bay marking — centre rectangle
+        bay_pts = [(-1,-8),(9,-8),(9,9),(-1,9)]
+        bp = [self._rotate_pt(p, angle, pos) for p in bay_pts]
+        pygame.draw.polygon(self.surface, (12, 18, 32), bp)
+        pygame.draw.polygon(self.surface, (38, 44, 68), bp, 1)
+        for x_off in (2, 5):
+            p1 = self._rotate_pt((x_off, -8), angle, pos)
+            p2 = self._rotate_pt((x_off,  9), angle, pos)
+            pygame.draw.line(self.surface, (28, 32, 52), p1, p2, 1)
+
+        # Panel seams
+        seam_col = (55, 58, 90)
+        for a, b in [((14,-7),(-6,-7)),((14,8),(-6,8)),((5,-10),(5,11)),((-5,-9),(-5,10))]:
+            pygame.draw.line(self.surface, seam_col,
+                             self._rotate_pt(a, angle, pos), self._rotate_pt(b, angle, pos), 1)
+
+        # Cockpit visor — elongated hex on nose
+        cockpit_pts = [(17,-3),(12,-6),(7,-5),(7,5),(12,6),(17,3)]
+        cpt = [self._rotate_pt(p, angle, pos) for p in cockpit_pts]
+        cp  = 0.6 + 0.4 * math.sin(t * 1.8)
+        pygame.draw.polygon(self.surface, (4, 30, 60), cpt)
+        pygame.draw.polygon(self.surface,
+                            (int(20+80*cp), int(140+80*cp), int(180+60*cp)), cpt, 1)
+        pygame.draw.circle(self.surface, (180, 240, 255),
+                           self._rotate_pt((14,-2), angle, pos), 1)
+
+        # Engine nozzle housing
+        nz_pts = [(-18,-5),(-25,-4),(-25,4),(-18,5)]
+        nz = [self._rotate_pt(p, angle, pos) for p in nz_pts]
+        pygame.draw.polygon(self.surface, (0, 22, 50), nz)
+        pygame.draw.polygon(self.surface, (75, 95, 130), nz, 1)
+        np_ = 0.6 + 0.4 * math.sin(t * 14.0)
+        pygame.draw.circle(self.surface,
+                           (int(200*np_), int(140*np_), int(40*np_)),
+                           self._rotate_pt((-21, 0), angle, pos), 2)
+
+        # RCS ports
+        rp = 0.4 + 0.4 * math.sin(t * 6.0)
+        rc = (int(40+60*rp), int(40+60*rp), int(80+50*rp))
+        for lx, ly in ((9,-8),(9,10),(-10,-6),(-10,8)):
+            pygame.draw.circle(self.surface, rc, self._rotate_pt((lx,ly), angle, pos), 1)
+
+        # Nav lights on wing nubs
+        pygame.draw.circle(self.surface, (255, 60, 60), self._rotate_pt((-1,-14), angle, pos), 2)
+        pygame.draw.circle(self.surface, (60, 255, 100), self._rotate_pt((-1, 14), angle, pos), 2)
+
+        # Gun barrel
+        self._draw_ship_gun(ship, pos, angle, t, tip=(26,0), base=(18,0))
+
+    # ---- SCRAP DELTA-7 --------------------------------------------------
+    def _draw_ship_delta7(self, ship, pos, angle, hp, t):
+        """Light interceptor — swept delta wings, needle nose, tight single engine."""
+        hull = [(26,0),(20,-5),(4,-9),(-8,-16),(-18,-10),(-18,10),(-8,16),(4,9),(20,5)]
+        body = [(22,0),(16,-4),(0,-6),(-10,-4),(-16,-2),(-16,2),(-10,4),(0,6),(16,4)]
+        pts  = [self._rotate_pt(p, angle, pos) for p in hull]
+        bpts = [self._rotate_pt(p, angle, pos) for p in body]
+
+        # Engine glow — tight, blue-white
+        eg_col = _hsv(0.62 + (1.0-hp)*0.18, 0.6, 0.9)
+        glow_surf = pygame.Surface((56, 56), pygame.SRCALPHA)
+        pygame.draw.circle(glow_surf, (*eg_col, 30), (28,28), 22)
+        pygame.draw.circle(glow_surf, (*eg_col, 50), (28,28), 14)
+        ep = self._rotate_pt((-16, 0), angle, pos)
+        self.surface.blit(glow_surf, (ep[0]-28, ep[1]-28))
+
+        # Damage glow outline
+        dr = int((1.0-hp)*65)
+        pygame.draw.polygon(self.surface,
+                            (dr, max(0,55-int((1-hp)*42)), max(0,115-int((1-hp)*85))),
+                            pts, 5)
+
+        # Wing fill (dark blue-grey) + outline
+        pygame.draw.polygon(self.surface, (6, 12, 24), pts)
+        ol = S.WHITE_VEC if hp > 0.4 else (200, 180, 180)
+        pygame.draw.polygon(self.surface, ol, pts, 2)
+
+        # Fuselage body (brighter inset)
+        pygame.draw.polygon(self.surface, (10, 18, 36), bpts)
+        pygame.draw.polygon(self.surface, (80, 90, 120), bpts, 1)
+
+        # Panel seams — swept delta lines
+        seam_col = (50, 55, 88)
+        for a, b in [((16,-3),(-6,-3)),((16,3),(-6,3)),((4,-8),(4,8)),((-4,-12),(-4,12))]:
+            pygame.draw.line(self.surface, seam_col,
+                             self._rotate_pt(a, angle, pos), self._rotate_pt(b, angle, pos), 1)
+
+        # Cockpit — narrow fighter-pilot slit
+        cockpit_pts = [(22,-2),(17,-4),(12,-3),(12,3),(17,4),(22,2)]
+        cpt = [self._rotate_pt(p, angle, pos) for p in cockpit_pts]
+        cp  = 0.7 + 0.3 * math.sin(t * 1.8)
+        pygame.draw.polygon(self.surface, (4, 26, 52), cpt)
+        pygame.draw.polygon(self.surface,
+                            (int(20+80*cp), int(120+100*cp), int(160+75*cp)), cpt, 1)
+        pygame.draw.circle(self.surface, (200, 240, 255),
+                           self._rotate_pt((20,-1), angle, pos), 1)
+
+        # Engine nozzle — tight single rear center
+        nz_pts = [(-18,-3),(-23,-2),(-23,2),(-18,3)]
+        nz = [self._rotate_pt(p, angle, pos) for p in nz_pts]
+        pygame.draw.polygon(self.surface, (0, 18, 45), nz)
+        pygame.draw.polygon(self.surface, (80, 100, 140), nz, 1)
+        np_ = 0.6 + 0.4 * math.sin(t * 16.0)
+        pygame.draw.circle(self.surface,
+                           (int(160*np_), int(200*np_), int(255*np_)),
+                           self._rotate_pt((-20, 0), angle, pos), 2)
+
+        # RCS ports — at wing roots
+        rp = 0.4 + 0.4 * math.sin(t * 7.5)
+        rc = (int(40+60*rp), int(50+70*rp), int(90+60*rp))
+        for lx, ly in ((-2,-10),(-2,10),(-10,-6),(-10,6)):
+            pygame.draw.circle(self.surface, rc, self._rotate_pt((lx,ly), angle, pos), 1)
+
+        # Nav lights at swept wing tips
+        pygame.draw.circle(self.surface, (255, 60, 60), self._rotate_pt((-8,-16), angle, pos), 2)
+        pygame.draw.circle(self.surface, (60, 255, 100), self._rotate_pt((-8, 16), angle, pos), 2)
+
+        # Gun barrel — longer on lighter/faster ship
+        self._draw_ship_gun(ship, pos, angle, t, tip=(32,0), base=(22,0))
+
+    # ---- REINFORCED JUNK MK2 -------------------------------------------
+    def _draw_ship_junk_mk2(self, ship, pos, angle, hp, t):
+        """Heavy armored freighter — wide, blunt, twin engines, twin guns."""
+        hull = [(16,0),(10,-12),(-4,-18),(-20,-16),(-28,-8),(-28,8),(-20,16),(-4,18),(10,12)]
+        shoulder_l = [(0,-14),(0,-20),(-16,-20),(-16,-14)]
+        shoulder_r = [(0, 14),(0, 20),(-16, 20),(-16, 14)]
+        pts = [self._rotate_pt(p, angle, pos) for p in hull]
+        sl  = [self._rotate_pt(p, angle, pos) for p in shoulder_l]
+        sr  = [self._rotate_pt(p, angle, pos) for p in shoulder_r]
+
+        # Twin engine glow halos
+        ag_col = _hsv(0.55 + (1.0-hp)*0.22, 0.45, 0.75)
+        for side_off in (-8, 8):
+            glow_surf = pygame.Surface((52, 52), pygame.SRCALPHA)
+            pygame.draw.circle(glow_surf, (*ag_col, 25), (26,26), 20)
+            pygame.draw.circle(glow_surf, (*ag_col, 45), (26,26), 12)
+            ep = self._rotate_pt((-24, side_off), angle, pos)
+            self.surface.blit(glow_surf, (ep[0]-26, ep[1]-26))
+
+        # Damage glow outline
+        dr = int((1.0-hp)*70)
+        pygame.draw.polygon(self.surface,
+                            (dr, max(0,55-int((1-hp)*42)), max(0,115-int((1-hp)*85))),
+                            pts, 6)
+
+        # Shoulder armor fill
+        pygame.draw.polygon(self.surface, (10, 16, 26), sl)
+        pygame.draw.polygon(self.surface, (10, 16, 26), sr)
+        shldr_col = (100, 110, 130) if hp > 0.4 else (150, 130, 130)
+        pygame.draw.polygon(self.surface, shldr_col, sl, 1)
+        pygame.draw.polygon(self.surface, shldr_col, sr, 1)
+
+        # Hull fill + outline
+        pygame.draw.polygon(self.surface, (8, 14, 28), pts)
+        ol = S.WHITE_VEC if hp > 0.4 else (200, 180, 180)
+        pygame.draw.polygon(self.surface, ol, pts, 2)
+
+        # Armor rivets on shoulder plates
+        rivet_col = (70, 75, 100)
+        for lx, ly in [(-4,-16),(-10,-18),(-16,-16),(-4,16),(-10,18),(-16,16)]:
+            pygame.draw.circle(self.surface, rivet_col, self._rotate_pt((lx,ly), angle, pos), 1)
+
+        # Panel seams — heavy armored look
+        seam_col = (55, 58, 90)
+        for a, b in [((10,-10),(-10,-10)),((10,11),(-10,11)),
+                     ((4,-16),(4,17)),((-8,-16),(-8,17)),((-16,-12),(-16,13))]:
+            pygame.draw.line(self.surface, seam_col,
+                             self._rotate_pt(a, angle, pos), self._rotate_pt(b, angle, pos), 1)
+
+        # Cargo bay — large center rectangle
+        bay_pts = [(-4,-10),(8,-10),(8,11),(-4,11)]
+        bp = [self._rotate_pt(p, angle, pos) for p in bay_pts]
+        pygame.draw.polygon(self.surface, (12, 16, 28), bp)
+        pygame.draw.polygon(self.surface, (42, 46, 70), bp, 1)
+        for x_off in (0, 4, 8):
+            p1 = self._rotate_pt((x_off-2, -10), angle, pos)
+            p2 = self._rotate_pt((x_off-2,  11), angle, pos)
+            pygame.draw.line(self.surface, (30, 34, 55), p1, p2, 1)
+
+        # Boxy cockpit dome at nose
+        cockpit_pts = [(12,-6),(6,-10),(0,-8),(0,8),(6,10),(12,6)]
+        cpt = [self._rotate_pt(p, angle, pos) for p in cockpit_pts]
+        cp  = 0.5 + 0.5 * math.sin(t * 1.4)
+        pygame.draw.polygon(self.surface, (6, 22, 44), cpt)
+        pygame.draw.polygon(self.surface,
+                            (int(20+60*cp), int(100+80*cp), int(140+80*cp)), cpt, 1)
+        for gx, gy in ((10,-2),(8,-5)):
+            pygame.draw.circle(self.surface, (160, 220, 255),
+                               self._rotate_pt((gx, gy), angle, pos), 1)
+
+        # Twin engine nozzles side by side
+        for side_off in (-8, 8):
+            y1, y2 = side_off-4, side_off+4
+            nz_pts = [(-24,y1),(-30,y1),(-30,y2),(-24,y2)]
+            nz = [self._rotate_pt(p, angle, pos) for p in nz_pts]
+            pygame.draw.polygon(self.surface, (0, 18, 42), nz)
+            pygame.draw.polygon(self.surface, (70, 90, 120), nz, 1)
+            np_ = 0.5 + 0.5 * math.sin(t * 13.0 + side_off)
+            pygame.draw.circle(self.surface,
+                               (int(180*np_), int(110*np_), int(30*np_)),
+                               self._rotate_pt((-27, side_off), angle, pos), 2)
+
+        # RCS ports — 6 for the heavier ship
+        rp = 0.4 + 0.4 * math.sin(t * 5.5)
+        rc = (int(40+60*rp), int(40+60*rp), int(80+50*rp))
+        for lx, ly in ((8,-10),(8,11),(-4,-14),(-4,15),(-14,-10),(-14,10)):
+            pygame.draw.circle(self.surface, rc, self._rotate_pt((lx,ly), angle, pos), 1)
+
+        # Nav lights at outer armor flanges
+        pygame.draw.circle(self.surface, (255, 60, 60), self._rotate_pt((-4,-18), angle, pos), 2)
+        pygame.draw.circle(self.surface, (60, 255, 100), self._rotate_pt((-4, 18), angle, pos), 2)
+
+        # Twin gun pods — heavier ship, two barrels
+        self._draw_ship_gun(ship, pos, angle, t, tip=(22,-5), base=(14,-5))
+        self._draw_ship_gun(ship, pos, angle, t, tip=(22, 5), base=(14, 5))
+
+    # ---- Shared gun helper ----------------------------------------------
+    def _draw_ship_gun(self, ship, pos, angle, t, tip, base):
+        if not hasattr(ship, "gun"):
+            return
+        if not ship.gun.is_jammed:
+            tp = self._rotate_pt(tip, angle, pos)
+            bp = self._rotate_pt(base, angle, pos)
+            pygame.draw.line(self.surface, (130, 130, 160), bp, tp, 2)
+            pygame.draw.line(self.surface, (100, 230, 130), bp, tp, 1)
+            pygame.draw.circle(self.surface, (60, 180, 90), tp, 1)
+        else:
+            jp  = 0.5 + 0.5 * abs(math.sin(t * 8))
+            jc  = (int(200*jp), 0, 0)
+            tp  = self._rotate_pt(tip, angle, pos)
+            bp  = self._rotate_pt(base, angle, pos)
+            pygame.draw.line(self.surface, jc, bp, tp, 2)
+
+    def _draw_exhaust(self, ship, t: float, frame_name: str = ""):
         keys      = pygame.key.get_pressed()
         thrusting = keys[pygame.K_UP] or keys[pygame.K_w]
         reversing = keys[pygame.K_DOWN] or keys[pygame.K_s]
@@ -1862,59 +2038,128 @@ class VectorRenderer:
         angle  = ship.angle
         hp_pct = ship.hull_pct
         flick  = 1.0 + math.sin(t * 53.7) * 0.13
+        jitter = math.sin(t * 22.0) * 1.5
+        rad    = math.radians(angle + 180)
+        ship_vx = ship.body.vel.x if hasattr(ship, "body") else 0
+        ship_vy = ship.body.vel.y if hasattr(ship, "body") else 0
 
         if thrusting:
-            hue     = 0.58 + (1.0 - hp_pct) * 0.26
-            c_outer = _hsv(hue, 0.75, 0.32 * flick)
-            c_mid   = _hsv(hue, 0.92, 0.72 * flick)
-            c_core  = _hsv(hue - 0.04, 0.25, 1.0)
-            # Wavering plume — slight perpendicular jitter
-            jitter = math.sin(t * 22.0) * 1.5
-            outer = [self._rotate_pt(p, angle, pos) for p in
-                     ((-14,-9),(-58, jitter),(-14,11))]
-            mid   = [self._rotate_pt(p, angle, pos) for p in
-                     ((-14,-5),(-38, jitter * 0.6),(-14,7))]
-            core  = [self._rotate_pt(p, angle, pos) for p in
-                     ((-14,-2),(-26, jitter * 0.3),(-14,4))]
+            if frame_name == "REINFORCED JUNK MK2":
+                # Twin heavy plumes — shorter, wider, orange-amber
+                hue2    = 0.06 + (1.0-hp_pct)*0.05
+                c_out2  = _hsv(hue2, 0.85, 0.38*flick)
+                c_mid2  = _hsv(hue2, 0.95, 0.75*flick)
+                c_core2 = _hsv(hue2-0.03, 0.20, 1.0)
+                gp_col2 = _hsv(hue2, 0.8, 0.9)
+                for so in (-8, 8):
+                    outer = [self._rotate_pt(p, angle, pos) for p in
+                             ((-26,so-6),(-54,so+jitter*0.7),(-26,so+6))]
+                    mid   = [self._rotate_pt(p, angle, pos) for p in
+                             ((-26,so-3),(-38,so+jitter*0.4),(-26,so+3))]
+                    core  = [self._rotate_pt(p, angle, pos) for p in
+                             ((-26,so-1),(-30,so+jitter*0.2),(-26,so+1))]
+                    glow_surf = pygame.Surface((100, 70), pygame.SRCALPHA)
+                    pygame.draw.circle(glow_surf, (*gp_col2, 28), (50,35), 28)
+                    pygame.draw.circle(glow_surf, (*gp_col2, 45), (50,35), 16)
+                    gp = self._rotate_pt((-34, so), angle, pos)
+                    self.surface.blit(glow_surf, (gp[0]-50, gp[1]-35))
+                    pygame.draw.polygon(self.surface, c_out2,  outer)
+                    pygame.draw.polygon(self.surface, c_mid2,  mid)
+                    pygame.draw.polygon(self.surface, c_core2, core)
+                    pygame.draw.circle(self.surface, (240, 250, 255),
+                                       self._rotate_pt((-26, so), angle, pos), 1)
+                if random.random() < 0.55:
+                    spawn = self._rotate_pt((-28, random.choice([-8,8]) + random.uniform(-3,3)), angle, pos)
+                    sp = random.uniform(120, 220)
+                    spr = math.radians(random.uniform(-18, 18))
+                    self._spawn_ember(spawn[0], spawn[1],
+                                      math.cos(rad+spr)*sp + ship_vx*0.5,
+                                      math.sin(rad+spr)*sp + ship_vy*0.5,
+                                      (hue2 + random.uniform(-0.05, 0.05)) % 1.0)
 
-            # Soft glow under plume
-            glow_surf = pygame.Surface((120, 80), pygame.SRCALPHA)
-            gp_col = _hsv(hue, 0.8, 0.9)
-            pygame.draw.circle(glow_surf, (*gp_col, 35), (60, 40), 36)
-            pygame.draw.circle(glow_surf, (*gp_col, 50), (60, 40), 22)
-            cx_glow = self._rotate_pt((-30, 0), angle, pos)
-            self.surface.blit(glow_surf, (cx_glow[0] - 60, cx_glow[1] - 40))
+            elif frame_name == "SCRAP DELTA-7":
+                # Tight single blue-white plume — high energy
+                hue3    = 0.62 + (1.0-hp_pct)*0.20
+                c_out3  = _hsv(hue3, 0.70, 0.35*flick)
+                c_mid3  = _hsv(hue3, 0.90, 0.78*flick)
+                c_core3 = _hsv(hue3-0.02, 0.15, 1.0)
+                gp_col3 = _hsv(hue3, 0.8, 0.9)
+                outer = [self._rotate_pt(p, angle, pos) for p in
+                         ((-18,-7),(-62,jitter*0.8),(-18,7))]
+                mid   = [self._rotate_pt(p, angle, pos) for p in
+                         ((-18,-4),(-40,jitter*0.5),(-18,4))]
+                core  = [self._rotate_pt(p, angle, pos) for p in
+                         ((-18,-2),(-28,jitter*0.25),(-18,2))]
+                glow_surf = pygame.Surface((120, 70), pygame.SRCALPHA)
+                pygame.draw.circle(glow_surf, (*gp_col3, 30), (60,35), 30)
+                pygame.draw.circle(glow_surf, (*gp_col3, 55), (60,35), 18)
+                cg = self._rotate_pt((-34, 0), angle, pos)
+                self.surface.blit(glow_surf, (cg[0]-60, cg[1]-35))
+                pygame.draw.polygon(self.surface, c_out3,  outer)
+                pygame.draw.polygon(self.surface, c_mid3,  mid)
+                pygame.draw.polygon(self.surface, c_core3, core)
+                pygame.draw.polygon(self.surface, (240, 250, 255),
+                                    [self._rotate_pt(p, angle, pos) for p in ((-18,-1),(-21,0),(-18,1))])
+                if random.random() < 0.50:
+                    spawn = self._rotate_pt((-20, random.uniform(-2,2)), angle, pos)
+                    sp = random.uniform(160, 260)
+                    spr = math.radians(random.uniform(-12, 12))
+                    self._spawn_ember(spawn[0], spawn[1],
+                                      math.cos(rad+spr)*sp + ship_vx*0.5,
+                                      math.sin(rad+spr)*sp + ship_vy*0.5,
+                                      (hue3 + random.uniform(-0.04, 0.04)) % 1.0)
 
-            pygame.draw.polygon(self.surface, c_outer, outer)
-            pygame.draw.polygon(self.surface, c_mid,   mid)
-            pygame.draw.polygon(self.surface, c_core,  core)
-
-            # White hot inner flame
-            inner_core = [self._rotate_pt(p, angle, pos) for p in
-                          ((-14,-1),(-18,0),(-14,2))]
-            pygame.draw.polygon(self.surface, (240, 250, 255), inner_core)
-
-            # Spawn embers — small chance each frame to add particles
-            if random.random() < 0.45:
-                # Particle exits the nozzle in the opposite direction of facing
-                rad = math.radians(angle + 180)
-                spawn = self._rotate_pt((-18, random.uniform(-3, 3)), angle, pos)
-                base_speed = random.uniform(140, 240)
-                spread = math.radians(random.uniform(-15, 15))
-                # Inherit ship velocity for natural look
-                ship_vx = ship.body.vel.x if hasattr(ship, "body") else 0
-                ship_vy = ship.body.vel.y if hasattr(ship, "body") else 0
-                evx = math.cos(rad + spread) * base_speed + ship_vx * 0.5
-                evy = math.sin(rad + spread) * base_speed + ship_vy * 0.5
-                ember_hue = (hue + random.uniform(-0.05, 0.05)) % 1.0
-                self._spawn_ember(spawn[0], spawn[1], evx, evy, ember_hue)
+            else:  # RUSTBUCKET ALPHA
+                hue     = 0.58 + (1.0-hp_pct)*0.26
+                c_outer = _hsv(hue, 0.75, 0.32*flick)
+                c_mid   = _hsv(hue, 0.92, 0.72*flick)
+                c_core  = _hsv(hue-0.04, 0.25, 1.0)
+                gp_col  = _hsv(hue, 0.8, 0.9)
+                outer = [self._rotate_pt(p, angle, pos) for p in
+                         ((-18,-9),(-60,jitter),(-18,11))]
+                mid   = [self._rotate_pt(p, angle, pos) for p in
+                         ((-18,-5),(-40,jitter*0.6),(-18,7))]
+                core  = [self._rotate_pt(p, angle, pos) for p in
+                         ((-18,-2),(-26,jitter*0.3),(-18,4))]
+                glow_surf = pygame.Surface((120, 80), pygame.SRCALPHA)
+                pygame.draw.circle(glow_surf, (*gp_col, 35), (60,40), 36)
+                pygame.draw.circle(glow_surf, (*gp_col, 50), (60,40), 22)
+                cg = self._rotate_pt((-34, 0), angle, pos)
+                self.surface.blit(glow_surf, (cg[0]-60, cg[1]-40))
+                pygame.draw.polygon(self.surface, c_outer, outer)
+                pygame.draw.polygon(self.surface, c_mid,   mid)
+                pygame.draw.polygon(self.surface, c_core,  core)
+                pygame.draw.polygon(self.surface, (240, 250, 255),
+                                    [self._rotate_pt(p, angle, pos) for p in ((-18,-1),(-22,0),(-18,2))])
+                if random.random() < 0.45:
+                    spawn = self._rotate_pt((-22, random.uniform(-3,3)), angle, pos)
+                    sp = random.uniform(140, 240)
+                    spr = math.radians(random.uniform(-15, 15))
+                    self._spawn_ember(spawn[0], spawn[1],
+                                      math.cos(rad+spr)*sp + ship_vx*0.5,
+                                      math.sin(rad+spr)*sp + ship_vy*0.5,
+                                      (hue + random.uniform(-0.05, 0.05)) % 1.0)
 
         if reversing:
-            retro = [self._rotate_pt(p, angle, pos) for p in ((18,-2),(30, math.sin(t*20)*0.8),(18,2))]
-            pygame.draw.polygon(self.surface, (200, 80, 20), retro)
-            # Forward glow
-            fwd_glow = self._rotate_pt((28, 0), angle, pos)
-            pygame.draw.circle(self.surface, (255, 140, 40), fwd_glow, 3)
+            if frame_name == "REINFORCED JUNK MK2":
+                for gy in (-6, 6):
+                    retro = [self._rotate_pt(p, angle, pos) for p in
+                             ((14,gy-2),(26,math.sin(t*20)*0.6+gy),(14,gy+2))]
+                    pygame.draw.polygon(self.surface, (200, 80, 20), retro)
+                pygame.draw.circle(self.surface, (255, 130, 40),
+                                   self._rotate_pt((22, 0), angle, pos), 4)
+            elif frame_name == "SCRAP DELTA-7":
+                retro = [self._rotate_pt(p, angle, pos) for p in
+                         ((24,-1),(36,math.sin(t*22)*0.5),(24,1))]
+                pygame.draw.polygon(self.surface, (180, 70, 10), retro)
+                pygame.draw.circle(self.surface, (255, 120, 30),
+                                   self._rotate_pt((32, 0), angle, pos), 2)
+            else:
+                retro = [self._rotate_pt(p, angle, pos) for p in
+                         ((20,-2),(30,math.sin(t*20)*0.8),(20,2))]
+                pygame.draw.polygon(self.surface, (200, 80, 20), retro)
+                pygame.draw.circle(self.surface, (255, 140, 40),
+                                   self._rotate_pt((28, 0), angle, pos), 3)
 
     # ------------------------------------------------------------------  BARGES
     def _draw_barges(self, run_mgr, ship, t: float = 0.0):
