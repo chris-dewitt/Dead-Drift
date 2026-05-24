@@ -1006,6 +1006,14 @@ class RunManager:
         self._pending_advance = True
 
     def on_terminal_complete(self, outcome):
+        # Return to flight at rest — the ship was visually frozen during the
+        # terminal but its velocity was preserved; resuming flight at the
+        # pre-terminal momentum is disorienting. Skip when an intercepting
+        # barge is alive: that's a continuing combat encounter, momentum stays.
+        if self._ship is not None and self._intercepting_barge is None:
+            self._ship.body.vel    = Vec2()
+            self._ship.body._force = Vec2()
+
         # ESC abort: static burst deals hull damage, no reward
         if outcome == "abort":
             if self._ship is not None:

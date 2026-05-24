@@ -859,6 +859,16 @@ class Game:
 
         if rm.jump_ready:
             jump_txt = font.render("[ J ]  JUMP READY", True, S.GREEN_TERM)
+        elif (getattr(rm, "mutators", None) is not None
+              and rm.mutators.is_active("slingshot_only")):
+            # Sector timer doesn't advance — only slingshots fill the bar.
+            # Render N slingshots remaining instead of a misleading countdown.
+            deficit = max(0.0, rm._sector_dur - rm._sector_timer)
+            per_sling = rm._sector_dur / 3.0
+            slings_needed = max(1, int(-(-deficit // per_sling)))  # ceil div
+            label = (f"SLING TO JUMP  ({slings_needed})"
+                     if slings_needed > 1 else "SLING TO JUMP")
+            jump_txt = font.render(label, True, (190, 140, 60))
         else:
             jump_txt = font.render(
                 f"JUMP IN  {rm.jump_cooldown:>4.0f}s", True, S.GREY_DEAD,
