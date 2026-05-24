@@ -69,6 +69,11 @@ class VectorRenderer:
         # Screen shake state: trauma decays exponentially; offset is random per frame
         self._shake_trauma = 0.0   # 0.0 (none) → 1.0 (huge)
 
+        # Soft lead-camera offset — the flight area glides slightly with the
+        # ship's velocity. World still wraps in absolute coords; only the
+        # display blit is offset. See _apply_camera_glide().
+        self._cam_offset = pygame.Vector2(0.0, 0.0)
+
         # Per-sector background palette shift + intensity ramp
         self._sector_hue_shift = 0.0
         self._sector_intensity = 0.0   # 0.0 sector 1 → 1.0 sector SECTORS_PER_RUN
@@ -188,6 +193,7 @@ class VectorRenderer:
         self._draw_spore_effect(ship, t)
         self._draw_cargo_overlays(ship, t)
         self._draw_warp_streak(dt)
+        self._apply_camera_glide(ship, dt)
         self._apply_screen_shake(dt)
         self._vfx.apply_flight_grade(
             self.surface, dt,
@@ -533,6 +539,40 @@ class VectorRenderer:
             sub_lbl = font_xs.render("[UNOBSERVED]", True, (140, 120, 28))
             self.surface.blit(vip_lbl, (W - vip_lbl.get_width() - 10, H - 44))
             self.surface.blit(sub_lbl, (W - sub_lbl.get_width() - 10, H - 30))
+
+    def _apply_camera_glide(self, ship, dt: float):
+        """
+        Tile-blit the flight area with an offset that follows the ship's
+        velocity. Wraps via 4-quadrant blit so no black gap appears.
+        Only affects the flight area (y < FLIGHT_H); cockpit is untouched.
+        """
+        if ship is None or not ship.is_alive:
+            target_x = target_y = 0.0
+        else:
+            vx, vy = ship.body.vel.x, ship.body.vel.y
+            target_x = max(-S.CAMERA_GLIDE_MAX,
+                           min(S.CAMERA_GLIDE_MAX, vx * S.CAMERA_GLIDE_GAIN))
+            target_y = max(-S.CAMERA_GLIDE_MAX,
+                           min(S.CAMERA_GLIDE_MAX, vy * S.CAMERA_GLIDE_GAIN))
+        step = min(1.0, S.CAMERA_GLIDE_RATE * dt)
+        self._cam_offset.x += (target_x - self._cam_offset.x) * step
+        self._cam_offset.y += (target_y - self._cam_offset.y) * step
+
+        ox = int(round(-self._cam_offset.x))
+        oy = int(round(-self._cam_offset.y))
+        if ox == 0 and oy == 0:
+            return
+
+        W, H = S.SCREEN_W, S.FLIGHT_H
+        snapshot = self.surface.subsurface(pygame.Rect(0, 0, W, H)).copy()
+        self.surface.fill(S.BLACK, pygame.Rect(0, 0, W, H))
+        # Tile in the four quadrants so the wrap-gap is filled regardless
+        # of offset sign.
+        dx_alt = W if ox < 0 else -W
+        dy_alt = H if oy < 0 else -H
+        for dx in (0, dx_alt):
+            for dy in (0, dy_alt):
+                self.surface.blit(snapshot, (ox + dx, oy + dy))
 
     def _apply_screen_shake(self, dt: float):
         if self._shake_trauma <= 0.01:
