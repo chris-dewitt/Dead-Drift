@@ -10,23 +10,29 @@ from terminal.npcs.underground_dj import UndergroundDJ
 from terminal.npcs.toll_authority import TollAuthority
 from terminal.npcs.nervous_fence import NervousFence
 from terminal.npcs.cargo_inspector import CargoInspector
+from terminal.npcs.dray import Dray
+from terminal.npcs.nova_soma import NovaSomaCollections
+from terminal.npcs.mira_voss import MiraVoss
 from terminal.npcs.base_npc import BaseNPC
 
 
 def make_npc(npc_type: str, **kwargs) -> BaseNPC:
     """Factory: instantiate an NPC by type string."""
     registry = {
-        "gary":               Gary,
-        "synthetic_droid":    SyntheticDroid,
-        "union_dispatcher":   UnionDispatcher,
-        "kress":              Kress,
-        "insurance_adjuster": InsuranceAdjuster,
-        "sandra":             Sandra,
-        "pirate":             Pirate,
-        "underground_dj":     UndergroundDJ,
-        "toll_authority":     TollAuthority,
-        "nervous_fence":      NervousFence,
-        "cargo_inspector":    CargoInspector,
+        "gary":                    Gary,
+        "synthetic_droid":         SyntheticDroid,
+        "union_dispatcher":        UnionDispatcher,
+        "kress":                   Kress,
+        "insurance_adjuster":      InsuranceAdjuster,
+        "sandra":                  Sandra,
+        "pirate":                  Pirate,
+        "underground_dj":          UndergroundDJ,
+        "toll_authority":          TollAuthority,
+        "nervous_fence":           NervousFence,
+        "cargo_inspector":         CargoInspector,
+        "dray":                    Dray,
+        "nova_soma_collections":   NovaSomaCollections,
+        "mira_voss":               MiraVoss,
     }
     cls = registry.get(npc_type)
     if cls is None:
