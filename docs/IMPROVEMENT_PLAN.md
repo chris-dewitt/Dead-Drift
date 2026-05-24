@@ -14,7 +14,7 @@
 
 | Epic | Done | Partial | Open | Notes |
 |------|------|---------|------|-------|
-| **Phase 0** — Trust fixes | 0 | 0 | 6 | Chris priorities + live playtest findings |
+| **Phase 0** — Trust fixes | 0 | 0 | 9 | Chris priorities + live playtest findings |
 | **1** — Code hygiene | 6 | 2 | 2 | Font cache + NLTK lazy still open |
 | **2** — Flight feel | 5 | 2 | 0 | SNAP CHARGE bar missing; thruster heat is Phase 0 |
 | **3** — Sector variety | 2 | 4 | 0 | Hazards via themes; collapsing well / debris cloud unwired |
@@ -40,6 +40,9 @@ Tracked here and in `docs/DOCUMENTATION_STATUS.md`. These override epic list ord
 | Improve market graphics | Epic 6 / shop polish | [ ] |
 | Improve docking graphics | Epic 5 | [ ] |
 | Shroom control inversion (Ch.2 cargo) | Phase 0.6 | [ ] |
+| Barge intercept = Gary / Union only | Phase 0.7 | [ ] |
+| Dock Union identity (Gary, Local 404) | Phase 0.8 + Epic 5.4 | [ ] |
+| Non-Union NPCs → distinct ship hulls | Phase 0.9 + Epic 3.7 | [ ] |
 
 ---
 
@@ -84,6 +87,40 @@ Dead constant `{3, 6}`; live config is `settings.SHOP_SECTORS = {1, 3}`.
 
 **Fix direction:** Reproduce in Ch.2 flight with shrooms selected; add temporary debug readout if needed; trace `cargo.update` → `controls_inverted` → `_read_input` each frame; confirm overlay + Bax line on trigger.
 
+### 0.7 Repo barges = Gary / Union only (no pirates on barge comm) — [ ]
+**Playtest / design lock (Chris, May 2026):** When a **Local 404 repo barge** intercepts the player, the comm is **Gary Pruitt** — every time. Only the **Union** operates repo barges. Pirates, DJs, fences, etc. do **not** piggyback the barge relay.
+
+**Current code (wrong):** `run_manager.open_barge_terminal()` — Gary ~30% chance; else random from `union_dispatcher`, `synthetic_droid`, `insurance_adjuster`, `pirate` (`roguelite/run_manager.py`). Bax even warns about pirates on the repo frequency.
+
+**Fix direction:**
+- Barge intercept → always `open_terminal("gary", intercepted=True)` (or Union dispatcher **as Gary's supervisor on the same barge**, if we want variety — still Union crew, never pirates).
+- Move `pirate`, `underground_dj`, `nervous_fence`, etc. to **non-barge** encounter channels only (sector **J** jump terminal, **K** Kress hail, random comms events, distinct fly-by ships — see 0.9).
+- Audit Bax framing lines that mention pirates on barge frequency.
+
+### 0.8 Dock visuals — Union Local 404 + Gary identity — [ ]
+**Playtest / design lock (Chris, May 2026):** Update the **landing / dock sequence** so it reads as a Union facility with Gary's presence — not generic green technicians only.
+
+**Current code:** `delivery/delivery_sequence.py` Beat 2 `_draw_land` — `UNION LOCAL 404` placard + anonymous ground crew silhouettes. No Gary portrait, no dock-master dialogue tied to Gary. `docs/CORRIDOR_DESIGN.md` Ch.1 already spec's Gary at handoff (off-duty, sheepish) — landing dock should foreshadow that.
+
+**Fix direction (Epic 5.4):**
+- Dock master / receiving officer silhouette or CRT portrait = **Gary** (or chapter-appropriate Union contact — Ch.1 Gary, Ch.2 lab tech, etc. per corridor spec).
+- Union amber hazard palette, Local 404 signage, repo-barge bay markers visible in background.
+- Beat 2 miss lines reference Gary / dock master as Union, not anonymous "dock master muttering."
+- Align with Chris priority **#5 improve docking graphics**.
+
+### 0.9 Non-Union NPCs need distinct spaceship types — [ ]
+**Playtest / design lock (Chris, May 2026):** **Pirates, radio DJs (Marrow), Kress, fences, Sandra**, etc. must appear in space on **their own hull silhouettes** — not repo barges, not the player courier wedge.
+
+**Current code:**
+- In-flight threats: player ship + `RepoBarge` (Union industrial) + optional `AlienShip` fly-through (`antagonists/alien_ship.py`).
+- Pirates / Marrow / Kress / Sandra: **terminal-only** (no vessel in the flight scene).
+- Pirate can incorrectly appear via barge comm (0.7).
+
+**Fix direction (Epic 3.7):**
+- Define a small **hull registry** in `renderer/vector_renderer.py` (or `antagonists/vessels/`) — e.g. `PirateSkiff`, `BroadcastRelay`, `ComplianceCourier` (Sandra), `OuterBeltHauler` (Kress).
+- Wire spawn paths: pirate hail → pirate skiff enters range or trails player; **K** / DJ events → relay dish ship; keep **repo barge** silhouette exclusive to Local 404.
+- Jump-terminal NPCs can stay voice-only until ship is on-screen, but the visual rule is: **if you see a ship, its hull matches the faction.**
+
 ---
 
 ## Locked design decisions (decisions log)
@@ -118,6 +155,9 @@ These are the directional answers backing this plan. Don't re-litigate — imple
 - **Threat-level music layer:** add a low harmonica drone that fades in within 320 px of a barge (uses existing `EVT_BARGE_NEARBY`).
 - **North-star metric:** each chapter feels mechanically distinct on first playthrough AND replay rate after campaign clear is non-zero.
 - **Next Fest demo focus:** all four headline pillars must ship — corridor overhaul, sector variety, control feel, terminal & cockpit polish.
+- **Repo barges (Union only):** `RepoBarge` is Local 404 exclusively. Barge comm intercept = **Gary** (Union). No pirates or non-Union NPCs on the barge channel. **Locked May 2026 (Chris playtest).**
+- **Faction ship silhouettes:** Non-Union NPCs (pirates, Marrow/DJ relay, Kress, Sandra, fences) each get a **distinct vector hull** when they appear in the flight scene — not repo barges. **Locked May 2026.**
+- **Dock identity:** Landing sequence docks read as Union facilities; Gary / chapter contact visible at dock (see Epic 5.4). **Locked May 2026.**
 
 ---
 
@@ -349,6 +389,20 @@ When a sector loads (currently `EVT_SECTOR_START`), draw a 2-second sector-intro
 
 Fades out after 2 seconds. Reinforces the "every sector feels different" promise visually.
 
+### 3.7 Non-Union vessel silhouettes — [ ]
+**Chris lock (May 2026):** Pirates, underground DJs, Outer Belt contacts, Sandra's compliance courier, etc. each fly a **recognizable hull type** — not a repo barge.
+
+| Faction / NPC | Hull sketch (implementation-agnostic) | When it appears |
+|---------------|--------------------------------------|-----------------|
+| **Local 404 Union** | Existing `RepoBarge` — massive industrial, amber hazards | Hunt / tether / intercept |
+| **Outer Belt pirate** | Asymmetric skiff, jury-rigged plates, red running lights | Pirate hail comms, hostile proximity |
+| **Marrow / pirate radio** | Small relay ship — dish antenna, patchwork solar panels | **K** events, DJ terminal, fly-by |
+| **Kress (bill collector)** | Sleek corporate shuttle — Nova Soma livery, too clean | Random collector transmission |
+| **Sandra Vega-Marsh** | Poster-perfect compliance courier — symmetrical, sterile white | Gate / jump terminal (optional fly-by) |
+| **Alien** | Existing `AlienShip` asymmetric fin | Rare fly-through (keep) |
+
+**Fix direction:** Vector polygons only (`pygame.draw`), same art bible as player ship. Renderer draws faction hull before opening terminal where possible so the player *sees* who is hailing them.
+
 ---
 
 ## Epic 4 — The Mario Corridor: Delivery Sequence Overhaul
@@ -484,6 +538,17 @@ Each chapter has a different station for the landing:
 Each station is a vector illustration rendered procedurally — same constraints as the rest of the renderer (no sprite assets).
 
 **May 2026:** Chapter-themed names/colors via `_STATION_THEMES`; `draw_landing_star_destroyer` shared silhouette. Distinct harbour/biolab/compliance/hotel **silhouettes** — partial (palette swap more than unique art).
+
+### 5.4 Union dock identity (Gary + Local 404) — [ ]
+**Chris lock (May 2026):** The landing dock is a **Union Local 404** facility. **Gary** (Ch.1) or the chapter's receiving contact should be visible — portrait, silhouette, or named placard — not anonymous green technicians alone.
+
+**Targets:**
+- `delivery/delivery_sequence.py` — Beat 2 landing bay + Beat 3 clamp cutscene.
+- Per-chapter dock contact table (align with `docs/CORRIDOR_DESIGN.md` boss rooms): Ch.1 Gary, Ch.2 lab tech, Ch.3 Union dispatcher desk, Ch.4 hotel concierge.
+- Union signage, amber hazard stripes, repo-barge maintenance bay in background (ties flight barges to dock fantasy).
+- Optional: Gary CRT bust on dock wall reacting to perfect vs rough landing (reuse `terminal/npc_portraits.py` pipeline).
+
+**May 2026:** Generic `UNION LOCAL 404` placard exists; Gary not present at dock. Chris playtest — **update the docks**.
 
 ---
 

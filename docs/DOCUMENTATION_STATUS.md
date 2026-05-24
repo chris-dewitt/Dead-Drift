@@ -18,6 +18,9 @@
 | 5 | `MAX_VELOCITY` | **280 px/s** — overdrive cap **420 px/s** | Done |
 | 6 | `SOUNDTRACK_PLAN.md` | Implementation status section | Done |
 | 7 | `README.md` | Full feature list | Done |
+| 8 | Repo barges = Gary / Union only | **Locked** — Phase 0.7 | Done (doc) |
+| 9 | Dock Union / Gary identity | **Locked** — Epic 5.4 | Done (doc) |
+| 10 | Non-Union faction ship silhouettes | **Locked** — Epic 3.7 | Done (doc) |
 
 ---
 
@@ -31,6 +34,9 @@
 | 4 | **Improve market graphics** | **Open (polish)** |
 | 5 | **Improve docking graphics** | **Open (polish)** |
 | 6 | **Shroom control inversion (Ch.2 cargo)** | **Open (bug)** — playtest: inversion not felt in-flight; code exists, wiring unverified |
+| 7 | **Barge intercept = Gary / Union only** | **Open (design violation)** — `open_barge_terminal()` randomizes Gary ~30%; pirates can appear on barge comm |
+| 8 | **Dock Union identity (Gary, Local 404)** | **Open (polish)** — generic dock crew; Gary not at landing per corridor spec |
+| 9 | **Non-Union NPCs → distinct ship hulls** | **Open** — pirates/DJs/etc. terminal-only; only player + barge + alien in flight |
 
 Tracked in `docs/IMPROVEMENT_PLAN.md` → **Phase 0**.
 
@@ -43,6 +49,9 @@ Add rows as you play; agents update Phase 0 / epics from here.
 | Date | Finding | Doc / phase |
 |------|---------|-------------|
 | May 2026 | Epistemological Shrooms — periodic control inversion not working in flight | Phase 0.6 |
+| May 2026 | Repo barges should always be Gary — **only Union** on barges; no pirates on barge comm | Phase 0.7 |
+| May 2026 | Update the docks — Union / Gary identity at landing | Phase 0.8, Epic 5.4 |
+| May 2026 | Pirates, radio DJs, etc. need **different spaceship types** (not barges) | Phase 0.9, Epic 3.7 |
 
 ---
 

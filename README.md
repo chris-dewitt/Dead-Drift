@@ -52,6 +52,7 @@ Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sent
 - Sector **themes** (8 types): wrecks, mines, ice, trash, flares, toll checkpoints, etc.
 - Repo **Barge** state machine: patrol → chase → aim → intercept → clamp → torch (unbolt modules)
 - **Tether:** spring force toward barge; snap with lateral velocity
+- **Design lock (May 2026):** Repo barges = **Local 404 Union only**; barge intercept comm = **Gary**. Pirates, DJs, and other factions use **different ship hulls** — not barges. See `docs/IMPROVEMENT_PLAN.md` Phase 0.7–0.9.
 - Gun, debris, fuel canisters, satellites, hazards wired per theme
 
 ### Hotwired signal chain
