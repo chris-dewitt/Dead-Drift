@@ -139,6 +139,13 @@ Tone benchmark: *"GENUINE NOVA SOMA® PARTS IN EVERY CLONE"* — that's the bar.
 
 ## Epic 10 — Visual Quality Across All Scenes
 
+**May 2026 status:**
+- 10.1 Shop screen: **COMPLETE** — condition badges (MINT/WORN/SCRAP) on every item card, credits display repositioned to top-right amber, Nova Soma™ branding scratched off right wall, exit door graphic at footer.
+- 10.2 Death/decanting screen: **COMPLETE** — clone tube hospital background with 5 cylindrical tanks (active one glows), rotating taglines per clone count, "ACCEPT CHARGES (non-optional)" button, invoice panel floating over the room.
+- 10.3 Portrait quality: ambient backdrop already provides ≥3 animated elements (passersby, motes, readout flicker) for every NPC. Nova Soma AI face remains to do (alien sensor array per spec).
+- 10.4 Corridor: `delivery/corridor/` system already has per-chapter palettes defined; main render loop in `base.py` uses them. Additional wall panels/parallax/lighting still open.
+- 10.5 Landing: open.
+
 **Decision:** every scene must reach flight-scene quality. Same vector renderer vocabulary: panel seams, glow halos, scorch marks, procedural depth. No scene should feel lower-fidelity than another.
 
 ### 10.1 Shop screen — full visual overhaul
