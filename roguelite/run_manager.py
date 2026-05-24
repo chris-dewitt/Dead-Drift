@@ -673,14 +673,20 @@ class RunManager:
     def _install_terminal(self, terminal: Terminal) -> None:
         """Route every Terminal creation through here so the popup gate fires.
         Defers `_active_terminal` assignment until Bax's priority line settles."""
-        silent = (self._t - self._last_voice_char_t) > 0.5
+        t_now  = getattr(self, '_t', 0.0)
+        t_last = getattr(self, '_last_voice_char_t', -10.0)
+        silent = (t_now - t_last) > 0.5
         if silent:
             self._active_terminal = terminal
-            self._pending_terminal = None
-            self._terminal_arm_t = -1.0
+            if hasattr(self, '_pending_terminal'):
+                self._pending_terminal = None
+            if hasattr(self, '_terminal_arm_t'):
+                self._terminal_arm_t = -1.0
         else:
-            self._pending_terminal = terminal
-            self._terminal_arm_t = self._t
+            if hasattr(self, '_pending_terminal'):
+                self._pending_terminal = terminal
+            if hasattr(self, '_terminal_arm_t'):
+                self._terminal_arm_t = t_now
 
     def _tick_terminal_gate(self) -> None:
         if self._pending_terminal is None or self._active_terminal is not None:

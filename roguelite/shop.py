@@ -22,6 +22,14 @@ _TAG_COL: dict[str, tuple] = {
     "scrap_bullets":    (255,  80,  50),
 }
 
+def _condition(cost: int) -> tuple[str, tuple]:
+    """Return (badge_label, color) based on item price tier."""
+    if cost >= 1800:
+        return "MINT",  (0, 195, 125)
+    if cost >= 800:
+        return "WORN",  (190, 145, 30)
+    return "SCRAP", (195, 65, 35)
+
 _VENDOR_LINES = [
     "Cash only. No IDs. No questions. Some questions.",
     "Discretion costs extra. You look all out.",
@@ -370,10 +378,12 @@ class ShopScreen:
         surf.blit(loc_s, (cx - loc_s.get_width() // 2, 62))
         pygame.draw.line(surf, (90, 62, 0), (cx - 390, 80), (cx + 390, 80), 1)
 
-        # Balance
-        bal_s = _font(14, bold=True).render(
-            f"AVAILABLE:  {self._balance:>8,} cr", True, (55, 200, 100))
-        surf.blit(bal_s, (cx - 390, 86))
+        # Credits — large amber display, top-right of panel
+        cr_lbl = _font(9).render("CREDITS AVAILABLE", True, (75, 55, 0))
+        surf.blit(cr_lbl, (cx + 138, 80))
+        cr_val = _font(17, bold=True).render(f"{self._balance:,} cr",
+                                              True, (215, 165, 0))
+        surf.blit(cr_val, (cx + 388 - cr_val.get_width(), 93))
 
         # Vendor portrait + line (right column)
         _draw_vendor_small(surf, cx + 326, 158, t)
@@ -425,12 +435,17 @@ class ShopScreen:
                     (row.x - 5,  item_y + 47),
                 ])
 
-            # Tag label (top-left, small)
+            # Tag label + condition badge (top-left row)
             tg_col = (45, 90, 45) if bought else (tcol if can_buy else
                       tuple(v // 3 for v in tcol))
             tg = _font(10, bold=True).render(
                 item.tag.upper().replace("_", " "), True, tg_col)
             surf.blit(tg, (text_x, item_y + 5))
+            cond_lbl, cond_col = _condition(item.cost)
+            if bought:
+                cond_col = (45, 80, 45)
+            cond_s = _font(9, bold=True).render(f"[{cond_lbl}]", True, cond_col)
+            surf.blit(cond_s, (text_x + 152, item_y + 6))
 
             _draw_item_icon(surf, icon_rect, item.tag, tcol, t,
                             dim=not can_buy and not bought, bought=bought)
@@ -480,6 +495,7 @@ class ShopScreen:
             "↑ ↓  Navigate     ENTER  Purchase     J / ESC  Leave",
             True, (115, 95, 38))
         surf.blit(ctrl, (cx - ctrl.get_width() // 2, H - 62))
+        _draw_exit_door(surf, cx + 360, H - 58)
         disc = _font(10).render(
             "Non-refundable. No exceptions. Especially not yours.",
             True, (45, 45, 65))
@@ -605,6 +621,18 @@ def _draw_alley_bg(surf: pygame.Surface, W: int, H: int, t: float,
     for i in range(7):
         ry = 70 + i * strip_h
         pygame.draw.rect(surf, (9, 8, 14), (W - 105, ry, 105, strip_h - 3), 1)
+
+    # Nova Soma branding — half-scratched off right wall
+    fbrand = _font(8, bold=True)
+    bx, by = W - 100, 120
+    brand1 = fbrand.render("NOVA SOMA™", True, (30, 22, 38))
+    surf.blit(brand1, (bx, by))
+    brand2 = fbrand.render("CERT. VENDOR #7-G", True, (24, 18, 32))
+    surf.blit(brand2, (bx, by + 12))
+    # Scratch lines over the branding
+    for sx1, sy1, sx2, sy2 in [(0, 3, 62, 7), (5, 18, 70, 14), (18, 0, 45, 22)]:
+        pygame.draw.line(surf, (20, 15, 26), (bx + sx1, by + sy1),
+                         (bx + sx2, by + sy2), 1)
 
     # Overhead pipes
     for py, pw, pc in [(20, 5, (44, 38, 54)), (36, 3, (36, 32, 46)), (50, 2, (26, 23, 36))]:
@@ -824,6 +852,14 @@ def _corner_caps(surf: pygame.Surface, rect: pygame.Rect,
     ):
         pygame.draw.line(surf, col, (bx, by), (bx + sx * L, by), 2)
         pygame.draw.line(surf, col, (bx, by), (bx, by + sy * L), 2)
+
+
+def _draw_exit_door(surf: pygame.Surface, cx: int, cy: int):
+    """Small vector door graphic for the exit indicator."""
+    pygame.draw.rect(surf, (18, 14, 8), (cx - 11, cy - 17, 22, 34))
+    pygame.draw.rect(surf, (75, 52, 18), (cx - 11, cy - 17, 22, 34), 1)
+    pygame.draw.rect(surf, (34, 25, 10), (cx - 9, cy - 15, 18, 30), 1)
+    pygame.draw.circle(surf, (90, 65, 22), (cx + 6, cy), 2)
 
 
 def _wrap(text: str, font: pygame.font.Font, max_w: int) -> list[str]:
