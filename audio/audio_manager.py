@@ -550,6 +550,9 @@ class AudioManager:
         self._tick_decanting(dt)
         self._tick_menu_idle(dt)
         self._tick_chapter_cargo(dt)
+        # Plan §2.4 — keep the active stem count at or below 5 by ducking the
+        # lowest-priority hot stem when a 6th wants in.
+        self._enforce_stem_budget()
 
         if self._master_fx:
             self._master_fx.update(hull_pct, cargo_alarm)
@@ -747,13 +750,16 @@ class AudioManager:
             self._voice_duck_target = self._VOICE_DUCK_FLOOR
         else:
             self._voice_duck_target = 1.0
-        rate = 7.0
-        if self._voice_duck < self._voice_duck_target:
-            self._voice_duck = min(self._voice_duck_target,
-                                   self._voice_duck + rate * dt)
-        elif self._voice_duck > self._voice_duck_target:
+        # Asymmetric attack/release so duck-in is gentle (~200 ms) but
+        # duck-out is brisk (~170 ms) — music breathes back fast after a line.
+        if self._voice_duck > self._voice_duck_target:
+            rate = 3.0   # attack (going down)
             self._voice_duck = max(self._voice_duck_target,
                                    self._voice_duck - rate * dt)
+        elif self._voice_duck < self._voice_duck_target:
+            rate = 6.0   # release (going up)
+            self._voice_duck = min(self._voice_duck_target,
+                                   self._voice_duck + rate * dt)
         self._refresh_ducked_loops()
 
     def _refresh_ducked_loops(self) -> None:
@@ -765,7 +771,8 @@ class AudioManager:
         if self._hum_ch:
             self._hum_ch.set_volume(m * (0.038 / self._master) if self._master else 0)
         if self._lick_ch and self._lick_ch.get_busy():
-            self._lick_ch.set_volume(m * (1.0 / self._master) if self._master else 0)
+            # Plan §2.4 — harp is the 5th-priority voice, sits *under* the band.
+            self._lick_ch.set_volume(m * (0.55 / self._master) if self._master else 0)
         if self._gtr_ch and self._gtr_ch.get_busy():
             vol = 0.55 if self._scene == SCENE_DELIVERY else 0.42
             self._gtr_ch.set_volume(m * (vol / self._master) if self._master else 0)
@@ -773,7 +780,8 @@ class AudioManager:
             vol = 0.65 if self._scene == SCENE_DECANTING else 0.40
             self._slide_ch.set_volume(m * (vol / self._master) if self._master else 0)
         if self._barge_ch and self._barge_ch.get_busy():
-            self._barge_ch.set_volume(m * (0.28 / self._master) if self._master else 0)
+            # Plan §6.2 target: -24 dBFS drone, not a foreground harp.
+            self._barge_ch.set_volume(m * (0.09 / self._master) if self._master else 0)
 
     def _apply_band_volumes(self):
         m = self._music_gain()
@@ -859,7 +867,8 @@ class AudioManager:
                 idle_mood = "lonely" if self._idle_mood_toggle == 0 else "weary"
                 self._idle_mood_toggle ^= 1
                 lick = generate_lick(mood=idle_mood)
-            self._lick_ch.set_volume(self._music_gain() * (1.0 / self._master) if self._master else 0)
+            # Plan §2.4 — harp is the 5th-priority voice, sits *under* the band.
+            self._lick_ch.set_volume(self._music_gain() * (0.55 / self._master) if self._master else 0)
             self._lick_ch.play(lick)
             if self._scene == SCENE_TERMINAL:
                 self._lick_cd = random.uniform(18.0, 32.0)
@@ -910,7 +919,8 @@ class AudioManager:
         """Fade barge motif drone in/out based on proximity."""
         if self._barge_ch is None:
             return
-        target_vol = self._music_gain() * 0.28 if self._barge_nearby else 0.0
+        # Plan §6.2: -24 dBFS drone — under the bandstand, not over it.
+        target_vol = self._music_gain() * 0.09 if self._barge_nearby else 0.0
         cur = self._barge_ch.get_volume()
         step = 0.016 * 0.4   # ~2.5s fade
         if cur < target_vol:
@@ -1084,7 +1094,7 @@ class AudioManager:
         if amount > 5:
             self._play_sfx("hull", 0.82)
 
-    def _on_clang(self, **_):   self._play_sfx("clang")
+    def _on_clang(self, **_):   self._play_sfx("clang", 0.72)
     def _on_gun(self, **_):     self._play_sfx("gun", 0.62)
     def _on_canister(self, **_):
         self._play_sfx("canister", 0.70)
@@ -1094,7 +1104,7 @@ class AudioManager:
             self._play_sfx("spore", 0.75)
 
     def _on_snap(self, **_):
-        self._play_sfx("snap")
+        self._play_sfx("snap", 0.78)
         # Schedule musical resolution: snare flam on next sub-beat, then pad opens
         self._snap_resolve_t = self._bar_dur * 0.25   # quarter-bar ahead
         self._snap_beats_left = 2
