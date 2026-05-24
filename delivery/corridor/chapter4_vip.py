@@ -53,32 +53,129 @@ _PAL_R3 = {
 
 
 def _bg_r1(surf, camera_x, t, pal):
-    """Service corridor — industrial pipes but with carpet."""
+    """Service corridor — chandeliers, gold trim, velvet wallpaper, room-service cart, staff silhouette, stain."""
     bg_off = camera_x * 0.5
-    # Carpet (mid-floor band)
-    pygame.draw.rect(surf, (30, 10, 40),
-                     (0, FLOOR_Y - 8, CORRIDOR_W, 8))
-    # Carpet pattern
-    for cx in range(0, CORRIDOR_W, 16):
-        pul = int(40 + 15 * abs(math.sin(t * 0.3 + cx * 0.1)))
-        pygame.draw.rect(surf, (pul, 0, int(pul * 0.6)),
-                         (cx, FLOOR_Y - 8, 8, 8))
-    # Overhead pipes
-    for py_c in (CEIL_Y + 4, CEIL_Y + 10, CEIL_Y + 16):
-        pygame.draw.line(surf, (40, 20, 60), (0, py_c), (CORRIDOR_W, py_c), 2)
-    for cx2 in range(0, CORRIDOR_W, 70):
-        pygame.draw.rect(surf, (50, 25, 70), (cx2, CEIL_Y, 10, 22))
-    # Laundry carts (cover objects)
-    for wx in range(300, 2500, 500):
-        sx = int(wx - bg_off) % (CORRIDOR_W + 100) - 50
-        if -30 < sx < CORRIDOR_W + 30:
-            pygame.draw.rect(surf, (20, 12, 30), (sx - 20, FLOOR_Y - 44, 40, 36))
-            pygame.draw.rect(surf, (60, 30, 80), (sx - 20, FLOOR_Y - 44, 40, 36), 1)
-            # Wheels
-            pygame.draw.circle(surf, (30, 20, 40), (sx - 14, FLOOR_Y - 6), 4)
-            pygame.draw.circle(surf, (30, 20, 40), (sx + 14, FLOOR_Y - 6), 4)
-            pygame.draw.circle(surf, (60, 40, 80), (sx - 14, FLOOR_Y - 6), 4, 1)
-            pygame.draw.circle(surf, (60, 40, 80), (sx + 14, FLOOR_Y - 6), 4, 1)
+    bg_off_slow = camera_x * 0.3
+
+    WALL_TOP = CEIL_Y
+    WALL_BOT = FLOOR_Y
+    WALL_H = WALL_BOT - WALL_TOP  # 80
+
+    # --- Deep midnight-purple base fill ---
+    pygame.draw.rect(surf, (10, 6, 16), (0, WALL_TOP, CORRIDOR_W, WALL_H))
+
+    # --- Velvet wallpaper: subtle diamond tiling in dark purple ---
+    diamond_w = 22
+    diamond_h = 14
+    for gx in range(-diamond_w, CORRIDOR_W + diamond_w, diamond_w):
+        gx_off = int(gx - bg_off_slow * 0.08)
+        for gy in range(WALL_TOP + 2, WALL_BOT - 4, diamond_h):
+            # alternating rows offset by half
+            row = (gy - WALL_TOP) // diamond_h
+            x_off = (diamond_w // 2) if row % 2 == 1 else 0
+            cx_d = gx_off + x_off
+            if -diamond_w < cx_d < CORRIDOR_W + diamond_w:
+                pts = [
+                    (cx_d, gy - diamond_h // 2),
+                    (cx_d + diamond_w // 2, gy),
+                    (cx_d, gy + diamond_h // 2),
+                    (cx_d - diamond_w // 2, gy),
+                ]
+                pygame.draw.polygon(surf, (22, 10, 32), pts, 1)
+
+    # --- Thick GOLD border trim along top and bottom of wall zone (4px) ---
+    pygame.draw.line(surf, (180, 140, 40), (0, WALL_TOP + 3), (CORRIDOR_W, WALL_TOP + 3), 4)
+    pygame.draw.line(surf, (120, 90, 24), (0, WALL_TOP + 7), (CORRIDOR_W, WALL_TOP + 7), 1)
+    pygame.draw.line(surf, (180, 140, 40), (0, WALL_BOT - 4), (CORRIDOR_W, WALL_BOT - 4), 4)
+    pygame.draw.line(surf, (120, 90, 24), (0, WALL_BOT - 8), (CORRIDOR_W, WALL_BOT - 8), 1)
+
+    # --- Chandelier shapes along ceiling ---
+    for wx_ch in range(120, CORRIDOR_W + 1400, 220):
+        sx_ch = int(wx_ch - bg_off)
+        if -60 < sx_ch < CORRIDOR_W + 60:
+            # Vertical drop rod from ceiling
+            pygame.draw.line(surf, (140, 110, 30), (sx_ch, WALL_TOP + 4), (sx_ch, WALL_TOP + 18), 2)
+            # Main horizontal arm
+            pygame.draw.line(surf, (160, 125, 35), (sx_ch - 22, WALL_TOP + 18), (sx_ch + 22, WALL_TOP + 18), 2)
+            # Two side drop arms
+            for arm_dx in (-22, -11, 0, 11, 22):
+                arm_len = 6 + int(4 * abs(math.sin(abs(arm_dx) * 0.15)))
+                pygame.draw.line(surf, (140, 110, 28),
+                                 (sx_ch + arm_dx, WALL_TOP + 18),
+                                 (sx_ch + arm_dx, WALL_TOP + 18 + arm_len), 1)
+                # Small gem circle at tip
+                gem_y = WALL_TOP + 18 + arm_len + 2
+                gem_col_base = int(180 + 60 * abs(math.sin(t * 1.2 + arm_dx * 0.3 + wx_ch * 0.01)))
+                pygame.draw.circle(surf, (int(gem_col_base * 0.9), int(gem_col_base * 0.7), 20),
+                                   (sx_ch + arm_dx, gem_y), 2)
+                pygame.draw.circle(surf, (gem_col_base, int(gem_col_base * 0.85), 40),
+                                   (sx_ch + arm_dx, gem_y), 2, 1)
+            # Central body (octagonal lantern-like shape)
+            pygame.draw.rect(surf, (60, 45, 10), (sx_ch - 5, WALL_TOP + 15, 10, 8))
+            pygame.draw.rect(surf, (180, 140, 36), (sx_ch - 5, WALL_TOP + 15, 10, 8), 1)
+            # Warm ambient glow beneath chandelier
+            glow_surf = pygame.Surface((50, 16), pygame.SRCALPHA)
+            glow_a = int(30 + 12 * abs(math.sin(t * 0.6 + wx_ch * 0.01)))
+            glow_surf.fill((220, 170, 60, glow_a))
+            surf.blit(glow_surf, (sx_ch - 25, WALL_TOP + 24))
+
+    # --- Hotel staff silhouette facing away ---
+    staff_wx = 580
+    staff_sx = int(staff_wx - bg_off * 0.6)
+    if -20 < staff_sx < CORRIDOR_W + 20:
+        sy_base = WALL_BOT - 1
+        # Uniform body (dark jacket, facing away — wider shoulders than hips)
+        body_pts = [
+            (staff_sx - 8, sy_base),
+            (staff_sx + 8, sy_base),
+            (staff_sx + 10, sy_base - 20),
+            (staff_sx - 10, sy_base - 20),
+        ]
+        pygame.draw.polygon(surf, (12, 8, 20), body_pts)
+        # Head
+        pygame.draw.circle(surf, (12, 8, 20), (staff_sx, sy_base - 26), 6)
+        # White collar band
+        pygame.draw.line(surf, (180, 175, 170), (staff_sx - 5, sy_base - 20),
+                         (staff_sx + 5, sy_base - 20), 2)
+        # Epaulette hints on shoulders
+        pygame.draw.rect(surf, (140, 110, 28), (staff_sx - 12, sy_base - 22, 5, 3))
+        pygame.draw.rect(surf, (140, 110, 28), (staff_sx + 7, sy_base - 22, 5, 3))
+
+    # --- Room service cart ---
+    cart_wx = 350
+    cart_sx = int(cart_wx - bg_off * 0.7)
+    if -50 < cart_sx < CORRIDOR_W + 50:
+        cy = WALL_BOT - 1
+        # Cart body (3 shelves)
+        pygame.draw.rect(surf, (30, 18, 42), (cart_sx - 18, cy - 48, 36, 40))
+        pygame.draw.rect(surf, (80, 60, 100), (cart_sx - 18, cy - 48, 36, 40), 1)
+        # Shelf dividers
+        for shelf_y in (cy - 32, cy - 18):
+            pygame.draw.line(surf, (60, 44, 78), (cart_sx - 16, shelf_y), (cart_sx + 16, shelf_y), 1)
+        # Dish circles on top shelf
+        for dish_x in (cart_sx - 10, cart_sx, cart_sx + 10):
+            pygame.draw.circle(surf, (200, 195, 185), (dish_x, cy - 42), 4)
+            pygame.draw.circle(surf, (240, 235, 225), (dish_x, cy - 42), 4, 1)
+            # Dome/cloche
+            pygame.draw.arc(surf, (170, 165, 155),
+                            pygame.Rect(dish_x - 4, cy - 46, 8, 6), 0, math.pi, 1)
+        # Wheels
+        for wx_w in (cart_sx - 12, cart_sx + 12):
+            pygame.draw.circle(surf, (20, 14, 30), (wx_w, cy - 4), 4)
+            pygame.draw.circle(surf, (70, 50, 90), (wx_w, cy - 4), 4, 1)
+        # Handle bar
+        pygame.draw.line(surf, (90, 65, 110), (cart_sx + 18, cy - 44), (cart_sx + 18, cy - 10), 2)
+
+    # --- STAIN on carpet near floor (horror note — dark red smear) ---
+    stain_wx = 480
+    stain_sx = int(stain_wx - bg_off * 0.4)
+    if -40 < stain_sx < CORRIDOR_W + 40:
+        # Irregular smear using SRCALPHA ellipse-ish overlay
+        stain_surf = pygame.Surface((34, 8), pygame.SRCALPHA)
+        stain_surf.fill((0, 0, 0, 0))
+        pygame.draw.ellipse(stain_surf, (90, 6, 6, 160), (0, 2, 34, 5))
+        pygame.draw.ellipse(stain_surf, (70, 4, 4, 120), (5, 0, 20, 8))
+        surf.blit(stain_surf, (stain_sx - 17, WALL_BOT - 9))
 
 
 def _bg_r2(surf, camera_x, t, pal):
