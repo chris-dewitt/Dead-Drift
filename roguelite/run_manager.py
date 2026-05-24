@@ -272,6 +272,8 @@ class RunManager:
         self._sector    = generate_sector(self._sector_index, self._difficulty(),
                                           rng=rng, chapter=self._current_chapter())
         self._sector_start_hull = ship.hull
+        self._sector_timer      = 0.0
+        self._jump_ready_fired  = False
         self._spawn_sector_objects()
 
         # Bax loadout handoff — frame brief + cargo-specific addendum
