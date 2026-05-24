@@ -7,6 +7,8 @@ import math
 import random
 import pygame
 
+from renderer.sci_fi_ui import draw_mario_brick_platform
+
 CORRIDOR_W = 400
 CORRIDOR_H = 360
 FLOOR_Y    = 320
@@ -57,12 +59,9 @@ class Platform(Element):
 
     def draw(self, surf, camera_x, t, palette):
         sx = int(self.x - camera_x)
-        col = palette.get("platform", (0, 140, 70))
-        hi  = palette.get("platform_hi", (0, 200, 100))
-        pygame.draw.rect(surf, col,
-                         (sx - self.w // 2, int(self.y), self.w, self.h))
-        pygame.draw.rect(surf, hi,
-                         (sx - self.w // 2, int(self.y), self.w, self.h), 1)
+        brick = palette.get("brick", palette.get("platform", (140, 70, 20)))
+        hi = palette.get("brick_hi", palette.get("platform_hi", (220, 140, 40)))
+        draw_mario_brick_platform(surf, sx, int(self.y), self.w, self.h, brick, hi, t)
 
 
 class MovingPlatform(Element):
@@ -95,19 +94,15 @@ class MovingPlatform(Element):
                 and py + PLAYER_H <= self.y + self.H + 14)
 
     def draw(self, surf, camera_x, t, palette):
-        sx  = int(self.x - camera_x)
-        col = palette.get("moving_platform", (0, 120, 180))
-        hi  = palette.get("moving_platform_hi", (0, 180, 240))
-        pygame.draw.rect(surf, col,
-                         (sx - self.W // 2, int(self.y), self.W, self.H))
-        pygame.draw.rect(surf, hi,
-                         (sx - self.W // 2, int(self.y), self.W, self.H), 1)
-        # Direction arrow
-        ax = sx + (12 if self._dir > 0 else -12)
-        pygame.draw.polygon(surf, hi,
-                            [(ax - 4 * self._dir, int(self.y) + 3),
-                             (ax + 4 * self._dir, int(self.y) + 6),
-                             (ax - 4 * self._dir, int(self.y) + 9)])
+        sx = int(self.x - camera_x)
+        brick = palette.get("moving_platform", (60, 100, 180))
+        hi = palette.get("moving_platform_hi", (120, 200, 255))
+        draw_mario_brick_platform(surf, sx, int(self.y), self.W, self.H, brick, hi, t)
+        ax = sx + (14 if self._dir > 0 else -14)
+        pygame.draw.polygon(surf, (255, 255, 200),
+                            [(ax - 5 * self._dir, int(self.y) + 2),
+                             (ax + 5 * self._dir, int(self.y) + 6),
+                             (ax - 5 * self._dir, int(self.y) + 10)])
 
 
 class CollapsingPlatform(Element):

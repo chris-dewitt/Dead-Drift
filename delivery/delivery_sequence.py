@@ -14,6 +14,13 @@ import pygame
 from delivery.corridor import make_corridor
 from delivery.corridor.elements import CORRIDOR_W, CORRIDOR_H
 from config import settings as S
+from renderer.sci_fi_ui import draw_space_crawl, draw_landing_star_destroyer
+
+_APPROACH_CRAWL = [
+    "Episode MCLXIV: THE DEBT STRIKES BACK (AT YOUR WALLET)",
+    "A reckless courier. A rusted ship. Crushing compound interest.",
+    "The Union of Repo Men demands satisfaction. Again.",
+]
 from core.event_bus import bus, EVT_BAX_SPEAK, EVT_DOCK_APPROACH, EVT_DOCK_PERFECT, EVT_DOCK_ROUGH
 
 # ── Payout config ──────────────────────────────────────────────────────────
@@ -205,7 +212,8 @@ class DeliverySequence:
 
     def _draw_approach(self, surface: pygame.Surface, W: int, H: int):
         t = self._t
-        surface.fill((2, 4, 8))
+        surface.fill((8, 4, 16))
+        draw_space_crawl(surface, _APPROACH_CRAWL, t, y_start=H - 80, speed=22.0)
         approach_frac = min(1.0, t / _APPROACH_DURATION)
 
         # ── Background nebula wash ───────────────────────────────────────
@@ -280,17 +288,12 @@ class DeliverySequence:
             pygame.draw.circle(surface, (255, 80, 80),
                                (st_cx, ant_base_y - int(24 * station_scale)), 2)
 
-        # Main hull
-        pygame.draw.rect(surface, (20, 30, 20),
-                         (st_cx - sw // 2, st_cy - sh // 2, sw, sh))
-        pygame.draw.rect(surface, (40, 80, 50),
-                         (st_cx - sw // 2, st_cy - sh // 2, sw, sh), 2)
-
-        # Structural ribs
-        for ri in range(1, 4):
-            ry2 = int(st_cy - sh // 2 + ri * sh // 4)
-            pygame.draw.line(surface, (28, 50, 30),
-                             (st_cx - sw // 2, ry2), (st_cx + sw // 2, ry2), 1)
+        # Main hull — oversized wedge (Spaceballs energy)
+        theme = _STATION_THEMES.get(self.chapter, _STATION_THEMES[1])
+        draw_landing_star_destroyer(
+            surface, st_cx, st_cy, station_scale, t,
+            theme[0], theme[1],
+        )
 
         # Signage panels
         if station_scale > 0.35:

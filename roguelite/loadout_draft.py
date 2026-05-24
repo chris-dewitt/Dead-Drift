@@ -8,6 +8,7 @@ from cargo.epi_shrooms import EpistemologicalShrooms
 from cargo.paperwork import SentientPaperwork
 from cargo.schrodinger_vip import SchrodingerVIP
 from config import settings as S
+from renderer.bax_doodle import draw_bax_droid
 
 
 # ---------------------------------------------------------------------------
@@ -201,12 +202,12 @@ class LoadoutDraft:
     Three columns; ARROWS navigate; ENTER on CARGO confirms.
     """
 
-    COL_W      = 400
-    GAP        = 20
+    COL_W      = 380
+    GAP        = 24
     MARGIN     = 20
     HEADER_H   = 60
     PREVIEW_H  = 230
-    BAX_H      = 88
+    BAX_H      = 100
     TICKER_H   = 32
 
     def __init__(self, chapter: int = 1):
@@ -318,11 +319,18 @@ class LoadoutDraft:
                                  True, (110, 80, 0))
         surface.blit(instr, (S.SCREEN_W - instr.get_width() - self.MARGIN, 36))
 
+    def _columns_width(self) -> int:
+        return 3 * self.COL_W + 2 * self.GAP
+
+    def _columns_x0(self) -> int:
+        return (S.SCREEN_W - self._columns_width()) // 2
+
     # ------------------------------------------------------------------ columns
     def _draw_columns(self, surface, t):
         labels = ["FRAME", "MODULE", "CARGO"]
+        x0 = self._columns_x0()
         for i in range(3):
-            col_x = self.MARGIN + i * (self.COL_W + self.GAP)
+            col_x = x0 + i * (self.COL_W + self.GAP)
             self._draw_column(surface, i, col_x, labels[i], t)
 
     def _draw_column(self, surface, slot_i, x, label, t):
@@ -648,45 +656,28 @@ class LoadoutDraft:
     # ------------------------------------------------------------------ bax commentary
     def _draw_bax_panel(self, surface, t):
         panel_y = self.HEADER_H + 18 + 22 + self.PREVIEW_H + 160 + 14
-        panel   = pygame.Rect(self.MARGIN, panel_y,
-                              S.SCREEN_W - 2 * self.MARGIN, self.BAX_H)
+        x0 = self._columns_x0()
+        panel = pygame.Rect(x0, panel_y, self._columns_width(), self.BAX_H)
         pygame.draw.rect(surface, (8, 6, 0), panel)
         pygame.draw.rect(surface, (150, 100, 0), panel, 1)
         self._draw_panel_brackets(surface, panel, (200, 140, 30))
 
-        # Bax mini portrait
-        px = panel.left + 32
-        py = panel.centery
-        head = [(px - 16, py - 22), (px + 16, py - 22),
-                (px + 20, py - 4),  (px - 20, py - 4)]
-        pygame.draw.polygon(surface, (20, 20, 30), head)
-        pygame.draw.polygon(surface, (110, 80, 0), head, 1)
-        glow = 0.4 + 0.3 * abs(math.sin(t * 1.2))
-        ec   = (int(220 * glow), int(140 * glow), 0)
-        pygame.draw.circle(surface, ec, (px - 6, py - 14), 3)
-        pygame.draw.circle(surface, ec, (px + 6, py - 14), 3)
-        # Antenna
-        pygame.draw.line(surface, (110, 80, 0), (px + 14, py - 22), (px + 18, py - 32), 1)
-        pygame.draw.circle(surface, (200, 140, 0), (px + 18, py - 33), 2)
-        # Body
-        body = [(px - 18, py - 4), (px + 18, py - 4),
-                (px + 16, py + 22), (px - 16, py + 22)]
-        pygame.draw.polygon(surface, (28, 22, 8), body)
-        pygame.draw.polygon(surface, (110, 80, 0), body, 1)
+        draw_bax_droid(
+            surface, panel.left + 58, panel.centery + 6, t,
+            scale=1.55, speaking=abs(math.sin(t * 2.1)) > 0.85,
+        )
 
-        # Caption + line
-        font_cap  = pygame.font.SysFont("monospace", 11, bold=True)
+        font_cap = pygame.font.SysFont("monospace", 11, bold=True)
         font_line = pygame.font.SysFont("monospace", 15)
-        cap = font_cap.render("BAX, NAV-MORALE //  on your current selection:",
+        cap = font_cap.render("BAX // NAV-MORALE  —  on your current selection:",
                               True, (180, 130, 30))
-        surface.blit(cap, (panel.left + 70, panel.top + 12))
+        surface.blit(cap, (panel.left + 108, panel.top + 14))
 
         choice = self._choices[self._slot][self._selected[self._slot]]
         meta = self._lookup_meta(self._slot, choice)
         bax_line = f'"{meta["bax"]}"'
-        # Wrap if necessary (rough single-line is fine at this width)
         line_surf = font_line.render(bax_line, True, (245, 220, 130))
-        surface.blit(line_surf, (panel.left + 70, panel.top + 36))
+        surface.blit(line_surf, (panel.left + 108, panel.top + 38))
 
     # ------------------------------------------------------------------ hint
     def _draw_hint(self, surface, t):

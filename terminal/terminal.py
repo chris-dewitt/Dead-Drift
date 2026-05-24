@@ -5,6 +5,7 @@ import pygame
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import NLPParser
 from terminal.npc_portraits import draw_portrait
+from renderer.sci_fi_ui import draw_terminal_backdrop
 from core.event_bus import bus, EVT_TERMINAL_OPEN, EVT_TERMINAL_CLOSE, EVT_VOICE_CHAR
 from config import settings as S
 
@@ -35,6 +36,7 @@ _SCAN_VOCAB: dict[str, dict[str, str]] = {
         "bribe": "BRIBE", "pay": "BRIBE", "credits": "BRIBE", "money": "BRIBE",
         "deal": "DEAL", "negotiate": "DEAL", "reduce": "DEAL", "settlement": "DEAL",
         "please": "SYMPATHY", "family": "SYMPATHY", "desperate": "SYMPATHY",
+        "sorry": "SYMPATHY", "begging": "SYMPATHY", "rough": "SYMPATHY",
         "overtime": "OVERTIME", "union": "UNION", "quota": "QUOTA",
     },
     "TK-9": {
@@ -378,19 +380,16 @@ class Terminal:
         lh      = font.get_linesize()
         lh_sm   = font_sm.get_linesize()
 
-        # Scanline overlay (cached)
-        if not hasattr(self, '_scan_surf') or self._scan_surf.get_size() != (W, H):
-            self._scan_surf = pygame.Surface((W, H), pygame.SRCALPHA)
-            for sy in range(0, H, 3):
-                pygame.draw.line(self._scan_surf, (0, 0, 0, 30), (0, sy), (W, sy))
-
-        # ── Background + outer border ─────────────────────────────────
-        surface.fill((2, 7, 2))
-        pygame.draw.rect(surface, (0, 118, 48), (2, 2, W - 4, H - 4), 1)
+        # ── Background + outer border (phosphor CRT) ─────────────────
+        surface.fill((10, 22, 14))
+        draw_terminal_backdrop(surface, t)
+        pygame.draw.rect(surface, (255, 160, 40), (0, 0, W, H), 3)
+        pygame.draw.rect(surface, (0, 200, 90), (4, 4, W - 8, H - 8), 1)
+        pygame.draw.rect(surface, (80, 40, 120), (6, 6, W - 12, H - 12), 1)
 
         # ── Header bar ────────────────────────────────────────────────
-        pygame.draw.rect(surface, (4, 20, 7), (0, 0, W, HDR_H))
-        pygame.draw.line(surface, (0, 140, 58), (0, HDR_H), (W, HDR_H), 1)
+        pygame.draw.rect(surface, (12, 32, 18), (0, 0, W, HDR_H))
+        pygame.draw.line(surface, (255, 180, 60), (0, HDR_H), (W, HDR_H), 2)
 
         ROW_Y = HDR_H // 2   # vertical centre of header = 30
 
@@ -480,22 +479,23 @@ class Terminal:
 
         # ── Portrait panel ────────────────────────────────────────────
         p_rect = pygame.Rect(M, HDR_H + 4, PNL_W - M - 4, PORT_H)
-        pygame.draw.rect(surface, (4, 12, 4), p_rect)
-        pygame.draw.rect(surface, (0, 80, 34), p_rect, 1)
+        pygame.draw.rect(surface, (8, 20, 12), p_rect)
+        pygame.draw.rect(surface, (255, 140, 50), p_rect, 2)
+        pygame.draw.rect(surface, (0, 220, 120), p_rect.inflate(-4, -4), 1)
         draw_portrait(surface, self.npc.name, p_rect, self.npc.disposition, t)
 
         if not hasattr(self, '_p_scan') or self._p_scan.get_size() != (p_rect.w, p_rect.h):
             self._p_scan = pygame.Surface((p_rect.w, p_rect.h), pygame.SRCALPHA)
-            for sy in range(0, p_rect.h, 2):
-                pygame.draw.line(self._p_scan, (0, 0, 0, 50), (0, sy), (p_rect.w, sy))
+            for sy in range(0, p_rect.h, 3):
+                pygame.draw.line(self._p_scan, (0, 0, 0, 18), (0, sy), (p_rect.w, sy))
         surface.blit(self._p_scan, p_rect.topleft)
 
         # ── Dossier / Path Progress panel ────────────────────────────
         doss_y = HDR_H + 4 + PORT_H + 4
         doss_h = H - BTM_H - 4 - doss_y
         doss_rect = pygame.Rect(M, doss_y, PNL_W - M - 4, doss_h)
-        pygame.draw.rect(surface, (3, 8, 3), doss_rect)
-        pygame.draw.rect(surface, (0, 60, 28), doss_rect, 1)
+        pygame.draw.rect(surface, (8, 18, 10), doss_rect)
+        pygame.draw.rect(surface, (0, 90, 42), doss_rect, 1)
         self._draw_dossier(surface, doss_rect, t, font_sm, lh_sm)
 
         # ── Vertical divider ─────────────────────────────────────────
@@ -508,6 +508,9 @@ class Terminal:
         dl_w     = W - dl_x - M
         DIAG_Y0  = HDR_H + 8
         DIAG_Y1  = H - BTM_H
+        diag_bg = pygame.Rect(PNL_W + 4, HDR_H + 4, W - PNL_W - M - 4, DIAG_Y1 - HDR_H - 6)
+        pygame.draw.rect(surface, (12, 30, 18), diag_bg)
+        pygame.draw.rect(surface, (0, 72, 38), diag_bg, 1)
         char_w   = max(1, font.size("A")[0])
         char_w_sm = max(1, font_sm.size("A")[0])
         # Subtract indent (4 spaces) so rendered text never overflows right edge
@@ -665,16 +668,13 @@ class Terminal:
         # ── Active path hint + turn counter ─────────────────────────
         hint_y = scan_y + lh_sm + 3
         hint   = self._build_hint()
-        surface.blit(font_sm.render(hint, True, (50, 98, 60)), (M, hint_y))
-        turn_s = font_sm.render(f"TURN {self.npc._turn}", True, (42, 72, 42))
+        surface.blit(font_sm.render(hint, True, (72, 130, 82)), (M, hint_y))
+        turn_s = font_sm.render(f"TURN {self.npc._turn}", True, (68, 110, 68))
         surface.blit(turn_s, (W - M - turn_s.get_width(), hint_y))
 
         # ── Outcome banner ─────────────────────────────────────────────
         if self._done:
             self._draw_outcome_banner(surface, W, H, t)
-
-        # ── Global scanlines ───────────────────────────────────────────
-        surface.blit(self._scan_surf, (0, 0))
 
     # ------------------------------------------------------------------
     def _draw_dossier(self, surface: pygame.Surface, rect: pygame.Rect,

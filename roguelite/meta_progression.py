@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
-import os
+from pathlib import Path
+
 from config import settings as S
 from core.event_bus import bus, EVT_DEBT_UPDATE
 
@@ -21,22 +22,32 @@ class MetaProgression:
         "reputation":         {},     # npc_id -> int (-10..10)
     }
 
-    def __init__(self):
+    def __init__(self, save_path: Path | str | None = None):
+        self._save_path = Path(save_path) if save_path else Path(S.RUN_HISTORY_FILE)
         self._data: dict = {}
+        self._after_save = None  # optional callable — set by Game (SaveManager sync)
         self.load()
 
     # ------------------------------------------------------------------
     def load(self):
-        if os.path.exists(S.RUN_HISTORY_FILE):
-            with open(S.RUN_HISTORY_FILE, "r") as f:
+        path = self._save_path
+        if path.is_file():
+            with open(path, encoding="utf-8") as f:
                 self._data = {**self._DEFAULTS, **json.load(f)}
         else:
             self._data = dict(self._DEFAULTS)
 
     def save(self):
-        os.makedirs(os.path.dirname(S.RUN_HISTORY_FILE), exist_ok=True)
-        with open(S.RUN_HISTORY_FILE, "w") as f:
+        path = self._save_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(self._data, f, indent=2)
+        if self._after_save:
+            self._after_save()
+
+    def reset_to_defaults(self) -> None:
+        """Fresh campaign — Chapter 1, default debt, no completed chapters."""
+        self._data = dict(self._DEFAULTS)
 
     # ------------------------------------------------------------------
     def apply_death_penalty(self, sector_index: int = 0):

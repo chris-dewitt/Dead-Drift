@@ -63,13 +63,20 @@ def extract_credit_amount(text: str) -> int | None:
     m = re.search(r'\b(\d+)\s*k\b', lower)
     if m:
         return int(m.group(1)) * 1000
-    # Raw digits 3–7 digits
-    m = re.search(r'\b(\d{3,7})\b', lower)
-    if m:
-        return int(m.group(1))
+    # Raw digits 3–7 digits (skip Local 404 union designation)
+    for m in re.finditer(r'\b(\d{3,7})\b', lower):
+        val = int(m.group(1))
+        if val == 404 and re.search(r'local\s*404', lower):
+            continue
+        return val
+    # 'fifteen hundred' / 'five hundred' style (before bare 'five' -> 5000 heuristic)
+    if "hundred" in lower and "thousand" not in lower:
+        for word, val in _WORD_NUMS.items():
+            if re.search(rf"\b{re.escape(word)}\b", lower):
+                return val * 100
     # 'five thousand' / 'twenty grand' style
     for word, val in _WORD_NUMS.items():
-        if word in lower:
+        if re.search(rf"\b{re.escape(word)}\b", lower):
             if "thousand" in lower or "grand" in lower or "k" in lower:
                 return val * 1000
             if val >= 5:
@@ -102,7 +109,8 @@ _INTENT_PATTERNS: list[tuple[str, list[str]]] = [
     ("complain",      ["management", "union", "boss", "overtime", "underpaid",
                        "bureaucracy", "paperwork", "quota", "unfair", "corrupt"]),
     ("sympathy",      ["desperate", "please", "family", "kids", "children",
-                       "survive", "struggling", "help", "dying", "last", "need"]),
+                       "survive", "struggling", "help", "dying", "last", "need",
+                       "sorry", "apolog", "rough", "hard time", "begging"]),
     ("therapy",       ["feel", "feelings", "sad", "depressed", "lonely", "why",
                        "meaning", "purpose", "okay", "alright"]),
     ("paradox",       ["exist", "real", "not real", "if this statement",

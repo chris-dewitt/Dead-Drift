@@ -5,10 +5,12 @@ import pygame
 
 from config import settings as S
 from core.state_manager import StateManager, GameState
+from renderer.visual_fx import VisualFX
 from core.transitions import TransitionManager
 from core.text import install_font_patch
 from core.event_bus import bus, EVT_SHIP_DESTROYED, EVT_RUN_END, EVT_TORCH_ACTIVE, EVT_DEBT_DING, EVT_BAX_SPEAK
 from roguelite.meta_progression import MetaProgression
+from roguelite.save_manager import SaveManager
 from roguelite.run_manager import RunManager
 from ship.ship import PlayerShip
 from bax.bax import Bax
@@ -27,6 +29,14 @@ from roguelite.shop import ShopScreen
 
 
 class Game:
+    _PAUSEABLE = frozenset({
+        GameState.FLIGHT,
+        GameState.TERMINAL,
+        GameState.SHOP,
+        GameState.LOADOUT_DRAFT,
+        GameState.INTERSTITIAL,
+    })
+
     def __init__(self):
         pygame.init()
         # Route every pygame.font.SysFont("monospace", ...) call through
@@ -38,12 +48,22 @@ class Game:
         self.running = True
 
         self.states  = StateManager()
-        self.meta    = MetaProgression()
-        self.run_mgr = RunManager(self.meta)
+        self.save_mgr = SaveManager()
         self.ship    = PlayerShip()
+        self._menu_mode         = "main"   # main | pick_new | pick_load | confirm_overwrite
+        self._menu_cursor       = 0
+        self._slot_cursor       = 0
+        self._pending_slot: int | None = None
+        self._pause_menu_cursor = 0
+        self._state_before_pause: GameState | None = None
+        self.meta    = MetaProgression(save_path=self.save_mgr.active_save_path())
+        self.meta._after_save = lambda: self.save_mgr.sync_active(self.meta)
+        self.run_mgr = RunManager(self.meta)
         self.bax     = Bax(self.ship, self.meta)
 
         self.vec_renderer     = VectorRenderer(self.screen)
+        self._menu_vfx        = VisualFX()
+        self._checkpoint_cd   = 25.0   # autosave interval during flight
         self.hud_renderer     = HUDRenderer(self.screen)
         self.term_renderer    = TerminalRenderer(self.screen)
         # Pass live references so the cockpit info panel always reads current state
@@ -83,6 +103,20 @@ class Game:
 
         self._wire_events()
 
+    def _bind_meta_from_active_slot(self) -> None:
+        """Reload campaign progress from the active save slot."""
+        path = self.save_mgr.active_save_path()
+        self.meta = MetaProgression(save_path=path)
+        self.meta._after_save = lambda: self.save_mgr.sync_active(self.meta)
+        self.run_mgr.meta = self.meta
+        self.bax._meta = self.meta
+        self.cockpit_renderer._meta = self.meta
+
+    def _effective_state(self) -> GameState:
+        if self.states.state == GameState.PAUSED and self._state_before_pause is not None:
+            return self._state_before_pause
+        return self.states.state
+
     def _wire_events(self):
         bus.subscribe(EVT_SHIP_DESTROYED, self._on_ship_destroyed)
         bus.subscribe(EVT_RUN_END,        self._on_run_end)
@@ -106,12 +140,17 @@ class Game:
     def _goto(self, new_state: GameState):
         """Animated state change: capture the current frame, start the
         CRT power-down transition, then swap state."""
+        if new_state == GameState.PAUSED:
+            self.states.transition(GameState.PAUSED)
+            return
         try:
             snapshot = self.screen.copy()
         except (pygame.error, AttributeError):
             snapshot = pygame.Surface((S.SCREEN_W, S.SCREEN_H))
         self.transition.start(snapshot)
         self.states.transition(new_state)
+        if new_state == GameState.MAIN_MENU:
+            self._bind_meta_from_active_slot()
         scene = self._STATE_TO_SCENE.get(new_state)
         if scene is not None and self.audio is not None:
             # Pass current chapter for chapter-keyed scenes (flight + delivery)
@@ -141,6 +180,7 @@ class Game:
 
     def _on_run_end(self, success, **_):
         if success:
+            self.save_mgr.delete_run_checkpoint()
             self._delivery_chapter = self.run_mgr._current_chapter()
             self.meta.clear_debt_chunk()
             bus.emit(EVT_BAX_SPEAK, priority=True, line=random.choice([
@@ -216,8 +256,205 @@ class Game:
                 if self.states.state == GameState.DELIVERY and self._delivery:
                     self._delivery.handle_keyup(event)
 
+    def _pause_game(self) -> None:
+        if self.states.state in self._PAUSEABLE:
+            self._state_before_pause = self.states.state
+            self._pause_menu_cursor = 0
+            self.states.transition(GameState.PAUSED)
+
+    def _resume_game(self) -> None:
+        if self.states.state != GameState.PAUSED or self._state_before_pause is None:
+            return
+        self.states._state = self._state_before_pause
+        self._state_before_pause = None
+
+    def _pause_to_main_menu(self, *, save: bool) -> None:
+        if save:
+            self.meta.save()
+            self._save_run_checkpoint()
+        self._state_before_pause = None
+        self._menu_mode = "main"
+        self._goto(GameState.MAIN_MENU)
+
+    def _main_menu_rows(self) -> list[tuple[str, bool, str]]:
+        active = self.save_mgr.slot_info(self.save_mgr.active_slot_id)
+        has_ckpt = self.save_mgr.has_run_checkpoint()
+        if has_ckpt:
+            cont_label = "RESUME RUN"
+            cont_ok = True
+        else:
+            cont_label = "CONTINUE"
+            cont_ok = active.exists
+        rows: list[tuple[str, bool, str]] = [
+            (cont_label, cont_ok, "continue"),
+        ]
+        if has_ckpt:
+            rows.append(("DELETE RUN", True, "delete_run"))
+        rows.extend([
+            ("NEW GAME", True, "new"),
+            ("LOAD GAME", True, "load"),
+            ("QUIT", True, "quit"),
+        ])
+        return rows
+
+    def _menu_activate(self) -> None:
+        if self._menu_mode == "confirm_delete_run":
+            self.save_mgr.delete_run_checkpoint()
+            self._menu_mode = "main"
+            return
+
+        if self._menu_mode == "confirm_overwrite":
+            sid = self._pending_slot
+            if sid is None:
+                self._menu_mode = "pick_new"
+                return
+            self.save_mgr.create_fresh_save(sid)
+            self._bind_meta_from_active_slot()
+            self._pending_slot = None
+            self._menu_mode = "main"
+            self.save_mgr.delete_run_checkpoint()
+            self._begin_run_from_menu()
+            return
+
+        if self._menu_mode in ("pick_new", "pick_load"):
+            sid = self._slot_cursor + 1
+            if self._menu_mode == "pick_new":
+                info = self.save_mgr.slot_info(sid)
+                if info.exists:
+                    self._pending_slot = sid
+                    self._menu_mode = "confirm_overwrite"
+                    return
+                self.save_mgr.create_fresh_save(sid)
+                self._bind_meta_from_active_slot()
+                self._menu_mode = "main"
+                self.save_mgr.delete_run_checkpoint()
+                self._begin_run_from_menu()
+            else:
+                self.save_mgr.set_active(sid)
+                self._bind_meta_from_active_slot()
+                self._menu_mode = "main"
+            return
+
+        rows = self._main_menu_rows()
+        _label, enabled, action = rows[self._menu_cursor]
+        if not enabled:
+            return
+        if action == "continue":
+            self._continue_from_menu()
+        elif action == "delete_run":
+            self._menu_mode = "confirm_delete_run"
+        elif action == "new":
+            self._menu_mode = "pick_new"
+            self._slot_cursor = self.save_mgr.active_slot_id - 1
+        elif action == "load":
+            self._menu_mode = "pick_load"
+            self._slot_cursor = 0
+        elif action == "quit":
+            self.running = False
+
+    def _save_run_checkpoint(self) -> None:
+        if self.run_mgr._sector is None and not self.run_mgr.draft.is_confirmed():
+            return
+        try:
+            self.save_mgr.save_run_checkpoint(self)
+        except OSError:
+            pass
+
+    def _continue_from_menu(self) -> None:
+        self._bind_meta_from_active_slot()
+        self._run_just_completed = False
+        if self.save_mgr.has_run_checkpoint():
+            if self.save_mgr.load_run_checkpoint(self):
+                from roguelite.run_checkpoint import load_checkpoint_file
+                data = load_checkpoint_file(self.save_mgr.run_checkpoint_path())
+                gs_name = (data or {}).get("game_state", "FLIGHT")
+                try:
+                    target = GameState[gs_name]
+                except KeyError:
+                    target = GameState.FLIGHT
+                if target == GameState.SHOP:
+                    self._shop = ShopScreen(self.run_mgr, self.ship)
+                self._goto(target)
+                return
+        if self.save_mgr.slot_info(self.save_mgr.active_slot_id).exists:
+            self._begin_run_from_menu()
+        else:
+            self._menu_mode = "pick_new"
+            self._slot_cursor = 0
+
+    def _begin_run_from_menu(self) -> None:
+        self._run_just_completed = False
+        self.save_mgr.delete_run_checkpoint()
+        self.run_mgr.start_run(self.ship)
+        self._goto(GameState.LOADOUT_DRAFT)
+
+    def _handle_main_menu_key(self, event: pygame.event.Event) -> None:
+        if self._menu_mode == "confirm_delete_run":
+            if event.key in (pygame.K_y, pygame.K_RETURN):
+                self._menu_activate()
+            elif event.key in (pygame.K_n, pygame.K_ESCAPE):
+                self._menu_mode = "main"
+            return
+
+        if self._menu_mode == "confirm_overwrite":
+            if event.key in (pygame.K_y, pygame.K_RETURN):
+                self._menu_activate()
+            elif event.key in (pygame.K_n, pygame.K_ESCAPE):
+                self._menu_mode = "pick_new"
+                self._pending_slot = None
+            return
+
+        if self._menu_mode in ("pick_new", "pick_load"):
+            if event.key == pygame.K_UP:
+                self._slot_cursor = (self._slot_cursor - 1) % S.MAX_SAVE_SLOTS
+            elif event.key == pygame.K_DOWN:
+                self._slot_cursor = (self._slot_cursor + 1) % S.MAX_SAVE_SLOTS
+            elif event.key == pygame.K_RETURN:
+                self._menu_activate()
+            elif event.key == pygame.K_ESCAPE:
+                self._menu_mode = "main"
+                self._pending_slot = None
+            return
+
+        rows = self._main_menu_rows()
+        if event.key == pygame.K_UP:
+            self._menu_cursor = (self._menu_cursor - 1) % len(rows)
+        elif event.key == pygame.K_DOWN:
+            self._menu_cursor = (self._menu_cursor + 1) % len(rows)
+        elif event.key == pygame.K_RETURN:
+            self._menu_activate()
+        elif event.key == pygame.K_ESCAPE:
+            self.running = False
+
+    def _handle_pause_menu_key(self, event: pygame.event.Event) -> None:
+        items = ("RESUME", "SAVE & RETURN TO MENU")
+        if event.key in (pygame.K_1, pygame.K_ESCAPE) and self._pause_menu_cursor == 0:
+            self._resume_game()
+            return
+        if event.key == pygame.K_UP:
+            self._pause_menu_cursor = (self._pause_menu_cursor - 1) % len(items)
+        elif event.key == pygame.K_DOWN:
+            self._pause_menu_cursor = (self._pause_menu_cursor + 1) % len(items)
+        elif event.key == pygame.K_RETURN:
+            if self._pause_menu_cursor == 0:
+                self._resume_game()
+            else:
+                self._pause_to_main_menu(save=True)
+
     def _route_keydown(self, event: pygame.event.Event):
         state = self.states.state
+
+        if state == GameState.PAUSED:
+            self._handle_pause_menu_key(event)
+            return
+
+        if state in self._PAUSEABLE:
+            if event.key == pygame.K_1:
+                self._pause_game()
+                return
+            if event.key == pygame.K_ESCAPE and state != GameState.TERMINAL:
+                self._pause_game()
+                return
 
         if state == GameState.FLIGHT:
             # R = cockpit radio (cycles stations); also acts as toggle to/from SCENE_FLIGHT
@@ -240,11 +477,13 @@ class Game:
         elif state == GameState.SHOP:
             if self._shop is not None:
                 self._shop.handle_key(event)
-        elif state in (GameState.DECANTING, GameState.MAIN_MENU):
+        elif state == GameState.MAIN_MENU:
+            self._handle_main_menu_key(event)
+        elif state == GameState.DECANTING:
             if event.key == pygame.K_RETURN:
-                self.run_mgr.start_run(self.ship)
-                self._run_just_completed = False
-                self._goto(GameState.LOADOUT_DRAFT)
+                self.meta.save()
+                self._menu_mode = "main"
+                self._goto(GameState.MAIN_MENU)
         elif state == GameState.INTERSTITIAL:
             if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
                 self._exit_interstitial()
@@ -252,6 +491,14 @@ class Game:
     # ------------------------------------------------------------------
     def _update(self, dt: float):
         state = self.states.state
+
+        if state == GameState.PAUSED:
+            if self.audio is not None:
+                self.audio.update(
+                    0.0, dt,
+                    hull_pct=self.ship.hull_pct if self.ship else 1.0,
+                )
+            return
 
         # Death hold — freeze in FLIGHT for a moment, then transition to DECANTING
         if self._death_hold_t > 0:
@@ -284,8 +531,13 @@ class Game:
                     cargo_alarm=self.run_mgr.cargo_alarm_level(),
                 )
                 # Shop stop between sectors
+                self._checkpoint_cd -= dt
+                if self._checkpoint_cd <= 0:
+                    self._checkpoint_cd = 25.0
+                    self._save_run_checkpoint()
                 if self.run_mgr._shop_pending:
                     self._shop = ShopScreen(self.run_mgr, self.ship)
+                    self._save_run_checkpoint()
                     self._goto(GameState.SHOP)
                 # Terminal opened by jump key — transition immediately
                 elif self.run_mgr.active_terminal is not None:
@@ -297,6 +549,7 @@ class Game:
                 if self._shop.is_done:
                     self._shop = None
                     self.run_mgr._load_next_sector()
+                    self._save_run_checkpoint()
                     self._goto(GameState.FLIGHT)
 
         elif state == GameState.TERMINAL:
@@ -355,6 +608,8 @@ class Game:
         elif state == GameState.LOADOUT_DRAFT:
             if self.run_mgr.draft.is_confirmed():
                 self.run_mgr.apply_draft(self.ship)
+                self._checkpoint_cd = 25.0
+                self._save_run_checkpoint()
                 self._goto(GameState.FLIGHT)
 
         elif state == GameState.DELIVERY:
@@ -386,7 +641,7 @@ class Game:
     # ------------------------------------------------------------------
     def _render(self):
         self.screen.fill(S.VOID)
-        state = self.states.state
+        state = self._effective_state()
 
         # Death hold: red flash that fades to black before DECANTING
         if self._death_hold_t > 0:
@@ -439,6 +694,9 @@ class Game:
 
         elif state == GameState.MAIN_MENU:
             self._render_main_menu()
+
+        if self.states.state == GameState.PAUSED:
+            self._render_pause_overlay()
 
         # CRT power-down overlay (no-op when no transition is active)
         self.transition.draw(self.screen, self._dt)
@@ -773,7 +1031,7 @@ class Game:
             ("(Form NS-19b is not available in your jurisdiction.)",
              (55, 55, 55), font_sm),
             ("", None, font),
-            ("[ PRESS ENTER TO CONTINUE ]", S.GREEN_TERM, font),
+            ("[ PRESS ENTER — REPORT FOR DUTY ]", S.GREEN_TERM, font),
         ]
 
         y = 56
@@ -1084,11 +1342,9 @@ class Game:
         # --- Wireframe rotating ship hull "studio" panel (mid-left) ---
         self._render_menu_ship_studio(t)
 
-        # --- "Begin Run" pulsing prompt ---
-        self._render_menu_begin_prompt(t)
-
-        # --- Cargo dossier cards (Epic 8.2) ---
-        self._render_menu_cargo_dossier(t)
+        # Chapter cards only on the main list (slot picker / confirms need a clear center)
+        if self._menu_mode == "main":
+            self._render_menu_cargo_dossier(t)
 
         # --- Lore strap line (above bottom bar) ---
         font_lore = pygame.font.SysFont("monospace", 13)
@@ -1099,7 +1355,7 @@ class Game:
         for i, line in enumerate(lore_lines):
             s = font_lore.render(line, True, (75, 75, 95))
             self.screen.blit(s, (cx - s.get_width() // 2,
-                                  S.SCREEN_H - bar_h - 60 + i * 18))
+                                  S.SCREEN_H - bar_h - 34 + i * 18))
 
         # --- Bottom bar: scrolling Nova Soma propaganda ticker ---
         self._render_menu_propaganda(t)
@@ -1107,9 +1363,13 @@ class Game:
         # --- Bax mini portrait (bottom right) ---
         self._render_menu_bax_portrait(t)
 
+        # Run controls last so nothing paints over RESUME / NEW GAME / etc.
+        self._render_main_menu_actions(t)
+
         # --- Outer corner brackets + scanlines ---
         self._render_menu_corner_brackets()
         self._render_menu_scanlines()
+        self._menu_vfx.apply_menu_grade(self.screen, self._dt)
 
     # ------------------------------------------------------------------
     def _render_menu_debt_panel(self, t: float):
@@ -1143,7 +1403,7 @@ class Game:
 
     # ------------------------------------------------------------------
     def _render_menu_spec_panel(self, t: float):
-        panel = pygame.Rect(S.SCREEN_W - 300, 80, 280, 80)
+        panel = pygame.Rect(S.SCREEN_W - 300, 80, 280, 98)
         pygame.draw.rect(self.screen, (4, 6, 8), panel)
         pygame.draw.rect(self.screen, (60, 130, 180), panel, 1)
         for c, sx, sy in ((panel.topleft, 1, 1), (panel.topright, -1, 1),
@@ -1167,8 +1427,8 @@ class Game:
         for i, (k, v) in enumerate(rows):
             ks = font_v.render(f"{k:<10}", True, (90, 140, 180))
             vs = font_v.render(v, True, (180, 220, 240))
-            self.screen.blit(ks, (panel.left + 12, panel.top + 26 + i * 16))
-            self.screen.blit(vs, (panel.left + 110, panel.top + 26 + i * 16))
+            self.screen.blit(ks, (panel.left + 12, panel.top + 28 + i * 17))
+            self.screen.blit(vs, (panel.left + 110, panel.top + 28 + i * 17))
 
     # ------------------------------------------------------------------
     def _render_menu_ship_studio(self, t: float):
@@ -1221,29 +1481,138 @@ class Game:
         self.screen.blit(s2, (panel.left + 8, panel.bottom - 12))
 
     # ------------------------------------------------------------------
-    def _render_menu_begin_prompt(self, t: float):
+    def _render_main_menu_actions(self, t: float) -> None:
         cx = S.SCREEN_W // 2
-        py = S.SCREEN_H // 2 + 70
-
+        py = int(S.SCREEN_H * 0.54)
+        font_h = pygame.font.SysFont("monospace", 13, bold=True)
+        font_row = pygame.font.SysFont("monospace", 20, bold=True)
+        font_sm = pygame.font.SysFont("monospace", 11)
         pulse = 0.5 + 0.5 * math.sin(t * 3.0)
-        font_enter = pygame.font.SysFont("monospace", 26, bold=True)
-        text = "[  PRESS  ENTER  TO  BEGIN  RUN  ]"
 
-        # Soft glow background
-        glow_col = (int(60 + 60 * pulse), int(255 * pulse * 0.5), int(40 + 40 * pulse))
-        gs = font_enter.render(text, True, glow_col)
-        self.screen.blit(gs, (cx - gs.get_width() // 2 + 2, py + 2))
+        sid = self.save_mgr.active_slot_id
+        active = self.save_mgr.slot_info(sid)
+        hdr_text = (
+            f"ACTIVE SAVE: SLOT {sid}  —  {active.chapter_display}  "
+            f"//  {active.debt:,} cr  //  CLONE #{active.clone_count}"
+        )
+        hdr = font_sm.render(hdr_text, True, (120, 120, 150))
 
-        main_col = (int(180 + 75 * pulse), int(180 + 75 * pulse), int(190 + 65 * pulse))
-        ms = font_enter.render(text, True, main_col)
-        self.screen.blit(ms, (cx - ms.get_width() // 2, py))
-
-        # Subtitle below
         if self._run_just_completed:
             font_c = pygame.font.SysFont("monospace", 14, bold=True)
             cs = font_c.render("// RUN COMPLETE //  DEBT REDUCED  //",
                                True, S.GREEN_TERM)
-            self.screen.blit(cs, (cx - cs.get_width() // 2, py - 38))
+            self.screen.blit(cs, (cx - cs.get_width() // 2, py - 48))
+
+        if self._menu_mode != "main":
+            self.screen.blit(hdr, (cx - hdr.get_width() // 2, py - 28))
+
+        if self._menu_mode == "confirm_overwrite":
+            slot = self._pending_slot or 1
+            lines = [
+                f"OVERWRITE SAVE SLOT {slot}?",
+                "All progress in this slot will be erased.",
+                "[ Y / ENTER ]  confirm     [ N / ESC ]  cancel",
+            ]
+            for i, line in enumerate(lines):
+                col = (220, 80, 80) if i == 0 else (140, 140, 160)
+                s = font_row.render(line, True, col)
+                self.screen.blit(s, (cx - s.get_width() // 2, py + i * 28))
+            return
+
+        if self._menu_mode == "confirm_delete_run":
+            lines = [
+                "DELETE MID-RUN CHECKPOINT?",
+                "Campaign save stays. You will start fresh on next run.",
+                "[ Y / ENTER ]  confirm     [ N / ESC ]  cancel",
+            ]
+            for i, line in enumerate(lines):
+                col = (220, 140, 60) if i == 0 else (140, 140, 160)
+                s = font_row.render(line, True, col)
+                self.screen.blit(s, (cx - s.get_width() // 2, py + i * 28))
+            return
+
+        if self._menu_mode in ("pick_new", "pick_load"):
+            title = "SELECT SLOT — NEW GAME" if self._menu_mode == "pick_new" else "SELECT SLOT — LOAD"
+            ts = font_h.render(title, True, (200, 160, 60))
+            self.screen.blit(ts, (cx - ts.get_width() // 2, py - 8))
+            for i, info in enumerate(self.save_mgr.list_slots()):
+                sel = i == self._slot_cursor
+                mark = ">" if sel else " "
+                status = "EMPTY" if not info.exists else info.chapter_display
+                debt_s = f"{info.debt:,} cr" if info.exists else "—"
+                row = f"{mark} SLOT {info.slot_id}  {status}  //  {debt_s}"
+                col = (255, 220, 120) if sel else (90, 90, 110)
+                if not info.exists and not sel:
+                    col = (55, 55, 70)
+                rs = font_row.render(row, True, col)
+                self.screen.blit(rs, (cx - rs.get_width() // 2, py + 22 + i * 30))
+            hint = font_sm.render("↑↓ select   ENTER confirm   ESC back", True, (80, 80, 100))
+            self.screen.blit(hint, (cx - hint.get_width() // 2, py + 22 + S.MAX_SAVE_SLOTS * 30 + 8))
+            return
+
+        n_rows = len(self._main_menu_rows())
+        foot = font_sm.render(
+            "[ 1 ] pause in-run  //  [ ESC ] pause (not at terminal)  //  data/saves/",
+            True, (60, 60, 80),
+        )
+        hint_top = font_sm.render("↑↓ select   ENTER confirm", True, (80, 80, 100))
+
+        hdr_y = py - 32
+        hint_y = py - 10
+        row_y0 = py + 20
+        foot_y = row_y0 + n_rows * 32 + 8
+        panel_top = hdr_y - 14
+        panel_bottom = foot_y + foot.get_height() + 14
+        content_w = max(hdr.get_width(), hint_top.get_width(), foot.get_width(), 320)
+        panel_w = content_w + 56
+        panel = pygame.Rect(cx - panel_w // 2, panel_top, panel_w, panel_bottom - panel_top)
+        backdrop = pygame.Surface((panel.w, panel.h), pygame.SRCALPHA)
+        backdrop.fill((4, 6, 12, 235))
+        self.screen.blit(backdrop, panel.topleft)
+        pygame.draw.rect(self.screen, (120, 90, 30), panel, 1)
+
+        self.screen.blit(hdr, (cx - hdr.get_width() // 2, hdr_y))
+        self.screen.blit(hint_top, (cx - hint_top.get_width() // 2, hint_y))
+
+        for i, (label, enabled, _action) in enumerate(self._main_menu_rows()):
+            sel = i == self._menu_cursor
+            prefix = ">" if sel else " "
+            if not enabled:
+                col = (55, 55, 65)
+            elif sel:
+                col = (int(180 + 75 * pulse), int(200 + 55 * pulse), int(120 + 40 * pulse))
+            else:
+                col = (130, 130, 150)
+            text = f"{prefix}  {label}"
+            rs = font_row.render(text, True, col)
+            self.screen.blit(rs, (cx - rs.get_width() // 2, row_y0 + i * 32))
+
+        self.screen.blit(foot, (cx - foot.get_width() // 2, foot_y))
+
+    def _render_pause_overlay(self) -> None:
+        ov = pygame.Surface((S.SCREEN_W, S.SCREEN_H), pygame.SRCALPHA)
+        ov.fill((0, 0, 0, 170))
+        self.screen.blit(ov, (0, 0))
+
+        cx = S.SCREEN_W // 2
+        cy = S.SCREEN_H // 2 - 40
+        font_t = pygame.font.SysFont("monospace", 32, bold=True)
+        font_r = pygame.font.SysFont("monospace", 22, bold=True)
+        font_s = pygame.font.SysFont("monospace", 12)
+
+        title = font_t.render("—  PAUSED  —", True, S.AMBER_TERM)
+        self.screen.blit(title, (cx - title.get_width() // 2, cy))
+
+        items = ("RESUME", "SAVE & RETURN TO MENU")
+        for i, label in enumerate(items):
+            sel = i == self._pause_menu_cursor
+            col = S.GREEN_TERM if sel else (100, 100, 120)
+            prefix = ">" if sel else " "
+            rs = font_r.render(f"{prefix}  {label}", True, col)
+            self.screen.blit(rs, (cx - rs.get_width() // 2, cy + 50 + i * 36))
+
+        sub = font_s.render("↑↓ select   ENTER   //   ESC or 1 — resume", True, (80, 80, 100))
+        self.screen.blit(sub, (cx - sub.get_width() // 2, cy + 140))
 
     # ------------------------------------------------------------------
     def _render_menu_cargo_dossier(self, t: float):
@@ -1267,11 +1636,12 @@ class Game:
              (200, 160, 40), (255, 210, 80)),
         ]
         completed = set(self.meta.chapters_completed)
-        card_w, card_h = 240, 80
-        gap  = 16
+        card_w, card_h = 220, 72
+        gap  = 12
         total_w = len(_CARGO_CARDS) * card_w + (len(_CARGO_CARDS) - 1) * gap
         x0   = (S.SCREEN_W - total_w) // 2
-        cy   = S.SCREEN_H // 2 + 115   # below begin prompt
+        bar_h = 56
+        cy   = S.SCREEN_H - bar_h - 118   # lower on screen, below main menu box
 
         font_h  = pygame.font.SysFont("monospace", 10, bold=True)
         font_sm = pygame.font.SysFont("monospace", 9)
@@ -1349,17 +1719,26 @@ class Game:
         self.screen.blit(sl, (0, 0))
 
     def _render_menu_bax_portrait(self, t: float):
-        px = S.SCREEN_W - 110
-        py = S.SCREEN_H - 120
-        head = [(px-14,py-22),(px+14,py-22),(px+18,py-4),(px-18,py-4)]
-        pygame.draw.polygon(self.screen, (20, 20, 30), head)
-        pygame.draw.polygon(self.screen, (55, 44, 0), head, 1)
-        glow   = 0.4 + 0.3 * abs(math.sin(t * 0.9))
-        ec     = (int(180 * glow), int(110 * glow), 0)
-        pygame.draw.circle(self.screen, ec, (px-5, py-14), 3)
-        pygame.draw.circle(self.screen, ec, (px+5, py-14), 3)
-        pygame.draw.line(self.screen, (55, 44, 0), (px+12, py-22), (px+16, py-32), 1)
-        pygame.draw.circle(self.screen, (80, 60, 0), (px+16, py-33), 2)
-        body = [(px-16,py-4),(px+16,py-4),(px+14,py+20),(px-14,py+20)]
-        pygame.draw.polygon(self.screen, (18, 18, 28), body)
-        pygame.draw.polygon(self.screen, (55, 44, 0), body, 1)
+        from renderer.bax_doodle import draw_bax_droid
+
+        hull_top = S.SCREEN_H // 2 + 30
+        panel = pygame.Rect(S.SCREEN_W - 210, hull_top, 195, 248)
+        pygame.draw.rect(self.screen, (6, 8, 12), panel)
+        pygame.draw.rect(self.screen, (140, 100, 35), panel, 1)
+        for c, sx, sy in ((panel.topleft, 1, 1), (panel.topright, -1, 1),
+                          (panel.bottomleft, 1, -1), (panel.bottomright, -1, -1)):
+            pygame.draw.line(self.screen, (200, 150, 50), c, (c[0] + sx * 14, c[1]), 2)
+            pygame.draw.line(self.screen, (200, 150, 50), c, (c[0], c[1] + sy * 14), 2)
+
+        font_h = pygame.font.SysFont("monospace", 11, bold=True)
+        font_s = pygame.font.SysFont("monospace", 10)
+        hdr = font_h.render("BAX // NAV-MORALE", True, (255, 190, 50))
+        sub = font_s.render("bolt-on advisor droid", True, (110, 100, 80))
+        self.screen.blit(hdr, (panel.centerx - hdr.get_width() // 2, panel.top + 10))
+        self.screen.blit(sub, (panel.centerx - sub.get_width() // 2, panel.top + 26))
+
+        speaking = abs(math.sin(t * 1.4)) > 0.92
+        draw_bax_droid(
+            self.screen, panel.centerx, panel.centery + 18, t,
+            scale=2.35, speaking=speaking,
+        )

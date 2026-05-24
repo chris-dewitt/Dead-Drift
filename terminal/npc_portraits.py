@@ -58,16 +58,22 @@ def draw_portrait(surface: pygame.Surface, npc_name: str,
 def _draw_crt_bezel(surface: pygame.Surface, rect: pygame.Rect,
                     npc_name: str, t: float, disposition: int) -> pygame.Rect:
     """Draws a chunky CRT bezel around `rect`, returns the inner usable area."""
-    # Outer plastic frame
-    pygame.draw.rect(surface, (12, 9, 4), rect)
+    pulse = 0.5 + 0.5 * math.sin(t * 2.1)
+    # Outer plastic — warm industrial
+    pygame.draw.rect(surface, (28, 18, 8), rect)
+    pygame.draw.rect(surface, (int(200 + 55 * pulse), int(120 + 40 * pulse), 20), rect, 3)
     # Recessed bezel ring
-    pygame.draw.rect(surface, (38, 26, 6), rect, 2)
+    pygame.draw.rect(surface, (60, 40, 12), rect.inflate(-2, -2), 2)
 
-    # Inner CRT face
+    # Inner CRT face — green phosphor glow
     bezel = 6
-    crt_outer = rect.inflate(-bezel*2, -bezel*2)
-    pygame.draw.rect(surface, (2, 1, 0), crt_outer)
-    pygame.draw.rect(surface, (140, 92, 0), crt_outer, 1)
+    crt_outer = rect.inflate(-bezel * 2, -bezel * 2)
+    pygame.draw.rect(surface, (4, 12, 6), crt_outer)
+    glow = pygame.Surface((crt_outer.w, crt_outer.h), pygame.SRCALPHA)
+    glow.fill((0, 80, 40, int(30 + 25 * pulse)))
+    surface.blit(glow, crt_outer.topleft)
+    pygame.draw.rect(surface, (0, 255, 140), crt_outer, 1)
+    pygame.draw.rect(surface, (255, 180, 60), crt_outer.inflate(-2, -2), 1)
     # Subtle curvature highlight
     pygame.draw.line(surface, (78, 52, 10),
                      (crt_outer.left+1, crt_outer.top+1),
@@ -143,9 +149,15 @@ def _draw_crt_bezel(surface: pygame.Surface, rect: pygame.Rect,
 
 def _draw_signal_overlay(surface: pygame.Surface, inner: pygame.Rect,
                          t: float, disposition: int):
-    """Disposition-tied glitch effect — clean when calm, broken when angry."""
+    """Disposition-tied glitch effect — alive phosphor when calm, broken when angry."""
     if disposition >= 0:
-        return  # clean signal
+        shimmer = pygame.Surface((inner.w, inner.h), pygame.SRCALPHA)
+        for y in range(0, inner.h, 6):
+            a = int(12 + 10 * abs(math.sin(t * 2.5 + y * 0.08)))
+            pygame.draw.line(shimmer, (0, 255, 140, a), (0, y), (inner.w, y))
+        surface.blit(shimmer, inner.topleft)
+        if disposition < 3:
+            return
 
     overlay = pygame.Surface((inner.w, inner.h), pygame.SRCALPHA)
     rng = random.Random(int(t * 6))
@@ -654,8 +666,9 @@ def _backdrop_gary(surface, inner, t):
 
     # ── Viewport window (top-centre) — debris outside ──────────────────────
     vp = pygame.Rect(cx - 44, inner.top + 5, 88, 50)
-    pygame.draw.rect(surface, (2, 6, 12), vp)
-    pygame.draw.rect(surface, (80, 58, 14), vp, 3)
+    pygame.draw.rect(surface, (12, 4, 28), vp)
+    pygame.draw.rect(surface, (255, 160, 40), vp, 2)
+    pygame.draw.rect(surface, (0, 255, 180), vp.inflate(-6, -6), 1)
     # Window frame: thick cross-bar
     pygame.draw.line(surface, (65, 46, 12), (vp.left, vp.centery), (vp.right, vp.centery), 2)
     pygame.draw.line(surface, (65, 46, 12), (vp.centerx, vp.top), (vp.centerx, vp.bottom), 2)

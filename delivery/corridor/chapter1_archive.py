@@ -16,15 +16,17 @@ from delivery.corridor.base import Room, Corridor, STAR_3_TIME, STAR_2_TIME
 
 # Palette — warm oranges/reds/dark brutalist
 _PAL_R1 = {
-    "bg":            (8,  4,  4),
-    "grid":          (24, 12, 12),
-    "ceiling_fill":  (22, 10, 10),
-    "ceiling_line":  (180, 70,  0),
-    "floor_fill":    (18,  8,  8),
-    "floor_line":    (160, 60,  0),
+    "bg":            (12,  6,  14),
+    "grid":          (40, 20,  50),
+    "ceiling_fill":  (30, 12,  40),
+    "ceiling_line":  (255, 80,  200),
+    "floor_fill":    (22, 10,  28),
+    "floor_line":    (255, 120,  60),
     "platform":      (120, 50, 10),
     "platform_hi":   (200, 90, 20),
-    "light":         (200, 100, 20),
+    "brick":         (160, 60,  20),
+    "brick_hi":      (255, 180,  70),
+    "light":         (255, 140,  80),
 }
 _PAL_R2 = {
     "bg":            (8,  4,  8),
