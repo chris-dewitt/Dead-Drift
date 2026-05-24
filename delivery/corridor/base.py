@@ -772,12 +772,21 @@ class Corridor:
                            (int(200 + 55 * math.sin(t * 8)), 80, 255))
             surf.blit(iw, (CORRIDOR_W // 2 - iw.get_width() // 2, CEIL_Y + 4))
 
-        # Controls hint (only show for first 8s)
-        if self._elapsed < 8.0:
-            hint_alpha = min(255, int(255 * (1.0 - self._elapsed / 8.0) * 2))
-            hint_col   = (0, max(0, int(160 * hint_alpha / 255)), 0)
-            hint = fsm.render("D/→ run  A/← retreat  SPACE jump", True, hint_col)
+        # Bright introductory hint (first 6s) — brighter and includes climb
+        if self._elapsed < 6.0:
+            hint_alpha = min(255, int(255 * (1.0 - self._elapsed / 6.0) * 2))
+            hint_col   = (0, max(0, int(200 * hint_alpha / 255)),
+                          max(0, int(60 * hint_alpha / 255)))
+            hint = fsm.render(
+                "A/← D/→ MOVE    W/S CLIMB LADDER    SPACE JUMP",
+                True, hint_col)
             surf.blit(hint, (CORRIDOR_W // 2 - hint.get_width() // 2, CEIL_Y + 6))
+
+        # Persistent compact legend (bottom-right, always on)
+        legend = fsm.render(
+            "←/→ move   ↑/↓ climb   SPACE jump", True, (55, 95, 60))
+        surf.blit(legend, (CORRIDOR_W - legend.get_width() - 6,
+                           CORRIDOR_H - 20))
 
         # Progress bar
         prog = min(1.0, self._px / max(1, room.length))
