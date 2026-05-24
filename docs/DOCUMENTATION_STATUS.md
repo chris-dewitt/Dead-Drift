@@ -13,8 +13,8 @@
 |---|--------|----------|--------|
 | 1 | `CLAUDE.md` | **B** — archived to `docs/CLAUDE_ARCHIVED.md`; root file is agent pointer | Done |
 | 2 | `DEAD_DRIFT_GDD.md` | **A** — archived to `docs/DEAD_DRIFT_GDD_ARCHIVED.md` | Done |
-| 3 | Chapter theme order | **Pending** — [DECISION_BRIEFS.md](DECISION_BRIEFS.md) §3 | **Do not implement** |
-| 4 | Landing Beat 2 | **Pending** — [DECISION_BRIEFS.md](DECISION_BRIEFS.md) §4 | **Do not implement** |
+| 3 | Chapter theme order | **B** — IMPROVEMENT_PLAN §3.4 matches `procedural.py` | Done |
+| 4 | Landing Beat 2 | **A** — J gauge + SPACE hold bar in `delivery_sequence.py` | Done |
 | 5 | `MAX_VELOCITY` | **280 px/s** — overdrive cap **420 px/s** | Done |
 | 6 | `SOUNDTRACK_PLAN.md` | Implementation status section | Done |
 | 7 | `README.md` | Full feature list | Done |
@@ -53,12 +53,7 @@ Tracked in `docs/IMPROVEMENT_PLAN.md` → **Phase 0**.
 
 ## Open decisions — do not implement until Chris replies
 
-**Full sector tables, scoring math, and A/B/C options:** [DECISION_BRIEFS.md](DECISION_BRIEFS.md)
-
-| # | Topic | Summary |
-|---|--------|---------|
-| **3** | Chapter theme order | Ch **1, 2, 3** differ between IMPROVEMENT_PLAN §3.4 and `procedural.py`; Ch **4** matches |
-| **4** | Landing Beat 2 | Plan = J gauge + SPACE hold bar · Code = SPACE-only physics + VSI (`_j_hit` misnamed) |
+**All design forks resolved May 2026.** Historical detail: [DECISION_BRIEFS.md](DECISION_BRIEFS.md) (superseded options kept for record).
 
 ---
 

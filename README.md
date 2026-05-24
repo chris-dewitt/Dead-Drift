@@ -93,7 +93,7 @@ Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sent
 | P | Pause |
 | ESC | Pause in-flight; **abort** terminal (−20 hull); shop leave *(bug: may open pause — Phase 0 fix)* |
 
-**Delivery (dock):** Beat 1 — A/D/W/S align nose · Beat 2 — hold **SPACE** for retros · Corridor — arrows / jump keys per platformer
+**Delivery (dock):** Beat 1 — A/D/W/S align nose · Beat 2 — **J** when gauge centred, then **hold SPACE** ~1.2s for retro burn · Corridor — platformer keys
 
 **Menus:** ↑↓ navigate · ENTER confirm · ESC back / quit where noted
 
@@ -111,7 +111,7 @@ Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sent
 ## Delivery sequence (chapter win)
 
 1. **Approach** — align ship nose to docking bay (~5s)
-2. **Land** — physics descent; hold SPACE to slow (**VSI** / altitude HUD)
+2. **Land** — tap **J** to align thrusters, then hold **SPACE** ~1.2s for retro burn (dock scoring)
 3. **Touchdown** — clamp cutscene; perfect/rough dock affects credits
 4. **Corridor** — 2–3 min themed platformer (branching paths, secrets, NPCs, stealth)
 5. **Result** — payout card, debt adjustment, chapter stamp

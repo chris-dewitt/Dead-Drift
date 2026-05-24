@@ -1,8 +1,11 @@
 # DEAD DRIFT — Open design decisions (detail briefs)
 
-**May 2026** — Chris requested full information before choosing. **No code or plan changes for these items until you reply.**
+**May 2026** — **Resolved.** Kept for historical context.
 
-Resolved elsewhere (see `DOCUMENTATION_STATUS.md`): CLAUDE → B, GDD → A, MAX_VELOCITY → 280, SOUNDTRACK status section → yes, README → full.
+| # | Topic | Chris chose |
+|---|--------|-------------|
+| 3 | Chapter theme order | **B** — plan updated to match `procedural.py` |
+| 4 | Landing Beat 2 | **A** — J gauge + SPACE hold implemented |
 
 ---
 
