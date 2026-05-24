@@ -14,12 +14,12 @@
 
 | Epic | Done | Partial | Open | Notes |
 |------|------|---------|------|-------|
-| **Phase 0** — Trust fixes | 0 | 0 | 5 | Chris priorities — do first |
+| **Phase 0** — Trust fixes | 0 | 0 | 6 | Chris priorities + live playtest findings |
 | **1** — Code hygiene | 6 | 2 | 2 | Font cache + NLTK lazy still open |
 | **2** — Flight feel | 5 | 2 | 0 | SNAP CHARGE bar missing; thruster heat is Phase 0 |
 | **3** — Sector variety | 2 | 4 | 0 | Hazards via themes; collapsing well / debris cloud unwired |
 | **4** — Corridor | 3 | 4 | 0 | Framework shipped; music + full scoring card open |
-| **5** — Landing | 1 | 2 | 0 | Beat 2 differs from spec — **decision needed** |
+| **5** — Landing | 2 | 1 | 0 | Beat 2 mechanics done; docking **graphics** still open |
 | **6** — Terminal polish | 0 | 2 | 4 | Keystroke pulse exists; outcomes / portraits need work |
 | **7** — Bax | 1 | 2 | 2 | Lines mostly ported; portrait glow + hull pitch open |
 | **8** — Meta replay | 1 | 0 | 3 | Stepped death done; Records + carousel not built |
@@ -39,6 +39,7 @@ Tracked here and in `docs/DOCUMENTATION_STATUS.md`. These override epic list ord
 | ESC leaves the market | Phase 0 | [ ] |
 | Improve market graphics | Epic 6 / shop polish | [ ] |
 | Improve docking graphics | Epic 5 | [ ] |
+| Shroom control inversion (Ch.2 cargo) | Phase 0.6 | [ ] |
 
 ---
 
@@ -66,6 +67,22 @@ Tracked here and in `docs/DOCUMENTATION_STATUS.md`. These override epic list ord
 
 ### 0.5 Remove stale `SHOP_SECTORS` in `roguelite/shop.py` — [ ]
 Dead constant `{3, 6}`; live config is `settings.SHOP_SECTORS = {1, 3}`.
+
+### 0.6 Epistemological Shrooms — control inversion not working in play — [ ]
+**Playtest (Chris, May 2026):** With Ch.2 / Epistemological Shrooms cargo, periodic control inversion does not appear to fire in-flight.
+
+**Expected (design):** Every 10–20 s (`SPORE_INTERVAL_MIN/MAX`), controls invert for 6 s (`SPORE_DURATION` in `config/settings.py`). `ship.controls_inverted` swaps WASD/arrow input in `ship/ship.py`. Renderer shows spore vignette / `!! CONTROLS INVERTED !!` overlay (`renderer/vector_renderer.py`). Bax reacts via `EVT_SPORE_INVERTED`. Loadout draft advertises: *"Controls invert periodically."*
+
+**Code present (May 2026 review):** `cargo/epi_shrooms.py` timer + `_trigger()` sets `ship.controls_inverted`; `run_manager.update()` calls `cargo.update()` before `ship.update()` in `core/game.py` — order is correct. Headless sim of `cargo.update()` alone triggers inversion ~14 s after sector start.
+
+**Likely failure modes to check when fixing:**
+1. Player picked a non-shroom cargo from the draft pool (Ch.2 offers shrooms + two random others).
+2. Thruster overheat trap (0.1) — ship stops responding; can be mistaken for inversion not firing.
+3. Visual/audio fires but input swap too subtle — verify `controls_inverted` at runtime (debug HUD or Bax line).
+4. Checkpoint restore dropping cargo timer state (`run_checkpoint.py` saves `_next_cd` / `_invert_active` — verify on load).
+5. **Corridor vs flight:** Ch.2 delivery corridor has separate spore-zone inversion (`delivery/corridor/base.py` `SporeZone`, ~1.5 s) — distinct from in-flight cargo; test both.
+
+**Fix direction:** Reproduce in Ch.2 flight with shrooms selected; add temporary debug readout if needed; trace `cargo.update` → `controls_inverted` → `_read_input` each frame; confirm overlay + Bax line on trigger.
 
 ---
 

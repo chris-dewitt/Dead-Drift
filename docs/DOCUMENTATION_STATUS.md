@@ -30,8 +30,19 @@
 | 3 | **ESC leaves the market** | **Open (bug)** — ESC opens pause before shop leave handler |
 | 4 | **Improve market graphics** | **Open (polish)** |
 | 5 | **Improve docking graphics** | **Open (polish)** |
+| 6 | **Shroom control inversion (Ch.2 cargo)** | **Open (bug)** — playtest: inversion not felt in-flight; code exists, wiring unverified |
 
 Tracked in `docs/IMPROVEMENT_PLAN.md` → **Phase 0**.
+
+---
+
+## Live playtest log (Chris)
+
+Add rows as you play; agents update Phase 0 / epics from here.
+
+| Date | Finding | Doc / phase |
+|------|---------|-------------|
+| May 2026 | Epistemological Shrooms — periodic control inversion not working in flight | Phase 0.6 |
 
 ---
 

@@ -78,6 +78,7 @@ These are the directional answers backing this plan. Don't re-litigate — imple
 | `audio/chapter_1.py` … `chapter_4.py` | [x] | Modules exist |
 | `load_chapter(n)` hook | [x] | `audio_manager.load_chapter()` |
 | Cargo alarm → mix hooks | [~] | Partial wiring via `cargo_alarm` param |
+| Ch.2 spore invert → stereo flip (§4.2) | [ ] | `EVT_SPORE_INVERTED` plays `spore` SFX only; stereo invert not wired. Cargo inversion itself reported broken in playtest — see IMPROVEMENT_PLAN Phase 0.6 |
 
 ### Signature moments (Section 1.4) — player-visible
 

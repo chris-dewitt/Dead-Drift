@@ -40,6 +40,8 @@ python audio_dev.py   # dev — tune procedural audio
 
 Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sentient Paperwork, Schrödinger VIP). Each cargo adds a unique mid-flight mechanic.
 
+> **Known issue (May 2026 playtest):** Ch.2 Epistemological Shrooms — periodic control inversion is **not working in flight** despite implementation in `cargo/epi_shrooms.py`. Tracked in `docs/IMPROVEMENT_PLAN.md` Phase 0.6. Other cargos: verify individually.
+
 ---
 
 ## Core Mechanics
