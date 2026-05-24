@@ -589,7 +589,12 @@ class RunManager:
         return ctx
 
     def open_terminal(self, npc_type: str, **npc_kwargs) -> Terminal:
-        npc_kwargs.setdefault("run_context", self._build_run_context())
+        # Don't use dict.setdefault here — its default arg is evaluated eagerly,
+        # which would call _build_run_context() even when run_context is already
+        # supplied by the caller (and would crash if the caller bypassed __init__,
+        # e.g. in unit tests using RunManager.__new__).
+        if "run_context" not in npc_kwargs:
+            npc_kwargs["run_context"] = self._build_run_context()
         # Mira Voss needs a ship reference so she can call ship.repair() on success.
         if npc_type == "mira_voss" and self._ship is not None:
             npc_kwargs.setdefault("ship", self._ship)
@@ -597,7 +602,7 @@ class RunManager:
         self._active_terminal = Terminal(
             npc,
             blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset(),
-            vocabulary_vault=terminal_vault,
+            vocabulary_vault=getattr(self, "_vault", None),
         )
         return self._active_terminal
 

@@ -32,7 +32,8 @@ _JUMP_READY = (
 class TutorialManager:
     """
     First-run contextual hints fired once per mechanic, delivered as Bax lines.
-    Only instantiated when meta.clone_count == 1 (player has never died).
+    Instantiated when meta.clone_count <= 3 (per IMPROVEMENT_PLAN Epic 2.7 —
+    extends tutorial reach to first three lives, not just the first).
     """
 
     def __init__(self):
