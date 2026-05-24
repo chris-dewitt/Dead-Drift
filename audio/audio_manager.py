@@ -21,6 +21,7 @@ from audio.synth import (
     delivery_footstep, delivery_hit_sting, delivery_door_chime,
     sector_pad, slide_blues_note,
     tape_hum_bed, slingshot_stinger, barge_motif, decanting_printer,
+    npc_sig_dispatcher, npc_sig_adjuster, torch_slow_clap,
     _to_sound, _2PI,
     drum_kick, drum_snare_gated, drum_hihat, drum_clap,
     synth_bass_note,
@@ -294,6 +295,11 @@ class AudioManager:
 
         # Lick mood filter — set by Bax event handler
         self._next_lick_mood: str | None = None
+        # Edge-trigger cooldowns so repeating events don't queue the same mood every frame
+        self._barge_mood_cd:   float = 0.0
+        self._hull_crit_mood_cd: float = 0.0
+        # Idle harp alternates lonely / weary so two consecutive licks aren't the same mood
+        self._idle_mood_toggle: int = 0
 
         # Master FX (hull degradation)
         self._master_fx = None
@@ -356,6 +362,9 @@ class AudioManager:
         self._sfx["sling_stinger"] = slingshot_stinger()
         self._sfx["printer"]       = decanting_printer()
         self._sfx["tape_hum"]      = tape_hum_bed()
+        self._sfx["npc_dispatcher"] = npc_sig_dispatcher()
+        self._sfx["npc_adjuster"]   = npc_sig_adjuster()
+        self._sfx["torch_clap"]     = torch_slow_clap()
         self._barge_motif_snd      = barge_motif()
 
         print("[audio] generating blues licks…", flush=True)
@@ -502,6 +511,10 @@ class AudioManager:
         bus.subscribe(EVT_DELIVERY_HIT,   self._on_d_hit)
         bus.subscribe(EVT_DELIVERY_DONE,  self._on_d_done)
         bus.subscribe(EVT_SECTOR_CLEAR,   self._on_sector_clear)
+        from core.event_bus import EVT_HULL_CRITICAL, EVT_MODULE_UNBOLTED, EVT_TORCH_ACTIVE
+        bus.subscribe(EVT_HULL_CRITICAL,  self._on_hull_critical)
+        bus.subscribe(EVT_MODULE_UNBOLTED, self._on_module_unbolted)
+        bus.subscribe(EVT_TORCH_ACTIVE,   self._on_torch_active)
         bus.subscribe(EVT_RUN_START,      self._on_run_start)
 
     # ------------------------------------------------------------------
@@ -515,6 +528,12 @@ class AudioManager:
 
         self._update_pressure(speed)
         self._tick_bar(dt)
+
+        # Edge-trigger cooldowns for repeating mood-queue events
+        if self._barge_mood_cd > 0.0:
+            self._barge_mood_cd -= dt
+        if self._hull_crit_mood_cd > 0.0:
+            self._hull_crit_mood_cd -= dt
 
         if not self._in_terminal:
             self._update_engine(speed)
@@ -835,7 +854,11 @@ class AudioManager:
                 lick = generate_lick(mood=self._next_lick_mood)
                 self._next_lick_mood = None
             else:
-                lick = random.choice(self._licks)
+                # Idle ambient — alternate lonely / weary so the score's resting
+                # texture is melancholy, not random.  (Plan §7.3.)
+                idle_mood = "lonely" if self._idle_mood_toggle == 0 else "weary"
+                self._idle_mood_toggle ^= 1
+                lick = generate_lick(mood=idle_mood)
             self._lick_ch.set_volume(self._music_gain() * (1.0 / self._master) if self._master else 0)
             self._lick_ch.play(lick)
             if self._scene == SCENE_TERMINAL:
@@ -1063,7 +1086,9 @@ class AudioManager:
 
     def _on_clang(self, **_):   self._play_sfx("clang")
     def _on_gun(self, **_):     self._play_sfx("gun", 0.62)
-    def _on_canister(self, **_): self._play_sfx("canister", 0.70)
+    def _on_canister(self, **_):
+        self._play_sfx("canister", 0.70)
+        self._next_lick_mood = "cocky"
     def _on_spore(self, active, **_):
         if active:
             self._play_sfx("spore", 0.75)
@@ -1073,6 +1098,7 @@ class AudioManager:
         # Schedule musical resolution: snare flam on next sub-beat, then pad opens
         self._snap_resolve_t = self._bar_dur * 0.25   # quarter-bar ahead
         self._snap_beats_left = 2
+        self._next_lick_mood = "cocky"
 
     def _on_death(self, **_):
         self._play_sfx("death", 0.90)
@@ -1102,6 +1128,25 @@ class AudioManager:
         ch = self._bax_v_ch
         if ch and not ch.get_busy():
             self._play_sfx("barge", 0.65)
+        # Edge-trigger: queue a sarcastic harp lick only once per ~15s window,
+        # not every frame the barge is in range.
+        if self._barge_mood_cd <= 0.0:
+            self._next_lick_mood = "sarcastic"
+            self._barge_mood_cd  = 15.0
+
+    def _on_hull_critical(self, hp=0, **_):
+        # Fires repeatedly while hull is critical — cooldown keeps it from spamming.
+        if self._hull_crit_mood_cd <= 0.0:
+            self._next_lick_mood = "panic"
+            self._hull_crit_mood_cd = 10.0
+
+    def _on_module_unbolted(self, **_):
+        self._next_lick_mood = "weary"
+
+    def _on_torch_active(self, **_):
+        # Plays each time the barge re-cycles its torch (every ~5s).  Already
+        # spaced by the emitter, so no cooldown needed here.
+        self._play_sfx("torch_clap", 0.50)
 
     def _on_bax_speak(self, line: str = "", **_):
         if not line:
@@ -1151,7 +1196,7 @@ class AudioManager:
         self._music_active = 0
         self._music_xfade  = 0.0
 
-    def _on_term_open(self, **_):
+    def _on_term_open(self, npc=None, **_):
         self._in_terminal = True
         for ch in self._eng_ch:
             ch.set_volume(0.0)
@@ -1166,6 +1211,12 @@ class AudioManager:
         if self._drone_ch and self._sfx.get("drone"):
             self._drone_ch.set_volume(self._master * 0.32)
             self._drone_ch.play(self._sfx["drone"], loops=-1)
+        # NPC-specific sonic signatures (plan §7.2)
+        npc_cls = type(npc).__name__ if npc is not None else ""
+        if npc_cls == "UnionDispatcher":
+            self._play_sfx("npc_dispatcher", 0.55)
+        elif npc_cls == "InsuranceAdjuster":
+            self._play_sfx("npc_adjuster", 0.50)
 
     def _on_term_close(self, **_):
         self._in_terminal = False
