@@ -7,6 +7,7 @@ from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_TETHER_HIT, EVT_TETHER_SNAP,
                              EVT_MODULE_UNBOLTED, EVT_BAX_SPEAK,
                              EVT_NLP_EXPLOIT, EVT_SLINGSHOT,
+                             EVT_THRUSTER_OVERHEAT,
                              EVT_BARGE_NEARBY, EVT_CANISTER_GRAB,
                              EVT_COMMS_INTERCEPT, EVT_DEBRIS_SHOWER, EVT_SCAN_PING,
                              EVT_GUN_MALFUNCTION, EVT_SPORE_INVERTED,
@@ -446,6 +447,7 @@ class Bax:
         self._alien_count      = 0
         self._barge_kills_run  = 0   # for _FIRST_BARGE_KILL_OF_RUN
         self._sector_first_kill = False  # reset each sector
+        self._thruster_overheat_spoken = False
 
         # No-immediate-repeat (Epic 7.5)
         self._last_lines: dict[str, deque] = {}
@@ -486,6 +488,7 @@ class Bax:
         bus.subscribe(EVT_HULL_CRITICAL,   self._on_hull_critical)
         bus.subscribe(EVT_TETHER_HIT,      self._on_tether_hit)
         bus.subscribe(EVT_TETHER_SNAP,     self._on_tether_snap)
+        bus.subscribe(EVT_THRUSTER_OVERHEAT, self._on_thruster_overheat)
         bus.subscribe(EVT_MODULE_UNBOLTED, self._on_module_unbolted)
         bus.subscribe(EVT_NLP_EXPLOIT,     self._on_exploit_found)
         bus.subscribe(EVT_SLINGSHOT,        self._on_slingshot)
@@ -616,6 +619,16 @@ class Bax:
             "Tether's snapped! Leg it!",
             "YEAH! Have that, Gary!",
             "That's what lateral velocity looks like, mate!",
+        ]))
+
+    def _on_thruster_overheat(self, **_):
+        if self._thruster_overheat_spoken:
+            return
+        self._thruster_overheat_spoken = True
+        self.speak(self._no_repeat_pick("thruster_overheat", [
+            "Thruster's cooked. Let it cool before you ask it for miracles.",
+            "Propulsion overheated. Ease off a tick unless you fancy drifting forever.",
+            "Engine heat's in the red. Stop leaning on it, Boss.",
         ]))
 
     def _on_module_unbolted(self, module, **_):
@@ -781,6 +794,7 @@ class Bax:
         self._run_hull_events  = 0
         self._run_slingshots   = 0
         self._barge_kills_run  = 0
+        self._thruster_overheat_spoken = False
         n = getattr(self._meta, "clone_count", 0)
         if n > 1:
             line = self._no_repeat_pick("run_start", [

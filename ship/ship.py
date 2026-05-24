@@ -28,6 +28,7 @@ class PlayerShip:
         self._thruster       = Thruster(tier="salvage")
         self._life_sup       = LifeSupport()
         self.controls_inverted = False
+        self._external_thrust_scale = 1.0
         self.last_damage_source = "unknown"
         self._iframe_t       = 0.0   # mercy window after taking hull damage
         self.chain.install(self._life_sup, 0)
@@ -59,6 +60,7 @@ class PlayerShip:
         keys = pygame.key.get_pressed()
         self._thrusting = False
         inv = self.controls_inverted
+        thrust_scale = self._external_thrust_scale
 
         left  = keys[pygame.K_LEFT]  or keys[pygame.K_a]
         right = keys[pygame.K_RIGHT] or keys[pygame.K_d]
@@ -77,17 +79,28 @@ class PlayerShip:
         if fwd:
             self._thrusting = True
             for t in thrusters:
-                self.body.apply_thrust(t.force)
+                if hasattr(t, "mark_firing"):
+                    t.mark_firing()
+                self.body.apply_thrust(t.force * thrust_scale)
 
         if rev:
             for t in thrusters:
-                self.body.apply_thrust(-t.force * 0.6)
+                if hasattr(t, "mark_firing"):
+                    t.mark_firing()
+                self.body.apply_thrust(-t.force * 0.6 * thrust_scale)
 
         if keys[pygame.K_SPACE]:
             rad = math.radians(self.body.angle)
             nose = Vec2(self.body.pos.x + math.cos(rad) * 22,
                         self.body.pos.y + math.sin(rad) * 22)
             self.gun.fire(nose, self.body.angle)
+        self._external_thrust_scale = 1.0
+
+    def apply_thrust_scale(self, scale: float):
+        self._external_thrust_scale = min(
+            self._external_thrust_scale,
+            max(0.0, scale),
+        )
 
     def _wrap_screen(self):
         pos = self.body.pos
@@ -158,6 +171,7 @@ class PlayerShip:
         self._destroyed        = False
         self._thrusting        = False
         self.controls_inverted = False
+        self._external_thrust_scale = 1.0
         self.cargo             = None
         self.gun               = Gun()
         self._iframe_t         = 0.0

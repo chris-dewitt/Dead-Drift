@@ -448,6 +448,11 @@ class Game:
             self._handle_pause_menu_key(event)
             return
 
+        if state == GameState.SHOP and event.key == pygame.K_ESCAPE:
+            if self._shop is not None:
+                self._shop.handle_key(event)
+            return
+
         if state in self._PAUSEABLE:
             if event.key == pygame.K_1:
                 self._pause_game()

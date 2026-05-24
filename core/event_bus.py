@@ -36,6 +36,7 @@ EVT_HULL_CRITICAL  = "hull_critical"     # payload: hp
 EVT_SHIP_DESTROYED = "ship_destroyed"
 EVT_TETHER_HIT     = "tether_hit"        # payload: barge
 EVT_TETHER_SNAP    = "tether_snap"
+EVT_THRUSTER_OVERHEAT = "thruster_overheat"  # payload: thruster, heat
 EVT_MODULE_UNBOLTED = "module_unbolted"  # payload: module
 EVT_CARGO_DAMAGED  = "cargo_damaged"     # payload: cargo, severity
 EVT_TERMINAL_OPEN  = "terminal_open"     # payload: npc

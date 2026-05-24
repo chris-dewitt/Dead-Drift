@@ -61,7 +61,7 @@ Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sent
 - Between sectors (**J** after 20s timer), mid-sector **toll**, **barge intercept**, optional **K** call to Kress
 - Type natural language; VADER sentiment, intent, paradox, SQL-style exploit detection
 - 11 NPC types with distinct win paths; persistent exploit vault
-- Procedural CRT **portraits** (Inspector Holt portrait — in progress)
+- Procedural CRT **portraits** for all terminal NPCs, including Inspector Holt and Relay-7 Felix
 
 ### Bax
 - Cockpit strip: vector portrait, typewriter speech
@@ -91,7 +91,7 @@ Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sent
 | K | Call Kress (once per sector, optional) |
 | R | Cycle cockpit radio stations |
 | P | Pause |
-| ESC | Pause in-flight; **abort** terminal (−20 hull); shop leave *(bug: may open pause — Phase 0 fix)* |
+| ESC | Pause in-flight; **abort** terminal (−20 hull); shop leave |
 
 **Delivery (dock):** Beat 1 — A/D/W/S align nose · Beat 2 — **J** when gauge centred, then **hold SPACE** ~1.2s for retro burn · Corridor — platformer keys
 
@@ -163,7 +163,7 @@ Spec + implementation status → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLA
 | Path | Purpose |
 |------|---------|
 | `config/settings.py` | Tuning constants — edit here first |
-| `docs/IMPROVEMENT_PLAN.md` | Master task list + Phase 0 bugs |
+| `docs/IMPROVEMENT_PLAN.md` | Master task list + shipped Phase 0 trust fixes |
 | `docs/CORRIDOR_DESIGN.md` | Delivery corridor specs |
 | `docs/BAX_VOICE.md` | Bax line bank |
 | `docs/CLAUDE_ARCHIVED.md` | Historical agent/GDD excerpt |
@@ -173,9 +173,8 @@ Spec + implementation status → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLA
 
 ---
 
-## Known issues (Phase 0 — see IMPROVEMENT_PLAN)
+## Known issues / open polish
 
-- Thruster can **overheat permanently** while powered (heat system bug)
-- Shop **ESC** may open pause instead of leaving
-- **Inspector Holt** / **Felix** terminal portraits show `?`
-- Ice field **thrust penalty** not applied in code
+- Market graphics need another polish pass
+- Docking graphics can be pushed further
+- NLTK bootstrap is still eager on `main.py` first launch; lazy in-game splash remains open

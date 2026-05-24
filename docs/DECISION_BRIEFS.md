@@ -69,7 +69,7 @@ Player-facing sector numbers are **index + 1**.
 - Avoids stacking **ice physics** (slick drift + broken thrust penalty) on top of **cargo control inversion**
 
 **If sector 5 → Frozen Trail (code):**
-- **Ice field** (slick acceleration; 30% thrust penalty **defined but not wired** — Phase 0.4)
+- **Ice field** (slick acceleration; 30% thrust penalty; wired in Phase 0.4)
 - **Comet trail** lanes
 - Synergizes with shroom cargo chaos on sector 5
 - **No** toll terminal
@@ -240,6 +240,6 @@ Two **separate** input challenges (~4s total):
 
 ---
 
-## Do not implement until Chris replies
+## Resolution
 
-Items 3 and 4 remain **open** in `IMPROVEMENT_PLAN.md` §3.4 and §5.1 until you choose A/B/C (or hybrid spec).
+Items 3 and 4 were resolved in May 2026: theme order follows Chris decision B, and Landing Beat 2 follows Chris decision A. Keep this file as historical context unless Chris reopens a fork.
