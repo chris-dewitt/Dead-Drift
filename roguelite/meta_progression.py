@@ -1,4 +1,5 @@
 from __future__ import annotations
+import copy
 import json
 from pathlib import Path
 
@@ -20,6 +21,7 @@ class MetaProgression:
         "chapters_completed": [],
         "bax_level":          1,
         "reputation":         {},     # npc_id -> int (-10..10)
+        "bax_hums_heard":     [],     # list[int] — hum indices the player has heard
     }
 
     def __init__(self, save_path: Path | str | None = None):
@@ -31,11 +33,14 @@ class MetaProgression:
     # ------------------------------------------------------------------
     def load(self):
         path = self._save_path
+        # Deep-copy defaults so the class-level mutable values (chapters_completed,
+        # reputation, bax_hums_heard) aren't shared by reference across instances.
+        defaults = copy.deepcopy(self._DEFAULTS)
         if path.is_file():
             with open(path, encoding="utf-8") as f:
-                self._data = {**self._DEFAULTS, **json.load(f)}
+                self._data = {**defaults, **json.load(f)}
         else:
-            self._data = dict(self._DEFAULTS)
+            self._data = defaults
 
     def save(self):
         path = self._save_path
@@ -47,7 +52,7 @@ class MetaProgression:
 
     def reset_to_defaults(self) -> None:
         """Fresh campaign — Chapter 1, default debt, no completed chapters."""
-        self._data = dict(self._DEFAULTS)
+        self._data = copy.deepcopy(self._DEFAULTS)
 
     # ------------------------------------------------------------------
     def apply_death_penalty(self, sector_index: int = 0):
@@ -94,6 +99,15 @@ class MetaProgression:
     def get_reputation(self, npc_id: str) -> int:
         return self._data["reputation"].get(npc_id, 0)
 
+    def mark_hum_heard(self, idx: int) -> bool:
+        """Record that the player has heard hum `idx`.  Returns True if newly heard."""
+        heard = self._data.setdefault("bax_hums_heard", [])
+        if idx in heard:
+            return False
+        heard.append(idx)
+        self.save()
+        return True
+
     # ------------------------------------------------------------------
     @property
     def debt(self) -> int:
@@ -114,3 +128,12 @@ class MetaProgression:
     @property
     def is_debt_cleared(self) -> bool:
         return self._data["debt"] <= 0
+
+    @property
+    def bax_hums_heard(self) -> list[int]:
+        return list(self._data.get("bax_hums_heard", []))
+
+    @property
+    def campaign_cleared_at_least_once(self) -> bool:
+        """True if the player has completed all 4 chapters at any point."""
+        return len(self._data.get("chapters_completed", [])) >= 4

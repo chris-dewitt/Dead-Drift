@@ -49,9 +49,10 @@ _BASS_CH    = 23   # walking sub-bass loop
 _GTR_CH     = 24   # acoustic guitar phrases (one-shot)
 _ARP_CH     = 25   # new-wave arpeggio pad
 _SLIDE_CH   = 26   # mournful slide-blues notes
-_HUM_CH     = 27   # tape hum bed (subliminal glue layer)
-_BARGE_CH   = 28   # barge motif drone
-_SFX_POOL   = 10   # channels 10-19: one-shot SFX pool
+_HUM_CH       = 27   # tape hum bed (subliminal glue layer)
+_BARGE_CH     = 28   # barge motif drone
+_HUM_VOICE_CH = 29   # Bax hums (§7.4) — own channel so voice-duck doesn't grab it
+_SFX_POOL     = 10   # channels 10-19: one-shot SFX pool
 
 _BAX_CHARS_PER_SEC = 32.0
 
@@ -208,6 +209,8 @@ class AudioManager:
         self._drone_ch: pygame.mixer.Channel | None = None
         self._hum_ch:   pygame.mixer.Channel | None = None
         self._barge_ch: pygame.mixer.Channel | None = None
+        self._hum_voice_ch: pygame.mixer.Channel | None = None
+        self._bax_hums: list[pygame.mixer.Sound] = []
         self._licks:    list[pygame.mixer.Sound] = []
         self._sfx:      dict[str, pygame.mixer.Sound] = {}
         self._voices:   dict[str, list[pygame.mixer.Sound]] = {}
@@ -373,6 +376,10 @@ class AudioManager:
         print("[audio] generating character voices…", flush=True)
         self._voices = prebuild_voices()
 
+        print("[audio] generating Bax hums…", flush=True)
+        from audio.bax_hum import prebuild_all_hums
+        self._bax_hums = prebuild_all_hums()
+
         print("[audio] generating sector pads…", flush=True)
         from config import settings as S
         self._music_pads = [sector_pad(i) for i in range(S.SECTORS_PER_RUN)]
@@ -486,6 +493,11 @@ class AudioManager:
         if self._barge_motif_snd:
             self._barge_ch.set_volume(0.0)
             self._barge_ch.play(self._barge_motif_snd, loops=-1)
+
+        # Bax hum voice channel (§7.4) — own channel so voice-duck logic
+        # (which handles speaking blips) doesn't squash the hum.
+        self._hum_voice_ch = pygame.mixer.Channel(_HUM_VOICE_CH)
+        self._hum_voice_ch.set_volume(0.0)
 
         # Radio piggybacks on the slide channel (only one ever active at a time)
         self._radio_ch = self._slide_ch
@@ -1058,6 +1070,20 @@ class AudioManager:
             cb(self._cargo_alarm, master_fx=self._master_fx)
         except Exception:
             pass
+
+    def play_bax_hum(self, idx: int) -> None:
+        """Play one of the 8 prebuilt Bax hums on a dedicated channel.
+        Ducks the bandstand (drum/bass/arp targets × 0.25) so the hum is the
+        clear foreground.  Bandstand restores naturally on next set_scene().
+        Plan §7.4.
+        """
+        if not 0 <= idx < len(self._bax_hums) or self._hum_voice_ch is None:
+            return
+        # Duck the band so the hum is the foreground voice
+        self._vol_targets = {k: v * 0.25 for k, v in self._vol_targets.items()}
+        self._hum_voice_ch.stop()
+        self._hum_voice_ch.set_volume(self._master * 0.62)
+        self._hum_voice_ch.play(self._bax_hums[idx])
 
     def _restore_pad_transposition(self):
         """Return pad to root transposition after slingshot key change."""
