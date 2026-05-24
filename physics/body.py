@@ -114,10 +114,10 @@ class RigidBody2D:
         speed = self.vel.length()
         if speed > cap:
             excess_pct = (speed - cap) / cap
-            # Drag scales quadratically with excess: gentle near cap, hard at extremes.
-            # At 2x cap (excess_pct=1): drag_k=18, recovers in ~0.06s.
-            # At 1.1x cap (excess_pct=0.1): drag_k=6.6, recovers in ~0.23s.
-            drag_k = 6.0 * (1.0 + excess_pct * 2.0)
+            # Drag scales quadratically with excess. Tuned harder than before
+            # to kill the "blur of death" feel — at 1.1x cap drag_k≈11,
+            # at 2x cap drag_k≈40 (recovers in ~30ms).
+            drag_k = 10.0 * (1.0 + excess_pct * 3.0)
             self.vel = self.vel * (1.0 - excess_pct * dt * drag_k)
 
         self.pos = self.pos + self.vel * dt

@@ -6,6 +6,7 @@ from config import settings as S
 from antagonists.repo_barge import BargeState
 from antagonists.alien_ship import HULL_PTS as _ALIEN_HULL, INNER_PTS as _ALIEN_INNER
 from renderer.visual_fx import VisualFX
+from renderer.chromatic_corruption import ChromaticCorruption
 from core.event_bus import (bus, EVT_SLINGSHOT, EVT_SCAN_PING,
                              EVT_TETHER_HIT, EVT_TETHER_SNAP,
                              EVT_MODULE_UNBOLTED, EVT_HULL_DAMAGE,
@@ -38,6 +39,8 @@ class VectorRenderer:
     def __init__(self, surface: pygame.Surface):
         self.surface     = surface
         self._vfx        = VisualFX()
+        self._corruption = ChromaticCorruption(S.SCREEN_W, S.FLIGHT_H)
+        self._glitch_burst_t = 0.0   # >0 = trigger glitch tear on next frame
         self._stars      = self._gen_stars()
         self._nebulae    = self._gen_nebulae()
         self._dust       = self._gen_dust()
@@ -118,6 +121,7 @@ class VectorRenderer:
         if amount >= 5.0:
             n = max(4, int(amount * 0.8))
             self._spawn_explosion(self._last_ship_x, self._last_ship_y, n, 0.28)
+            self._glitch_burst_t = 0.18   # tear the screen for a moment on impact
 
     def _on_hull_critical(self, **_):
         self._shake_trauma = min(1.0, self._shake_trauma + 0.4)
@@ -189,6 +193,19 @@ class VectorRenderer:
             self.surface, dt,
             hull_pct=ship.hull_pct if ship else 1.0,
             sector_intensity=self._sector_intensity,
+        )
+
+        # Layered chromatic corruption — only kicks in once hull is hurt.
+        # iframe_active drives the cool blue shimmer (post-mercy-hit).
+        hull_pct = ship.hull_pct if ship else 1.0
+        burst = self._glitch_burst_t > 0
+        if burst:
+            self._glitch_burst_t = max(0.0, self._glitch_burst_t - dt)
+        self._corruption.apply(
+            self.surface, t, dt,
+            intensity=max(0.0, (1.0 - hull_pct) - 0.18),
+            iframe_active=bool(getattr(ship, "iframe_active", False)),
+            glitch_burst=burst,
         )
 
     # ------------------------------------------------------------------  WARP STREAK
@@ -1339,6 +1356,11 @@ class VectorRenderer:
     def _draw_ship(self, ship, t: float = 0.0):
         if not ship.is_alive:
             return
+        # Mercy-window flicker — skip drawing on alternating fast frames so
+        # the ship visibly strobes when invulnerable. Cheap and instantly readable.
+        if getattr(ship, "iframe_active", False):
+            if int(t * 18.0) % 2 == 0:
+                return
         pos   = ship.pos
         angle = ship.angle
         raw   = [(18,0),(5,-9),(-14,-7),(-14,9),(5,10)]
