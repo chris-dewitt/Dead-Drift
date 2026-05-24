@@ -303,4 +303,30 @@ class UndergroundDJ(BaseNPC):
             "I once played a Local 404 dispatcher's wedding mix backwards "
             "for a week. Nobody noticed. *laughs softly* "
             "Anyway. What do you want?",
+
+            "Sandra Vega-Marsh called in last week. "
+            "She thought I wouldn't recognise the voice. "
+            "She asked me to take a dedication off the archive. "
+            "I didn't. *laughs softly* "
+            "Some things should stay on record.",
+
+            "Little known fact: Felix from Relay-7 tunes in every night. "
+            "Never calls. Too nervous. *needle skip* "
+            "Felix, if you're listening: the sad jingle is about you. "
+            "Not the bad one. The other sad one.",
+
+            "I did a whole set last Tuesday about Local 404. "
+            "'The Debt Collectors Can't Hear The Music.' "
+            "Gary, if you're monitoring this channel: you're in it. "
+            "You're not the villain. Just the saddest character. "
+            "There's a difference. Anyway — what do you need?",
+
+            "The Outer Belt crew picks up my signal sometimes. "
+            "They never request songs. They just listen. *quiet* "
+            "I like that. Sometimes the hardest people just need something playing.",
+
+            "Kress has an original pressing of something I've been hunting since 2019. "
+            "He won't trade it. "
+            "He WILL describe it to me every time we talk. "
+            "*sighs* That's the underground economy. What do you need?",
         ])

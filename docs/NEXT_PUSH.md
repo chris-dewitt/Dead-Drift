@@ -51,7 +51,7 @@ Items are ordered — top is most urgent. Each has a **felt test**: can a strang
 
 **Decision (planning committee):** every NPC must be brought to full depth. Some new NPCs have skeletal keyword sets and no humor. This is a visible quality gap that undermines the whole terminal system.
 
-**May 2026 status:** 9.1 — partial (cross-NPC refs + dossier parity shipped for the four priority NPCs); 9.2 — shipped (CRT visual overhaul, boot text, status bar, scanlines, vignette, flicker); 9.3 — shipped (popup pacing gate); 9.4 — partial (propaganda ticker expanded; full string audit still open).
+**May 2026 status:** 9.1 — **COMPLETE** (full NPC parity sweep across all 11 NPCs); 9.2 — **COMPLETE** (CRT visual overhaul, boot text, status bar, scanlines, vignette, flicker); 9.3 — **COMPLETE** (popup pacing gate); 9.4 — partial (propaganda ticker expanded; full string audit still open).
 
 ### 9.1 NPC audit — every terminal at the same depth
 
@@ -71,7 +71,11 @@ Run a pass on all NPCs in `terminal/npcs/`. For each, verify:
 - Cross-NPC reference filler added to Dray, Mira Voss, Toll Authority, Nova Soma — each now name-drops Gary, Sandra, Felix, or Bax in 2-4 lines. Continuity carries between terminals.
 - Existing test suite still passes (`tests/test_terminal_npcs.py`, 6 tests).
 
-**Still open:** RELAY-7 FELIX still needs a Gary-tier expansion pass; remaining NPCs (Sandra, Underground DJ, Synthetic Droid, Cargo Inspector, Insurance Adjuster, Kress, Pirate) need the same cross-reference + humor sweep.
+**Shipped May 2026 (this push, continued):**
+- RELAY-7 FELIX already at Gary-tier depth (8 win paths, full cross-NPC dict).
+- Cross-NPC reference + humor sweep completed for all remaining NPCs: Sandra, Underground DJ (Marrow), Synthetic Droid (TK-9), Cargo Inspector (Holt), Insurance Adjuster (Morwenna), Kress, Pirate. Each now has 2-6 new filler lines referencing other characters. Galaxy feels connected.
+
+**9.1 STATUS: COMPLETE ✓**
 
 ### 9.2 Terminal visual overhaul
 
