@@ -670,3 +670,252 @@ class QuantumDoor(Element):
             if txt:
                 s = f.render(txt, True, col)
                 surf.blit(s, (sx - s.get_width() // 2, CEIL_Y + 4))
+
+
+# ---------------------------------------------------------------------------
+# Epic 14.1 — Corridor hazards
+# ---------------------------------------------------------------------------
+
+class SteamVent(Element):
+    """
+    Wall- or floor-mounted steam vent.
+      - 0.6s telegraph (hiss) → 1.8s eruption (15 hp damage) → 4s cooldown.
+      - Pressure gauge above the vent displays the cycle countdown.
+      - Shootable: if shot during cooldown or telegraph, disables for 12s.
+    """
+    PHASE_COOLDOWN  = "cool"
+    PHASE_TELEGRAPH = "tele"
+    PHASE_ERUPT     = "erupt"
+    PHASE_DISABLED  = "off"
+
+    TELEGRAPH_S = 0.6
+    ERUPT_S     = 1.8
+    COOLDOWN_S  = 4.0
+    DISABLE_S   = 12.0
+    PLUME_H     = 64           # vertical reach of steam
+    DAMAGE      = 15
+
+    def __init__(self, x: float, y: float = FLOOR_Y,
+                 phase_offset: float = 0.0, mount: str = "floor",
+                 path_tag: str | None = None):
+        super().__init__(x, path_tag)
+        self.y      = y
+        self.mount  = mount   # "floor" or "wall_left" or "wall_right"
+        self._t     = phase_offset
+        self._phase = self.PHASE_COOLDOWN
+
+    def disable(self) -> None:
+        self._phase = self.PHASE_DISABLED
+        self._t     = 0.0
+
+    def update(self, dt: float, player_x: float, player_y: float) -> None:
+        self._t += dt
+        if self._phase == self.PHASE_COOLDOWN and self._t >= self.COOLDOWN_S:
+            self._phase = self.PHASE_TELEGRAPH
+            self._t = 0.0
+        elif self._phase == self.PHASE_TELEGRAPH and self._t >= self.TELEGRAPH_S:
+            self._phase = self.PHASE_ERUPT
+            self._t = 0.0
+        elif self._phase == self.PHASE_ERUPT and self._t >= self.ERUPT_S:
+            self._phase = self.PHASE_COOLDOWN
+            self._t = 0.0
+        elif self._phase == self.PHASE_DISABLED and self._t >= self.DISABLE_S:
+            self._phase = self.PHASE_COOLDOWN
+            self._t = 0.0
+
+    def collides(self, px: float, py: float) -> bool:
+        if self._phase != self.PHASE_ERUPT:
+            return False
+        if abs(px - self.x) > 16:
+            return False
+        # Floor vents shoot up; wall vents shoot horizontally
+        if self.mount == "floor":
+            return self.y - self.PLUME_H < py + PLAYER_H and py < self.y
+        # wall vents: hazard zone is at constant y, extending ~PLUME_H horizontally
+        return abs(py + PLAYER_H / 2 - self.y) < 20
+
+    def draw(self, surf, camera_x, t, palette):
+        sx = int(self.x - camera_x)
+        base_col = (90, 90, 100)
+        # Vent body
+        if self.mount == "floor":
+            pygame.draw.rect(surf, (24, 24, 32), (sx - 14, int(self.y) - 8, 28, 10))
+            pygame.draw.rect(surf, base_col,    (sx - 14, int(self.y) - 8, 28, 10), 1)
+            pygame.draw.rect(surf, (10, 10, 16), (sx - 10, int(self.y) - 6, 20, 4))
+        # Pressure gauge above
+        gauge_y = int(self.y) - 22
+        pygame.draw.circle(surf, (16, 16, 22), (sx, gauge_y), 6)
+        pygame.draw.circle(surf, base_col, (sx, gauge_y), 6, 1)
+        # Gauge needle reflects phase progress
+        if self._phase == self.PHASE_COOLDOWN:
+            frac = self._t / self.COOLDOWN_S
+            needle_c = (60, 180, 80)
+        elif self._phase == self.PHASE_TELEGRAPH:
+            frac = 0.5 + 0.5 * self._t / self.TELEGRAPH_S
+            needle_c = (220, 160, 0)
+        elif self._phase == self.PHASE_ERUPT:
+            frac = 1.0
+            needle_c = (220, 40, 40)
+        else:  # disabled
+            frac = 0.0
+            needle_c = (60, 60, 60)
+        ang = -math.pi * 0.75 + math.pi * 1.5 * frac
+        nx, ny = sx + int(4 * math.cos(ang)), gauge_y + int(4 * math.sin(ang))
+        pygame.draw.line(surf, needle_c, (sx, gauge_y), (nx, ny), 1)
+        # Telegraph hiss: little curl puffs above vent
+        if self._phase == self.PHASE_TELEGRAPH:
+            puff_a = abs(math.sin(t * 9.0))
+            for pi in range(3):
+                yo = int(8 + pi * 4)
+                pygame.draw.circle(surf, (200, 200, 220),
+                                   (sx - 3 + int(2 * math.sin(t * 7.0 + pi)),
+                                    int(self.y) - 8 - yo),
+                                   max(1, int(2 * puff_a)), 1)
+        # Eruption: white-grey steam column
+        elif self._phase == self.PHASE_ERUPT:
+            puff_t = self._t / self.ERUPT_S
+            for layer in range(7):
+                yo = int(layer * (self.PLUME_H / 7))
+                wd = 14 + layer * 2
+                alpha = int(220 * (1 - layer / 7))
+                steam = pygame.Surface((wd * 2, 12), pygame.SRCALPHA)
+                steam.fill((230, 230, 240, alpha))
+                jitter = int(2 * math.sin(t * 12 + layer * 1.7))
+                surf.blit(steam, (sx - wd + jitter, int(self.y) - 8 - yo - 4))
+        # Disabled: dim grey, "DSBLD" tag
+        elif self._phase == self.PHASE_DISABLED:
+            f = pygame.font.SysFont("monospace", 7, bold=True)
+            tg = f.render("OFFLINE", True, (90, 90, 90))
+            surf.blit(tg, (sx - tg.get_width() // 2, int(self.y) - 36))
+
+
+class Tripwire(Element):
+    """
+    Thin cyan laser across a corridor section. Crossing triggers an alarm:
+    Bax line + visual flash for ~2s. Wire can be 'disarmed' (set armed=False).
+    No direct hull damage but marks the player as alerted.
+    """
+    def __init__(self, x: float, y: float = FLOOR_Y - 32,
+                 w: int = 48, path_tag: str | None = None,
+                 bax_line: str | None = None):
+        super().__init__(x, path_tag)
+        self.y         = y
+        self.w         = w
+        self.armed     = True
+        self.triggered = False
+        self._flash_t  = 0.0
+        self._bax_line = bax_line or (
+            "Tripwire! Security alert. They KNOW you're here. Move.")
+
+    def disarm(self) -> None:
+        self.armed = False
+
+    def collides(self, px: float, py: float) -> bool:
+        if not self.armed or self.triggered:
+            return False
+        if abs(px - self.x) > self.w // 2:
+            return False
+        # Player legs cross the wire height
+        return self.y - 6 < py + PLAYER_H < self.y + 6
+
+    def trigger(self) -> None:
+        self.triggered = True
+        self._flash_t  = 2.0
+        from core.event_bus import bus, EVT_BAX_SPEAK
+        bus.emit(EVT_BAX_SPEAK, line=self._bax_line)
+
+    def update(self, dt: float, player_x: float, player_y: float) -> None:
+        self._flash_t = max(0.0, self._flash_t - dt)
+
+    def draw(self, surf, camera_x, t, palette):
+        sx = int(self.x - camera_x)
+        x0 = sx - self.w // 2
+        x1 = sx + self.w // 2
+        if not self.armed:
+            pygame.draw.line(surf, (30, 60, 60), (x0, int(self.y)), (x1, int(self.y)), 1)
+            return
+        if self.triggered and self._flash_t > 0:
+            pulse = abs(math.sin(t * 14.0))
+            col   = (255, int(180 * pulse), int(60 * pulse))
+            pygame.draw.line(surf, col, (x0, int(self.y)), (x1, int(self.y)), 2)
+            f = pygame.font.SysFont("monospace", 8, bold=True)
+            al = f.render("ALERT", True, col)
+            surf.blit(al, (sx - al.get_width() // 2, int(self.y) - 12))
+        else:
+            # Live cyan wire with a faint pulse
+            pulse = 0.6 + 0.4 * math.sin(t * 4.0)
+            col = (int(40 + 60 * pulse), int(200 + 55 * pulse), int(220))
+            pygame.draw.line(surf, col, (x0, int(self.y)), (x1, int(self.y)), 1)
+            # Mount points
+            for px in (x0, x1):
+                pygame.draw.rect(surf, (60, 60, 80), (px - 2, int(self.y) - 4, 4, 8))
+
+
+class SecurityBeam(Element):
+    """
+    Ceiling-mounted spotlight that sweeps the floor. Player caught in the
+    illuminated cone takes hull damage. Sweep angle is sinusoidal.
+    Shadow zones (outside the cone) allow safe movement.
+    """
+    SWEEP_PERIOD = 4.2
+    HALF_ANGLE   = math.radians(28)
+    DAMAGE       = 10
+
+    def __init__(self, x: float, y: float = CEIL_Y + 8,
+                 length: float = 240.0, phase: float = 0.0,
+                 path_tag: str | None = None):
+        super().__init__(x, path_tag)
+        self.y       = y
+        self.length  = length
+        self._phase  = phase
+
+    def _angle(self, t: float) -> float:
+        # Sweep from -1 to +1, mapped to ±60° around straight down
+        s = math.sin(2 * math.pi * t / self.SWEEP_PERIOD + self._phase)
+        return s * math.radians(50)
+
+    def _cone_hits(self, px: float, py: float, t: float) -> bool:
+        # Vector from beam origin to player
+        dx = px - self.x
+        dy = (py + PLAYER_H / 2) - self.y
+        d  = math.hypot(dx, dy)
+        if d < 8 or d > self.length:
+            return False
+        beam_a   = self._angle(t) + math.pi / 2  # downward
+        actor_a  = math.atan2(dy, dx)
+        diff     = ((actor_a - beam_a + math.pi) % (2 * math.pi)) - math.pi
+        return abs(diff) < self.HALF_ANGLE
+
+    def collides(self, px: float, py: float, t: float) -> bool:
+        return self._cone_hits(px, py, t)
+
+    def draw(self, surf, camera_x, t, palette):
+        sx = int(self.x - camera_x)
+        # Housing
+        pygame.draw.rect(surf, (20, 20, 24), (sx - 10, int(self.y) - 6, 20, 8))
+        pygame.draw.rect(surf, (90, 60, 60), (sx - 10, int(self.y) - 6, 20, 8), 1)
+        # Cone — semi-transparent sweeping light
+        beam_a = self._angle(t) + math.pi / 2
+        for steps in range(5):
+            r = self.length * (steps + 1) / 5
+            for side in (-1, 1):
+                ang = beam_a + side * self.HALF_ANGLE
+                ex = sx + int(r * math.cos(ang))
+                ey = int(self.y) + int(r * math.sin(ang))
+                pygame.draw.line(surf, (180, 90, 60, 0), (sx, int(self.y)), (ex, ey), 0)
+        # Filled cone via polygon with alpha
+        ex_l = sx + int(self.length * math.cos(beam_a - self.HALF_ANGLE))
+        ey_l = int(self.y) + int(self.length * math.sin(beam_a - self.HALF_ANGLE))
+        ex_r = sx + int(self.length * math.cos(beam_a + self.HALF_ANGLE))
+        ey_r = int(self.y) + int(self.length * math.sin(beam_a + self.HALF_ANGLE))
+        cone = pygame.Surface((CORRIDOR_W, CORRIDOR_H), pygame.SRCALPHA)
+        pygame.draw.polygon(cone, (220, 90, 50, 38),
+                            [(sx, int(self.y)), (ex_l, ey_l), (ex_r, ey_r)])
+        surf.blit(cone, (0, 0))
+        # Bright centerline
+        ex_c = sx + int(self.length * math.cos(beam_a))
+        ey_c = int(self.y) + int(self.length * math.sin(beam_a))
+        pygame.draw.line(surf, (255, 160, 80), (sx, int(self.y)), (ex_c, ey_c), 1)
+        # Pulsing red "ARMED" lamp
+        if abs(math.sin(t * 3.5)) > 0.5:
+            pygame.draw.circle(surf, (220, 30, 30), (sx, int(self.y) - 8), 2)

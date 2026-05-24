@@ -505,6 +505,15 @@ class Terminal:
         self._font:    pygame.font.Font | None = None
         self._font_sm: pygame.font.Font | None = None
 
+        # CRT visual overhaul (Epic 9.2)
+        self._life_t           = 0.0          # seconds since terminal opened
+        self._boot_duration    = 0.85         # boot-text overlay duration
+        self._flicker_t        = random.uniform(8.0, 12.0)  # countdown to next flicker
+        self._flicker_active   = 0            # frames remaining on flicker dim
+        self._full_scan_surf:  pygame.Surface | None = None
+        self._vignette_surf:   pygame.Surface | None = None
+        self._signal_phase     = random.random() * math.tau   # signal-bar wobble seed
+
         bus.emit(EVT_TERMINAL_OPEN, npc=npc)
         self._push(npc.name.upper(), npc.intro())
 
@@ -743,6 +752,15 @@ class Terminal:
         if self._cursor_timer >= S.CURSOR_BLINK_MS / 1000.0:
             self._cursor_visible = not self._cursor_visible
             self._cursor_timer   = 0.0
+
+        # CRT life + flicker timing (Epic 9.2)
+        self._life_t   += dt
+        self._flicker_t -= dt
+        if self._flicker_active > 0:
+            self._flicker_active -= 1
+        if self._flicker_t <= 0.0:
+            self._flicker_active = random.choice([1, 1, 2])
+            self._flicker_t = random.uniform(8.0, 12.0)
 
         if 0 <= self._tw_pos < len(self._history):
             speaker, text = self._history[self._tw_pos]
@@ -1101,6 +1119,11 @@ class Terminal:
         turn_s = font_sm.render(f"TURN {self.npc._turn}", True, (68, 110, 68))
         surface.blit(turn_s, (W - M - turn_s.get_width(), hint_y))
 
+        # ── CRT effects layer (Epic 9.2): status bar, scanlines, vignette, flicker
+        self._draw_status_bar(surface, W, H, t, font_sm)
+        self._draw_crt_effects(surface, W, H, t)
+        self._draw_boot_overlay(surface, W, H, t)
+
         # ── Outcome banner ─────────────────────────────────────────────
         if self._done:
             self._draw_outcome_banner(surface, W, H, t)
@@ -1171,6 +1194,154 @@ class Terminal:
                 return "ACTIVE: " + " · ".join(tips) + " · [ESC] abort"
         return _NPC_HINTS.get(self.npc.name.upper(),
                               "deal · bribe · sympathy · threaten · [ESC] abort")
+
+    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # CRT visual overhaul helpers (Epic 9.2)
+    # ------------------------------------------------------------------
+    def _draw_status_bar(self, surface: pygame.Surface, W: int, H: int,
+                         t: float, font_sm: pygame.font.Font):
+        """Bottom status bar: signal strength, encryption, session timer."""
+        bar_h = 16
+        bar_y = H - bar_h
+        # Dark backplate with phosphor edge
+        pygame.draw.rect(surface, (4, 14, 8), (0, bar_y, W, bar_h))
+        pygame.draw.line(surface, (0, 100, 50), (0, bar_y), (W, bar_y), 1)
+
+        # ── Signal strength (left) — wobbles, drops to static if hostile
+        sig_x = 12
+        sig_label = font_sm.render("SIG", True, (50, 110, 70))
+        surface.blit(sig_label, (sig_x, bar_y + 2))
+        sig_x += sig_label.get_width() + 6
+        hostile = self.npc.disposition <= -4
+        wobble = math.sin(t * 4.0 + self._signal_phase)
+        if hostile:
+            # Choppy / dropping signal
+            bars = 1 + int(2 + 1.5 * wobble) % 3
+        else:
+            bars = 4 + int(2 + wobble * 1.5) % 3   # 4–6 of 7
+        bars = max(1, min(7, bars))
+        for i in range(7):
+            lit = i < bars
+            cell_x = sig_x + i * 6
+            cell_h = 3 + i * 1
+            cell_y = bar_y + bar_h - 3 - cell_h
+            if lit:
+                col = (200, 60, 40) if hostile else (0, 200 - i * 10, 90)
+            else:
+                col = (18, 32, 22)
+            pygame.draw.rect(surface, col, (cell_x, cell_y, 4, cell_h))
+
+        # ── Encryption (center) — varies per NPC
+        enc_text = self._encrypt_label()
+        enc_surf = font_sm.render(enc_text, True, (80, 140, 90))
+        surface.blit(enc_surf, ((W - enc_surf.get_width()) // 2, bar_y + 2))
+
+        # ── Session timer (right)
+        sess_mm = int(self._life_t) // 60
+        sess_ss = int(self._life_t) % 60
+        sess_surf = font_sm.render(f"SESSION {sess_mm:02d}:{sess_ss:02d}", True, (60, 120, 80))
+        surface.blit(sess_surf, (W - 12 - sess_surf.get_width(), bar_y + 2))
+
+    def _encrypt_label(self) -> str:
+        name = self.npc.name.upper()
+        if "NOVA SOMA" in name:
+            return "ENCRYPT // NOVA SOMA AES-72 [VERIFIED]"
+        if name in ("TK-9", "DISPATCHER", "UNION DISPATCHER"):
+            return "ENCRYPT // UNION ChCh-9 [STD]"
+        if name in ("PIRATE", "DRAY", "MIRA VOSS", "NERVOUS FENCE", "RELAY-7 FELIX",
+                    "UNDERGROUND DJ", "KRESS"):
+            return "ENCRYPT // PIRATE BAND [OPEN — UNLOGGED]"
+        if "INSPECTOR" in name or "GARY" in name:
+            return "ENCRYPT // LOCAL 404 SECURE [BILLED]"
+        if "TOLL" in name:
+            return "ENCRYPT // GATE TRANSIT [LOGGED]"
+        return "ENCRYPT // CIPHERED"
+
+    def _draw_crt_effects(self, surface: pygame.Surface, W: int, H: int, t: float):
+        """Full-screen scanlines + vignette + occasional flicker dim."""
+        # Lazy-build the scanline + vignette surfaces
+        if self._full_scan_surf is None or self._full_scan_surf.get_size() != (W, H):
+            self._full_scan_surf = pygame.Surface((W, H), pygame.SRCALPHA)
+            for sy in range(0, H, 2):
+                pygame.draw.line(self._full_scan_surf, (0, 0, 0, 32),
+                                 (0, sy), (W, sy))
+        if self._vignette_surf is None or self._vignette_surf.get_size() != (W, H):
+            self._vignette_surf = pygame.Surface((W, H), pygame.SRCALPHA)
+            # Corner darkening — concentric rounded-rect rings of low-alpha black
+            for inset in range(0, 80, 8):
+                alpha = max(0, 70 - inset)
+                rect = pygame.Rect(-40 + inset, -40 + inset,
+                                   W + 80 - inset * 2, H + 80 - inset * 2)
+                pygame.draw.rect(self._vignette_surf, (0, 0, 0, alpha), rect, 4,
+                                 border_radius=80)
+
+        # Scanlines (every 2 rows — denser than the portrait's every-3)
+        surface.blit(self._full_scan_surf, (0, 0))
+        # Vignette / corner curl
+        surface.blit(self._vignette_surf, (0, 0))
+        # Edge-glow phosphor — soft amber on screen perimeter
+        glow_alpha = int(28 + 6 * math.sin(t * 0.7))
+        edge = pygame.Surface((W, H), pygame.SRCALPHA)
+        for thick in range(1, 4):
+            pygame.draw.rect(edge, (90, 180, 80, max(0, glow_alpha - thick * 8)),
+                             (thick, thick, W - thick * 2, H - thick * 2), 1)
+        surface.blit(edge, (0, 0))
+        # Flicker — 1–2 frame screen-wide dim every 8–12s
+        if self._flicker_active > 0:
+            dim = pygame.Surface((W, H), pygame.SRCALPHA)
+            dim.fill((0, 0, 0, 70))
+            surface.blit(dim, (0, 0))
+
+    def _draw_boot_overlay(self, surface: pygame.Surface, W: int, H: int, t: float):
+        """Type-revealing boot text on terminal open — system splash for ~0.85s."""
+        if self._life_t > self._boot_duration:
+            return
+        # Cover the dialogue area so the boot text reads cleanly.
+        # Layout matches the dialogue panel: starts at PNL_W + 4, header offset.
+        PNL_W = 300
+        HDR_H = 56
+        BTM_H = 98
+        M = 12
+        rect = pygame.Rect(PNL_W + 4, HDR_H + 4,
+                           W - PNL_W - M - 4, H - BTM_H - HDR_H - 6)
+
+        # Black overlay fades out near the end of the boot window
+        fade = 1.0 - max(0.0, (self._life_t - self._boot_duration + 0.2) / 0.2)
+        fade = max(0.0, min(1.0, fade))
+        bg_alpha = int(245 * fade)
+        bg = pygame.Surface((rect.w, rect.h), pygame.SRCALPHA)
+        bg.fill((4, 12, 8, bg_alpha))
+        surface.blit(bg, rect.topleft)
+
+        # Boot lines — typed out at ~70 chars/sec
+        npc_name = self.npc.name.upper()
+        encrypt = self._encrypt_label().replace("ENCRYPT // ", "")
+        lines = [
+            ">> SECTOR COMM RELAY v2.3.1",
+            ">> LICENSED THROUGH LOCAL 404 :: DO NOT REDISTRIBUTE",
+            ">> ESTABLISHING CHANNEL TO: " + npc_name,
+            ">> HANDSHAKE: " + encrypt,
+            ">> CHANNEL OPEN. EVERY CONVERSATION IS LOGGED.",
+        ]
+        total_chars = sum(len(l) for l in lines)
+        revealed = int(min(total_chars, self._life_t * 110))   # 110 chars/sec
+        font_sm = self._get_font_sm()
+        lh_sm   = font_sm.get_linesize()
+        y = rect.top + 16
+        chars_left = revealed
+        for line in lines:
+            shown = line[:chars_left]
+            chars_left -= len(line)
+            col = (0, 220, 100) if int(self._life_t * 8) % 2 == 0 else (0, 200, 90)
+            surface.blit(font_sm.render(shown, True, col), (rect.left + 18, y))
+            y += lh_sm + 2
+            if chars_left <= 0:
+                break
+        # Blinking boot cursor at end of last visible line
+        if int(t * 3) % 2 == 0 and self._life_t < self._boot_duration - 0.1:
+            cur_x = rect.left + 18 + font_sm.size(shown)[0] + 2
+            pygame.draw.rect(surface, (0, 230, 110), (cur_x, y - lh_sm, 7, lh_sm - 2))
 
     # ------------------------------------------------------------------
     def _draw_outcome_banner(self, surface: pygame.Surface, W: int, H: int, t: float):

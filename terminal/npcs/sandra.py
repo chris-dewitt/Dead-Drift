@@ -296,4 +296,32 @@ class Sandra(BaseNPC):
             "I've read it. Twice. For research.",
             "I'm not going to impound you. I just wanted to talk. "
             "Honestly. ...Mostly honestly.",
+
+            "Courier Dray operates on the same sector band. "
+            "I've reviewed his run logs. Creative is the word I'd use. "
+            "'Creative' meaning wrong. "
+            "He also hasn't been impounded in fourteen runs. "
+            "I find that statistically offensive.",
+
+            "An unlicensed relay broker offered to clear my last checkpoint. "
+            "Three hundred credits. For me. "
+            "I reported him immediately. His name is Felix. "
+            "I want him to know I reported him. "
+            "I'm noting it here in case you know him.",
+
+            "I encountered a TK-9 compliance unit last sector. "
+            "Pre-filed everything. Correct codes. Both forms. "
+            "It still cross-referenced my clone iteration. "
+            "I cited Exemption 12-C. It paused for four seconds. "
+            "That's the nearest I've come to an apology from a machine.",
+
+            "There's a field medic out of Bay 9. Doctor Voss, off the books. "
+            "Apparently very good with hull repairs. "
+            "I don't use Bay 9. I also don't take hull damage. "
+            "Those two facts are directly related.",
+
+            "An information broker has been selling my route data. "
+            "'Competitive intelligence.' His name rhymes with stress. "
+            "I've filed three complaints. They're all pending. "
+            "Kress is still selling my data. I'm told this is legal.",
         ])

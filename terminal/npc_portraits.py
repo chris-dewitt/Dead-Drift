@@ -3169,16 +3169,19 @@ def _backdrop_nova_soma_collections(surface, inner, t):
 
 def _nova_soma_collections(surface, cx, cy, s, disposition, t):
     """
-    Nova Soma Collections AI: not a human face — a corporate UI avatar.
-    Stylized smooth head form, soft geometric "face" with sensor eyes,
-    wellness-pastel color scheme.
+    Nova Soma Collections AI — a corporate sensor platform, not a humanoid face.
+    Asymmetric elliptical sensor array. Emotion shown through readout state changes.
     """
-    bg_col    = (14, 20, 30)       # dark interface fill
-    shell     = (38, 58, 72)       # outer casing
-    shell_l   = (70, 110, 125)     # highlight edge
-    eye_cyan  = (100, 230, 215)    # primary sensor glow
-    eye_pink  = (255, 130, 170)    # secondary accent
-    soft_wht  = (200, 230, 240)
+    bg_col  = (14, 20, 30)
+    shell   = (38, 58, 72)
+    shell_l = (70, 110, 125)
+    cyan    = (100, 230, 215)
+    pink    = (255, 130, 170)
+    amber   = (215, 160, 40)
+    dim     = (25, 55, 60)
+
+    hostile  = disposition <= -3
+    friendly = disposition >= 3
 
     # Platform / neck stub
     plat_pts = [
@@ -3190,78 +3193,133 @@ def _nova_soma_collections(surface, cx, cy, s, disposition, t):
     pygame.draw.polygon(surface, (24, 36, 46), plat_pts)
     pygame.draw.polygon(surface, shell_l, plat_pts, 1)
 
-    # Clean elliptical head casing
+    # Elliptical head casing
     head_rect = pygame.Rect(int(cx - 52 * s), int(cy - 60 * s),
                              int(104 * s), int(108 * s))
     pygame.draw.ellipse(surface, shell, head_rect)
     pygame.draw.ellipse(surface, shell_l, head_rect, 2)
-    # Inner lighter face panel
+
+    # Sensor display panel — slightly flatter ellipse than the casing
     face_rect = pygame.Rect(int(cx - 40 * s), int(cy - 46 * s),
-                             int(80 * s), int(82 * s))
+                             int(80 * s), int(84 * s))
     pygame.draw.ellipse(surface, bg_col, face_rect)
-    pygame.draw.ellipse(surface, (55, 85, 100), face_rect, 1)
+    pygame.draw.ellipse(surface, (40, 65, 80), face_rect, 1)
 
-    # Sensor eyes — two horizontal capsule shapes
-    pulse = 0.5 + 0.5 * math.sin(t * 2.8)
-    for ex_off, ecol in [(-16, eye_cyan), (16, eye_cyan)]:
-        ew, eh = int(18 * s), max(3, int(6 * s))
-        ex = int(cx + ex_off * s) - ew // 2
-        ey = int(cy - 18 * s) - eh // 2
-        pygame.draw.rect(surface, ecol, pygame.Rect(ex, ey, ew, eh),
-                         border_radius=max(2, int(3 * s)))
-        glow_surf = pygame.Surface((ew + 8, eh + 8), pygame.SRCALPHA)
-        glow_col = (*ecol, int(40 + 50 * pulse))
-        pygame.draw.rect(glow_surf, glow_col,
-                         pygame.Rect(2, 2, ew + 4, eh + 4),
-                         border_radius=max(2, int(3 * s)))
-        surface.blit(glow_surf, (ex - 4, ey - 4))
+    # ── PRIMARY SENSOR NODE ──────────────────────────────────────────────────
+    # Large horizontal bar, offset LEFT of centre — breaks bilateral symmetry
+    p_pulse = 0.5 + 0.5 * math.sin(t * (5.5 if hostile else 2.1))
+    p_col   = pink if hostile else (amber if friendly else cyan)
+    p_lit   = tuple(min(255, int(c * (0.55 + 0.45 * p_pulse))) for c in p_col)
 
-    # When very hostile — eyes shift to pink alarm
-    if disposition <= -4:
-        for ex_off in (-16, 16):
-            ew, eh = int(18 * s), max(3, int(6 * s))
-            ex = int(cx + ex_off * s) - ew // 2
-            ey = int(cy - 18 * s) - eh // 2
-            alarm = pygame.Surface((ew, eh), pygame.SRCALPHA)
-            alarm.fill((*eye_pink, int(120 + 80 * abs(math.sin(t * 8.0)))))
-            surface.blit(alarm, (ex, ey))
+    pw, ph = max(4, int(26 * s)), max(3, int(9 * s))
+    px_s, py_s = int(cx - 11 * s), int(cy - 16 * s)
+    pygame.draw.rect(surface, dim,
+                     pygame.Rect(px_s - pw // 2, py_s - ph // 2, pw, ph),
+                     border_radius=max(2, int(ph // 2)))
+    pygame.draw.rect(surface, p_lit,
+                     pygame.Rect(px_s - pw // 2 + 1, py_s - ph // 2 + 1,
+                                 pw - 2, max(1, ph - 2)),
+                     border_radius=max(1, max(1, ph // 2 - 1)))
+    if ph >= 4:
+        g_s = pygame.Surface((pw + 14, ph + 14), pygame.SRCALPHA)
+        pygame.draw.rect(g_s, (*p_lit, int(30 + 45 * p_pulse)),
+                         pygame.Rect(5, 5, pw + 4, ph + 4),
+                         border_radius=max(2, int(ph // 2)))
+        surface.blit(g_s, (px_s - pw // 2 - 7, py_s - ph // 2 - 7))
 
-    # "Nose" — single vertical indicator LED strip
-    for i in range(3):
-        led_col = eye_cyan if int(t * 4 + i) % 3 != 0 else (20, 60, 70)
-        pygame.draw.circle(surface, led_col,
-                           (cx, int(cy + (-2 + i * 7) * s)), max(1, int(2 * s)))
-
-    # Mouth — smooth horizontal status bar
-    bar_y = int(cy + 20 * s)
-    bar_w = int(44 * s)
-    bar_h = max(3, int(5 * s))
-    pygame.draw.rect(surface, (24, 36, 46),
-                     pygame.Rect(cx - bar_w // 2, bar_y, bar_w, bar_h),
-                     border_radius=max(2, int(2 * s)))
-    # Fill fraction based on disposition — full cyan when neutral, pink when hostile
-    fill_frac = max(0.1, min(1.0, 0.5 + disposition * 0.06))
-    fill_col  = eye_cyan if disposition >= 0 else eye_pink
-    fill_w    = max(2, int(bar_w * fill_frac))
-    pygame.draw.rect(surface, fill_col,
-                     pygame.Rect(cx - bar_w // 2 + 1, bar_y + 1, fill_w - 2, bar_h - 2),
+    # ── SECONDARY SENSOR — small vertical rectangle, upper RIGHT ────────────
+    s2_p  = 0.5 + 0.5 * math.sin(t * 1.6 + 1.5)
+    s2w   = max(3, int(11 * s))
+    s2h   = max(4, int(16 * s))
+    s2x   = int(cx + 20 * s)
+    s2y   = int(cy - 18 * s)
+    s2col = pink if hostile else (dim if s2_p < 0.4 else cyan)
+    pygame.draw.rect(surface, (8, 20, 24),
+                     pygame.Rect(s2x - s2w // 2, s2y - s2h // 2, s2w, s2h),
                      border_radius=max(1, int(2 * s)))
+    pygame.draw.rect(surface, s2col,
+                     pygame.Rect(s2x - s2w // 2, s2y - s2h // 2, s2w, s2h),
+                     border_radius=max(1, int(2 * s)), width=1)
+    pygame.draw.circle(surface, s2col, (s2x, s2y), max(1, int(2 * s)))
 
-    # "NOVA SOMA" logotype under the face panel
-    font = pygame.font.SysFont("monospace", max(6, int(6 * s)), bold=True)
-    lbl_a = int(120 + 60 * math.sin(t * 1.5))
-    lbl_surf = font.render("NOVA SOMA", True, (int(eye_cyan[0] * lbl_a / 180),
-                                                int(eye_cyan[1] * lbl_a / 180),
-                                                int(eye_cyan[2] * lbl_a / 180)))
-    surface.blit(lbl_surf, (cx - lbl_surf.get_width() // 2,
-                             int(cy + 32 * s)))
+    # ── TERTIARY CLUSTER — 3 micro-dots, lower LEFT, irregular spacing ───────
+    for di, (dox, doy, dp_off) in enumerate([(-19, 7, 0.0), (-24, 15, 1.1), (-13, 19, 2.3)]):
+        dp = abs(math.sin(t * (3.2 if hostile else 1.2) + dp_off))
+        dc = pink if (hostile and dp > 0.5) else (cyan if dp > 0.5 else dim)
+        pygame.draw.circle(surface, dc,
+                           (int(cx + dox * s), int(cy + doy * s)),
+                           max(1, int(2 * s)))
 
-    # Decorative corner panel accents on the casing
-    for corner, dx, dy in [(0, -1, -1), (1, 1, -1), (2, -1, 1), (3, 1, 1)]:
+    # ── QUATERNARY STRIP — 4 micro-nodes on right edge, vertical ────────────
+    for qi in range(4):
+        q_p  = abs(math.sin(t * (2.8 if hostile else 0.9) + qi * 0.9))
+        q_on = q_p > (0.25 if hostile else 0.55)
+        qc   = pink if (hostile and q_on) else (cyan if q_on else dim)
+        pygame.draw.circle(surface, qc,
+                           (int(cx + 27 * s), int(cy + (-12 + qi * 7) * s)),
+                           max(1, int(2 * s)))
+
+    # ── SWEEP ARC from primary sensor ───────────────────────────────────────
+    sweep_a = (t * 0.85) % (2 * math.pi)
+    arc_c   = tuple(min(255, int(c * 0.26)) for c in p_col)
+    for step in range(3):
+        r_off = max(8, int((14 + step * 8) * s))
+        ax = px_s + int(r_off * math.cos(sweep_a))
+        ay = py_s + int(r_off * math.sin(sweep_a))
+        if face_rect.collidepoint(ax, ay):
+            pygame.draw.circle(surface, arc_c, (ax, ay), 1)
+
+    # ── READOUT PANEL — replaces "mouth"; state changes with disposition ─────
+    rdp_y = int(cy + 10 * s)
+    rdp_w = max(14, int(64 * s))
+    rdp_h = max(5, int(26 * s))
+    rdp_x = cx - rdp_w // 2
+    pygame.draw.rect(surface, (6, 12, 18),
+                     pygame.Rect(rdp_x, rdp_y, rdp_w, rdp_h),
+                     border_radius=max(1, int(2 * s)))
+    pygame.draw.rect(surface, (30, 50, 65),
+                     pygame.Rect(rdp_x, rdp_y, rdp_w, rdp_h),
+                     border_radius=max(1, int(2 * s)), width=1)
+
+    if s >= 0.55 and rdp_h >= 12:
+        rd_font = pygame.font.SysFont("monospace", max(5, int(6 * s)))
+        tick    = int(t * (5.0 if hostile else 1.8))
+
+        def _hx(seed, n=3):
+            v = (seed * 2654435761) & 0xFFFFFFFF
+            chars = "0123456789ABCDEF"
+            return "".join(chars[(v >> (i * 4)) & 0xF] for i in range(n))
+
+        if hostile:
+            rows = [f"ERR:{_hx(tick)}", f"ALM:{'!!!' if tick % 2 else '---'}"]
+            rc   = pink
+        elif friendly:
+            rows = [f"SYN:{_hx(tick // 3, 2)}h", "OK:100"]
+            rc   = amber
+        else:
+            rows = [f"{_hx(tick, 4)}", f"{_hx(tick+5,2)}.{_hx(tick+9,2)}"]
+            rc   = (60, 160, 150)
+
+        row_h = max(4, (rdp_h - 4) // max(1, len(rows)))
+        for li, row in enumerate(rows):
+            ry = rdp_y + 2 + li * row_h
+            if ry + 5 < rdp_y + rdp_h:
+                rtxt = rd_font.render(row, True, rc)
+                surface.blit(rtxt, (rdp_x + max(2, int(3 * s)), ry))
+
+    # ── LOGOTYPE ──────────────────────────────────────────────────────────────
+    font_lbl = pygame.font.SysFont("monospace", max(6, int(6 * s)), bold=True)
+    la  = int(80 + 40 * math.sin(t * 0.75))
+    lc  = (int(cyan[0] * la // 120), int(cyan[1] * la // 120), int(cyan[2] * la // 120))
+    ls  = font_lbl.render("NOVA SOMA", True, lc)
+    surface.blit(ls, (cx - ls.get_width() // 2, int(cy + 36 * s)))
+
+    # Corner accent dots on casing (structural detail only)
+    for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
         acx = int(cx + dx * 44 * s)
         acy = int(cy + dy * 46 * s)
         pygame.draw.circle(surface, shell_l, (acx, acy), max(2, int(3 * s)))
-        pygame.draw.circle(surface, eye_cyan, (acx, acy), max(2, int(3 * s)), 1)
+        pygame.draw.circle(surface, cyan,    (acx, acy), max(2, int(3 * s)), 1)
 
 
 # ---------------------------------------------------------------------------

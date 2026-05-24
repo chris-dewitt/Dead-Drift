@@ -218,6 +218,14 @@ class Kress(BaseNPC):
             "worse than Gary. Much worse. Gary you can reason with. "
             "TK-9 you need tricks. Paradox or bureaucracy or employee of month. "
             "Do not ask how I know this. What do you need.",
+            "Sandra Vega-Marsh. Perfect courier, twelve years. She calls me too. "
+            "Off record. Asking about insurance gaps in Sector Three. "
+            "*laughs* Perfect couriers also have gaps. "
+            "I find this comforting. What do you need.",
+            "Marrow from the Roost — pirate radio — "
+            "once broadcast patrol intel as a song dedication. "
+            "Very clever. If you need signal coverage next sector, he can do it. "
+            "Just ask correctly. What do you need.",
         ]
         if self._intel_count == 0 and random.random() < 0.25:
             return random.choice(cross_npc_lines)

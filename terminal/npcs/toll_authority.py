@@ -262,6 +262,14 @@ class TollAuthority(BaseNPC):
             "Fifteen hundred credits would clear that up. Immediately.",
             "One more non-payment response and I escalate. That's procedure. "
             "Fifteen hundred credits.",
+            "Sandra Vega-Marsh came through last week. Paid in TWO seconds. "
+            "Two. Then waved. SMUG. Fifteen hundred credits.",
+            "Gary Pruitt — Local 404 — tried to convince me his repo fees "
+            "counted as 'transit fees'. THEY DO NOT. Pay the toll.",
+            "Felix from sector four runs this gate at full burn every Tuesday. "
+            "I've stopped trying to stop him. You I'm trying. Pay.",
+            "Heard a Bax-class droid on a courier comm last week complaining "
+            "about gate fees. Right with him. Fifteen hundred credits.",
         ]))
 
     def bribe_cost(self) -> int:

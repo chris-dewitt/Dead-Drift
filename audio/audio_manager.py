@@ -892,8 +892,15 @@ class AudioManager:
             return
         self._lick_cd -= dt
         if self._lick_cd <= 0.0 and not self._lick_ch.get_busy():
-            # Use mood-filtered lick if one was requested by Bax
-            if self._next_lick_mood is not None:
+            # Epic 11.5 — at low hull, override to mournful and boost volume.
+            # Signature moment: harmonica should be unmissable when dying.
+            low_hull = self._hull_pct < 0.30
+            volume_boost = 1.0
+            if low_hull:
+                lick = generate_lick(mood="weary")
+                self._next_lick_mood = None
+                volume_boost = 1.55
+            elif self._next_lick_mood is not None:
                 lick = generate_lick(mood=self._next_lick_mood)
                 self._next_lick_mood = None
             else:
@@ -903,10 +910,14 @@ class AudioManager:
                 self._idle_mood_toggle ^= 1
                 lick = generate_lick(mood=idle_mood)
             # Plan §2.4 — harp is the 5th-priority voice, sits *under* the band.
-            self._lick_ch.set_volume(self._music_gain() * (0.55 / self._master) if self._master else 0)
+            base_vol = self._music_gain() * (0.55 / self._master) if self._master else 0
+            self._lick_ch.set_volume(min(1.0, base_vol * volume_boost))
             self._lick_ch.play(lick)
             if self._scene == SCENE_TERMINAL:
                 self._lick_cd = random.uniform(18.0, 32.0)
+            elif low_hull:
+                # Tighter cadence when dying — unmissable signature
+                self._lick_cd = random.uniform(5.0, 9.0)
             else:
                 self._lick_cd = random.uniform(8.0, 18.0)
 

@@ -11,6 +11,7 @@ from delivery.corridor.elements import (
     Platform, MovingPlatform, Hazard, MovingHazard, Ladder,
     ToggleBeam, NPCEncounter, Collectible, Secret, Checkpoint,
     BossRoomTrigger, StealthZone, SporeZone,
+    SteamVent, Tripwire, SecurityBeam,
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H,
 )
 from delivery.corridor.base import Room, Corridor
@@ -383,6 +384,9 @@ def build() -> Corridor:
         Platform(280, FLOOR_Y - 50, 80),
         Platform(460, FLOOR_Y - 50, 80),
         Platform(660, FLOOR_Y - 50, 80),
+        # Epic 14.1 — Bio-pressure vents — vapor blasts from the cultivation tanks
+        SteamVent(400, FLOOR_Y, phase_offset=0.0),
+        SteamVent(620, FLOOR_Y, phase_offset=2.1),
         # NPC Dr. Valeria
         NPCEncounter(
             500,

@@ -58,6 +58,27 @@ class SectorLayout:
     theme:        str = THEME_COMPLIANCE  # sector theme (Epic 3.3)
     name:         str = ""        # corporate-speak sector designation
     formerly:     str = ""        # what locals used to call it, if anything
+    # Epic 12.3 — per-sector dominant hazard + opportunity rolls (display only)
+    hazard_roll:      str = ""
+    opportunity_roll: str = ""
+
+
+# Epic 12.3 — hazard/opportunity rolls displayed in sector intro card
+SECTOR_HAZARD_ROLLS: dict[str, str] = {
+    "gravity_tide":      "GRAVITY TIDE — wells shift direction every 30s",
+    "sensor_jamming":    "SENSOR JAMMING — barge radar disabled this sector",
+    "scan_infestation":  "SCAN PING INFESTATION — Union scanners fire every 12s",
+    "asteroid_shower":   "ASTEROID SHOWER — debris count doubled for 45s",
+    "comms_blackout":    "COMMUNICATION BLACKOUT — terminal patience -30%",
+}
+
+SECTOR_OPPORTUNITY_ROLLS: dict[str, str] = {
+    "wells_favorable":   "GRAVITY WELLS FAVORABLE — slingshot within first 20s",
+    "salvage_cache":     "SALVAGE CACHE — extra canister cluster near sector centre",
+    "friendly_signal":   "FRIENDLY SIGNAL — an NPC ship will hail",
+    "abandoned_station": "ABANDONED STATION — loot cache (+1200 cr if unlocked)",
+    "weak_barge":        "WEAK BARGE — this sector's barge spawns at 50% HP",
+}
 
 
 _HAZARD_POOL = [
@@ -101,18 +122,20 @@ _FORMERLY_NAMES = [
 
 def generate_sector(index: int, difficulty: float = 1.0,
                     rng: random.Random | None = None,
-                    chapter: int = 1) -> SectorLayout:
+                    chapter: int = 1,
+                    force_theme: str | None = None) -> SectorLayout:
     """
     Procedurally generate a sector layout.
     difficulty scales 1.0 (sector 1) → 2.0 (sector 10).
     Pass a seeded rng for deterministic/replay runs.
     chapter selects the curated theme pool.
+    force_theme overrides the theme pick (Epic 12.1 — COLD_SECTOR mutator).
     """
     if rng is None:
         rng = random.Random()
 
     gravity = _generate_gravity(index, difficulty, rng)
-    theme   = _pick_theme(index, chapter, rng)
+    theme   = force_theme or _pick_theme(index, chapter, rng)
     hazards = _hazards_for_theme(theme, index, difficulty, rng)
     budget  = max(1, int(1 + difficulty * 1.5))
     ambush  = index >= 5 and rng.random() < 0.25 * difficulty
@@ -121,15 +144,26 @@ def generate_sector(index: int, difficulty: float = 1.0,
     # ~45% chance the sector has a "formerly" name people remember
     formerly = rng.choice(_FORMERLY_NAMES) if rng.random() < 0.45 else ""
 
+    # Epic 12.3 — each sector rolls one dominant hazard and one dominant
+    # opportunity. Sector 0 is always a clean baseline.
+    if index == 0:
+        hazard_roll = ""
+        opp_roll    = ""
+    else:
+        hazard_roll = rng.choice(list(SECTOR_HAZARD_ROLLS.keys()))
+        opp_roll    = rng.choice(list(SECTOR_OPPORTUNITY_ROLLS.keys()))
+
     return SectorLayout(
-        index        = index,
-        gravity      = gravity,
-        hazards      = hazards,
-        enemy_budget = budget,
-        is_ambush    = ambush,
-        theme        = theme,
-        name         = name,
-        formerly     = formerly,
+        index            = index,
+        gravity          = gravity,
+        hazards          = hazards,
+        enemy_budget     = budget,
+        is_ambush        = ambush,
+        theme            = theme,
+        name             = name,
+        formerly         = formerly,
+        hazard_roll      = hazard_roll,
+        opportunity_roll = opp_roll,
     )
 
 

@@ -255,19 +255,27 @@ class DeliverySequence:
         self._align_held_t  = 0.0
         self._lock_flash_t  = 0.0
 
-        # Landing state (Beat 2) — J alignment gauge + SPACE retro burn
-        self._land_sub        = "j_align"   # j_align | retro_burn
+        # Landing state (Beat 2) — Epic 14.2: continuous speed-dock gauge.
+        # Legacy fields kept so Beat 3 scoring display stays compatible.
+        self._land_sub        = "speed_dock"   # always 'speed_dock' in new design
         self._land_sub_t      = 0.0
-        self._j_marker_t      = 0.0
-        self._j_hit           = False
-        self._j_resolved      = False
-        self._burn_fill       = 0.0
-        self._burn_holding    = False
-        self._burn_done       = False
-        self._burn_overshoot  = False
+        self._j_hit           = False     # set by _finish_dock for Beat 3 display
+        self._burn_done       = False     # set by _finish_dock for Beat 3 display
+        self._burn_overshoot  = False     # set by _finish_dock for Beat 3 display
         self._land_y          = 60.0
         self._land_score      = 0
         self._beat2_sub_t     = 0.0
+        # Epic 14.2 — speed-dock minigame state
+        self._dock_speed         = 0.55     # current displayed speed 0..1
+        self._dock_speed_target  = 0.55     # player-driven target
+        self._dock_distance      = 1.0      # 1=far, 0=docked
+        self._dock_in_zone_t     = 0.0      # accumulated time in green band
+        self._dock_total_t       = 0.0      # total Beat 2 time elapsed
+        self._dock_overshoots    = 0        # count of overshoot events
+        self._dock_idle_t        = 0.0      # accumulated idle time
+        self._dock_over_held_t   = 0.0      # held-over-zone timer
+        self._dock_angle         = 0.0      # ship pitch (auto-corrected ±20°)
+        self._dock_abort_t       = 0.0      # extreme-angle abort accumulator
 
         # Beat 3: cutscene
         self._clamp_anim_t  = 0.0
@@ -293,24 +301,14 @@ class DeliverySequence:
         if self._phase == self.PHASE_APPROACH:
             pass   # A/D rotation via held keys in update
         elif self._phase == self.PHASE_LAND:
-            if self._land_sub == "j_align" and event.key == pygame.K_j:
-                self._resolve_j_align()
-            elif self._land_sub == "retro_burn" and event.key == pygame.K_SPACE:
-                self._burn_holding = True
+            # Epic 14.2 — all input is held-key (W/S/A/D); no discrete triggers
+            pass
         elif self._phase == self.PHASE_RUN:
             if self._run is not None:
                 self._run.handle_key(event)
 
     def handle_keyup(self, event: pygame.event.Event):
-        if self._phase == self.PHASE_LAND and self._land_sub == "retro_burn":
-            if event.key == pygame.K_SPACE and self._burn_holding:
-                self._burn_holding = False
-                if self._burn_fill >= 1.0 and not self._burn_overshoot:
-                    self._burn_done = True
-                    self._finish_beat2()
-                elif self._burn_fill < 1.0:
-                    self._burn_done = False
-                    self._finish_beat2()
+        pass  # Beat 2 no longer needs key-release tracking
 
     def update(self, dt: float):
         self._t += dt
@@ -538,9 +536,14 @@ class DeliverySequence:
                 lc  = (int(80 * lp), int(200 * lp), int(120 * lp))
                 pygame.draw.circle(surface, lc,
                                    (bay_left + max(2, int(4 * station_scale)), led_y), 2)
-        gi = pygame.Surface((max(1, bay_w), max(1, bay_bot - bay_top)), pygame.SRCALPHA)
-        gi.fill((80, 60, 0, int(60 * pulse)))
-        surface.blit(gi, (bay_left, bay_top))
+        if bay_w > 4 and bay_bot > bay_top:
+            gi = pygame.Surface((max(1, bay_w), max(1, bay_bot - bay_top)), pygame.SRCALPHA)
+            gi.fill((80, 60, 0, int(45 * pulse)))
+            # Atmosphere shimmer: horizontal density streaks
+            for sk in range(0, bay_bot - bay_top, max(3, int(5 * station_scale))):
+                sa = int(18 + 22 * abs(math.sin(t * 3.4 + sk * 0.15)))
+                pygame.draw.line(gi, (140, 110, 20, sa), (0, sk), (bay_w - 1, sk), 1)
+            surface.blit(gi, (bay_left, bay_top))
 
         # PAPI glideslope lights visible when close
         if station_scale > 0.5:
@@ -551,6 +554,28 @@ class DeliverySequence:
                 pygame.draw.circle(surface, pc,
                                    (bay_left + int((pi + 1) * bay_w // 5), papi_y2),
                                    max(2, int(3 * station_scale)))
+
+        # ── Bay docking status lights — 3-state panel (red/amber/green) ────
+        if bay_w > 8:
+            sl_x  = bay_left - max(6, int(18 * station_scale))
+            sl_cy = int((bay_top + bay_bot) / 2)
+            sl_h  = max(10, int(38 * station_scale))
+            sl_w  = max(4, int(14 * station_scale))
+            pygame.draw.rect(surface, (8, 14, 10),
+                             (sl_x - sl_w // 2 - 2, sl_cy - sl_h // 2 - 2,
+                              sl_w + 4, sl_h + 4), border_radius=2)
+            pygame.draw.rect(surface, (30, 52, 34),
+                             (sl_x - sl_w // 2 - 2, sl_cy - sl_h // 2 - 2,
+                              sl_w + 4, sl_h + 4), border_radius=2, width=1)
+            angle_abs = abs(self._ship_angle)
+            for li, (lo_c, hi_c, on) in enumerate([
+                ((60, 0, 0),   (220, 40, 40), angle_abs >= 35.0),      # red: off-axis
+                ((50, 35, 0),  (200, 150, 0), 10.0 < angle_abs < 35.0),# amber: aligning
+                ((0, 50, 0),   (0, 220, 80),  angle_abs <= 10.0),       # green: clear
+            ]):
+                ly = sl_cy - sl_h // 3 + li * (sl_h // 3)
+                pygame.draw.circle(surface, hi_c if on else lo_c,
+                                   (sl_x, ly), max(2, int(4 * station_scale)))
 
         # ── Alignment cone guide (target ±30°) ──────────────────────────
         cone_cx = bay_left - 40
@@ -626,99 +651,124 @@ class DeliverySequence:
         needle_c  = (0, 255, 100) if self._aligned else (255, 180, 0)
         pygame.draw.rect(surface, needle_c, (needle_x - 2, H - 35, 4, 18))
 
-    # ── Phase: Land (Beat 2 — J gauge + SPACE retro burn) ─────────────────
-    _J_ALIGN_TIMEOUT   = 2.0     # seconds before J phase auto-fails
-    _J_HIT_HALF        = 0.11    # marker within this of centre = hit
-    _BURN_HOLD_S       = 1.2     # seconds of SPACE hold to fill bar
-    _BURN_OVERSHOOT_S  = 0.35    # hold past full this long = overshoot fail
-    _RETRO_SUB_TIMEOUT = 2.2     # max seconds in retro phase after J resolved
+    # ── Phase: Land (Beat 2 — Epic 14.2: continuous speed-dock gauge) ─────
+    # Replaces the old J-tap + SPACE-hold QTE with a held-W/S minigame that
+    # plays out as a single ~8s approach. Same scoring envelope.
+    _DOCK_DURATION       = 8.0     # nominal time to dock at sweet-spot speed
+    _DOCK_ZONE_LO        = 0.42    # gauge value: bottom of green band
+    _DOCK_ZONE_HI        = 0.62    # gauge value: top of green band
+    _DOCK_OVERSHOOT_LIM  = 0.85    # speed above which an "overshoot timer" runs
+    _DOCK_OVERSHOOT_HOLD = 0.40    # seconds held above threshold = overshoot event
+    _DOCK_IDLE_LIM       = 0.18    # speed below which "idle fee" accumulates
+    _DOCK_TIME_CAP       = 14.0    # safety cap — never let Beat 2 run forever
 
-    def _j_marker_pos(self) -> float:
-        return 0.5 + 0.42 * math.sin(self._j_marker_t * 3.1)
-
-    def _resolve_j_align(self):
-        if self._j_resolved:
-            return
-        self._j_resolved = True
-        pos = self._j_marker_pos()
-        self._j_hit = abs(pos - 0.5) <= self._J_HIT_HALF
-        if self._j_hit:
-            bus.emit(EVT_BAX_SPEAK, line=random.choice([
-                "Thrusters aligned. Lovely. Don't cock it up on the burn.",
-                "Alignment locked. Retro burn when ready, mate.",
-            ]))
-        else:
-            bus.emit(EVT_BAX_SPEAK, line=random.choice([
-                "That wasn't centred. Dock master's muttering. Press on.",
-                "Bit sloppy on the alignment. They noticed.",
-            ]))
-        self._land_sub_t = 0.0
-        self._land_sub  = "retro_burn"
-
-    def _finish_beat2(self):
-        if self._burn_done and self._j_hit:
+    # ── Epic 14.2 — Continuous speed-dock approach ──────────────────────────
+    def _finish_dock(self):
+        """End Beat 2: compute score from time-in-zone + overshoots + idle."""
+        accuracy = self._dock_in_zone_t / max(0.1, self._dock_total_t)
+        perfect  = (accuracy >= 0.65 and self._dock_overshoots == 0
+                    and self._dock_idle_t < 1.5)
+        rough    = (accuracy < 0.30 or self._dock_overshoots >= 2
+                    or self._dock_idle_t >= 3.0)
+        if perfect:
             self._land_score = 2
-            bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_LAND_SMOOTH))
-        elif self._burn_done or self._j_hit:
-            self._land_score = 1
-        else:
-            self._land_score = 0
-            if not self._burn_done:
-                bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_LAND_ROUGH))
-
-        hits = ((1 if self._approach_score >= 1 else 0) +
-                (1 if self._j_hit else 0) +
-                (1 if self._burn_done else 0))
-        if hits >= 2:
             self._dock_bonus_cr = 500
+            self._j_hit = True
+            self._burn_done = True
             bus.emit(EVT_DOCK_PERFECT)
-        elif hits == 0:
+            bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_LAND_SMOOTH))
+        elif rough:
+            self._land_score = 0
             self._dock_bonus_cr = -200
+            self._j_hit = False
+            self._burn_done = False
+            self._burn_overshoot = self._dock_overshoots >= 2
             bus.emit(EVT_DOCK_ROUGH)
+            bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_LAND_ROUGH))
         else:
+            self._land_score = 1
             self._dock_bonus_cr = 0
-
+            self._j_hit = True
+            self._burn_done = False
         self._t     = 0.0
         self._phase = self.PHASE_BEAT3
 
     def _update_land(self, dt: float):
         self._beat2_sub_t += dt
         self._land_sub_t  += dt
+        self._dock_total_t += dt
 
-        if self._land_sub == "j_align":
-            self._j_marker_t += dt
-            if self._land_sub_t >= self._J_ALIGN_TIMEOUT:
-                self._j_hit = False
-                self._j_resolved = True
-                self._land_sub = "retro_burn"
-                self._land_sub_t = 0.0
-                bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_APPROACH_MISS))
-            return
-
-        # retro_burn sub-phase
-        if self._burn_holding:
-            self._burn_fill += dt / self._BURN_HOLD_S
-            if self._burn_fill >= 1.0 + self._BURN_OVERSHOOT_S:
-                self._burn_overshoot = True
-                self._burn_holding = False
-                self._burn_done = False
+        # Held-key input: W/UP increases target speed, S/DOWN decreases.
+        # A/D nudge angle; auto-correct toward 0 if within ±20°.
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_w] or keys[pygame.K_UP]:
+            self._dock_speed_target = min(1.0, self._dock_speed_target + 0.95 * dt)
+        if keys[pygame.K_s] or keys[pygame.K_DOWN]:
+            self._dock_speed_target = max(0.0, self._dock_speed_target - 0.95 * dt)
+        if keys[pygame.K_a] or keys[pygame.K_LEFT]:
+            self._dock_angle = max(-35.0, self._dock_angle - 26.0 * dt)
+        if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
+            self._dock_angle = min(35.0, self._dock_angle + 26.0 * dt)
+        # Auto-correct angle while inside the dock-master tolerance (±20°).
+        if abs(self._dock_angle) <= 20.0:
+            ease = min(1.0, dt * 0.9)
+            self._dock_angle -= self._dock_angle * ease
+        else:
+            # Outside tolerance: accumulate abort timer, bail at 1.0s.
+            self._dock_abort_t += dt
+            if self._dock_abort_t >= 1.0:
                 bus.emit(EVT_BAX_SPEAK, line=random.choice([
-                    "Held it too long! Overshot the pad. Brilliant.",
-                    "Too much burn, mate. We're going around again. Metaphorically.",
+                    "ABORT, mate, abort — we're way out of line. Resetting.",
+                    "Pitch too steep! Dock master's furious. Recovering.",
                 ]))
-                self._finish_beat2()
-                return
+                self._dock_overshoots += 1
+                self._dock_angle      = 0.0
+                self._dock_abort_t    = 0.0
+                self._dock_distance   = min(1.0, self._dock_distance + 0.18)
 
-        # Visual descent tracks burn progress
+        # Speed converges to target
+        ease = min(1.0, dt * 2.6)
+        self._dock_speed += (self._dock_speed_target - self._dock_speed) * ease
+        self._dock_speed = max(0.0, min(1.0, self._dock_speed))
+
+        # Track sweet-spot residency
+        if self._DOCK_ZONE_LO <= self._dock_speed <= self._DOCK_ZONE_HI:
+            self._dock_in_zone_t += dt
+            self._dock_over_held_t = 0.0
+        elif self._dock_speed > self._DOCK_OVERSHOOT_LIM:
+            self._dock_over_held_t += dt
+            if self._dock_over_held_t >= self._DOCK_OVERSHOOT_HOLD:
+                # Overshoot event — hull damage + speed reset + Bax shout
+                self._dock_over_held_t = 0.0
+                self._dock_overshoots += 1
+                self._dock_speed = 0.35
+                self._dock_speed_target = 0.50
+                # Pushed back a bit on the approach
+                self._dock_distance = min(1.0, self._dock_distance + 0.12)
+                bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                    "OVERSHOOT! You're cooking the retros, ease off!",
+                    "Too HOT, mate, too HOT! Bringing us round.",
+                ]))
+        elif self._dock_speed < self._DOCK_IDLE_LIM:
+            self._dock_over_held_t = 0.0
+            self._dock_idle_t += dt
+        else:
+            self._dock_over_held_t = 0.0
+
+        # Descent — speed maps to distance-per-second
+        descend_rate = 0.045 + self._dock_speed * 0.18
+        self._dock_distance -= dt * descend_rate
+        self._dock_distance = max(0.0, self._dock_distance)
+
+        # Visual Y position (kept for legacy ship rendering in _draw_land)
         H_local   = S.SCREEN_H
         pad_top_y = H_local - 140
         contact_y = pad_top_y - 22
         start_y   = 60.0
-        self._land_y = start_y + (contact_y - start_y) * min(1.0, self._burn_fill)
+        self._land_y = start_y + (contact_y - start_y) * (1.0 - self._dock_distance)
 
-        if self._land_sub_t >= self._RETRO_SUB_TIMEOUT:
-            self._burn_done = self._burn_fill >= 1.0 and not self._burn_overshoot
-            self._finish_beat2()
+        if self._dock_distance <= 0.0 or self._dock_total_t >= self._DOCK_TIME_CAP:
+            self._finish_dock()
 
     def _update_beat3(self, dt: float):
         self._clamp_anim_t += dt
@@ -779,6 +829,23 @@ class DeliverySequence:
         for cxc, cyc, cwc, chc in [(W - 128, H - 198, 44, 50), (W - 82, H - 134, 40, 40)]:
             pygame.draw.rect(surface, (16, 30, 18), (cxc, cyc, cwc, chc))
             pygame.draw.rect(surface, (0, 80, 40),  (cxc, cyc, cwc, chc), 1)
+
+        # ── Magnetic clamp housing brackets on bay walls ──────────────────
+        for wx, w_sign in ((58, 1), (W - 58, -1)):
+            for cy_brk in (H // 2 - 50, H // 2 + 10):
+                bw = 22 * w_sign
+                bx = wx - (bw if w_sign < 0 else 0)
+                pygame.draw.rect(surface, (12, 26, 14), (bx, cy_brk - 14, abs(bw), 28))
+                pygame.draw.rect(surface, (0, 90, 40),  (bx, cy_brk - 14, abs(bw), 28), 1)
+                # Clamp arm recess
+                arm_x = wx + (w_sign * 2)
+                pygame.draw.rect(surface, (6, 16, 8),
+                                 (arm_x - 5 * (1 if w_sign < 0 else 0),
+                                  cy_brk - 8, 10, 16))
+                # Status indicator
+                cl_p = 0.4 + 0.6 * abs(math.sin(t * 1.5 + cy_brk * 0.02))
+                pygame.draw.circle(surface, (int(180 * cl_p), int(90 * cl_p), 0),
+                                   (wx + w_sign * 8, cy_brk), 2)
 
         # ── Maintenance drone hovering near ceiling ───────────────────────
         drone_x = int(W * 0.7 + 42 * math.sin(t * 0.58))
@@ -870,14 +937,19 @@ class DeliverySequence:
         ]
         pygame.draw.polygon(surface, (20, 200, 200), ship_pts)
         pygame.draw.polygon(surface, (0, 255, 240), ship_pts, 1)
-        if self._burn_holding:
-            # Retro-burn flames out the nose (downward)
+        # Epic 14.2 — retro flames length is proportional to current dock speed.
+        # Brighter / longer when throttle is high (overshoot zone), short/dim idle.
+        if self._dock_speed > 0.08:
             nose_y = ship_y + 22
-            for k in range(7):
+            flame_len = int(2 + 7 * self._dock_speed)
+            flame_warm = self._dock_speed > self._DOCK_OVERSHOOT_LIM
+            for k in range(flame_len):
                 cy3 = nose_y + k * 6 + 4
-                bc  = (max(0, int(255 - k * 28)),
-                       max(0, int(180 - k * 24)),
-                       0)
+                if flame_warm:
+                    bc = (max(0, int(255 - k * 20)), max(0, int(60 - k * 8)), 0)
+                else:
+                    bc = (max(0, int(255 - k * 28)),
+                          max(0, int(180 - k * 24)), 0)
                 pygame.draw.line(surface, bc, (ship_cx - 5, nose_y), (ship_cx - 5, cy3), 2)
                 pygame.draw.line(surface, bc, (ship_cx + 5, nose_y), (ship_cx + 5, cy3), 2)
                 pygame.draw.line(surface, bc, (ship_cx,     nose_y), (ship_cx,     cy3 + 4), 2)
@@ -887,45 +959,121 @@ class DeliverySequence:
         fsm2 = pygame.font.SysFont("monospace", 11)
         cx   = W // 2
 
-        if self._land_sub == "j_align":
-            surface.blit(f.render(
-                "BEAT 2  ·  TAP  J  WHEN MARKER CENTRES  (ALIGN THRUSTERS)",
-                True, (200, 160, 0)), (cx - 300, 14))
-            gauge_w = 320
-            gx = cx - gauge_w // 2
-            gy = H // 2 - 40
-            pygame.draw.rect(surface, (10, 22, 12), (gx, gy, gauge_w, 22))
-            pygame.draw.rect(surface, (0, 140, 70), (gx, gy, gauge_w, 22), 2)
-            zone_w = int(gauge_w * 0.18)
-            pygame.draw.rect(surface, (0, 80, 40),
-                             (cx - zone_w // 2, gy + 2, zone_w, 18))
-            marker_x = gx + int(self._j_marker_pos() * gauge_w)
-            pygame.draw.rect(surface, (255, 220, 60), (marker_x - 3, gy - 4, 6, 30))
-            remain = max(0.0, self._J_ALIGN_TIMEOUT - self._land_sub_t)
-            surface.blit(fsm2.render(f"WINDOW  {remain:.1f}s", True, (140, 170, 140)),
-                         (cx - 40, gy + 30))
-        else:
-            surface.blit(f.render(
-                "BEAT 2  ·  HOLD  SPACE  ~1.2s  —  RELEASE AT GREEN  (RETRO BURN)",
-                True, (200, 160, 0)), (cx - 330, 14))
-            bar_w = 280
-            bx = cx - bar_w // 2
-            by = H // 2 - 36
-            pygame.draw.rect(surface, (10, 22, 12), (bx, by, bar_w, 24))
-            pygame.draw.rect(surface, (0, 140, 70), (bx, by, bar_w, 24), 2)
-            fill_w = int(bar_w * min(1.0, self._burn_fill))
-            fill_col = (0, 220, 120) if self._burn_fill >= 1.0 else (200, 140, 0)
-            if fill_w > 0:
-                pygame.draw.rect(surface, fill_col, (bx + 2, by + 2, fill_w - 4, 20))
-            thr_lbl = fsm2.render(
-                "RETROS: ON" if self._burn_holding else "RETROS: hold SPACE",
-                True, (0, 220, 120) if self._burn_holding else (90, 100, 90))
-            surface.blit(thr_lbl, (cx - thr_lbl.get_width() // 2, by + 32))
-            if self._j_hit:
-                ok = fsm2.render("ALIGN: OK", True, (0, 220, 120))
-            else:
-                ok = fsm2.render("ALIGN: MISS", True, (220, 90, 70))
-            surface.blit(ok, (cx - ok.get_width() // 2, by - 22))
+        # ── Epic 14.2 — Cockpit instrument panel (continuous speed-dock) ──
+        inst_w, inst_h = 440, 120
+        inst_x = cx - inst_w // 2
+        inst_y = H // 2 - 70
+        # Outer bezel
+        pygame.draw.rect(surface, (4, 10, 6),
+                         (inst_x - 10, inst_y - 10, inst_w + 20, inst_h + 20),
+                         border_radius=6)
+        pygame.draw.rect(surface, (0, 100, 45),
+                         (inst_x - 10, inst_y - 10, inst_w + 20, inst_h + 20),
+                         border_radius=6, width=2)
+        # Inner face
+        pygame.draw.rect(surface, (6, 16, 8),
+                         (inst_x, inst_y, inst_w, inst_h),
+                         border_radius=4)
+        pygame.draw.rect(surface, (0, 70, 32),
+                         (inst_x, inst_y, inst_w, inst_h),
+                         border_radius=4, width=1)
+        fp7  = pygame.font.SysFont("monospace", 7, bold=True)
+        fp8  = pygame.font.SysFont("monospace", 8, bold=True)
+        fp10 = pygame.font.SysFont("monospace", 10)
+
+        # Header
+        hdr = fp8.render("DOCK APPROACH COMPUTER  ·  W/S throttle  ·  A/D pitch",
+                          True, (0, 140, 60))
+        surface.blit(hdr, (cx - hdr.get_width() // 2, inst_y + 6))
+
+        # ── Speed gauge ────────────────────────────────────────────────────
+        gauge_w = inst_w - 40
+        gx = inst_x + 20
+        gy = inst_y + 26
+        gh = 28
+        pygame.draw.rect(surface, (8, 22, 10), (gx, gy, gauge_w, gh),
+                         border_radius=2)
+        pygame.draw.rect(surface, (0, 100, 50), (gx, gy, gauge_w, gh),
+                         border_radius=2, width=1)
+        # Green sweet-spot band
+        z_x0 = gx + int(gauge_w * self._DOCK_ZONE_LO)
+        z_x1 = gx + int(gauge_w * self._DOCK_ZONE_HI)
+        pygame.draw.rect(surface, (0, 70, 35), (z_x0, gy + 2, z_x1 - z_x0, gh - 4))
+        pygame.draw.rect(surface, (0, 200, 90), (z_x0, gy + 2, z_x1 - z_x0, gh - 4), 1)
+        # Red overshoot zone
+        ov_x = gx + int(gauge_w * self._DOCK_OVERSHOOT_LIM)
+        pygame.draw.rect(surface, (50, 12, 12), (ov_x, gy + 2, gx + gauge_w - ov_x, gh - 4))
+        pygame.draw.rect(surface, (210, 60, 40), (ov_x, gy + 2, gx + gauge_w - ov_x, gh - 4), 1)
+        # Amber idle zone (left)
+        id_x = gx + int(gauge_w * self._DOCK_IDLE_LIM)
+        pygame.draw.rect(surface, (40, 30, 8), (gx + 1, gy + 2, id_x - gx, gh - 4))
+        pygame.draw.rect(surface, (200, 150, 30), (gx + 1, gy + 2, id_x - gx, gh - 4), 1)
+        # Current speed marker
+        m_x = gx + int(self._dock_speed * gauge_w)
+        in_zone = self._DOCK_ZONE_LO <= self._dock_speed <= self._DOCK_ZONE_HI
+        m_col = (0, 240, 120) if in_zone else (
+            (240, 70, 50) if self._dock_speed >= self._DOCK_OVERSHOOT_LIM
+            else (240, 200, 60))
+        pygame.draw.rect(surface, m_col, (m_x - 3, gy - 6, 6, gh + 12))
+        # Target marker (slim ghost above the gauge)
+        tgt_x = gx + int(self._dock_speed_target * gauge_w)
+        pygame.draw.polygon(surface, (160, 200, 160),
+                            [(tgt_x, gy - 10), (tgt_x - 4, gy - 4), (tgt_x + 4, gy - 4)])
+        # Tick marks
+        for tf in (0.0, 0.25, 0.5, 0.75, 1.0):
+            tx = gx + int(tf * gauge_w)
+            pygame.draw.line(surface, (0, 110, 55), (tx, gy + gh - 1), (tx, gy + gh + 3), 1)
+
+        # ── Status row ────────────────────────────────────────────────────
+        row_y = inst_y + 62
+        # Distance bar
+        dist_w = 120
+        dist_x = inst_x + 14
+        pygame.draw.rect(surface, (8, 22, 10), (dist_x, row_y, dist_w, 10))
+        pygame.draw.rect(surface, (0, 90, 45), (dist_x, row_y, dist_w, 10), 1)
+        d_fill = int(dist_w * (1.0 - self._dock_distance))
+        pygame.draw.rect(surface, (0, 200, 120),
+                         (dist_x + 1, row_y + 1, max(0, d_fill - 2), 8))
+        dl = fp7.render("DIST TO PAD", True, (90, 150, 110))
+        surface.blit(dl, (dist_x, row_y - 8))
+
+        # Accuracy
+        acc_pct = int(100 * self._dock_in_zone_t / max(0.1, self._dock_total_t))
+        acc_col = (0, 220, 110) if acc_pct >= 65 else (
+            (210, 80, 60) if acc_pct < 30 else (210, 170, 40))
+        acc_s = fp10.render(f"ACCURACY  {acc_pct}%", True, acc_col)
+        surface.blit(acc_s, (inst_x + 150, row_y - 1))
+
+        # Overshoots tally
+        ov_lbl = fp10.render(
+            f"OVERSHOOT  {self._dock_overshoots}",
+            True, (210, 70, 50) if self._dock_overshoots else (90, 130, 100))
+        surface.blit(ov_lbl, (inst_x + inst_w - ov_lbl.get_width() - 14, row_y - 1))
+
+        # ── Pitch indicator (artificial horizon strip) ────────────────────
+        ph_y = inst_y + inst_h - 28
+        ph_w = inst_w - 40
+        ph_x = inst_x + 20
+        pygame.draw.rect(surface, (8, 22, 10), (ph_x, ph_y, ph_w, 18))
+        pygame.draw.rect(surface, (0, 90, 45), (ph_x, ph_y, ph_w, 18), 1)
+        # Horizon scrolls with pitch
+        center_x = ph_x + ph_w // 2
+        pitch_norm = max(-1.0, min(1.0, self._dock_angle / 35.0))
+        h_x = center_x - int(pitch_norm * (ph_w // 2 - 6))
+        pygame.draw.line(surface, (0, 200, 110), (ph_x + 4, ph_y + 9),
+                         (ph_x + ph_w - 4, ph_y + 9), 1)
+        pygame.draw.rect(surface, (240, 200, 60), (h_x - 2, ph_y + 4, 4, 10))
+        # Tolerance bands ±20°
+        tol = int(ph_w / 2 * (20.0 / 35.0))
+        pygame.draw.line(surface, (60, 160, 80),
+                         (center_x - tol, ph_y + 1), (center_x - tol, ph_y + 17), 1)
+        pygame.draw.line(surface, (60, 160, 80),
+                         (center_x + tol, ph_y + 1), (center_x + tol, ph_y + 17), 1)
+        ph_lbl = fp7.render("PITCH  ±20°  AUTOTRIM ACTIVE" if abs(self._dock_angle) <= 20.0
+                            else "PITCH OUT OF LIMIT  —  ABORT IMMINENT",
+                            True, (90, 150, 110) if abs(self._dock_angle) <= 20.0
+                            else (220, 80, 60))
+        surface.blit(ph_lbl, (ph_x, ph_y - 8))
 
     def _draw_beat3(self, surface: pygame.Surface, W: int, H: int):
         """Beat 3: dock-clamp cutscene + fade to corridor."""
@@ -941,6 +1089,22 @@ class DeliverySequence:
         ship_pts = [(cx, pad_y + 22), (cx - 18, pad_y), (cx + 18, pad_y)]
         pygame.draw.polygon(surface, (20, 200, 200), ship_pts)
         pygame.draw.polygon(surface, (0, 255, 240), ship_pts, 1)
+
+        # Vapor burst at hull contact points — fires first 1.5s of beat3
+        if t < 1.5:
+            contact_y = pad_y + 1
+            burst_fade = max(0.0, 1.0 - t / 1.5)
+            for vbx, vb_dir in ((cx - 18, -1), (cx + 18, 1), (cx, 0)):
+                for vk in range(7):
+                    va = (t * 2.2 + vk * 0.18) % 1.0
+                    vx3 = vbx + int(vb_dir * (vk + 1) * 5 * va)
+                    vy3 = contact_y + int(va * 14)
+                    vr  = max(1, int(3 * (1 - va)))
+                    vsurf = pygame.Surface((vr * 2 + 2, vr * 2 + 2), pygame.SRCALPHA)
+                    va_out = int(burst_fade * 180 * (1 - va))
+                    pygame.draw.circle(vsurf, (190, 215, 230, va_out),
+                                       (vr + 1, vr + 1), vr)
+                    surface.blit(vsurf, (vx3 - vr - 1, vy3 - vr - 1))
 
         # Dock clamps animating in
         clamp_prog = min(1.0, t / 1.5)

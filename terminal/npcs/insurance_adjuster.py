@@ -618,4 +618,20 @@ class InsuranceAdjuster(BaseNPC):
             "The forms about it are not. "
             "This is the kind of thing I think about at 3am. "
             "Continue.",
+
+            "Nova Soma features a courier named Vega-Marsh on the quarterly bulletin. "
+            "Proof the system works. Living example. Inspirational. "
+            "I have her claims file. "
+            "She has claims. Active ones. "
+            "I am not permitted to discuss the contents of the file. "
+            "I process it quarterly. Continue.",
+
+            "A TK-9 compliance unit filed a cross-departmental coordination request "
+            "last quarter. Seven pages. "
+            "Subject: 'Exemption 12-C Abuse Patterns — Proposed Joint Review.' "
+            "I denied it. "
+            "Not because the subject matter was incorrect. "
+            "Because the request was not submitted on Form 34-A. "
+            "TK-9 has filed it again twice since. Same response each time. "
+            "Continue.",
         ])

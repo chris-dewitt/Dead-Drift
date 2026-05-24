@@ -247,6 +247,31 @@ class CargoInspector(BaseNPC):
             "Yours will not surprise me. Just describe it.",
             "*muffled sigh* I also have a union rep if you want to escalate this. "
             "His name is Gary. You'll hate Gary. Everyone hates Gary.",
+
+            "Courier Vega-Marsh filed her pre-declaration twenty-three minutes before "
+            "this checkpoint. I didn't have to ask a single follow-up question. "
+            "*pause* I had an entire sentence free. "
+            "That has never happened before. Your cargo type.",
+
+            "There is an unlicensed relay broker somewhere in this sector. 'Felix.' "
+            "If he ever routes through my checkpoint, "
+            "I have a seventeen-page form specifically for that situation. "
+            "I have been waiting. Cargo type, please.",
+
+            "A courier named Dray lists his cargo as 'probably fine.' Consistently. "
+            "That is not a recognised cargo classification. "
+            "I've flagged it three times. The flag returns as 'insufficient form type.' "
+            "I work within this system. Your manifest.",
+
+            "An information vendor has been advising pilots to cite Reg-14. "
+            "Reg-14 was repealed in 2031. "
+            "I've been processing the resulting misfilings for six months. "
+            "If someone told you to cite Reg-14: don't. Cargo type.",
+
+            "I'll retire eventually. They'll put a TK-9 unit here. "
+            "TK-9 units don't ask follow-up questions. "
+            "The manifests will be worse. Significantly worse. "
+            "*pause* Your cargo type, please.",
         ])
 
     def get_path_progress(self) -> list[tuple[str, int, int]]:

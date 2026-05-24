@@ -10,6 +10,8 @@ from roguelite.procedural import (generate_sector, SectorLayout,
                                    THEME_TOLL_AUTHORITY)
 from roguelite.loadout_draft import LoadoutDraft
 from roguelite.meta_progression import MetaProgression
+from roguelite.mutators import MutatorRegistry
+from roguelite.stats_tracker import StatsTracker
 from roguelite.tutorial import TutorialManager
 from antagonists.repo_barge import RepoBarge
 from antagonists.debris import DebrisRock
@@ -33,7 +35,10 @@ from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
                              EVT_SATELLITE_HIT, EVT_ALIEN_SIGHTING, EVT_DEMO_NOTICE,
                              EVT_JUMP_READY, EVT_WARP_JUMP, EVT_FINAL_SECTOR,
                              EVT_RUN_START, EVT_SHOP_ENTER, EVT_SECTOR_START,
-                             EVT_AISHIP_HAIL, EVT_AISHIP_DESTROYED)
+                             EVT_AISHIP_HAIL, EVT_AISHIP_DESTROYED, EVT_VOICE_CHAR,
+                             EVT_MUTATOR_SET, EVT_FIRST_TETHER_SNAP,
+                             EVT_LONG_FIGHT_SURVIVED, EVT_BARGE_KILLED,
+                             EVT_GUN_FIRE, EVT_CLOSE_CALL)
 from config import settings as S
 
 SLINGSHOT_CREDIT_BONUS = 800
@@ -174,6 +179,15 @@ class RunManager:
         self._well_hit_times: dict[int, float] = {}  # per-well core damage cooldown
         self._active_terminal: Terminal | None = None
         self._intercepting_barge = None   # set when a barge opens a mid-flight comm
+
+        # Terminal popup pacing (Epic 9.3) — defer opening until Bax's line settles.
+        # Gate logic: pending terminal becomes active when (a) ≥2.5s elapsed AND
+        # Bax has stopped emitting voice chars for ≥0.5s, OR (b) 5s hard cap.
+        self._t                 = 0.0
+        self._pending_terminal: Terminal | None = None
+        self._terminal_arm_t    = -1.0
+        self._last_voice_char_t = -10.0
+        bus.subscribe(EVT_VOICE_CHAR, self._on_voice_char)
         self._vault = None
         self._kress_called_this_sector = False
         self._sector_timer     = 0.0
@@ -226,10 +240,67 @@ class RunManager:
         bus.subscribe(EVT_CANISTER_GRAB, self._on_canister_grab)
         bus.subscribe(EVT_TETHER_SNAP,   self._on_tether_snap)
         bus.subscribe(EVT_SLINGSHOT,     self._on_slingshot)
+        bus.subscribe(EVT_GUN_FIRE,      self._on_gun_fire)
+
+        # Epic 12.1 — Run mutators
+        self.mutators = MutatorRegistry()
+
+        # Epic 12.4 — Stats tracker (subscribes to bus internally)
+        self.stats = StatsTracker()
+
+        # Epic 11.3 — bax_context: state Bax reads to reference past runs
+        # Persists across sectors within a run; reset on run start.
+        self.bax_context: dict = {
+            "times_died_this_sector":   {},   # sector_idx -> count
+            "last_sector_reached":      0,
+            "exploits_used_run":        0,
+            "slingshot_used_run":       False,
+            "shops_visited_this_chapter": 0,
+            "chapter_at_session_start": 1,
+        }
+        # Epic 11.4 — NPC opinions fired-once tracker: (npc_key, chapter) set
+        self._bax_opinion_fired: set[tuple[str, int]] = set()
+        # Epic 11.2 — long-fight tracking
+        self._barge_pursuit_t = 0.0
+        self._long_fight_emitted = False
+        # Epic 11.2 — close-call tracking: per-object min-distance witnesses
+        self._close_witness: dict[int, float] = {}  # id(obj) -> last_dist
+        self._close_call_cd = 0.0
+        # Epic 12.1 — NOVICE_PASS first-death-free flag
+        self._novice_pass_consumed = False
 
     # ------------------------------------------------------------------
     def start_run(self, ship):
+        # Epic 12.1 — roll a mutator. First run of each chapter has none.
+        # Detect "first run of chapter" by checking if the previous chapter is
+        # the highest completed; if no chapters_completed, this is the first
+        # run period (no mutator).
+        first_run_of_chapter = (
+            not self.meta.chapters_completed or
+            (self._current_chapter() - 1) not in self.meta.chapters_completed
+        )
+        self.mutators.roll_for_run(first_run_of_chapter=first_run_of_chapter)
+        bus.emit(EVT_MUTATOR_SET,
+                 mutator_key=self.mutators.active.key if self.mutators.active else None)
+        # Epic 12.1 — apply mutator to Gun's class-level malfunction multiplier
+        from ship.gun import Gun
+        Gun.malfunction_multiplier = (3.0 if self.mutators.is_active("system_glitch")
+                                       else 1.0)
+        self._novice_pass_consumed = False
+        # Stats tracker resets via its own EVT_RUN_START handler
         bus.emit(EVT_RUN_START)
+        self.stats.set_chapter(self._current_chapter())
+        # Apply mutator-driven debt at run start
+        starting_debt_bonus = self.mutators.starting_debt_bonus()
+        if starting_debt_bonus:
+            self.meta.add_debt(starting_debt_bonus)
+        # Reset bax_context for this run
+        self.bax_context["times_died_this_sector"] = {}
+        self.bax_context["last_sector_reached"]    = 0
+        self.bax_context["exploits_used_run"]      = 0
+        self.bax_context["slingshot_used_run"]     = False
+        self._barge_pursuit_t   = 0.0
+        self._long_fight_emitted = False
         self._run_seed = secrets.randbelow(2 ** 31)
         self._frame_name = ""
         self._sector_index = 0
@@ -243,6 +314,8 @@ class RunManager:
         self._aiship_hail_pending = None
         self._shower_rocks.clear()
         self._active_terminal    = None
+        self._pending_terminal   = None
+        self._terminal_arm_t     = -1.0
         self._intercepting_barge = None
         self._pending_advance    = False
         self._jump_ready_fired   = False
@@ -261,6 +334,7 @@ class RunManager:
         self._spawn_queue.clear()
         self._ship = ship
         self.draft = LoadoutDraft(chapter=self._current_chapter())
+        self.draft.set_mutator(self.mutators.active)
         self._kress_cd    = random.uniform(S.KRESS_INTERVAL_MIN, S.KRESS_INTERVAL_MAX)
         self._collector_cd = random.uniform(S.COLLECTOR_INTERVAL_MIN, S.COLLECTOR_INTERVAL_MAX)
         ship.reset()
@@ -279,7 +353,8 @@ class RunManager:
 
         rng = random.Random(self._run_seed + self._sector_index * 997)
         self._sector    = generate_sector(self._sector_index, self._difficulty(),
-                                          rng=rng, chapter=self._current_chapter())
+                                          rng=rng, chapter=self._current_chapter(),
+                                          force_theme=self._cold_sector_theme(rng))
         self._sector_start_hull = ship.hull
         self._sector_timer      = 0.0
         self._jump_ready_fired  = False
@@ -301,13 +376,54 @@ class RunManager:
 
     # ------------------------------------------------------------------
     def update(self, dt: float):
+        # Walltime tick — used by terminal popup gate even before a sector loads.
+        self._t += dt
+        self._tick_terminal_gate()
+
         if self._sector is None or self._ship is None:
             return
 
-        self._sector_timer += dt
+        # Epic 12.1 — SLINGSHOT_ONLY: timer only advances via slingshot bonus
+        if not self.mutators.is_active("slingshot_only"):
+            self._sector_timer += dt
         self._sling_cd      = max(0.0, self._sling_cd - dt)
         self._prox_cd       = max(0.0, self._prox_cd  - dt)
         self._flash_t       = max(0.0, self._flash_t  - dt)
+        self._close_call_cd = max(0.0, self._close_call_cd - dt)
+        # Epic 11.2 — close call detection: any barge/debris within 30px that
+        # was further away last frame, without intervening collision = close call
+        if self._ship is not None and self._close_call_cd <= 0:
+            ship_pos = self._ship.pos
+            candidates = list(self._barges)
+            candidates.extend(self._debris)
+            candidates.extend(self._shower_rocks)
+            for obj in candidates:
+                op = getattr(obj, "pos", None)
+                if op is None:
+                    continue
+                obj_id = id(obj)
+                dist = (op - ship_pos).length()
+                prev = self._close_witness.get(obj_id, 9999.0)
+                # Departing from very close range without hit = close call
+                if prev <= 30.0 and dist > 30.0 and dist < 60.0:
+                    bus.emit(EVT_CLOSE_CALL, distance=prev)
+                    self._close_call_cd = 6.0
+                    break
+                self._close_witness[obj_id] = dist
+            # Trim witness table for vanished objects
+            live_ids = {id(o) for o in candidates}
+            self._close_witness = {k: v for k, v in self._close_witness.items()
+                                    if k in live_ids}
+
+        # Epic 11.2 — Long fight survived: if a barge has been alive >45s
+        # without capturing the player, emit once per run.
+        if self._barges and not self._long_fight_emitted:
+            self._barge_pursuit_t += dt
+            if self._barge_pursuit_t >= 45.0:
+                self._long_fight_emitted = True
+                bus.emit(EVT_LONG_FIGHT_SURVIVED)
+        elif not self._barges:
+            self._barge_pursuit_t = 0.0
 
         # Drain deferred spawns
         due = [item for item in self._spawn_queue
@@ -580,24 +696,43 @@ class RunManager:
     def _on_slingshot(self, speed=0, **_):
         self._sector_slingshots += 1
         self._run_slingshots    += 1
-        # Credit bonus per clean slingshot
-        bonus = SLINGSHOT_CREDIT_BONUS
+        # Epic 11.3 — mark slingshot used for bax_context
+        self.bax_context["slingshot_used_run"] = True
+        # Credit bonus per clean slingshot (Epic 12.1 — mutator scale)
+        bonus = int(SLINGSHOT_CREDIT_BONUS * self.mutators.credit_pickup_multiplier())
         self.meta.pay_off(bonus)
         self._run_debt_reduced += bonus
         self._sector_credits   += bonus
-        # Overdrive window: 2 seconds at 1.5× velocity cap
+        # Epic 12.1 — SLINGSHOT_ONLY: each slingshot grants ~1/3 of jump timer.
+        if self.mutators.is_active("slingshot_only"):
+            self._sector_timer += self._sector_dur / 3.0
+        # Overdrive window: 2s at 1.5× cap (Epic 12.1 — fragile_frame doubles duration)
         if self._ship and self._ship.is_alive:
-            import math as _math
             self._ship.body._vel_cap_override = S.MAX_VELOCITY * 1.5
-            self._ship.body._overdrive_t      = 2.0
+            self._ship.body._overdrive_t      = 2.0 * self.mutators.slingshot_overdrive_multiplier()
+        # Epic 12.2 — milestone unlock: 10 lifetime slingshots → SLINGSHOT_ONLY mutator
+        total = self.meta.inc_milestone("slingshots_total")
+        if total >= 10 and not self.meta.has_unlock("slingshot_only_mutator"):
+            self.meta.add_unlock("slingshot_only_mutator")
+
+    def _on_gun_fire(self, **_):
+        # Epic 12.1 — SYSTEM_GLITCH: each successful shot pays +50 cr
+        if self.mutators.is_active("system_glitch"):
+            bonus = 50
+            self.meta.pay_off(bonus)
+            self._run_debt_reduced += bonus
+            self._sector_credits   += bonus
 
     def _on_tether_snap(self, **_):
-        bonus = 1200
+        bonus = int(1200 * self.mutators.credit_pickup_multiplier())
         self.meta.pay_off(bonus)
         self._run_debt_reduced += bonus
         self._sector_snaps     += 1
         self._run_snaps        += 1
         self._sector_credits   += bonus
+        # Epic 11.2 — emit FIRST_TETHER_SNAP once per run
+        if self._run_snaps == 1:
+            bus.emit(EVT_FIRST_TETHER_SNAP)
         bus.emit(EVT_BAX_SPEAK, line=random.choice([
             f"Snap! That's {bonus:,} off your tab. Union's gonna be LIVID.",
             "Beautiful lateral drift! Their claims department can cry about it.",
@@ -633,6 +768,9 @@ class RunManager:
                     ctx["cargo_state"] = cargo.state_for_terminal()
         if hasattr(self, "meta"):
             ctx["debt"] = self.meta.debt
+        # Epic 11.3 — share Bax's run-memory dict so NPCs/Bax can react to it
+        if hasattr(self, "bax_context"):
+            ctx["bax_context"] = dict(self.bax_context)
         return ctx
 
     def open_terminal(self, npc_type: str, **npc_kwargs) -> Terminal:
@@ -646,12 +784,46 @@ class RunManager:
         if npc_type == "mira_voss" and self._ship is not None:
             npc_kwargs.setdefault("ship", self._ship)
         npc = make_npc(npc_type, **npc_kwargs)
-        self._active_terminal = Terminal(
+        terminal = Terminal(
             npc,
             blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset(),
             vocabulary_vault=getattr(self, "_vault", None),
         )
-        return self._active_terminal
+        self._install_terminal(terminal)
+        return terminal
+
+    # ------------------------------------------------------------------
+    def _install_terminal(self, terminal: Terminal) -> None:
+        """Route every Terminal creation through here so the popup gate fires.
+        Defers `_active_terminal` assignment until Bax's priority line settles."""
+        t_now  = getattr(self, '_t', 0.0)
+        t_last = getattr(self, '_last_voice_char_t', -10.0)
+        silent = (t_now - t_last) > 0.5
+        if silent:
+            self._active_terminal = terminal
+            if hasattr(self, '_pending_terminal'):
+                self._pending_terminal = None
+            if hasattr(self, '_terminal_arm_t'):
+                self._terminal_arm_t = -1.0
+        else:
+            if hasattr(self, '_pending_terminal'):
+                self._pending_terminal = terminal
+            if hasattr(self, '_terminal_arm_t'):
+                self._terminal_arm_t = t_now
+
+    def _tick_terminal_gate(self) -> None:
+        if self._pending_terminal is None or self._active_terminal is not None:
+            return
+        elapsed = self._t - self._terminal_arm_t
+        silent  = (self._t - self._last_voice_char_t) > 0.5
+        # Hard cap = 5s. Soft promote at ≥2.5s once Bax is quiet.
+        if elapsed >= 5.0 or (elapsed >= 2.5 and silent):
+            self._active_terminal = self._pending_terminal
+            self._pending_terminal = None
+            self._terminal_arm_t = -1.0
+
+    def _on_voice_char(self, **_) -> None:
+        self._last_voice_char_t = self._t
 
     def open_barge_terminal(self, barge) -> Terminal:
         """Mid-flight intercept: repo comm — Gary is common but not guaranteed."""
@@ -948,8 +1120,11 @@ class RunManager:
             return
 
         # Shop stop — signal game.py to open the shop before next sector loads
-        if completed_sector in S.SHOP_SECTORS:
+        # Epic 12.1 — NO_SHOP mutator suppresses shop appearances entirely.
+        if completed_sector in S.SHOP_SECTORS and self.mutators.shops_enabled():
             self._shop_pending = True
+            self.bax_context["shops_visited_this_chapter"] = (
+                self.bax_context.get("shops_visited_this_chapter", 0) + 1)
             bus.emit(EVT_SHOP_ENTER)
             return
 
@@ -958,7 +1133,8 @@ class RunManager:
     def _load_next_sector(self):
         rng = random.Random(self._run_seed + self._sector_index * 997)
         self._sector       = generate_sector(self._sector_index, self._difficulty(),
-                                             rng=rng, chapter=self._current_chapter())
+                                             rng=rng, chapter=self._current_chapter(),
+                                             force_theme=self._cold_sector_theme(rng))
         self._sector_timer = 0.0
         self._jump_ready_fired = False
         self._barges.clear()
@@ -1182,13 +1358,27 @@ class RunManager:
         npc = make_npc("toll_authority",
                        vocabulary_vault=getattr(self, "_vault", None),
                        run_context=self._build_run_context())
-        self._active_terminal = Terminal(
+        terminal = Terminal(
             npc,
             blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset(),
             vocabulary_vault=getattr(self, "_vault", None),
         )
+        self._install_terminal(terminal)
 
     def _spawn_barge(self, immediate_chase: bool = False):
+        # Epic 12.1 — QUIET_SECTOR: suppress sectors 0-2, double up sectors 3-4
+        if self.mutators.is_active("quiet_sector"):
+            if self._sector_index <= 2:
+                return
+            # Sectors 3-4: spawn a second barge immediately on the first call
+            from antagonists.repo_barge import BargeState as _BS
+            side  = random.choice(["left", "right", "top", "bottom"])
+            pos_x = {"left": 0, "right": S.SCREEN_W}.get(side, random.randint(0, S.SCREEN_W))
+            pos_y = {"top":  0, "bottom": S.SCREEN_H}.get(side, random.randint(0, S.SCREEN_H))
+            extra = RepoBarge(pos_x, pos_y, self)
+            if immediate_chase:
+                extra.state = _BS.CHASE
+            self._barges.append(extra)
         from antagonists.repo_barge import BargeState
         side  = random.choice(["left", "right", "top", "bottom"])
         pos_x = {"left": 0, "right": S.SCREEN_W}.get(side, random.randint(0, S.SCREEN_W))
@@ -1252,6 +1442,13 @@ class RunManager:
             if ch not in completed:
                 return ch
         return 4
+
+    def _cold_sector_theme(self, rng: random.Random) -> str | None:
+        """Epic 12.1 — COLD_SECTOR mutator forces every sector to FROZEN_TRAIL
+        or MINE_STRIP. Returns None when the mutator is inactive."""
+        if not self.mutators.is_active("cold_sector"):
+            return None
+        return rng.choice([THEME_FROZEN_TRAIL, THEME_MINE_STRIP])
 
     # ------------------------------------------------------------------
     @property
@@ -1373,6 +1570,7 @@ class RunManager:
         self._sector = generate_sector(
             self._sector_index, self._difficulty(),
             rng=rng, chapter=self._current_chapter(),
+            force_theme=self._cold_sector_theme(rng),
         )
         self._sector_timer = 0.0
         self._jump_ready_fired = False

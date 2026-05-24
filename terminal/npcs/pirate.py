@@ -307,4 +307,27 @@ class Pirate(BaseNPC):
             "Either we never meet again, or you become a manifest entry.",
             "Twenty years out here. I've heard every plea, every threat, "
             "every clever angle. Surprise me. Or don't.",
+
+            "*low whistle* You know Kress? Eastern channels, old miner? "
+            "Good man. Doesn't apologize for a single thing. "
+            "That's how we measure respect out here.",
+
+            "We pick up the Roost sometimes. Marrow's station. "
+            "Plays things Nova Soma buried. "
+            "*crackling* That's the only music worth listening to out past the gate.",
+
+            "Local 404. We've watched their barges try to clamp ships past the boundary. "
+            "Those things don't maneuver out here and they know it. "
+            "They stay on their side. We stay on ours. "
+            "That's the only border that means anything.",
+
+            "'Perfect courier.' Twelve years. Sandra something. "
+            "They use her name in dispatch like a warning. "
+            "*pause* She's never been past the gate. "
+            "I notice things like that.",
+
+            "Nobody out here has clone debt. No body waiting to be repo'd. "
+            "When you die out here, you just die. "
+            "*long pause* "
+            "...We think about that sometimes.",
         ])

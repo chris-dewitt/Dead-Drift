@@ -74,6 +74,9 @@ class Game:
         self.run_mgr = RunManager(self.meta)
         self.bax     = Bax(self.ship, self.meta)
         self.run_mgr._vault = self.bax.vault
+        # Epic 11.3 — give Bax a live read on bax_context so handlers can reference past runs.
+        if hasattr(self.bax, "attach_run_context"):
+            self.bax.attach_run_context(self.run_mgr.bax_context)
 
         self.vec_renderer     = VectorRenderer(self.screen)
         self._menu_vfx        = VisualFX()
@@ -131,6 +134,8 @@ class Game:
         self.run_mgr.meta = self.meta
         self.bax._meta = self.meta
         self.run_mgr._vault = self.bax.vault
+        if hasattr(self.bax, "attach_run_context"):
+            self.bax.attach_run_context(self.run_mgr.bax_context)
         self.cockpit_renderer._meta = self.meta
 
     def _effective_state(self) -> GameState:
@@ -192,7 +197,28 @@ class Game:
 
     def _on_ship_destroyed(self, **_):
         sector_idx = getattr(self.run_mgr, '_sector_index', 0) if self.run_mgr else 0
-        self.meta.apply_death_penalty(sector_index=sector_idx)
+        # Epic 12.1 — NOVICE_PASS: first death of run skips the debt penalty
+        novice_skip = (self.run_mgr is not None and
+                       getattr(self.run_mgr, "mutators", None) is not None and
+                       self.run_mgr.mutators.is_active("novice_pass") and
+                       not getattr(self.run_mgr, "_novice_pass_consumed", False))
+        if novice_skip:
+            self.run_mgr._novice_pass_consumed = True
+            # Skip debt penalty but still increment clone_count for the death
+            self.meta._data["clone_count"] = self.meta.clone_count + 1
+            self.meta.save()
+            bus.emit(EVT_BAX_SPEAK, line="NOVICE PASS used — this clone's on the house. "
+                     "Don't get used to it.")
+        else:
+            self.meta.apply_death_penalty(sector_index=sector_idx)
+        # Epic 11.3 — track died-this-sector for Bax past-run references
+        if self.run_mgr is not None and hasattr(self.run_mgr, 'bax_context'):
+            tds = self.run_mgr.bax_context.setdefault("times_died_this_sector", {})
+            tds[sector_idx] = tds.get(sector_idx, 0) + 1
+            # Update last_sector_reached watermark
+            cur_last = self.run_mgr.bax_context.get("last_sector_reached", 0)
+            if sector_idx > cur_last:
+                self.run_mgr.bax_context["last_sector_reached"] = sector_idx
         self._run_just_completed = False
         # Pick the Bax decanting line once — cached so _render_decanting doesn't
         # re-roll it every frame, which makes the text flash/go crazy.
@@ -856,6 +882,22 @@ class Game:
                     f"(formerly: {sector.formerly})", True, (95, 95, 95))
                 self.screen.blit(fm_surf,
                                  (sec_w // 2 - fm_surf.get_width() // 2, 102))
+            # Epic 12.3 — hazard/opportunity ticker, only first 8s of sector
+            if rm._sector_timer < 8.0 and (sector.hazard_roll or sector.opportunity_roll):
+                from roguelite.procedural import SECTOR_HAZARD_ROLLS, SECTOR_OPPORTUNITY_ROLLS
+                fade = min(1.0, max(0.0, (8.0 - rm._sector_timer) / 8.0))
+                y_off = 118
+                if sector.hazard_roll:
+                    hz_txt = SECTOR_HAZARD_ROLLS.get(sector.hazard_roll, sector.hazard_roll)
+                    hcol = (int(180 * fade), int(70 * fade), int(40 * fade))
+                    hs = font_sm.render(f"HAZARD: {hz_txt}", True, hcol)
+                    self.screen.blit(hs, (sec_w // 2 - hs.get_width() // 2, y_off))
+                    y_off += 14
+                if sector.opportunity_roll:
+                    op_txt = SECTOR_OPPORTUNITY_ROLLS.get(sector.opportunity_roll, sector.opportunity_roll)
+                    ocol = (int(40 * fade), int(160 * fade), int(80 * fade))
+                    os_s = font_sm.render(f"OPPORTUNITY: {op_txt}", True, ocol)
+                    self.screen.blit(os_s, (sec_w // 2 - os_s.get_width() // 2, y_off))
 
         # Debt ticker — bottom-left
         interest_per_sec = max(0.01, self.meta.debt * S.DEBT_INTEREST_RATE)
@@ -992,6 +1034,20 @@ class Game:
                 True, col)
             self.screen.blit(warn, (8, 3))
 
+    # Nova Soma taglines — rotated per clone count on the death screen
+    _DECANT_TAGLINES = [
+        "Your Body, Our Investment.  Est. 2041.",
+        "We Value Your Continued Productivity.",
+        "Clone Activated. Debt Transferred. Welcome Back.",
+        "Your Previous Self Exceeded Expectations — Briefly.",
+        "Another You. Same Invoice. Fresh Start (Terms Apply).",
+        "Genuine Nova Soma® Parts In Every Clone.",
+        "Your Sacrifice Is Noted. Your Debt Is Not Forgiven.",
+        "Reconstituted For Your Convenience. Billed Accordingly.",
+        "You Are Our Most Important Asset. Also Our Most Indebted.",
+        "Nova Soma: We Never Lose A Customer. Only A Body.",
+    ]
+
     # Bax clone wake-up quips — generic fallback when death cause is unknown
     _DECANT_BAX = [
         "BAX: '...sensor re-initialised. Right. You're dead again. "
@@ -1088,57 +1144,196 @@ class Game:
             s = fs.render(line, True, dim_col)
             self.screen.blit(s, (cx - s.get_width() // 2, cy + 10 + i * 20))
 
+    def _draw_clone_tube_bg(self, t: float):
+        """Cold clinical clone-vat room background for the decanting screen."""
+        W, H = S.SCREEN_W, S.SCREEN_H
+        surf  = self.screen
+
+        surf.fill((3, 5, 9))
+
+        # Floor grid — cold blue-grey
+        gy = int(H * 0.72)
+        for fi in range(10):
+            y = gy + (H - gy) * fi // 9
+            pygame.draw.line(surf, (9, 12, 18), (0, y), (W, y))
+        vp_x = W // 2
+        for ci in range(14):
+            bx = W * ci // 13
+            pygame.draw.line(surf, (9, 12, 18), (vp_x, gy), (bx, H))
+
+        # Ceiling conduit
+        for px in range(0, W, 120):
+            pygame.draw.rect(surf, (8, 12, 18), (px, 0, 88, 14))
+            pygame.draw.rect(surf, (14, 20, 28), (px, 0, 88, 14), 1)
+
+        # Back wall — cold institutional
+        pygame.draw.rect(surf, (5, 7, 11), (0, 18, W, gy - 18))
+        pygame.draw.line(surf, (14, 20, 30), (0, gy), (W, gy), 1)
+
+        # Clone tubes — 5 cylinders, one center glowing (new clone)
+        tube_data = [
+            (int(W * 0.08), False), (int(W * 0.24), False),
+            (int(W * 0.50), True),  # active — player's new body
+            (int(W * 0.76), False), (int(W * 0.92), False),
+        ]
+        tube_w, tube_h = 44, int(H * 0.46)
+        tube_top = int(H * 0.22)
+        glow_pulse = 0.55 + 0.45 * abs(math.sin(t * 1.8))
+
+        for tx, active in tube_data:
+            # Tube body
+            tr = pygame.Rect(tx - tube_w // 2, tube_top, tube_w, tube_h)
+            if active:
+                bg_col = (4, 14, 22)
+                border_col = (0, int(80 * glow_pulse), int(140 * glow_pulse))
+                fluid_col  = (0, int(55 * glow_pulse), int(110 * glow_pulse))
+            else:
+                bg_col = (4, 6, 9)
+                border_col = (14, 18, 24)
+                fluid_col  = (6, 9, 13)
+
+            pygame.draw.rect(surf, bg_col, tr)
+            pygame.draw.rect(surf, border_col, tr, 2)
+
+            # Fluid fill gradient (bottom third)
+            fluid_rect = pygame.Rect(tr.x + 2, tr.y + tube_h * 2 // 3,
+                                     tr.w - 4, tube_h // 3 - 2)
+            pygame.draw.rect(surf, fluid_col, fluid_rect)
+
+            # Top dome cap
+            cap = pygame.Rect(tr.x - 4, tr.y - 8, tube_w + 8, 16)
+            pygame.draw.ellipse(surf, bg_col, cap)
+            pygame.draw.ellipse(surf, border_col, cap, 1)
+
+            # Base plate
+            base = pygame.Rect(tr.x - 8, tr.bottom - 2, tube_w + 16, 10)
+            pygame.draw.rect(surf, (12, 10, 7), base)
+            pygame.draw.rect(surf, (30, 22, 14), base, 1)
+
+            # Side conduit pipes
+            for ox in (-tube_w // 2 - 10, tube_w // 2 + 4):
+                pygame.draw.line(surf, (10, 14, 20),
+                                 (tx + ox, tube_top), (tx + ox, tr.bottom), 2)
+
+            if active:
+                # Glow halo around active tube
+                halo = pygame.Surface((tube_w + 40, tube_h + 40), pygame.SRCALPHA)
+                a = int(25 * glow_pulse)
+                pygame.draw.rect(halo, (0, 80, 160, a), halo.get_rect(), 12)
+                surf.blit(halo, (tx - tube_w // 2 - 20, tube_top - 20))
+
+                # "DECANTING" label below active tube
+                fa = pygame.font.SysFont("monospace", 9, bold=True)
+                lbl = fa.render("DECANTING", True,
+                                (0, int(130 * glow_pulse), int(220 * glow_pulse)))
+                surf.blit(lbl, (tx - lbl.get_width() // 2, tr.bottom + 14))
+
+        # Nova Soma logo on back wall (dim, corporate)
+        f_logo = pygame.font.SysFont("monospace", 11, bold=True)
+        logo = f_logo.render("NOVA SOMA SOLUTIONS — DECANTING WARD 7", True, (20, 22, 28))
+        surf.blit(logo, (W // 2 - logo.get_width() // 2, gy - 22))
+
     def _render_decanting(self):
         t = pygame.time.get_ticks() / 1000.0
         font_sm  = pygame.font.SysFont("monospace", 13)
         font     = pygame.font.SysFont("monospace", 17)
         font_hd  = pygame.font.SysFont("monospace", 11)
 
-        # Nova Soma header — cheerful, monstrous
-        header = pygame.font.SysFont("monospace", 15, bold=True)
+        # Clone tube hospital background
+        self._draw_clone_tube_bg(t)
+
+        # Nova Soma header — rotating tagline per clone
+        header = pygame.font.SysFont("monospace", 14, bold=True)
+        tagline = self._DECANT_TAGLINES[
+            self.meta.clone_count % len(self._DECANT_TAGLINES)]
         tagline_surf = header.render(
-            "NOVA SOMA SOLUTIONS  ·  Your Body, Our Investment  ·  Est. 2041",
-            True, (80, 80, 80))
+            f"NOVA SOMA SOLUTIONS  ·  {tagline}",
+            True, (65, 65, 70))
         self.screen.blit(tagline_surf,
-                         (S.SCREEN_W // 2 - tagline_surf.get_width() // 2, 18))
-        pygame.draw.line(self.screen, (50, 50, 50), (80, 36), (S.SCREEN_W - 80, 36), 1)
+                         (S.SCREEN_W // 2 - tagline_surf.get_width() // 2, 12))
+        pygame.draw.line(self.screen, (40, 42, 48), (80, 30), (S.SCREEN_W - 80, 30), 1)
+
+        # Invoice panel — centred, semi-transparent over the tubes
+        W, H = S.SCREEN_W, S.SCREEN_H
+        cx = W // 2
+        panel_w, panel_h = 640, 300
+        panel_x = cx - panel_w // 2
+        panel_y = int(H * 0.56)
+        psurf = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        psurf.fill((3, 4, 8, 230))
+        self.screen.blit(psurf, (panel_x, panel_y))
+        pygame.draw.rect(self.screen, (40, 42, 50),
+                         (panel_x, panel_y, panel_w, panel_h), 1)
 
         lines = [
             ("PATIENT INTAKE SUMMARY", S.AMBER_TERM, font),
             (f"Unit ID: CLN-{self.meta.clone_count:04d}  ·  Template: BASELINE-7  ·  "
-             f"Condition on Arrival: DECEASED", (140, 140, 140), font_sm),
-            ("", None, font),
-            ("ITEMISED CHARGES", (100, 100, 100), font_sm),
+             f"Condition on Arrival: DECEASED", (120, 120, 130), font_sm),
+            ("", None, font_sm),
+            ("ITEMISED CHARGES", (80, 82, 95), font_sm),
             (f"  Clone fluid & substrate . . . . -{S.CLONE_FLUID_FEE:>8,} cr",
-             (180, 180, 180), font),
+             (160, 160, 170), font),
             (f"  Wreckage recovery & tow . . . . -{S.WRECKAGE_TOW_FEE:>8,} cr",
-             (180, 180, 180), font),
+             (160, 160, 170), font),
             (f"  Body lease (standard term) . . . -{S.BASE_CLONE_DEBT:>8,} cr",
-             (180, 180, 180), font),
-            ("", None, font),
+             (160, 160, 170), font),
+            ("", None, font_sm),
             (f"OUTSTANDING BALANCE:   {self.meta.debt:,} cr",
              S.AMBER_TERM, pygame.font.SysFont("monospace", 20, bold=True)),
-            ("", None, font),
+            ("", None, font_sm),
             ("This invoice is non-negotiable. Debt is hereditary and compound.",
-             (70, 70, 70), font_sm),
-            ("Nova Soma Solutions is not responsible for psychological distress",
-             (70, 70, 70), font_sm),
-            ("arising from repeated decanting. See Form NS-19b for opt-out options.",
-             (70, 70, 70), font_sm),
-            ("(Form NS-19b is not available in your jurisdiction.)",
-             (55, 55, 55), font_sm),
-            ("", None, font),
-            ("[ PRESS ENTER — REPORT FOR DUTY ]", S.GREEN_TERM, font),
+             (60, 60, 68), font_sm),
+            ("(Form NS-19b opt-out is not available in your jurisdiction.)",
+             (48, 48, 56), font_sm),
+            ("", None, font_sm),
+            ("[ ENTER : ACCEPT CHARGES (non-optional) ]", S.GREEN_TERM, font),
         ]
 
-        y = 56
+        y = panel_y + 14
         for text, col, f in lines:
             if col is None:
-                y += 10
+                y += 8
                 continue
             surf = f.render(text, True, col)
-            self.screen.blit(surf, (S.SCREEN_W // 2 - surf.get_width() // 2, y))
+            self.screen.blit(surf, (cx - surf.get_width() // 2, y))
             y += f.get_linesize() + 2
+
+        # Epic 12.4 — Career stats panel (right side of invoice)
+        stats_tracker = getattr(self.run_mgr, "stats", None) if self.run_mgr else None
+        if stats_tracker is not None:
+            stats_x = panel_x + panel_w + 28
+            stats_w = 220
+            stats_h = 200
+            stats_y = panel_y + 10
+            if stats_x + stats_w < S.SCREEN_W - 16:
+                stats_panel = pygame.Surface((stats_w, stats_h), pygame.SRCALPHA)
+                stats_panel.fill((4, 8, 14, 200))
+                self.screen.blit(stats_panel, (stats_x, stats_y))
+                pygame.draw.rect(self.screen, (35, 50, 70),
+                                 (stats_x, stats_y, stats_w, stats_h), 1)
+                f_hdr = pygame.font.SysFont("monospace", 10, bold=True)
+                f_body = pygame.font.SysFont("monospace", 9)
+                hdr = f_hdr.render("CAREER LEDGER", True, (95, 150, 180))
+                self.screen.blit(hdr, (stats_x + 10, stats_y + 8))
+                # Run + career summaries combined
+                rows = stats_tracker.career_summary_lines()[:8]
+                ry = stats_y + 26
+                for row in rows:
+                    s = f_body.render(row, True, (140, 160, 180))
+                    self.screen.blit(s, (stats_x + 10, ry))
+                    ry += 13
+                # Unlocks earned this run/session
+                if self.meta.unlocks:
+                    pygame.draw.line(self.screen, (40, 60, 80),
+                                     (stats_x + 8, ry + 4), (stats_x + stats_w - 8, ry + 4), 1)
+                    ul = f_hdr.render("UNLOCKS EARNED", True, (180, 140, 60))
+                    self.screen.blit(ul, (stats_x + 10, ry + 8))
+                    ry += 22
+                    for uk in self.meta.unlocks[:3]:
+                        s = f_body.render(f"• {uk.replace('_', ' ')}",
+                                          True, (200, 170, 90))
+                        self.screen.blit(s, (stats_x + 10, ry))
+                        ry += 12
 
         # Bax wake-up line — use the line cached at death time (not re-rolled each frame)
         bax_line = self._decant_bax_line or random.choice(self._DECANT_BAX).format(

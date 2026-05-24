@@ -23,6 +23,7 @@
 | **6** — Terminal polish | 8 | 0 | 0 | Complete: keystrokes, portraits, backdrops, outcome beats, chips, dossier, market, and cargo dialogue |
 | **7** — Bax | 1 | 2 | 2 | Lines mostly ported; portrait glow + hull pitch open |
 | **8** — Meta replay | 1 | 0 | 3 | Stepped death done; Records + carousel not built |
+| **9** — Award push (see `NEXT_PUSH.md`) | 3 | 1 | 18 | 9.2 CRT visual overhaul + 9.3 popup gate + Nova Soma dossier parity shipped; 9.1 NPC cross-refs partial |
 
 **Rough overall:** ~63% complete · ~22% partial · ~14% not started (by checkbox count).
 
