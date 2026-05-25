@@ -67,6 +67,11 @@ class CargoInspector(BaseNPC):
         self._code_cited   = False
         self._article_used = False
         self._bribed       = False
+        # Aliveness B.1 — actual credit amount paid (drives standard label)
+        self._bribe_paid   = 0
+
+    def bribe_cost(self) -> int:
+        return self._bribe_paid
 
     def _intro_line(self) -> str:
         return random.choice([
@@ -190,7 +195,11 @@ class CargoInspector(BaseNPC):
 
         if parsed.amount is not None and parsed.amount >= _BRIBE_AMOUNT:
             self._bribed = True
-            self._current_path = "DOC FEE"
+            self._bribe_paid = parsed.amount
+            # Aliveness B.1 — standardised dossier label. Holt files it
+            # internally as a 'documentation fee' but the player sees the
+            # canonical BRIBE [X cr] format in the chip strip.
+            self._current_path = f"BRIBE [{parsed.amount} cr]"
             bus.emit(EVT_NLP_EXPLOIT, npc="cargo_inspector",
                      exploit_key="documentation_fee")
             if self._vault:
@@ -275,11 +284,15 @@ class CargoInspector(BaseNPC):
         ])
 
     def get_path_progress(self) -> list[tuple[str, int, int]]:
+        bribe_label = (f"BRIBE [{self._bribe_paid} cr]"
+                       if self._bribe_paid > 0
+                       else f"BRIBE [{_BRIBE_AMOUNT}+ cr]")
         return [
             ("COMPLIANT",   1 if self._current_path == "COMPLIANT" else 0, 1),
             ("CODE CITE",   int(self._code_cited),  1),
             ("ARTICLE 9",   int(self._article_used), 1),
             ("VAGUE×3",     min(self._vague_turns, 3), 3),
+            (bribe_label,   int(self._bribed), 1),
         ]
 
     def exploits(self) -> dict[str, str]:

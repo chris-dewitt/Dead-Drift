@@ -54,11 +54,17 @@ class UnionDispatcher(BaseNPC):
         self._concepts_used: set[str] = set()
         self._legal_points       = 0
         self._bribe_attempts     = 0
+        # Aliveness B.1 — credit amount paid (0 = nothing yet); drives
+        # the standardised `BRIBE [X cr]` dossier label.
+        self._bribe_paid         = 0
         self._certainty          = 10
         self._forms_mentions     = 0
         self._forty_two_hit      = False
         self._coffee_hit         = False
         self._ctx                = run_context or {}
+
+    def bribe_cost(self) -> int:
+        return self._bribe_paid
 
     def _intro_line(self) -> str:
         return random.choice([
@@ -154,11 +160,13 @@ class UnionDispatcher(BaseNPC):
                 "Please leave. I'll be occupied.",
             ])
 
-        # LARGE BRIBE
+        # LARGE BRIBE — Aliveness B.1 standard dossier label.
         if any(w in raw for w in self._BRIBE_KEYWORDS):
-            self._current_path = "BRIBERY (10k+)"
             if (any(amt in raw for amt in self._BIG_BRIBES) or
                     (parsed.amount is not None and parsed.amount >= 10000)):
+                paid = parsed.amount if parsed.amount else 10000
+                self._bribe_paid = paid
+                self._current_path = f"BRIBE [{paid} cr]"
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="corruption")
                 return NPCOutcome.RELEASE, random.choice([
                     "*long pause* "
@@ -323,7 +331,10 @@ class UnionDispatcher(BaseNPC):
             ("42 CRISIS",      int(self._forty_two_hit),   1),
             ("LEGAL PRESSURE", self._legal_points,         3),
             ("QUANTUM ESCAPE", len(self._concepts_used),   4),
-            ("BRIBERY (10k+)", min(self._bribe_attempts, 1), 1),
+            # Aliveness B.1 — standardised label, shows paid amount when known.
+            ((f"BRIBE [{self._bribe_paid} cr]" if self._bribe_paid > 0
+              else "BRIBE [10000+ cr]"),
+             min(self._bribe_attempts, 1), 1),
         ]
 
     def _dispatcher_filler(self) -> str:

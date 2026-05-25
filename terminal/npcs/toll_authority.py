@@ -128,19 +128,21 @@ class TollAuthority(BaseNPC):
             return NPCOutcome.CONTINUE
 
         if _offers_full_toll(parsed, text_l):
-            self._current_path = "PAY 1500+"
             self.disposition += 4
             self._paid = True
             self._bribe_paid = (
                 parsed.amount if parsed.amount and parsed.amount >= _TOLL_COST else _TOLL_COST
             )
+            # Aliveness B.1 — standardised dossier label exposing the
+            # amount paid so the player sees the price in the chip strip.
+            self._current_path = f"BRIBE [{self._bribe_paid} cr]"
             if self._vault:
                 self._vault.record("toll_authority", "PAID_TOLL")
             bus.emit(EVT_NLP_EXPLOIT, npc="toll_authority", exploit_key="PAID_TOLL")
             return NPCOutcome.RELEASE
 
         if any(w in text_l for w in _LOW_BRIBE_KEYWORDS):
-            self._current_path = "LOW BRIBE"
+            # Aliveness B.1 — standardised low-bribe label
             self._low_bribe_tries += 1
             self.disposition += 1
             self._low_bribed = True
@@ -148,10 +150,13 @@ class TollAuthority(BaseNPC):
                 self._bribe_paid = (
                     parsed.amount if parsed.amount and 0 < parsed.amount < _TOLL_COST else 750
                 )
+                self._current_path = f"BRIBE [{self._bribe_paid} cr]"
                 if self._vault:
                     self._vault.record("toll_authority", "LOW_BRIBE")
                 bus.emit(EVT_NLP_EXPLOIT, npc="toll_authority", exploit_key="LOW_BRIBE")
                 return NPCOutcome.RELEASE
+            # Ask-for-figure / refusal turn — keep label generic.
+            self._current_path = "BRIBE"
             return NPCOutcome.CONTINUE
 
         if any(w in text_l for w in _UNION_GRIPE_WORDS):

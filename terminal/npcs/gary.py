@@ -226,11 +226,14 @@ class Gary(BaseNPC):
         # BRIBE PATH
         if (any(w in raw for w in self._BRIBE_KEYWORDS) or
                 parsed.intent == "bribe"):
-            self._current_path = "BRIBE (3k+)"
+            # Aliveness B.1 schema: dossier path uses the standardised
+            # `BRIBE [<amount> cr]` format when an amount is on the table,
+            # else just `BRIBE` (turn 1 ask-for-figure state).
             has_big = (any(amt in raw for amt in self._BIG_AMOUNTS) or
                        (parsed.amount is not None and parsed.amount >= 3000))
             if has_big:
                 self._bribe_paid = parsed.amount if parsed.amount else 3000
+                self._current_path = f"BRIBE [{self._bribe_paid} cr]"
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="bribe")
                 return NPCOutcome.RELEASE, random.choice([
                     "*long pause* ...Right. I didn't see nuffin'. "
@@ -243,6 +246,9 @@ class Gary(BaseNPC):
                     "Me conscience: also not located. Go on then.",
                 ])
             self._bribe_attempts += 1
+            # Turn 1: ask-for-figure state. Path stays generic `BRIBE`
+            # until the player names a number (schema B.1).
+            self._current_path = "BRIBE"
             if self._bribe_attempts == 1:
                 return NPCOutcome.CONTINUE, random.choice([
                     "Now we're talkin'. What's the number, specifically?",
@@ -257,7 +263,7 @@ class Gary(BaseNPC):
                         3000,
                         parsed.amount if parsed.amount else 3000,
                     )
-                    self._current_path = "BRIBE (3k+)"
+                    self._current_path = f"BRIBE [{self._bribe_paid} cr]"
                     bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="bribe")
                     return NPCOutcome.RELEASE, (
                         "Alright, alright. You know what, I'm tired. "
@@ -402,12 +408,18 @@ class Gary(BaseNPC):
         return self._bribe_paid
 
     def get_path_progress(self) -> list[tuple[str, int, int]]:
+        # Aliveness B.1 — bribe row uses the standardised `BRIBE [X cr]`
+        # label once an amount has actually been paid; otherwise we
+        # show the floor (3000 cr) so the player knows the price.
+        bribe_label = (f"BRIBE [{self._bribe_paid} cr]"
+                       if self._bribe_paid > 0
+                       else "BRIBE [3000+ cr]")
         return [
             ("DEAL/NEGOTIATE", min(self._deal_attempts, 2),    2),
             ("SYMPATHY",       min(self._sympathy_turns, 2),   2),
             ("BLEVINS METHOD", min(self._management_score, 5), 5),
             ("ARTICLE 7",      int(self._article7_hit),        1),
-            ("BRIBE (3k+)",    min(self._bribe_attempts, 1),   1),
+            (bribe_label,      min(self._bribe_attempts, 1),   1),
         ]
 
     def _gary_filler(self) -> str:

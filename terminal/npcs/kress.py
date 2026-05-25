@@ -28,11 +28,24 @@ class Kress(BaseNPC):
     - Asking for intel/tips/contraband → he sells you a service
     """
 
+    # Aliveness B.1 / B.3 schema baseline: expanded so Kress now ships
+    # 22 distinct accepted pickup words across paths (was 14, under the
+    # 15-keyword floor). Same five paths, broader vocabulary so the
+    # player can hit them with natural phrasing.
     _INTEL_KEYWORDS    = ["intel", "tip", "tips", "info", "information",
-                           "what's ahead", "next sector", "patrol", "scan"]
+                           "what's ahead", "next sector", "patrol", "scan",
+                           # B.3 additions:
+                           "chatter", "broadcast", "tell me", "what do you know",
+                           "give me something", "rumor", "rumour", "heads up"]
     _CONTRABAND_WORDS  = ["contraband", "stims", "fuel", "jammer", "smoke",
-                           "shield", "patch", "hack", "warez", "stuff"]
-    _GREASE_KEYWORDS   = ["volkov", "old debt", "owe", "owed", "vienna"]
+                           "shield", "patch", "hack", "warez", "stuff",
+                           # B.3 additions:
+                           "wares", "merchandise", "goods", "off-books",
+                           "off the books", "supplies"]
+    _GREASE_KEYWORDS   = ["volkov", "old debt", "owe", "owed", "vienna",
+                           # B.3 additions:
+                           "favor", "favour", "favor for a favor",
+                           "marker", "ledger", "tab"]
 
     def __init__(self, run_context: dict | None = None):
         super().__init__("KRESS", patience=8)
