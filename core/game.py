@@ -696,6 +696,11 @@ class Game:
                     self.audio.cycle_radio_station()
                     self.audio._play_current_radio_station()
                 return
+            # H = Epic 11.1c harmonica heal session. Locks rotation,
+            # +5 hull over 6s, blocked within 300 px of an active barge.
+            if event.key == pygame.K_h:
+                self.run_mgr.start_harmonica_session()
+                return
             self.run_mgr.handle_key(event)
         elif state == GameState.TERMINAL:
             if self.run_mgr.active_terminal is not None:
@@ -869,12 +874,18 @@ class Game:
                 hull_pct=self.ship.hull_pct if self.ship else 1.0,
             )
 
-    # ── Epic 16 — debt float label ─────────────────────────────────────────
-    def _on_debt_update_hud(self, delta=0, total=0, **_):
+    # ── Epic 16 / 13.1 — debt float label ─────────────────────────────────
+    def _on_debt_update_hud(self, delta=0, total=0, source="", **_):
         if delta == 0:
             return
         sign = "+" if delta > 0 else "−"
-        self._debt_float_label = f"{sign}{abs(int(delta)):,} cr"
+        # Epic 13.1: append the source label (e.g. INTEREST, SLINGSHOT,
+        # SHOP) to the floater so the player can read what just happened
+        # without unpacking the debt counter.
+        if source:
+            self._debt_float_label = f"{sign}{abs(int(delta)):,} cr · {source}"
+        else:
+            self._debt_float_label = f"{sign}{abs(int(delta)):,} cr"
         self._debt_float_t = 2.0
 
     # ── Epic 18 — difficulty selector ──────────────────────────────────────

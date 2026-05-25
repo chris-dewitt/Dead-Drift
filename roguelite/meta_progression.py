@@ -80,24 +80,32 @@ class MetaProgression:
         penalty = S.BASE_CLONE_DEBT + S.CLONE_FLUID_FEE + tow_fee
         self._data["debt"]        += penalty
         self._data["clone_count"] += 1
-        bus.emit(EVT_DEBT_UPDATE, delta=penalty, total=self.debt)
+        bus.emit(EVT_DEBT_UPDATE, delta=penalty, total=self.debt,
+                 source="CLONE TANK")
         self.save()
 
-    def pay_off(self, amount: int):
-        """Reduce debt by amount (sector, terminal win, tether snap, etc.)."""
+    def pay_off(self, amount: int, source: str = ""):
+        """Reduce debt by amount (sector, terminal win, tether snap, etc.).
+
+        Epic 13.1 — `source` is a short human-readable tag that floats
+        beside the HUD debt counter so the player can see where each
+        change came from."""
         actual = min(amount, self._data["debt"])
         self._data["debt"] = max(0, self._data["debt"] - amount)
         if actual > 0:
-            bus.emit(EVT_DEBT_UPDATE, delta=-actual, total=self.debt)
+            bus.emit(EVT_DEBT_UPDATE, delta=-actual, total=self.debt,
+                     source=source)
 
-    def add_debt(self, amount: int):
+    def add_debt(self, amount: int, source: str = ""):
         """Increase debt (shop purchases re-add previously reduced credits)."""
         self._data["debt"] += amount
-        bus.emit(EVT_DEBT_UPDATE, delta=amount, total=self.debt)
+        bus.emit(EVT_DEBT_UPDATE, delta=amount, total=self.debt,
+                 source=source)
 
-    def clear_debt_chunk(self, amount: int = 50000):
+    def clear_debt_chunk(self, amount: int = 50000, source: str = ""):
         self._data["debt"] = max(0, self._data["debt"] - amount)
-        bus.emit(EVT_DEBT_UPDATE, delta=-amount, total=self.debt)
+        bus.emit(EVT_DEBT_UPDATE, delta=-amount, total=self.debt,
+                 source=source)
 
     def complete_chapter(self, chapter: int):
         if chapter not in self._data["chapters_completed"]:

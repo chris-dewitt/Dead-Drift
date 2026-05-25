@@ -249,7 +249,7 @@ class ShopScreen:
             self._flash(f"Insufficient credits. Need {item.cost - self._balance:,} more.")
             return
         self.run_mgr._run_debt_reduced -= item.cost
-        self.run_mgr.meta.add_debt(item.cost)
+        self.run_mgr.meta.add_debt(item.cost, source=f"SHOP: {item.name.upper()}")
         self._bought.add(self._cursor)
         item.apply(self.ship, self.run_mgr)
         self._flash(f"Purchased: {item.name}.")

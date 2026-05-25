@@ -1209,9 +1209,9 @@ class DeliverySequence:
             self._fee_cut += abs(self._dock_bonus_cr)
         net_reduction = self._bonus - self._fee_cut
         if net_reduction > 0:
-            self.meta.pay_off(net_reduction)
+            self.meta.pay_off(net_reduction, source="DELIVERY PAYOUT")
         elif net_reduction < 0:
-            self.meta.add_debt(-net_reduction)
+            self.meta.add_debt(-net_reduction, source="DOCK FEES")
         # Epic 8.4 — record HARDCORE best time + unlock check before
         # complete_chapter (it persists immediately).
         was_hardcore = bool(getattr(self.meta, "is_hardcore", False))

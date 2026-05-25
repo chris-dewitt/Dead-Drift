@@ -255,6 +255,16 @@ class RunManager:
         # When non-None, overrides the natural progression in `_current_chapter()`.
         self._chapter_override: int | None = None
 
+        # Epic 11.1c — harmonica heal session.
+        # Active while the ship is locked into a "Bax plays a long lick" beat.
+        # Heals ~+5 hull over HARM_SESSION_DURATION seconds. Cancellable by
+        # thrust input or barge proximity.
+        self._harm_session_t: float = 0.0
+        self._harm_session_dur: float = 6.0
+        self._harm_heal_total: float = 5.0
+        self._harm_heal_paid:  float = 0.0
+        self._harm_block_radius: float = 300.0
+
         # Epic 12.4 — Stats tracker (subscribes to bus internally)
         self.stats = StatsTracker()
 
@@ -305,7 +315,8 @@ class RunManager:
         # Apply mutator-driven debt at run start
         starting_debt_bonus = self.mutators.starting_debt_bonus()
         if starting_debt_bonus:
-            self.meta.add_debt(starting_debt_bonus)
+            self.meta.add_debt(starting_debt_bonus,
+                               source="VETERAN CLONE FEE")
         # Reset bax_context for this run
         self.bax_context["times_died_this_sector"] = {}
         self.bax_context["last_sector_reached"]    = 0
@@ -405,6 +416,8 @@ class RunManager:
             self._sector_timer += dt
         # Epic 8.4 — total run time always advances (used for HARDCORE best time).
         self._run_total_time += dt
+        # Epic 11.1c — tick the harmonica heal session.
+        self._tick_harmonica_session(dt)
         self._sling_cd      = max(0.0, self._sling_cd - dt)
         self._prox_cd       = max(0.0, self._prox_cd  - dt)
         self._flash_t       = max(0.0, self._flash_t  - dt)
@@ -730,7 +743,7 @@ class RunManager:
         self.bax_context["slingshot_used_run"] = True
         # Credit bonus per clean slingshot (Epic 12.1 — mutator scale)
         bonus = int(SLINGSHOT_CREDIT_BONUS * self.mutators.credit_pickup_multiplier())
-        self.meta.pay_off(bonus)
+        self.meta.pay_off(bonus, source="SLINGSHOT")
         self._run_debt_reduced += bonus
         self._sector_credits   += bonus
         # Epic 12.1 — SLINGSHOT_ONLY: each slingshot grants ~1/3 of jump timer.
@@ -749,13 +762,13 @@ class RunManager:
         # Epic 12.1 — SYSTEM_GLITCH: each successful shot pays +50 cr
         if self.mutators.is_active("system_glitch"):
             bonus = 50
-            self.meta.pay_off(bonus)
+            self.meta.pay_off(bonus, source="GLITCH GUN")
             self._run_debt_reduced += bonus
             self._sector_credits   += bonus
 
     def _on_tether_snap(self, **_):
         bonus = int(1200 * self.mutators.credit_pickup_multiplier())
-        self.meta.pay_off(bonus)
+        self.meta.pay_off(bonus, source="TETHER SNAP")
         self._run_debt_reduced += bonus
         self._sector_snaps     += 1
         self._run_snaps        += 1
@@ -1078,7 +1091,7 @@ class RunManager:
         npc = self._active_terminal.npc if self._active_terminal else None
         bribe_paid = npc.bribe_cost() if npc else 0
         if bribe_paid > 0:
-            self.meta.add_debt(bribe_paid)
+            self.meta.add_debt(bribe_paid, source="BRIBE PAID")
             self._sector_credits = max(0, self._sector_credits - bribe_paid)
             self._run_debt_reduced = max(0, self._run_debt_reduced - bribe_paid)
             bus.emit(EVT_BAX_SPEAK, line=random.choice([
@@ -1106,7 +1119,7 @@ class RunManager:
         # Grant debt reduction based on how the negotiation went
         if outcome == "exploit":
             bonus = 9000
-            self.meta.pay_off(bonus)
+            self.meta.pay_off(bonus, source="EXPLOIT")
             self._run_debt_reduced += bonus
             self._sector_credits   += bonus
             bus.emit(EVT_BAX_SPEAK, line=random.choice([
@@ -1117,7 +1130,7 @@ class RunManager:
         elif outcome == "release" and bribe_paid == 0:
             # Only give the full release bonus when no bribe was needed
             bonus = 2500
-            self.meta.pay_off(bonus)
+            self.meta.pay_off(bonus, source="NEGOTIATION")
             self._run_debt_reduced += bonus
             self._sector_credits   += bonus
             bus.emit(EVT_BAX_SPEAK, line=random.choice([
@@ -1139,7 +1152,7 @@ class RunManager:
     def _advance_sector(self):
         bus.emit(EVT_WARP_JUMP)
         sector_bonus = 4500
-        self.meta.pay_off(sector_bonus)
+        self.meta.pay_off(sector_bonus, source="SECTOR CLEAR")
         self._run_debt_reduced += sector_bonus
         self._sector_credits   += sector_bonus
 
@@ -1546,6 +1559,111 @@ class RunManager:
             self._chapter_override = None
         elif 1 <= chapter <= 4:
             self._chapter_override = int(chapter)
+
+    # ------------------------------------------------------------------
+    # Epic 11.1c — Harmonica heal session
+    # ------------------------------------------------------------------
+    @property
+    def harm_session_active(self) -> bool:
+        return self._harm_session_t > 0
+
+    def harm_session_pct(self) -> float:
+        """0..1 progress through the active session (0 = none / just started)."""
+        if self._harm_session_dur <= 0 or self._harm_session_t <= 0:
+            return 0.0
+        elapsed = self._harm_session_dur - self._harm_session_t
+        return max(0.0, min(1.0, elapsed / self._harm_session_dur))
+
+    def start_harmonica_session(self) -> bool:
+        """Begin a Bax harmonica session. Locks rotation + heals over 6s.
+        Blocked when:
+          * a session is already active
+          * any active barge is within `_harm_block_radius`
+          * the ship is destroyed or absent
+        Returns True if the session started, False otherwise."""
+        if self._harm_session_t > 0:
+            return False
+        if self._ship is None or not getattr(self._ship, "is_alive", False):
+            return False
+        # Combat lockout — too dangerous to drift while Bax plays.
+        for barge in self._barges:
+            if getattr(barge, "is_destroyed", False):
+                continue
+            if (barge.body.pos - self._ship.pos).length_sq() < (
+                    self._harm_block_radius ** 2):
+                bus.emit(EVT_BAX_SPEAK,
+                         line="Not now, mate — there's a barge near. "
+                              "Get clear an' I'll play.")
+                return False
+        # Hull at full? Decline politely.
+        if getattr(self._ship, "hull", 0) >= S.HULL_MAX:
+            bus.emit(EVT_BAX_SPEAK,
+                     line="Hull's pristine. Save it for when you actually need it, eh?")
+            return False
+        self._harm_session_t = self._harm_session_dur
+        self._harm_heal_paid = 0.0
+        if self._ship is not None:
+            self._ship.harm_session_active = True
+        bus.emit(EVT_BAX_SPEAK,
+                 line="Right. Steady the ship, courier. *harp warbles*")
+        return True
+
+    def cancel_harmonica_session(self, reason: str = "") -> None:
+        """End the session early — restores rotation immediately."""
+        if self._harm_session_t <= 0:
+            return
+        self._harm_session_t = 0.0
+        if self._ship is not None:
+            self._ship.harm_session_active = False
+        if reason == "input":
+            bus.emit(EVT_BAX_SPEAK,
+                     line="Yeah, I get it — concentrate. *harp drops mid-bend*")
+        elif reason == "barge":
+            bus.emit(EVT_BAX_SPEAK,
+                     line="Barge incomin'. Harp away. Hands on the stick.")
+
+    def _tick_harmonica_session(self, dt: float) -> None:
+        if self._harm_session_t <= 0:
+            return
+        ship = self._ship
+        if ship is None or not getattr(ship, "is_alive", True):
+            self._harm_session_t = 0.0
+            if ship is not None:
+                ship.harm_session_active = False
+            return
+        # Cancel on thrust input — keeps the player honest. Rotation is
+        # already locked by ship._read_input.
+        keys = pygame.key.get_pressed() if pygame else None
+        if keys is not None:
+            cancel_keys = (
+                pygame.K_w, pygame.K_UP, pygame.K_s, pygame.K_DOWN,
+                pygame.K_SPACE,
+            )
+            if any(keys[k] for k in cancel_keys):
+                self.cancel_harmonica_session(reason="input")
+                return
+        # Cancel if a barge has closed inside the block radius mid-session.
+        for barge in self._barges:
+            if getattr(barge, "is_destroyed", False):
+                continue
+            if (barge.body.pos - ship.pos).length_sq() < (
+                    self._harm_block_radius ** 2):
+                self.cancel_harmonica_session(reason="barge")
+                return
+        # Tick — heal proportionally so partial sessions still pay off.
+        prev = self._harm_session_t
+        self._harm_session_t = max(0.0, self._harm_session_t - dt)
+        progress = (prev - self._harm_session_t) / self._harm_session_dur
+        target_total = self._harm_heal_paid + (
+            self._harm_heal_total * progress)
+        delta = target_total - self._harm_heal_paid
+        if delta > 0:
+            ship.hull = min(S.HULL_MAX, ship.hull + delta)
+            self._harm_heal_paid += delta
+        if self._harm_session_t <= 0:
+            ship.harm_session_active = False
+            bus.emit(EVT_BAX_SPEAK,
+                     line=f"Right. Patched up. {int(self._harm_heal_paid)} hp back.")
 
     def _cold_sector_theme(self, rng: random.Random) -> str | None:
         """Epic 12.1 — COLD_SECTOR mutator forces every sector to FROZEN_TRAIL
