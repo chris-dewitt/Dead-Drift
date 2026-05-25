@@ -699,6 +699,8 @@ def build() -> Corridor:
         Platform(480, CEIL_Y + 40, 80, path_tag="high"),
         Platform(620, CEIL_Y + 40, 80, path_tag="high"),
         Platform(760, CEIL_Y + 40, 80, path_tag="high"),
+        # Mid-room checkpoint — File Room 4 ladder / clerk zone (Phase 0.10)
+        Checkpoint(520),
     ]
     room2 = Room(
         length     = 1100,

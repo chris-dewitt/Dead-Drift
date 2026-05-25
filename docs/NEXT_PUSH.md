@@ -1,7 +1,9 @@
 # DEAD DRIFT — Next Push: Award-Quality Drive
 
+> **Historical (May 2026):** Superseded by **[ALIVENESS_PUSH.md](ALIVENESS_PUSH.md)** for active work. Epics 9–14 items shipped or folded into Aliveness phases D–H.
+
 **Session:** May 2026 planning committee  
-**Status:** Decisions locked — implementation pending  
+**Status:** Complete — reference only  
 **Other agents:** Read this before touching any system. See [Multi-agent coordination](#multi-agent-coordination) at the bottom.
 
 ---
@@ -133,7 +135,7 @@ Tone benchmark: *"GENUINE NOVA SOMA® PARTS IN EVERY CLONE"* — that's the bar.
 **Shipped May 2026 (this push):**
 - Loadout-draft propaganda ticker expanded from 8 → 17 lines (`roguelite/loadout_draft.py:_PROPAGANDA`). New lines name-drop Sandra Vega-Marsh, Local 404, Bax-class droids, and include darker beats: *"STATISTICALLY YOU WILL BE A CLONE BY DAY'S END. PLAN ACCORDINGLY."*
 
-**Still open:** the full game-wide string audit — every NPC's keyword responses, every UI label, every shop item description, every Bax line, every sector designation. Big lift, requires a focused pass.
+**Still open:** ~~the full game-wide string audit~~ — **COMPLETE May 25 2026.** See `docs/STRING_AUDIT_RESULTS.md`.
 
 ---
 

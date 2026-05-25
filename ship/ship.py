@@ -129,6 +129,12 @@ class PlayerShip:
     def take_damage(self, amount: float, source: str = "unknown"):
         if source in self._IMPACT_SOURCES and self._iframe_t > 0:
             return   # mercy window — protected from chain-collisions
+        # Aliveness C.1 — faster impacts hurt more; rewards speed control.
+        if source in self._IMPACT_SOURCES:
+            speed = self.body.speed()
+            if speed > S.COLLISION_SPEED_BASE:
+                excess = speed - S.COLLISION_SPEED_BASE
+                amount *= 1.0 + excess * S.COLLISION_SPEED_SCALE
         self.hull = max(0.0, self.hull - amount)
         self.last_damage_source = source
         self._iframe_t = S.HIT_IFRAME_T

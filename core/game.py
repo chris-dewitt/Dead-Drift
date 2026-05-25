@@ -772,7 +772,8 @@ class Game:
                 self.cockpit_renderer.update(dt)
                 if self._delivery_delay_t <= 0:
                     self._delivery_pending = False
-                    self._delivery = DeliverySequence(self.meta, chapter=self._delivery_chapter)
+                    self._delivery = DeliverySequence(self.meta, chapter=self._delivery_chapter,
+                                                      ship=self.ship)
                     # Epic 8.4 — pass total run time so HARDCORE best-time
                     # recording uses real flight elapsed seconds, not delivery scene time.
                     self._delivery._total_time_for_hardcore = float(
@@ -853,7 +854,8 @@ class Game:
                 if self._delivery_delay_t <= 0:
                     self._delivery_pending = False
                     self._delivery = DeliverySequence(self.meta,
-                                                      chapter=self._delivery_chapter)
+                                                      chapter=self._delivery_chapter,
+                                                      ship=self.ship)
                     self._goto(GameState.DELIVERY)
 
         elif state == GameState.LOADOUT_DRAFT:

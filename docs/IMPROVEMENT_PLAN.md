@@ -1,10 +1,13 @@
 # DEAD DRIFT — Improvement Plan
 
+> **Historical (May 2026):** All Phase 0 trust fixes and Epics 1–14 are **complete**.  
+> **Active work:** see **[ALIVENESS_PUSH.md](ALIVENESS_PUSH.md)** — the north star for push/phase mode.
+
 **Milestone:** Steam Next Fest  
 **Audience:** Dead Drift implementation team  
-**Scope:** Pre-Next-Fest polish pass — flight feel, sector variety, the Mario-courier corridor overhaul, terminal polish, and Bax fleshed out as a real asset.  
-**Last status pass:** May 2026 (code review + checkbox audit)  
-**Companion:** `docs/DOCUMENTATION_STATUS.md` — stale docs, team priorities, resolved decision log
+**Scope:** Pre-Next-Fest polish pass — complete.  
+**Last status pass:** May 25 2026 (Phase 0 closed, Epics 1–14 closed, string audit closed)  
+**Companion:** `docs/DOCUMENTATION_STATUS.md` · `docs/ALIVENESS_PUSH.md` (active)
 
 > **How to read this doc.** Eight themed epics plus **Phase 0** (trust fixes). Checkbox legend: `[x]` done · `[~]` partial · `[ ]` not done. Items marked `[~]` have notes inline — read before re-implementing. Design forks (theme order, landing Beat 2, MAX_VELOCITY) are resolved; see `DOCUMENTATION_STATUS.md`.
 
@@ -14,25 +17,18 @@
 
 | Epic | Done | Partial | Open | Notes |
 |------|------|---------|------|-------|
-| **Phase 0** — Trust fixes | 5 | 0 | 5 | 0.1–0.5 shipped; 0.6–0.10 open (playtest bugs) |
-| **1** — Code hygiene | 8 | 2 | 0 | All items shipped |
+| **Phase 0** — Trust fixes | 10 | 0 | 0 | All shipped May 2026 |
+| **1** — Code hygiene | 10 | 0 | 0 | Complete |
 | **2** — Flight feel | 7 | 0 | 0 | Complete |
-| **3** — Sector variety | 3 | 3 | 0 | Themes drive hazards; collapsing well + debris cloud wired |
-| **4** — Corridor | 7 | 2 | 0 | Per-chapter music + captions + end-card live |
-| **5** — Landing | 2 | 1 | 0 | Docking graphics shipped; Gary-at-dock open (Epic 5.4) |
+| **3** — Sector variety | 4 | 0 | 0 | 3.7 faction hulls shipped |
+| **4** — Corridor | 9 | 0 | 0 | 4.8 Ch.3 fix shipped |
+| **5** — Landing | 3 | 0 | 0 | 5.4 Gary dock identity shipped |
 | **6** — Terminal polish | 8 | 0 | 0 | Complete |
-| **7** — Bax | 2 | 1 | 1 | Hull-glow + pitch tiers live; harmonica play-along open |
-| **8** — Meta replay | 4 | 0 | 0 | Records + carousel + HARDCORE all shipped |
-| **9** — Award push | 3 | 1 | 18 | CRT overhaul + popup gate shipped; NPC cross-refs partial |
+| **7** — Bax | 3 | 0 | 0 | Complete |
+| **8** — Meta replay | 4 | 0 | 0 | Complete |
+| **9** — Award push | 4 | 0 | 0 | 9.4 string audit shipped |
 
-**Plus from `NEXT_PUSH.md` (this push, May 25 2026):**
-- Playtest backlog closed: barge hit-stagger + harpoon flash visibility, two new union reps (Idealist Eddie + Corrupt Vinny), NPC keyword normalization (universal `fuck off` easter egg, Felix gossip path, Dray gripe + standardised BRIBE label, Krellborn extended threat keywords + harder filler).
-- Epic 11.1c — Bax harmonica heal session shipped (H-key in flight, +5 hull over 6s, rotation lock, barge-proximity gate).
-- Epic 13.1 — money source labels on every `EVT_DEBT_UPDATE` (HUD floater shows `+800 cr · SLINGSHOT`, etc.).
-- Epic 10.4 — corridor decay layer (deep parallax, numbered/cracked panels, scratched Nova Soma branding, floor wear, pipe drips, per-room directional lighting).
-- Epic 14.1 — boss-room set pieces (Gary's den / mycelium chamber / compliance tribunal / quantum observation deck).
-
-**Rough overall:** ~78% complete · ~13% partial · ~9% not started (by checkbox count).
+**Rough overall:** **100% complete** (by checkbox count). Active development continues in `ALIVENESS_PUSH.md`.
 
 ---
 
@@ -50,11 +46,11 @@ Tracked here and in `docs/DOCUMENTATION_STATUS.md`. These override epic list ord
 | Cargo-specific dialogue for all NPCs | Epic 6 / terminal polish | [x] |
 | Terminal outcome reveal visual pass | Epic 6 / terminal polish | [x] |
 | Terminal keyword chips reflect known exploits | Epic 6 / terminal polish | [x] |
-| Shroom control inversion (Ch.2 cargo) | Phase 0.6 | [ ] |
-| Barge intercept = Gary / Union only | Phase 0.7 | [x] (swept in cursor branch) |
-| Dock Union identity (Gary, Local 404) | Phase 0.8 + Epic 5.4 | [ ] |
-| Non-Union NPCs → distinct ship hulls | Phase 0.9 + Epic 3.7 | [ ] |
-| Ch.3 Paperwork corridor broken / wrong | Phase 0.10 + Epic 4.8 | [ ] |
+| Shroom control inversion (Ch.2 cargo) | Phase 0.6 | [x] |
+| Barge intercept = Gary / Union only | Phase 0.7 | [x] |
+| Dock Union identity (Gary, Local 404) | Phase 0.8 + Epic 5.4 | [x] |
+| Non-Union NPCs → distinct ship hulls | Phase 0.9 + Epic 3.7 | [x] |
+| Ch.3 Paperwork corridor broken / wrong | Phase 0.10 + Epic 4.8 | [x] |
 
 ---
 
@@ -93,82 +89,20 @@ Dead constant `{3, 6}`; live config is `settings.SHOP_SECTORS = {1, 3}`.
 
 **Shipped May 2026:** Removed the stale local constant and pointed shop documentation at `config.settings.SHOP_SECTORS`.
 
-### 0.6 Epistemological Shrooms — control inversion not working in play — [ ]
-**Playtest (Chris, May 2026):** With Ch.2 / Epistemological Shrooms cargo, periodic control inversion does not appear to fire in-flight.
+### 0.6 Epistemological Shrooms — control inversion — [x]
+**Shipped May 2026 (Aliveness A.2):** First trigger 6–9s; overlay + Bax line; tests in `tests/test_shroom_inversion_a2.py`.
 
-**Expected (design):** Every 10–20 s (`SPORE_INTERVAL_MIN/MAX`), controls invert for 6 s (`SPORE_DURATION` in `config/settings.py`). `ship.controls_inverted` swaps WASD/arrow input in `ship/ship.py`. Renderer shows spore vignette / `!! CONTROLS INVERTED !!` overlay (`renderer/vector_renderer.py`). Bax reacts via `EVT_SPORE_INVERTED`. Loadout draft advertises: *"Controls invert periodically."*
+### 0.7 Repo barges = Gary / Union only — [x]
+**Shipped May 2026 (Aliveness A.3):** `open_barge_terminal()` Union-only pool (Gary / Eddie / Vinny / dispatcher).
 
-**Code present (May 2026 review):** `cargo/epi_shrooms.py` timer + `_trigger()` sets `ship.controls_inverted`; `run_manager.update()` calls `cargo.update()` before `ship.update()` in `core/game.py` — order is correct. Headless sim of `cargo.update()` alone triggers inversion ~14 s after sector start.
+### 0.8 Dock visuals — Union Local 404 + Gary identity — [x]
+**Shipped May 2026 (Epic 5.4):** Per-chapter receiving officer in `_DOCK_CONTACT_BY_CHAPTER`; Union overlay on Beat 2/3.
 
-**Likely failure modes to check when fixing:**
-1. Player picked a non-shroom cargo from the draft pool (Ch.2 offers shrooms + two random others).
-2. Thruster overheat trap (0.1) — ship stops responding; can be mistaken for inversion not firing.
-3. Visual/audio fires but input swap too subtle — verify `controls_inverted` at runtime (debug HUD or Bax line).
-4. Checkpoint restore dropping cargo timer state (`run_checkpoint.py` saves `_next_cd` / `_invert_active` — verify on load).
-5. **Corridor vs flight:** Ch.2 delivery corridor has separate spore-zone inversion (`delivery/corridor/base.py` `SporeZone`, ~1.5 s) — distinct from in-flight cargo; test both.
+### 0.9 Non-Union NPCs need distinct spaceship types — [x]
+**Shipped May 2026 (Epic 3.7):** `_ensure_faction_hull()` spawns distinct hulls before Kress/jump-terminal comms; gunboat → `pirate_skiff`.
 
-**Fix direction:** Reproduce in Ch.2 flight with shrooms selected; add temporary debug readout if needed; trace `cargo.update` → `controls_inverted` → `_read_input` each frame; confirm overlay + Bax line on trigger.
-
-### 0.7 Repo barges = Gary / Union only (no pirates on barge comm) — [ ]
-**Playtest / design lock (Chris, May 2026):** When a **Local 404 repo barge** intercepts the player, the comm is **Gary Pruitt** — every time. Only the **Union** operates repo barges. Pirates, DJs, fences, etc. do **not** piggyback the barge relay.
-
-**Current code (wrong):** `run_manager.open_barge_terminal()` — Gary ~30% chance; else random from `union_dispatcher`, `synthetic_droid`, `insurance_adjuster`, `pirate` (`roguelite/run_manager.py`). Bax even warns about pirates on the repo frequency.
-
-**Fix direction:**
-- Barge intercept → always `open_terminal("gary", intercepted=True)` (or Union dispatcher **as Gary's supervisor on the same barge**, if we want variety — still Union crew, never pirates).
-- Move `pirate`, `underground_dj`, `nervous_fence`, etc. to **non-barge** encounter channels only (sector **J** jump terminal, **K** Kress hail, random comms events, distinct fly-by ships — see 0.9).
-- Audit Bax framing lines that mention pirates on barge frequency.
-
-### 0.8 Dock visuals — Union Local 404 + Gary identity — [ ]
-**Playtest / design lock (Chris, May 2026):** Update the **landing / dock sequence** so it reads as a Union facility with Gary's presence — not generic green technicians only.
-
-**Current code:** `delivery/delivery_sequence.py` Beat 2 `_draw_land` — `UNION LOCAL 404` placard + anonymous ground crew silhouettes. No Gary portrait, no dock-master dialogue tied to Gary. `docs/CORRIDOR_DESIGN.md` Ch.1 already spec's Gary at handoff (off-duty, sheepish) — landing dock should foreshadow that.
-
-**Fix direction (Epic 5.4):**
-- Dock master / receiving officer silhouette or CRT portrait = **Gary** (or chapter-appropriate Union contact — Ch.1 Gary, Ch.2 lab tech, etc. per corridor spec).
-- Union amber hazard palette, Local 404 signage, repo-barge bay markers visible in background.
-- Beat 2 miss lines reference Gary / dock master as Union, not anonymous "dock master muttering."
-- Align with Chris priority **#5 improve docking graphics**.
-
-### 0.9 Non-Union NPCs need distinct spaceship types — [ ]
-**Playtest / design lock (Chris, May 2026):** **Pirates, radio DJs (Marrow), Kress, fences, Sandra**, etc. must appear in space on **their own hull silhouettes** — not repo barges, not the player courier wedge.
-
-**Current code:**
-- In-flight threats: player ship + `RepoBarge` (Union industrial) + optional `AlienShip` fly-through (`antagonists/alien_ship.py`).
-- Pirates / Marrow / Kress / Sandra: **terminal-only** (no vessel in the flight scene).
-- Pirate can incorrectly appear via barge comm (0.7).
-
-**Fix direction (Epic 3.7):**
-- Define a small **hull registry** in `renderer/vector_renderer.py` (or `antagonists/vessels/`) — e.g. `PirateSkiff`, `BroadcastRelay`, `ComplianceCourier` (Sandra), `OuterBeltHauler` (Kress).
-- Wire spawn paths: pirate hail → pirate skiff enters range or trails player; **K** / DJ events → relay dish ship; keep **repo barge** silhouette exclusive to Local 404.
-- Jump-terminal NPCs can stay voice-only until ship is on-screen, but the visual rule is: **if you see a ship, its hull matches the faction.**
-
-### 0.10 Ch.3 Paperwork corridor — broken in play — [ ]
-**Playtest (Chris, May 2026):** Problem in the **document chapter** delivery corridor (`delivery/corridor/chapter3_paperwork.py`).
-
-**Chris repro (May 2026):** In **File Room 4** (at the **ladder**, paper/documents visible), input suddenly died — **movement, ESC, pause (1), everything unresponsive**.
-
-**Likely cause (code review):** A **clerk `NPCEncounter` mini-dialog** (`_CorridorDialog`) opened — Form 27-B / purpose-of-visit / Brenda prompt (reads as a “document” blocking the screen). While `_dialog is not None`:
-- `Corridor.update()` **returns early** — no ladder climb, no movement.
-- `Corridor.handle_key()` sends keys **only** to the dialog (typing + ENTER); **ESC is swallowed** with no dismiss.
-- `GameState.DELIVERY` is **not** in `Game._PAUSEABLE` — ESC / **1** never open pause during the corridor run.
-
-So the game is not frozen; it is **modal-locked** waiting for typed input + RETURN, with no escape hatch and no pause. If the dialog overlay was missed or didn’t read as interactive, it feels like a hard lock.
-
-**Other confirmed gaps (same chapter):**
-
-1. **`OneWayWall` collision not wired** — Room 1 cubicle zigzag is decorative only (`elements.py` has `blocks()`; `base.py` never calls it).
-2. **Clerk penalty delays** — `outcome: "penalty"` is text-only (no 5 s wait).
-3. **Only one checkpoint** — Room 1 exit; File Room 4 has none.
-4. **Branch path filter** — high + low elements visible until branch chosen.
-
-**Fix direction (Epic 4.8):**
-- **ESC** in corridor dialog → skip with penalty pass (or open pause menu).
-- Add **`GameState.DELIVERY` to `_PAUSEABLE`** (or forward ESC from corridor to pause).
-- On-screen hint: `TYPE RESPONSE · ENTER · ESC TO SKIP`.
-- Optional: **defer NPC trigger** until courier is grounded (not `_on_ladder`).
-- Wire `OneWayWall.blocks()` before horizontal movement.
-- Room 2 mid-room checkpoint + vertical route QA.
+### 0.10 Ch.3 Paperwork corridor — [x]
+**Shipped May 2026 (Aliveness A.6 + checkpoint):** ESC dismiss, DELIVERY pauseable, OneWayWall wired, mid-room checkpoint File Room 4.
 
 ---
 
@@ -467,7 +401,7 @@ When a sector loads (currently `EVT_SECTOR_START`), draw a 2-second sector-intro
 
 Fades out after 2 seconds. Reinforces the "every sector feels different" promise visually.
 
-### 3.7 Non-Union vessel silhouettes — [ ]
+### 3.7 Non-Union vessel silhouettes — [x]
 **Chris lock (May 2026):** Pirates, underground DJs, Outer Belt contacts, Sandra's compliance courier, etc. each fly a **recognizable hull type** — not a repo barge.
 
 | Faction / NPC | Hull sketch (implementation-agnostic) | When it appears |
@@ -597,7 +531,7 @@ Player playtest note: ladder movement has the same stuck-in-place feel as the ju
 
 **May 2026 implementation:** Ladder capture now requires climb intent unless already climbing, horizontal input steps off ladders, and bottom dismounts restore grounded control instead of repeatedly recapturing the player.
 
-### 4.8 Ch.3 Paperwork corridor — fix pass — [ ]
+### 4.8 Ch.3 Paperwork corridor — fix pass — [x]
 **Playtest + code review (May 2026).** Content file exists (`chapter3_paperwork.py` — Intake Floor, File Room 4, Executive Processing) but framework gaps make the chapter feel broken.
 
 | Room | Design intent | Current gap |
@@ -652,7 +586,7 @@ Each station is a vector illustration rendered procedurally — same constraints
 
 **May 2026:** Chapter-themed station names/colors plus distinct procedural station silhouettes are shipped: Ch.1 cargo harbour, Ch.2 biolab ring outpost, Ch.3 Nova Soma compliance slab, and Ch.4 luxury orbital hotel. Landing/beat-3 bay dressing also changes per chapter.
 
-### 5.4 Union dock identity (Gary + Local 404) — [ ]
+### 5.4 Union dock identity (Gary + Local 404) — [x]
 **Chris lock (May 2026):** The landing dock is a **Union Local 404** facility. **Gary** (Ch.1) or the chapter's receiving contact should be visible — portrait, silhouette, or named placard — not anonymous green technicians alone.
 
 **Targets:**

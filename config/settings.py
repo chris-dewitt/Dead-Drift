@@ -116,6 +116,19 @@ TETHER_FORCE      = 780.0         # spring constant for EM harpoon
 TETHER_MAX_LENGTH = 350.0         # px before it snaps on its own
 SNAP_VELOCITY     = 200.0         # lateral drift speed needed to snap tether
 
+# --- Aliveness Phase C (May 2026) — gameplay mechanics ---
+COLLISION_SPEED_BASE    = 80.0    # px/s below which impact damage is unscaled
+COLLISION_SPEED_SCALE   = 0.012   # extra damage per px/s above base
+SLINGSHOT_CHAIN_WINDOW  = 3.0       # seconds between slingshots to stack chain
+SLINGSHOT_CHAIN_MULTS   = (1.0, 1.5, 2.0, 2.5)
+SECTOR_ESCALATION_INTERVAL = 30.0 # seconds between sector pressure ramps
+ORBIT_BONUS_DURATION    = 3.0       # seconds in velocity band near a well
+ORBIT_BONUS_MULT        = 1.5       # credit multiplier vs base slingshot bonus
+ORBIT_SPEED_MIN         = 120.0     # px/s lower band for orbital hold
+DEBT_RECOVERED_MILESTONE = 500      # cr recovered this run before debt bites back
+BARGE_PATROL_CONE_DEG   = 55.0
+BARGE_PATROL_CONE_LEN   = 280.0
+
 # --- Paths ---
 DATA_DIR          = "data"
 ASSETS_DIR        = "assets"

@@ -2450,6 +2450,31 @@ class VectorRenderer:
                                    self._rotate_pt((28, 0), angle, pos), 3)
 
     # ------------------------------------------------------------------  BARGES
+    def _draw_barge_patrol_cone(self, barge, bx: int, by: int, t: float) -> None:
+        """Aliveness C.5 — amber sweep cone showing barge FOV while patrolling."""
+        target = getattr(barge, "_patrol_target", None)
+        if target is not None:
+            dx = target.x - barge.pos.x
+            dy = target.y - barge.pos.y
+        else:
+            vel = getattr(barge.body, "vel", None)
+            if vel is None or (vel.x == 0 and vel.y == 0):
+                dx, dy = 1.0, 0.0
+            else:
+                dx, dy = vel.x, vel.y
+        angle = math.degrees(math.atan2(dy, dx))
+        half = S.BARGE_PATROL_CONE_DEG / 2.0
+        length = S.BARGE_PATROL_CONE_LEN
+        pulse = 0.35 + 0.15 * abs(math.sin(t * 2.4))
+        cone = pygame.Surface((int(length * 2), int(length * 2)), pygame.SRCALPHA)
+        cx, cy = length, length
+        pts = [(cx, cy)]
+        for deg in (-half, half):
+            rad = math.radians(angle + deg)
+            pts.append((cx + math.cos(rad) * length, cy + math.sin(rad) * length))
+        pygame.draw.polygon(cone, (255, 180, 60, int(28 * pulse)), pts)
+        self.surface.blit(cone, (bx - length, by - length))
+
     def _draw_barges(self, run_mgr, ship, t: float = 0.0):
         for barge in run_mgr.barges:
             self._draw_barge(barge, ship, t)
@@ -2569,6 +2594,10 @@ class VectorRenderer:
         surface_404 = font.render("404", True, (200, 140, 0))
         self.surface.blit(surface_404, (bx - surface_404.get_width() // 2,
                                         by - surface_404.get_height() // 2))
+
+        # Aliveness C.5 — visible patrol detection cone (functional + atmospheric)
+        if state == "patrol":
+            self._draw_barge_patrol_cone(barge, bx, by, t)
 
         # Harpoon-arming warning — dashed targeting beam + reticle while in AIM
         if state == "aim" and ship and ship.is_alive:

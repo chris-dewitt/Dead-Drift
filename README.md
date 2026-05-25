@@ -6,7 +6,7 @@ A 2D Newtonian physics roguelite for PC. You are a space courier saddled with cr
 
 **Tone:** tense, darkly comic, lo-fi cyberpunk. Cowboy Bebop meets Papers Please meets the worst Tuesday you've ever had.
 
-**Docs:** Implementation plan → [`docs/IMPROVEMENT_PLAN.md`](docs/IMPROVEMENT_PLAN.md) · Open design forks → [`docs/DECISION_BRIEFS.md`](docs/DECISION_BRIEFS.md)
+**Docs:** Active roadmap → [`docs/ALIVENESS_PUSH.md`](docs/ALIVENESS_PUSH.md) · Historical epics → [`docs/IMPROVEMENT_PLAN.md`](docs/IMPROVEMENT_PLAN.md)
 
 ---
 
@@ -44,7 +44,7 @@ meantime. Sandbox flight without NLTK at all: `play.py`.
 
 Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sentient Paperwork, Schrödinger VIP). Each cargo adds a unique mid-flight mechanic.
 
-> **Known issue (May 2026 playtest):** Ch.2 Epistemological Shrooms — periodic control inversion is **not working in flight** despite implementation in `cargo/epi_shrooms.py`. Tracked in `docs/IMPROVEMENT_PLAN.md` Phase 0.6. Other cargos: verify individually.
+> **Cargo mechanics:** Ch.2 Epistemological Shrooms — periodic control inversion (Aliveness A.2). Ch.3+ cargos verified in play.
 
 ---
 
@@ -170,7 +170,8 @@ Spec + implementation status → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLA
 | Path | Purpose |
 |------|---------|
 | `config/settings.py` | Tuning constants — edit here first |
-| `docs/IMPROVEMENT_PLAN.md` | Master task list + shipped Phase 0 trust fixes |
+| `docs/ALIVENESS_PUSH.md` | **Active north star** — push/phase roadmap (currently Phase C+) |
+| `docs/IMPROVEMENT_PLAN.md` | Historical epic checklist (complete May 2026) |
 | `docs/CORRIDOR_DESIGN.md` | Delivery corridor specs |
 | `docs/BAX_VOICE.md` | Bax line bank |
 | `docs/CLAUDE_ARCHIVED.md` | Historical agent/GDD excerpt |
@@ -182,18 +183,12 @@ Spec + implementation status → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLA
 
 ## Known issues / open polish
 
-- Full string audit (Epic 9.4) still open
-- Harmonica `play along` (Epic 11.1b) deferred — high effort, low
-  immediate value
-- A few `NEXT_PUSH.md` items remain (sector-5 capstones 19, death
-  highlight reel 20, full Bax `theme` polish 21)
+See **`docs/ALIVENESS_PUSH.md`** for the active backlog (Phases D–H).
 
-(Market + docking graphics, Bax's Records (Epic 8.3), the lazy NLTK
-bootstrap (Epic 1.10), the font-cache adoption sweep (Epic 1.2),
-per-chapter corridor music (Epic 4.6), the cargo dossier carousel
-(Epic 8.2), the HARDCORE chapter variant (Epic 8.4), the harmonica
-heal session (Epic 11.1c), money source labels (Epic 13.1), the
-corridor decay layer (Epic 10.4), boss-room set pieces (Epic 14.1),
-the new union reps + NPC keyword normalization, and the barge feel
-+ harpoon visibility playtest fixes all shipped May 2026 — see
-`docs/DOCUMENTATION_STATUS.md`.)
+Harmonica **play-along** (Epic 11.1b) remains deferred — high effort, low immediate value.
+
+(Market + docking graphics, Bax's Records, NLTK bootstrap, font cache, corridor music,
+cargo carousel, HARDCORE, harmonica heal, money source labels, corridor decay,
+boss-room set pieces, union reps, NPC keyword normalization, barge feel, string audit
+(Epic 9.4), Phase 0 trust fixes, and Phase C gameplay mechanics all shipped May 2026 —
+see `docs/DOCUMENTATION_STATUS.md`.)

@@ -237,7 +237,10 @@ No combat in corridors. The flight scenes are where ship combat happens. The cor
 | Chapter | Issue | Status |
 |---------|--------|--------|
 | **Ch.3 Paperwork** | **Input lock at ladder / documents** — clerk `_CorridorDialog` modal; ESC/pause don't work in `DELIVERY` state | Open — Chris repro May 2026 |
-| **Ch.3 Paperwork** | `OneWayWall` cubicle zigzag (Room 1) — walls drawn but **collision not wired** in `base.py` | Open — Phase 0.10 |
+| **Ch.3 Paperwork** | `OneWayWall` cubicle zigzag (Room 1) | **Done** — Aliveness A.6 |
+| **Ch.3 File Room 4** | Mid-room checkpoint at ladder | **Done** — May 25 2026 |
+
+Chris playtest issues resolved. See `docs/ALIVENESS_PUSH.md` Phase G for corridor aliveness next.
 | **Ch.3 Paperwork** | Clerk "5-second delay" penalties are text-only | Open |
 | **Ch.3 Paperwork** | Only 1 checkpoint (Room 1 exit); File Room 4 has none | Open |
 

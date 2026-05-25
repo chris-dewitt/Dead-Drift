@@ -233,6 +233,15 @@ def _draw_chapter_bay_dressing(surface: pygame.Surface, W: int, H: int,
                        placard.centery - txt.get_height() // 2))
 
 
+# Epic 5.4 — per-chapter Union receiving officer at the dock window.
+_DOCK_CONTACT_BY_CHAPTER = {
+    1: ("GARY PRUITT", "LOCAL 404 FIELD AGENT"),
+    2: ("DR. CHEN", "BIOLAB RECEIVING"),
+    3: ("UNION DISPATCHER", "PAPERWORK DESK"),
+    4: ("CONCIERGE", "VIP ARRIVALS"),
+}
+
+
 def _draw_union_404_overlay(surface: pygame.Surface, W: int, H: int,
                             t: float, chapter: int) -> None:
     """Aliveness A.4 — Union Local 404 signage + repo bay markers laid
@@ -331,9 +340,13 @@ def _draw_union_404_overlay(surface: pygame.Surface, W: int, H: int,
                      pygame.Rect(gx + 6, gy - 18, 10, 12))
     pygame.draw.rect(surface, (120, 90, 40),
                      pygame.Rect(gx + 6, gy - 18, 10, 12), 1)
-    # Window header — "DOCK MASTER"
-    hdr = get_font(7, bold=True).render("DOCK MASTER", True, amber)
-    surface.blit(hdr, (win_x + (win_w - hdr.get_width()) // 2, win_y - 10))
+    # Window header — chapter receiving officer (Epic 5.4)
+    contact_name, contact_role = _DOCK_CONTACT_BY_CHAPTER.get(
+        chapter, ("DOCK MASTER", "UNION RECEIVING"))
+    hdr = get_font(7, bold=True).render(contact_name, True, amber)
+    surface.blit(hdr, (win_x + (win_w - hdr.get_width()) // 2, win_y - 18))
+    role = get_font(6).render(contact_role, True, amber_dim)
+    surface.blit(role, (win_x + (win_w - role.get_width()) // 2, win_y - 8))
 
 
 class DeliverySequence:
@@ -343,9 +356,10 @@ class DeliverySequence:
     PHASE_RUN      = "run"
     PHASE_RESULT   = "result"
 
-    def __init__(self, meta, chapter: int = 1):
+    def __init__(self, meta, chapter: int = 1, ship=None):
         self.meta    = meta
         self.chapter = chapter
+        self._ship_ref = ship   # Aliveness C.7 — cargo integrity payout
         self._phase  = self.PHASE_APPROACH
         self._t      = 0.0
 
@@ -1312,6 +1326,13 @@ class DeliverySequence:
         stars = self._run_stars
         self._bonus   = _DELIVERY_BONUS.get(stars, 0)
         self._fee_cut = _DELIVERY_FEE_CUT.get(stars, 0)
+        # Aliveness C.7 — payout scales with cargo integrity at delivery.
+        cargo_pct = 1.0
+        cargo = getattr(self._ship_ref, "cargo", None) if self._ship_ref else None
+        if cargo is not None:
+            cargo_pct = max(0.0, min(1.0, getattr(cargo, "integrity", 100.0) / 100.0))
+        self._cargo_pct = cargo_pct
+        self._bonus = int(self._bonus * cargo_pct)
         # Add dock bonus (from corridor credits_earned too)
         run_credits  = getattr(self._run, "credits_earned", 0)
         self._bonus += run_credits + max(0, self._dock_bonus_cr)
@@ -1396,6 +1417,10 @@ class DeliverySequence:
              f"{self._run_stars} ★  ·  run complete",
              (0, 190, 80) if self._run_stars == 3 else
              (200, 160, 0) if self._run_stars == 2 else (180, 60, 60)),
+            ("CARGO INTEGRITY",
+             f"{int(self._cargo_pct * 100)}%  ·  payout scaled",
+             (0, 220, 100) if self._cargo_pct >= 0.9 else
+             (255, 180, 0) if self._cargo_pct >= 0.7 else (220, 60, 60)),
         ]
 
         y = py_t + 72

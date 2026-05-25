@@ -4,9 +4,11 @@
 
 | Doc | Use for |
 |-----|---------|
+| **[docs/ALIVENESS_PUSH.md](docs/ALIVENESS_PUSH.md)** | **North star** — active push/phase roadmap (A→H) |
 | [README.md](README.md) | Player quick start, controls, feature overview |
-| [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md) | Implementation master plan (checkboxes, Phase 0) |
-| [docs/DOCUMENTATION_STATUS.md](docs/DOCUMENTATION_STATUS.md) | Stale-doc tracker, open design decisions |
+| [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md) | Historical epic checklist (Phase 0 + Epics 1–14 — complete May 2026) |
+| [docs/DOCUMENTATION_STATUS.md](docs/DOCUMENTATION_STATUS.md) | Stale-doc tracker, resolved decisions |
+| [docs/STRING_AUDIT_RESULTS.md](docs/STRING_AUDIT_RESULTS.md) | Epic 9.4 string audit report |
 | [docs/CLAUDE_ARCHIVED.md](docs/CLAUDE_ARCHIVED.md) | Historical session/GDD excerpt (out of date) |
 | [docs/DEAD_DRIFT_GDD_ARCHIVED.md](docs/DEAD_DRIFT_GDD_ARCHIVED.md) | Original pitch GDD (historical) |
 

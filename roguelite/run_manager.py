@@ -20,6 +20,8 @@ from antagonists.fuel_canister import FuelCanister
 from antagonists.satellite import SpinningSatellite
 from antagonists.alien_ship import AlienShip
 from antagonists.ai_ship import (AIShip, ALL_CLASSES, CLASS_DERELICT, CLASS_GUNBOAT,
+                                  CLASS_PIRATE_SKIFF, CLASS_BROADCAST_RELAY,
+                                  CLASS_BELT_HAULER, CLASS_COMPLIANCE_COURIER,
                                   BEHAVIOR_HAILER, BEHAVIOR_PIRATE, BEHAVIOR_TRAFFIC)
 from antagonists.wreck import SpaceWreck
 from antagonists.dead_station import DeadStation
@@ -45,6 +47,28 @@ from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
 from config import settings as S
 
 SLINGSHOT_CREDIT_BONUS = 800
+
+# Epic 3.7 / Aliveness A.5 — NPC type → distinct in-flight hull class.
+_FACTION_HULL_BY_NPC = {
+    "kress":          CLASS_BELT_HAULER,
+    "pirate":         CLASS_PIRATE_SKIFF,
+    "underground_dj": CLASS_BROADCAST_RELAY,
+    "sandra":         CLASS_COMPLIANCE_COURIER,
+}
+
+_DEBT_MILESTONE_LINES = [
+    "Five 'undred off the tab. Nova Soma's still ahead on points, mate.",
+    "Debt's movin'. Don't get cocky — interest never sleeps.",
+    "Every credit back is a finger in their eye. Keep goin'.",
+    "They notice when you pay. Trust me. They notice.",
+]
+
+_ESCALATION_LINES = [
+    "Sector's heatin' up. Union'll send another patrol if we linger.",
+    "Timer pressure — somethin's escalatin'. Move or fight.",
+    "Gravity's gettin' heavier. They're not lettin' us coast.",
+    "Passive scan just logged us again. Clock's tickin', mate.",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -207,6 +231,16 @@ class RunManager:
         # Proximity alarm cooldown
         self._prox_cd          = 0.0
 
+        # Aliveness Phase C — gameplay mechanics state
+        self._sling_chain_t       = -999.0
+        self._sling_chain_n       = 0
+        self._sector_escalation_t = 0.0
+        self._escalation_level    = 0
+        self._orbit_well_id       = None
+        self._orbit_t             = 0.0
+        self._orbit_bonus_claimed: set[int] = set()
+        self._next_debt_recovered_milestone = S.DEBT_RECOVERED_MILESTONE
+
         # Mid-flight random events (debris shower / scan / comms intercept)
         self._event_cd         = 40.0
         self._shower_rocks: list[DebrisRock] = []
@@ -362,6 +396,9 @@ class RunManager:
         self._run_slingshots     = 0
         self._shop_pending       = False
         self._sector_slingshots  = 0
+        self._sling_chain_t       = -999.0
+        self._sling_chain_n       = 0
+        self._next_debt_recovered_milestone = S.DEBT_RECOVERED_MILESTONE
         self._sector_snaps       = 0
         self._sector_credits     = 0
         self._sector_start_hull  = ship.hull if ship else S.HULL_MAX
@@ -489,6 +526,14 @@ class RunManager:
         self._sector.gravity.apply_all(self._ship.body)
         self._sector.gravity.update(dt)   # three-body well drift
 
+        # Aliveness Phase C — sector pressure + orbital hold + debt milestones
+        self._sector_escalation_t += dt
+        if self._sector_escalation_t >= S.SECTOR_ESCALATION_INTERVAL:
+            self._sector_escalation_t -= S.SECTOR_ESCALATION_INTERVAL
+            self._apply_sector_escalation()
+        self._check_orbital_bonus(dt)
+        self._check_debt_recovered_milestones()
+
         # Gravity-well core — capped hull damage (matches play.py demo)
         if self._ship.is_alive:
             well = self._sector.gravity.check_collisions(self._ship.body)
@@ -597,6 +642,7 @@ class RunManager:
     def _open_kress_terminal(self):
         from core.event_bus import EVT_KRESS_DIALLED
         self._kress_called_this_sector = True
+        self._ensure_faction_hull("kress")
         bus.emit(EVT_KRESS_DIALLED)
         self.open_terminal("kress")
 
@@ -750,9 +796,21 @@ class RunManager:
         self._run_slingshots    += 1
         # Epic 11.3 — mark slingshot used for bax_context
         self.bax_context["slingshot_used_run"] = True
+        # Aliveness C.2 — chain multiplier for successive slingshots.
+        if self._t - self._sling_chain_t <= S.SLINGSHOT_CHAIN_WINDOW:
+            self._sling_chain_n = min(
+                self._sling_chain_n + 1,
+                len(S.SLINGSHOT_CHAIN_MULTS) - 1,
+            )
+        else:
+            self._sling_chain_n = 0
+        self._sling_chain_t = self._t
+        chain_mult = S.SLINGSHOT_CHAIN_MULTS[self._sling_chain_n]
         # Credit bonus per clean slingshot (Epic 12.1 — mutator scale)
-        bonus = int(SLINGSHOT_CREDIT_BONUS * self.mutators.credit_pickup_multiplier())
-        self.meta.pay_off(bonus, source="SLINGSHOT")
+        bonus = int(SLINGSHOT_CREDIT_BONUS * chain_mult
+                    * self.mutators.credit_pickup_multiplier())
+        self.meta.pay_off(bonus, source="SLINGSHOT" if chain_mult <= 1.0
+                          else f"SLINGSHOT x{chain_mult:.1f}")
         self._run_debt_reduced += bonus
         self._sector_credits   += bonus
         # Epic 12.1 — SLINGSHOT_ONLY: each slingshot grants ~1/3 of jump timer.
@@ -1064,6 +1122,7 @@ class RunManager:
             ]
             lines = framing.get(npc_type, default_framing)
             bus.emit(EVT_BAX_SPEAK, line=random.choice(lines))
+        self._ensure_faction_hull(npc_type)
         self.open_terminal(npc_type)
         self._pending_advance = True
 
@@ -1216,6 +1275,11 @@ class RunManager:
         self._sector_dur   = self.hardcore_sector_dur(20.0)
         self._sector_timer = 0.0
         self._jump_ready_fired = False
+        self._sector_escalation_t = 0.0
+        self._escalation_level    = 0
+        self._orbit_well_id       = None
+        self._orbit_t             = 0.0
+        self._orbit_bonus_claimed.clear()
         self._barges.clear()
         self._spawn_queue.clear()
         self._sling_well_t.clear()
@@ -1509,7 +1573,76 @@ class RunManager:
         if not pool:
             return
         ship_class = random.choice(pool)
+        if ship_class == CLASS_GUNBOAT:
+            ship_class = CLASS_PIRATE_SKIFF
         self._ai_ships.append(AIShip(ship_class=ship_class))
+
+    def _ensure_faction_hull(self, npc_type: str) -> None:
+        """Epic 3.7 — spawn a distinct hull before opening a faction terminal."""
+        ship_class = _FACTION_HULL_BY_NPC.get(npc_type)
+        if ship_class is None:
+            return
+        if any(s.ship_class == ship_class for s in self._ai_ships):
+            return
+        self._ai_ships.append(AIShip(ship_class=ship_class, behavior=BEHAVIOR_HAILER))
+
+    def _check_orbital_bonus(self, dt: float) -> None:
+        """Aliveness C.4 — hold a stable orbit near a well for bonus credits."""
+        if self._sector is None or self._ship is None or not self._ship.is_alive:
+            return
+        speed = self._ship.body.speed()
+        if speed < S.ORBIT_SPEED_MIN or speed > S.SLINGSHOT_SPEED:
+            self._orbit_t = 0.0
+            self._orbit_well_id = None
+            return
+        sling_r2 = S.SLINGSHOT_RANGE * S.SLINGSHOT_RANGE
+        pos = self._ship.body.pos
+        for well in self._sector.gravity.wells:
+            if (well.pos - pos).length_sq() >= sling_r2:
+                continue
+            wid = id(well)
+            if self._orbit_well_id != wid:
+                self._orbit_well_id = wid
+                self._orbit_t = 0.0
+            self._orbit_t += dt
+            if (self._orbit_t >= S.ORBIT_BONUS_DURATION
+                    and wid not in self._orbit_bonus_claimed):
+                self._orbit_bonus_claimed.add(wid)
+                bonus = int(SLINGSHOT_CREDIT_BONUS * S.ORBIT_BONUS_MULT)
+                self.meta.pay_off(bonus, source="ORBIT BONUS")
+                self._run_debt_reduced += bonus
+                self._sector_credits += bonus
+                bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                    "Clean orbit. Physics paid out — literally.",
+                    "Held the band. That's precision flyin', mate.",
+                    "Orbit bonus. Wells love a patient pilot.",
+                ]))
+            return
+        self._orbit_t = 0.0
+        self._orbit_well_id = None
+
+    def _check_debt_recovered_milestones(self) -> None:
+        """Aliveness C.6 — debt recovery milestones bite back with pressure."""
+        while self._run_debt_reduced >= self._next_debt_recovered_milestone:
+            bus.emit(EVT_BAX_SPEAK, line=random.choice(_DEBT_MILESTONE_LINES))
+            step = self._next_debt_recovered_milestone // S.DEBT_RECOVERED_MILESTONE
+            if step % 2 == 0:
+                self._sector_timer = min(self._sector_dur,
+                                         self._sector_timer + 1.0)
+            self._next_debt_recovered_milestone += S.DEBT_RECOVERED_MILESTONE
+
+    def _apply_sector_escalation(self) -> None:
+        """Aliveness C.3 — every 30s the sector ramps pressure."""
+        self._escalation_level += 1
+        bus.emit(EVT_BAX_SPEAK, line=random.choice(_ESCALATION_LINES))
+        bus.emit(EVT_SCAN_PING,
+                 pos_x=random.randint(120, S.SCREEN_W - 120),
+                 pos_y=random.randint(100, S.FLIGHT_H - 60))
+        if self._escalation_level % 2 == 1:
+            self._spawn_barge()
+        elif self._sector is not None:
+            for well in self._sector.gravity.wells:
+                well.mass = min(well.mass * 1.08, 5000.0)
 
     def _on_aiship_hail(self, ship=None, npc_type=None, ship_class=None, **_):
         # Defer terminal opening — let core/game.py poll this and react via E key.

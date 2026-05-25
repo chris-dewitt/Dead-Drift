@@ -2,8 +2,9 @@
 
 **Branch:** `rhubarb/aliveness-push`
 **Started:** May 25 2026
-**Status:** Planning
+**Status:** Phase C complete — Phase D next
 **Scope:** Open-ended (no time cap)
+**North star for all agents:** this document supersedes `IMPROVEMENT_PLAN.md` and `NEXT_PUSH.md` for active work.
 
 ---
 
@@ -112,26 +113,33 @@ Bribes become 2–3 turn negotiations. Cheap NPCs accept low. Greedy ones counte
 
 ## Phase C — Gameplay Mechanics
 
-### C.1 Speed-scaled collision damage — [ ]
+### C.1 Speed-scaled collision damage — [x]
 Impact damage multiplies with relative velocity at moment of collision. Rewards speed management near obstacles; punishes throttle-mashing.
+**Shipped:** `ship/ship.py` `take_damage()` scales `_IMPACT_SOURCES` by excess speed above `COLLISION_SPEED_BASE`.
 
-### C.2 Slingshot chains — [ ]
-Successive slingshots within ~3s stack a multiplier (1.5× → 2.0× → 2.5×). Skilled players chain wells. High skill ceiling on existing mechanic.
+### C.2 Slingshot chains — [x]
+Successive slingshots within ~3s stack a multiplier (1.0× → 1.5× → 2.0× → 2.5×). Skilled players chain wells. High skill ceiling on existing mechanic.
+**Shipped:** `run_manager._on_slingshot()` chain window + credit multiplier; HUD floater via existing `EVT_SLINGSHOT`.
 
-### C.3 Sector escalation timer — [ ]
+### C.3 Sector escalation timer — [x]
 Every 30s in a sector, something escalates: another barge spawns, gravity wells intensify, scanner pings more often. Visible escalation cue. Forces forward momentum.
+**Shipped:** `_apply_sector_escalation()` — odd levels spawn barge, even levels bump well mass; Bax line + `EVT_SCAN_PING`.
 
-### C.4 Gravity well orbital bonus — [ ]
+### C.4 Gravity well orbital bonus — [x]
 Orbit a well at the right velocity band for 3+ seconds → automatic slingshot multiplier. Rewards precision flying over brute force.
+**Shipped:** `_check_orbital_bonus()` — 120–220 px/s band inside sling range for 3s → +1200 cr orbit payout.
 
-### C.5 Barge detection cone — [ ]
+### C.5 Barge detection cone — [x]
 Visible amber sweep cone in `PATROL` state showing barge FOV. Functional (telegraphs detection range) and atmospheric.
+**Shipped:** `vector_renderer._draw_barge_patrol_cone()` — 55° cone, 280 px, pulsing amber fill.
 
-### C.6 Debt timer with teeth — [ ]
+### C.6 Debt timer with teeth — [x]
 Debt should *threaten*, not just tick. Every 500cr milestone closes off a skip option, adds a penalty event, or triggers a Bax line. Pick the cheapest version that lands.
+**Shipped:** `_check_debt_recovered_milestones()` — Bax line every 500 cr recovered; even milestones add +1s sector timer pressure.
 
-### C.7 Cargo damage as cumulative penalty — [ ]
+### C.7 Cargo damage as cumulative penalty — [x]
 Every hit damages cargo by a percentage; on delivery, paid only for % surviving. Creates "deliver clean vs fast" tradeoff.
+**Shipped:** `delivery_sequence._compute_result()` scales delivery bonus by cargo integrity; result card shows integrity %.
 
 ---
 
