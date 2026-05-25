@@ -15,6 +15,7 @@ from delivery.obstacles import (
     CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H,
 )
 from core.event_bus import bus, EVT_BAX_SPEAK, EVT_DELIVERY_STEP, EVT_DELIVERY_HIT, EVT_DELIVERY_DONE
+from core.text import get_font
 
 # ── Layout inside the corridor surface ──────────────────────────────────────
 CORRIDOR_W     = 400    # visible width of the corridor viewport
@@ -282,7 +283,7 @@ class DeliveryRun:
             (2700, "YOUR CARGO IS OUR CONCERN",      (  0, 80, 40)),
             (3050, "STAY COMPLIANT. STAY ALIVE.",    ( 80,  0, 80)),
         ]
-        f_poster = pygame.font.SysFont("monospace", 8)
+        f_poster = get_font(8)
         for bg_wx, text, col in poster_data:
             psx = int(bg_wx - bg_off)
             if -110 < psx < CORRIDOR_W + 10:
@@ -303,7 +304,7 @@ class DeliveryRun:
                                  (psx, py_t2, pw_p, ph_p), 1)
 
         # Wall monitors (small screens showing debt data)
-        f_mon = pygame.font.SysFont("monospace", 7)
+        f_mon = get_font(7)
         for mon_wx in (350, 900, 1450, 1950, 2450, 2950):
             msx = int(mon_wx - bg_off)
             if -50 < msx < CORRIDOR_W + 10:
@@ -425,7 +426,7 @@ class DeliveryRun:
             dcol  = (int(0 + 200 * pulse), int(200 * pulse), 0)
             pygame.draw.rect(surf, (10, 28, 10), (int(door_sx), CEIL_Y, 50, FLOOR_Y - CEIL_Y))
             pygame.draw.rect(surf, dcol, (int(door_sx), CEIL_Y, 50, FLOOR_Y - CEIL_Y), 2)
-            f = pygame.font.SysFont("monospace", 11, bold=True)
+            f = get_font(11, bold=True)
             s = f.render("DROP", True, dcol)
             surf.blit(s, (int(door_sx) + 25 - s.get_width() // 2,
                           (CEIL_Y + FLOOR_Y) // 2 - s.get_height() // 2))
@@ -437,8 +438,8 @@ class DeliveryRun:
                          (0, CORRIDOR_H - 8, int(CORRIDOR_W * prog), 8))
 
         # ── HUD ───────────────────────────────────────────────────────
-        f   = pygame.font.SysFont("monospace", 13)
-        fsm = pygame.font.SysFont("monospace", 11)
+        f   = get_font(13)
+        fsm = get_font(11)
         timer_col = (0, 220, 100) if self._elapsed < STAR_3_TIME else \
                     (255, 180, 0) if self._elapsed < STAR_2_TIME else (220, 60, 60)
         surf.blit(f.render(f"TIME  {self._elapsed:>5.1f}s", True, timer_col), (6, 4))
@@ -461,7 +462,7 @@ class DeliveryRun:
             ov = pygame.Surface((CORRIDOR_W, CORRIDOR_H), pygame.SRCALPHA)
             ov.fill((0, 0, 0, 160))
             surf.blit(ov, (0, 0))
-            fh = pygame.font.SysFont("monospace", 20, bold=True)
+            fh = get_font(20, bold=True)
             label_col = [(220, 60, 60), (255, 180, 0), (0, 240, 110)][self._stars - 1]
             label_txt = ["★☆☆  1 STAR", "★★☆  2 STARS", "★★★  3 STARS!"][self._stars - 1]
             ls = fh.render(label_txt, True, label_col)

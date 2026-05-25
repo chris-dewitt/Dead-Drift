@@ -28,14 +28,21 @@ _SYSFONT_FALLBACK = "consolas,jetbrainsmono,dejavusansmono,menlo,monospace"
 # Global readability bump — adds this many points to every requested size
 _SIZE_BUMP = 2
 
-# Font instance cache
-_FONT_CACHE: dict[tuple[int, bool], pygame.font.Font] = {}
+# Font instance cache. Keyed by (size, bold, italic).
+_FONT_CACHE: dict[tuple[int, bool, bool], pygame.font.Font] = {}
 
 
-def get_font(size: int, bold: bool = False) -> pygame.font.Font:
-    """Return a cached pygame Font at the requested size (with size bump)."""
+def get_font(size: int, bold: bool = False,
+             italic: bool = False) -> pygame.font.Font:
+    """Return a cached pygame Font at the requested size (with size bump).
+
+    `italic` is honoured by setting `pygame.font.Font.set_italic(True)` on
+    the cached instance — pygame's bundled-font path doesn't expose an
+    italic constructor, but the bitmap-skew approximation is faithful
+    enough for the in-game CRT look.
+    """
     effective_size = max(8, size + _SIZE_BUMP)
-    key = (effective_size, bold)
+    key = (effective_size, bold, italic)
     cached = _FONT_CACHE.get(key)
     if cached is not None:
         return cached
@@ -44,7 +51,13 @@ def get_font(size: int, bold: bool = False) -> pygame.font.Font:
     if os.path.exists(path):
         font = pygame.font.Font(path, effective_size)
     else:
-        font = pygame.font.SysFont(_SYSFONT_FALLBACK, effective_size, bold=bold)
+        font = pygame.font.SysFont(_SYSFONT_FALLBACK, effective_size,
+                                   bold=bold, italic=italic)
+    if italic:
+        try:
+            font.set_italic(True)
+        except Exception:
+            pass
     _FONT_CACHE[key] = font
     return font
 
@@ -109,7 +122,7 @@ def install_font_patch():
         if ("mono" in name_l or "consolas" in name_l
                 or "courier" in name_l or "menlo" in name_l):
             try:
-                return get_font(size, bold=bold)
+                return get_font(size, bold=bold, italic=italic)
             except Exception:
                 pass
         return _orig_sysfont(name, size, bold=bold, italic=italic,

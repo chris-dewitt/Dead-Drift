@@ -2,6 +2,7 @@ from __future__ import annotations
 import math
 import random
 import pygame
+from core.text import get_font
 from config import settings as S
 from antagonists.repo_barge import BargeState
 from antagonists.alien_ship import HULL_PTS as _ALIEN_HULL, INNER_PTS as _ALIEN_INNER
@@ -339,7 +340,7 @@ class VectorRenderer:
                                  (note_x + 4, note_y - 4), (note_x + 8, note_y - 1), 1)
 
         # ── Sorrow meter HUD element — bolder ────────────────────────────────
-        font_xs = pygame.font.SysFont("monospace", 13, bold=True)
+        font_xs = get_font(13, bold=True)
         bars  = int(sl * 8)
         col_r = int(160 + sl * 95)
         col_g = int(80 * (1.0 - sl * 0.5))
@@ -421,9 +422,9 @@ class VectorRenderer:
             pygame.draw.rect(self.surface, pulse_col, (bx - 3, by - 3, bw + 6, bh + 6), 2)
             pygame.draw.rect(self.surface, pulse_col, (bx - 6, by - 6, bw + 12, bh + 12), 1)
 
-        font_xl = pygame.font.SysFont("monospace", 20, bold=True)
-        font_lg = pygame.font.SysFont("monospace", 16, bold=True)
-        font_sm = pygame.font.SysFont("monospace", 12)
+        font_xl = get_font(20, bold=True)
+        font_lg = get_font(16, bold=True)
+        font_sm = get_font(12)
 
         # Header stripe
         hdr_col = (180, 30, 30) if urgent else (140, 110, 0)
@@ -462,8 +463,8 @@ class VectorRenderer:
         # Determine state string from cargo
         status = cargo.state_for_terminal()   # "alive", "deceased", or "unobserved"
 
-        font_sm  = pygame.font.SysFont("monospace", 12, bold=True)
-        font_xs  = pygame.font.SysFont("monospace", 10)
+        font_sm  = get_font(12, bold=True)
+        font_xs  = get_font(10)
 
         if status == "alive":
             # ── Gentle green heartbeat pulse on screen edges ─────────────────
@@ -528,7 +529,7 @@ class VectorRenderer:
                                  pygame.Rect(i*6+2, i*6+2, W - i*12-4, H - i*12-4), 5)
             self.surface.blit(sup_surf, (0, 0))
             # Floating ? symbols that slowly rotate/drift
-            q_font = pygame.font.SysFont("monospace", 18, bold=True)
+            q_font = get_font(18, bold=True)
             q_positions = [(W // 4, H // 3), (3 * W // 4, H // 4),
                            (W // 2, H * 2 // 3), (W // 5, H * 2 // 3)]
             for qi, (qx, qy) in enumerate(q_positions):
@@ -1613,7 +1614,7 @@ class VectorRenderer:
         # Small caption above hailers when in HAIL state
         from antagonists.ai_ship import ST_HAIL, ST_ATTACK
         if aiship.state == ST_HAIL:
-            font = pygame.font.SysFont("monospace", 9, bold=True)
+            font = get_font(9, bold=True)
             pulse = 0.5 + 0.5 * math.sin(t * 4.0)
             col = (int(150 + 105 * pulse), int(220 + 35 * pulse), 80)
             lbl = font.render("HAIL ▸ PRESS E", True, col)
@@ -1621,7 +1622,7 @@ class VectorRenderer:
                               (int(aiship.pos.x) - lbl.get_width() // 2,
                                int(aiship.pos.y) - aiship.radius - 18))
         elif aiship.state == ST_ATTACK:
-            font = pygame.font.SysFont("monospace", 9, bold=True)
+            font = get_font(9, bold=True)
             col = (255, 60, 60)
             lbl = font.render("! HOSTILE", True, col)
             self.surface.blit(lbl,
@@ -1684,7 +1685,7 @@ class VectorRenderer:
             pygame.draw.circle(surf, blip_col, (bx_r, by_r), 3, 1)
 
         # Label
-        font = pygame.font.SysFont("monospace", 8)
+        font = get_font(8)
         label = font.render("RADAR", True, (40, 40, 55))
         surf.blit(label, (cx - label.get_width() // 2, cy + R + 2))
 
@@ -1746,7 +1747,7 @@ class VectorRenderer:
         if self._you_label_t > 0:
             fade = min(1.0, self._you_label_t * 2.0)   # fast in, holds, fades last 0.5s
             alpha = int(210 * fade)
-            lbl_font = pygame.font.SysFont("monospace", 11, bold=True)
+            lbl_font = get_font(11, bold=True)
             lbl = lbl_font.render("YOU", True, (240, 190, 60))
             lbl.set_alpha(alpha)
             self.surface.blit(lbl, (px - lbl.get_width() // 2, py - 36))
@@ -2328,7 +2329,7 @@ class VectorRenderer:
         badge_rect = pygame.Rect(bx - 8, by - 4, 16, 8)
         pygame.draw.rect(self.surface, (8, 4, 0), badge_rect)
         pygame.draw.rect(self.surface, (140, 90, 0), badge_rect, 1)
-        font = pygame.font.SysFont("monospace", 7)
+        font = get_font(7)
         surface_404 = font.render("404", True, (200, 140, 0))
         self.surface.blit(surface_404, (bx - surface_404.get_width() // 2,
                                         by - surface_404.get_height() // 2))
@@ -2607,7 +2608,7 @@ class VectorRenderer:
                                      pygame.Rect(i*4, i*4, W - i*8, H - i*8), 8)
                 self.surface.blit(vignette, (0, 0))
             # Tiny spore level readout bottom-left
-            font_xs = pygame.font.SysFont("monospace", 13)
+            font_xs = get_font(13)
             bars = int(spore_level * 8)
             spore_txt = font_xs.render(
                 f"SPORE {'|' * bars}{'.' * (8 - bars)}", True, (160, 0, 220))
@@ -2660,8 +2661,8 @@ class VectorRenderer:
         self.surface.blit(vignette, (0, 0))
 
         # Main warning — alternates cyan/magenta, large and bold
-        font_big = pygame.font.SysFont("monospace", 30, bold=True)
-        font_sm  = pygame.font.SysFont("monospace", 15)
+        font_big = get_font(30, bold=True)
+        font_sm  = get_font(15)
         col_a = (0, 255, 255) if int(t * 5) % 2 == 0 else (255, 0, 255)
         col_b = (255, 0, 255) if int(t * 5) % 2 == 0 else (0, 255, 255)
 

@@ -7,6 +7,7 @@ import math
 import random
 import pygame
 
+from core.text import get_font
 from delivery.corridor.elements import (
     Platform, MovingPlatform, Hazard, MovingHazard, Ladder,
     NPCEncounter, Collectible, Secret, Checkpoint, StealthZone,
@@ -181,7 +182,7 @@ def _bg_r1(surf, camera_x, t, pal):
 def _bg_r2(surf, camera_x, t, pal):
     """Guest floor 47 — identical doors, long hallway."""
     bg_off = camera_x * 0.5
-    f = pygame.font.SysFont("monospace", 8)
+    f = get_font(8)
     # Doors along both walls
     for wx in range(80, 3000, 160):
         sx = int(wx - bg_off)

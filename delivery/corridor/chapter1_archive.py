@@ -7,6 +7,7 @@ import math
 import random
 import pygame
 
+from core.text import get_font
 from delivery.corridor.elements import (
     Platform, MovingPlatform, Hazard, MovingHazard, Ladder,
     NPCEncounter, Collectible, Secret, Checkpoint, BossRoomTrigger,
@@ -57,7 +58,7 @@ _PAL_R3 = {
 def _bg_r1(surf, camera_x, t, pal):
     """Loading dock — crane hooks, vinyl records, neon signs, speaker cones, propaganda."""
     bg_off = camera_x * 0.45
-    f8 = pygame.font.SysFont("monospace", 8)
+    f8 = get_font(8)
 
     # ── Deep purple brick wall texture ───────────────────────────────────
     brick_off = int(camera_x * 0.15) % 40
@@ -189,8 +190,8 @@ def _bg_r1(surf, camera_x, t, pal):
 def _bg_r2(surf, camera_x, t, pal):
     """Employee corridor — vivid band posters, surveillance cam, graffiti, waveform."""
     bg_off = camera_x * 0.5
-    f8 = pygame.font.SysFont("monospace", 8)
-    f7 = pygame.font.SysFont("monospace", 7)
+    f8 = get_font(8)
+    f7 = get_font(7)
     bands = ["THE NULL SETS", "VOID UNION", "LOCAL STATIC", "ARCHIVE RATS",
              "BARGE CHASERS", "CLONEWAVE", "NOISE OF 404", "FEEDBACK LOOP"]
     poster_cols = [(220, 60, 200), (60, 220, 160), (220, 150, 0), (0, 200, 230),

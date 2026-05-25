@@ -8,6 +8,7 @@ import random
 import pygame
 
 from renderer.sci_fi_ui import draw_mario_brick_platform
+from core.text import get_font
 
 CORRIDOR_W = 400
 CORRIDOR_H = 360
@@ -382,7 +383,7 @@ class NPCEncounter(Element):
                              (sx + 10, FLOOR_Y - 50),
                              (sx, FLOOR_Y - 40),
                              (sx - 10, FLOOR_Y - 50)], 1)
-        f = pygame.font.SysFont("monospace", 9)
+        f = get_font(9)
         s = f.render(self.npc_name[:8], True, col)
         surf.blit(s, (sx - s.get_width() // 2, FLOOR_Y - 78))
 
@@ -453,7 +454,7 @@ class Secret(Element):
             p3 = (sx + int(10 * math.cos(math.radians((a + 1) * 72 - 90))),
                   sy + int(10 * math.sin(math.radians((a + 1) * 72 - 90))))
             pygame.draw.polygon(surf, col, [p1, p2, p3])
-        f = pygame.font.SysFont("monospace", 7)
+        f = get_font(7)
         s = f.render("★", True, col)
         surf.blit(s, (sx - s.get_width() // 2, sy - 22))
 
@@ -476,7 +477,7 @@ class Checkpoint(Element):
         pygame.draw.line(surf, col, (sx, CEIL_Y), (sx, FLOOR_Y), 2)
         # Banner
         pygame.draw.rect(surf, col, (sx, CEIL_Y + 10, 50, 16))
-        f = pygame.font.SysFont("monospace", 9, bold=True)
+        f = get_font(9, bold=True)
         s = f.render("SAVE", True, (0, 0, 0))
         surf.blit(s, (sx + 4, CEIL_Y + 12))
 
@@ -584,7 +585,7 @@ class BossRoomTrigger(Element):
         pul = int(180 + 75 * math.sin(t * 2.0))
         col = (pul, int(pul * 0.5), 0)
         pygame.draw.line(surf, col, (sx, CEIL_Y), (sx, FLOOR_Y), 3)
-        f = pygame.font.SysFont("monospace", 9, bold=True)
+        f = get_font(9, bold=True)
         s = f.render("BOSS", True, col)
         surf.blit(s, (sx + 4, CEIL_Y + 4))
 
@@ -665,7 +666,7 @@ class QuantumDoor(Element):
                              (sx - self.W // 2, CEIL_Y, self.W, self.H), 2)
             # Door knob
             pygame.draw.circle(surf, col, (sx + self.W // 2 - 6, (CEIL_Y + FLOOR_Y) // 2), 4)
-            f = pygame.font.SysFont("monospace", 9)
+            f = get_font(9)
             txt = "UP" if self._state == "idle" else "OPEN" if self._state == "open" else ""
             if txt:
                 s = f.render(txt, True, col)
@@ -784,7 +785,7 @@ class SteamVent(Element):
                 surf.blit(steam, (sx - wd + jitter, int(self.y) - 8 - yo - 4))
         # Disabled: dim grey, "DSBLD" tag
         elif self._phase == self.PHASE_DISABLED:
-            f = pygame.font.SysFont("monospace", 7, bold=True)
+            f = get_font(7, bold=True)
             tg = f.render("OFFLINE", True, (90, 90, 90))
             surf.blit(tg, (sx - tg.get_width() // 2, int(self.y) - 36))
 
@@ -838,7 +839,7 @@ class Tripwire(Element):
             pulse = abs(math.sin(t * 14.0))
             col   = (255, int(180 * pulse), int(60 * pulse))
             pygame.draw.line(surf, col, (x0, int(self.y)), (x1, int(self.y)), 2)
-            f = pygame.font.SysFont("monospace", 8, bold=True)
+            f = get_font(8, bold=True)
             al = f.render("ALERT", True, col)
             surf.blit(al, (sx - al.get_width() // 2, int(self.y) - 12))
         else:

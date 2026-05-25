@@ -1,6 +1,7 @@
 from __future__ import annotations
 import math
 import pygame
+from core.text import get_font
 from config import settings as S
 from core.event_bus import (bus, Subscriber, EVT_BAX_SPEAK, EVT_COMMS_SPEAK,
                             EVT_DEBT_UPDATE, EVT_HULL_DAMAGE)
@@ -122,7 +123,7 @@ class CockpitRenderer(Subscriber):
 
     def _get_font(self) -> pygame.font.Font:
         if self._font is None:
-            self._font = pygame.font.SysFont("monospace", 13)
+            self._font = get_font(13)
         return self._font
 
     # ------------------------------------------------------------------

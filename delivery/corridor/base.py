@@ -11,6 +11,7 @@ import random
 import pygame
 
 from renderer.sci_fi_ui import draw_courier_sprite
+from core.text import get_font
 
 from delivery.corridor.elements import (
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H, PLAYER_W,
@@ -113,9 +114,9 @@ class _CorridorDialog:
         pygame.draw.rect(surf, (0, 200, 100),
                          (dx, dy, self.DIALOG_W, self.DIALOG_H), 2)
 
-        f_name  = pygame.font.SysFont("monospace", 11, bold=True)
-        f_text  = pygame.font.SysFont("monospace", 10)
-        f_input = pygame.font.SysFont("monospace", 11)
+        f_name  = get_font(11, bold=True)
+        f_text  = get_font(10)
+        f_input = get_font(11)
 
         # NPC name header
         ns = f_name.render(f"[ {self._enc.npc_name} ]", True, (0, 230, 110))
@@ -512,7 +513,7 @@ class Corridor:
         if (room.branch_x is not None
                 and abs(self._px - room.branch_x) < 80
                 and self._active_path is None):
-            f = pygame.font.SysFont("monospace", 10)
+            f = get_font(10)
             s = f.render("W/↑ = HIGH PATH  ·  keep running = LOW PATH",
                          True, (200, 200, 0))
             surf.blit(s, (CORRIDOR_W // 2 - s.get_width() // 2, CEIL_Y + 8))
@@ -542,7 +543,7 @@ class Corridor:
             surf.blit(ov, (0, 0))
             # Caption — visible as screen fades back in (dir=1); fades with overlay
             if self._transition_caption and alpha > 0:
-                fc = pygame.font.SysFont("monospace", 14, bold=True)
+                fc = get_font(14, bold=True)
                 cs = fc.render(self._transition_caption, True, (0, 220, 100))
                 cap = pygame.Surface(cs.get_size(), pygame.SRCALPHA)
                 cap.blit(cs, (0, 0))
@@ -805,7 +806,7 @@ class Corridor:
 
         # ── Layer 5: background warning text stencils on wall ─────────────────
         warn_off = int(self._cam_x * 0.3) % 320
-        f_stencil = pygame.font.SysFont("monospace", 9)
+        f_stencil = get_font(9)
         for wx in range(-warn_off, CORRIDOR_W + 320, 320):
             msgs = ["AUTHORISED PERSONNEL ONLY", "SECTION 7-C", "NO CARGO BEYOND THIS POINT",
                     "TRANSIT ZONE — KEEP MOVING", "UNION LOCALS ONLY", "CLEARANCE REQUIRED"]
@@ -859,7 +860,7 @@ class Corridor:
             # Small box with question mark
             pygame.draw.rect(surf, (60, 20, 80), (bx + 2, by + 2, 14, 18))
             pygame.draw.rect(surf, (120, 60, 160), (bx + 2, by + 2, 14, 18), 1)
-            f = pygame.font.SysFont("monospace", 9, bold=True)
+            f = get_font(9, bold=True)
             s = f.render("?", True, (180, 100, 220))
             surf.blit(s, (bx + 5, by + 6))
         else:
@@ -868,8 +869,8 @@ class Corridor:
             pygame.draw.rect(surf, (255, 190, 0), (bx, by + 4, 10, 14), 1)
 
     def _draw_hud(self, surf, t, room):
-        f    = pygame.font.SysFont("monospace", 13)
-        fsm  = pygame.font.SysFont("monospace", 10)
+        f    = get_font(13)
+        fsm  = get_font(10)
         t_col = (0, 220, 100) if self._elapsed < room.star3_t else \
                 (255, 180, 0) if self._elapsed < room.star2_t else (220, 60, 60)
         surf.blit(f.render(f"TIME  {self._elapsed:>5.1f}s", True, t_col), (6, 4))
@@ -916,9 +917,9 @@ class Corridor:
         ov.fill((0, 0, 0, 170))
         surf.blit(ov, (0, 0))
 
-        fh  = pygame.font.SysFont("monospace", 20, bold=True)
-        f   = pygame.font.SysFont("monospace", 12)
-        fsm = pygame.font.SysFont("monospace", 11)
+        fh  = get_font(20, bold=True)
+        f   = get_font(12)
+        fsm = get_font(11)
 
         label_col = [(220, 60, 60), (255, 180, 0), (0, 240, 110)][self._stars - 1]
         label_txt = ["★☆☆  1 STAR", "★★☆  2 STARS", "★★★  3 STARS!"][self._stars - 1]

@@ -7,6 +7,7 @@ import math
 import random
 import pygame
 
+from core.text import get_font
 from delivery.corridor.elements import (
     Platform, MovingPlatform, Hazard, MovingHazard, Ladder,
     ToggleBeam, NPCEncounter, Collectible, Secret, Checkpoint,
@@ -57,7 +58,7 @@ _PAL_R3 = {
 def _bg_r1(surf, camera_x, t, pal):
     """Decontam chamber — drifting spores, UV strips, vivid biohazard signs, warning lines."""
     bg_off = camera_x * 0.5
-    f8 = pygame.font.SysFont("monospace", 8)
+    f8 = get_font(8)
 
     # ── Clean lab wall panels ─────────────────────────────────────────────
     for wx in range(0, 2600, 190):

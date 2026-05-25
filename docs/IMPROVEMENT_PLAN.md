@@ -15,7 +15,7 @@
 | Epic | Done | Partial | Open | Notes |
 |------|------|---------|------|-------|
 | **Phase 0** — Trust fixes | 5 | 0 | 0 | Shipped: controls/trust blockers closed |
-| **1** — Code hygiene | 7 | 2 | 1 | NLTK lazy bootstrap shipped; remaining gap = font-cache cleanup |
+| **1** — Code hygiene | 8 | 2 | 0 | All Epic 1 items shipped — font cache + NLTK lazy bootstrap closed; minor `[~]` items remain inline |
 | **2** — Flight feel | 7 | 0 | 0 | Flight-feel pass complete |
 | **3** — Sector variety | 3 | 3 | 0 | Themes drive hazards; collapsing well + debris cloud now also wired from `SectorLayout.hazards` |
 | **4** — Corridor | 6 | 3 | 0 | Framework shipped; black wipe + `ENTERING:` caption + end-card stats live; music remains open |
@@ -126,12 +126,24 @@ These are the directional answers backing this plan. Don't re-litigate — imple
 The `/dead-drift/` subtree is a ~3,500-LOC near-duplicate of the live root, including an older `main.py` whose NLTK bootstrap uses the broken pre-`punkt_tab` paths. Nothing in the live game imports it. **Delete the entire directory.** Pre-flight: run a project-wide grep for any string referencing the path (build scripts, CI configs, README links) and clear them before the rm.
 
 ### 1.2 Font caching helper — [x]
-At least 40 `pygame.font.SysFont(...)` calls live inside per-frame draw paths in `core/game.py` (with smaller pockets in `terminal/terminal.py`, `delivery/delivery_sequence.py`, `roguelite/shop.py`, `renderer/cockpit_renderer.py`, `roguelite/loadout_draft.py`, `delivery/platformer.py`, `delivery/obstacles.py`, `play.py`, `ship/hud.py`). Each call is a font lookup; at 60 FPS, this is hundreds of redundant constructions per second.
+Originally 200+ `pygame.font.SysFont(...)` calls lived inside per-frame draw paths in `core/game.py` (with smaller pockets in `terminal/terminal.py`, `delivery/delivery_sequence.py`, `roguelite/shop.py`, `renderer/cockpit_renderer.py`, `roguelite/loadout_draft.py`, `delivery/platformer.py`, `delivery/obstacles.py`, `play.py`, `ship/hud.py`). Each call was a font lookup; at 60 FPS, this was hundreds of redundant constructions per second.
 
 Land a single `Game._font(size: int, bold: bool = False, italic: bool = False)` helper that memoizes by `(size, bold, italic)`. Route every existing `pygame.font.SysFont("monospace", …)` through it. Keep the API tight — one helper, used everywhere.
 
 **May 2026:** `core/text.py` `get_font()` + `install_font_patch()` exist; `roguelite/shop.py` has local cache. `core/game.py`, `delivery/delivery_sequence.py`, and others still call raw `SysFont` in draw paths.
 **Phase 1 (May 25 2026):** `install_font_patch()` now called from `play.py` `main()` ahead of any `SysFont` lookups, so the patch covers every draw path — shipped.
+**Phase 3 (May 25 2026):** Direct `get_font()` adoption swept across every
+hot draw path. `core/game.py`, `delivery/{platformer,obstacles,delivery_sequence}.py`,
+`delivery/corridor/{base,elements,chapter1..4}.py`, `terminal/{terminal,npc_portraits}.py`,
+`renderer/{vector_renderer,sci_fi_ui,cockpit_renderer}.py`, `ship/hud.py`,
+`roguelite/{loadout_draft,shop}.py`, and `play.py` all now call
+`from core.text import get_font` instead of `pygame.font.SysFont("monospace", ...)`.
+`core/text.get_font()` gained an `italic=` flag so the three italic
+call-sites adopt it cleanly. `roguelite/shop.py`'s local
+`_FONT_CACHE` dict is gone; the helper now defers to `get_font()`.
+The legacy comment in `core/game.py:55` is the only remaining
+`SysFont` mention in the production tree, and `tests/test_font_cache.py`
+asserts no real call sites linger.
 
 ### 1.3 Event bus fixes — [x]
 `core/event_bus.py` has two latent issues:

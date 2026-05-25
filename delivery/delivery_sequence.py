@@ -15,6 +15,7 @@ from delivery.corridor import make_corridor
 from delivery.corridor.elements import CORRIDOR_W, CORRIDOR_H
 from config import settings as S
 from renderer.sci_fi_ui import draw_space_crawl
+from core.text import get_font
 
 _APPROACH_CRAWL = [
     "Episode MCLXIV: THE DEBT STRIKES BACK (AT YOUR WALLET)",
@@ -121,7 +122,7 @@ def _draw_chapter_station_exterior(surface: pygame.Surface, cx: int, cy: int,
         pygame.draw.rect(surface, (8, 16, 8), logo)
         pygame.draw.rect(surface, trim, logo, 1)
         if scale > 0.35:
-            font = pygame.font.SysFont("monospace", max(8, int(13 * scale)), bold=True)
+            font = get_font(max(8, int(13 * scale)), bold=True)
             ns = font.render("NS", True, trim)
             surface.blit(ns, (logo.centerx - ns.get_width() // 2,
                               logo.centery - ns.get_height() // 2))
@@ -168,7 +169,7 @@ def _draw_chapter_station_exterior(surface: pygame.Surface, cx: int, cy: int,
         pygame.draw.rect(surface, trim, under, 1)
 
     if scale > 0.4:
-        font = pygame.font.SysFont("monospace", max(8, int(9 * scale)), bold=True)
+        font = get_font(max(8, int(9 * scale)), bold=True)
         label = font.render(_STATION_THEMES.get(chapter, _STATION_THEMES[1])[2].split(" / ")[0],
                             True, trim)
         surface.blit(label, (cx - label.get_width() // 2, cy + int(116 * scale)))
@@ -196,7 +197,7 @@ def _draw_chapter_bay_dressing(surface: pygame.Surface, W: int, H: int,
         logo = pygame.Rect(W // 2 - 82, 112, 164, 62)
         pygame.draw.rect(surface, (8, 12, 8), logo)
         pygame.draw.rect(surface, trim, logo, 2)
-        font = pygame.font.SysFont("monospace", 24, bold=True)
+        font = get_font(24, bold=True)
         txt = font.render("NOVA SOMA", True, lit)
         surface.blit(txt, (logo.centerx - txt.get_width() // 2, logo.y + 9))
         for x in range(116, W - 116, 42):
@@ -226,7 +227,7 @@ def _draw_chapter_bay_dressing(surface: pygame.Surface, W: int, H: int,
     placard = pygame.Rect(W // 2 - 164, 48, 328, 28)
     pygame.draw.rect(surface, (5, 8, 7), placard)
     pygame.draw.rect(surface, trim, placard, 1)
-    font = pygame.font.SysFont("monospace", 10, bold=True)
+    font = get_font(10, bold=True)
     txt = font.render(name.upper(), True, lit)
     surface.blit(txt, (placard.centerx - txt.get_width() // 2,
                        placard.centery - txt.get_height() // 2))
@@ -480,7 +481,7 @@ class DeliverySequence:
 
         # Signage panels
         if station_scale > 0.35:
-            f_sign = pygame.font.SysFont("monospace", max(8, int(9 * station_scale)), bold=True)
+            f_sign = get_font(max(8, int(9 * station_scale)), bold=True)
             for sign_text, sy_frac, s_col in [
                 ("BAY 3",        -0.42, (200, 140,  0)),
                 ("LOCAL 404",     0.38, (  0, 160, 60)),
@@ -592,7 +593,7 @@ class DeliverySequence:
             lk = pygame.Surface((80, 22), pygame.SRCALPHA)
             lk.fill((0, 255, 100, 160))
             surface.blit(lk, (cone_cx - 40, cone_cy - 11))
-            fl = pygame.font.SysFont("monospace", 14, bold=True)
+            fl = get_font(14, bold=True)
             ls = fl.render("LOCKED", True, (0, 0, 0))
             surface.blit(ls, (cone_cx - ls.get_width() // 2, cone_cy - 8))
 
@@ -625,12 +626,12 @@ class DeliverySequence:
 
         # ── Chapter station label ────────────────────────────────────────
         theme = _STATION_THEMES.get(self.chapter, _STATION_THEMES[1])
-        f_stn = pygame.font.SysFont("monospace", 11)
+        f_stn = get_font(11)
         stn_s = f_stn.render(theme[2], True, theme[1])
         surface.blit(stn_s, (st_cx - stn_s.get_width() // 2, st_cy - sh // 2 - 18))
 
         # ── HUD ───────────────────────────────────────────────────────────
-        f = pygame.font.SysFont("monospace", 14)
+        f = get_font(14)
         surface.blit(f.render("BEAT 1  ·  ALIGN NOSE TO BAY  (A/D rotate  W/S nudge)",
                                True, (140, 100, 0)), (W // 2 - 260, 12))
         remain = max(0.0, _APPROACH_DURATION - t)
@@ -816,7 +817,7 @@ class DeliverySequence:
         pad_y  = H - 140
         pad_cx = W // 2
         pad_w  = 220
-        f_sm   = pygame.font.SysFont("monospace", 9)
+        f_sm   = get_font(9)
         for ci, (cxc, cyc, cwc, chc) in enumerate([
             (84,  H - 210, 44, 54), (84,  H - 148, 36, 44),
             (132, H - 164, 30, 38), (84,  H -  88, 52, 36),
@@ -895,8 +896,8 @@ class DeliverySequence:
         py_pl = 138
         pygame.draw.rect(surface, (10, 24, 12), (px_pl, py_pl, pw2, ph2))
         pygame.draw.rect(surface, (0, 120, 50), (px_pl, py_pl, pw2, ph2), 2)
-        fp2  = pygame.font.SysFont("monospace", 12, bold=True)
-        fp2s = pygame.font.SysFont("monospace", 10)
+        fp2  = get_font(12, bold=True)
+        fp2s = get_font(10)
         ps1  = fp2.render("UNION LOCAL 404", True, (0, 180, 80))
         ps2  = fp2s.render("CERTIFIED DOCKING FACILITY — BAY 3", True, (0, 100, 50))
         surface.blit(ps1, (W // 2 - ps1.get_width() // 2, py_pl + 6))
@@ -955,8 +956,8 @@ class DeliverySequence:
                 pygame.draw.line(surface, bc, (ship_cx,     nose_y), (ship_cx,     cy3 + 4), 2)
 
         # ── Beat 2 interactive overlay ────────────────────────────────────
-        f    = pygame.font.SysFont("monospace", 14)
-        fsm2 = pygame.font.SysFont("monospace", 11)
+        f    = get_font(14)
+        fsm2 = get_font(11)
         cx   = W // 2
 
         # ── Epic 14.2 — Cockpit instrument panel (continuous speed-dock) ──
@@ -977,9 +978,9 @@ class DeliverySequence:
         pygame.draw.rect(surface, (0, 70, 32),
                          (inst_x, inst_y, inst_w, inst_h),
                          border_radius=4, width=1)
-        fp7  = pygame.font.SysFont("monospace", 7, bold=True)
-        fp8  = pygame.font.SysFont("monospace", 8, bold=True)
-        fp10 = pygame.font.SysFont("monospace", 10)
+        fp7  = get_font(7, bold=True)
+        fp8  = get_font(8, bold=True)
+        fp10 = get_font(10)
 
         # Header
         hdr = fp8.render("DOCK APPROACH COMPUTER  ·  W/S throttle  ·  A/D pitch",
@@ -1080,8 +1081,8 @@ class DeliverySequence:
         t    = self._clamp_anim_t
         surface.fill((4, 12, 6))
         _draw_chapter_bay_dressing(surface, W, H, t, self.chapter)
-        f    = pygame.font.SysFont("monospace", 14)
-        fsm2 = pygame.font.SysFont("monospace", 12)
+        f    = get_font(14)
+        fsm2 = get_font(12)
         cx   = W // 2
         pad_y = H - 140
 
@@ -1190,7 +1191,7 @@ class DeliverySequence:
                 (px + 10, py + 16), (px - 10, py + 16)]
         pygame.draw.polygon(surface, (12, 12, 20), body)
         pygame.draw.polygon(surface, (40, 32, 0), body, 1)
-        f = pygame.font.SysFont("monospace", 9)
+        f = get_font(9)
         surface.blit(f.render("BAX", True, (60, 50, 0)), (px - 12, py + 18))
 
     # ── Phase: Result ─────────────────────────────────────────────────────
@@ -1235,9 +1236,9 @@ class DeliverySequence:
         star_label = ["☆☆☆  POOR DELIVERY", "★☆☆  ACCEPTABLE", "★★☆  GOOD RUN", "★★★  FLAWLESS"][stars]
         star_col   = [(80, 80, 80), (220, 60, 60), (255, 180, 0), (0, 220, 100)][stars]
 
-        fh  = pygame.font.SysFont("monospace", 22, bold=True)
-        fmd = pygame.font.SysFont("monospace", 16)
-        fsm = pygame.font.SysFont("monospace", 13)
+        fh  = get_font(22, bold=True)
+        fmd = get_font(16)
+        fsm = get_font(13)
 
         hs = fh.render(star_label, True, star_col)
         surface.blit(hs, (W // 2 - hs.get_width() // 2, py_t + 24))

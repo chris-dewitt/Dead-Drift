@@ -51,15 +51,12 @@ _LOCATIONS = [
 _STEAM_X_FRACS = [0.06, 0.28, 0.72, 0.94]
 _ITEM_ICON_SIZE = 44
 
-# Module-level font cache — avoids re-creating fonts every frame
-_FONT_CACHE: dict[tuple, pygame.font.Font] = {}
-
-
 def _font(size: int, bold: bool = False) -> pygame.font.Font:
-    key = (size, bold)
-    if key not in _FONT_CACHE:
-        _FONT_CACHE[key] = pygame.font.SysFont("monospace", size, bold=bold)
-    return _FONT_CACHE[key]
+    """Thin wrapper preserved for back-compat — defers to the central
+    cached helper so all shop renders honour the global readability
+    settings (Epic 1.2)."""
+    from core.text import get_font
+    return get_font(size, bold=bold)
 
 
 # ---------------------------------------------------------------------------

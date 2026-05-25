@@ -1,6 +1,7 @@
 from __future__ import annotations
 import random
 import pygame
+from core.text import get_font
 from config import settings as S
 from ship.ship import PlayerShip
 
@@ -23,7 +24,7 @@ class HUD:
 
     def _get_font(self) -> pygame.font.Font:
         if self._font is None:
-            self._font = pygame.font.SysFont("monospace", 14)
+            self._font = get_font(14)
         return self._font
 
     # ------------------------------------------------------------------

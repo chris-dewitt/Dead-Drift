@@ -7,7 +7,7 @@ from config import settings as S
 from core.state_manager import StateManager, GameState
 from renderer.visual_fx import VisualFX
 from core.transitions import TransitionManager
-from core.text import install_font_patch
+from core.text import install_font_patch, get_font
 from core.event_bus import bus, EVT_SHIP_DESTROYED, EVT_RUN_END, EVT_TORCH_ACTIVE, EVT_DEBT_DING, EVT_BAX_SPEAK
 from roguelite.meta_progression import MetaProgression
 from roguelite.save_manager import SaveManager
@@ -862,9 +862,9 @@ class Game:
         self.screen.blit(bg, (x, y))
         pygame.draw.rect(self.screen, (160, 110, 30), (x, y, W, H), 2)
 
-        fhd  = pygame.font.SysFont("monospace", 17, bold=True)
-        frow = pygame.font.SysFont("monospace", 15, bold=True)
-        fsub = pygame.font.SysFont("monospace", 11)
+        fhd  = get_font(17, bold=True)
+        frow = get_font(15, bold=True)
+        fsub = get_font(11)
 
         title = fhd.render("NOVA SOMA COURIER RISK ASSESSMENT", True, (220, 185, 80))
         self.screen.blit(title, (cx - title.get_width() // 2, y + 14))
@@ -919,7 +919,7 @@ class Game:
             frac = self._death_hold_t / 0.9   # 1.0 at start, 0.0 at end
             r    = int(200 * frac)
             self.screen.fill((r, 0, 0))
-            f = pygame.font.SysFont("monospace", 28, bold=True)
+            f = get_font(28, bold=True)
             if frac > 0.4:
                 txt = f.render("SHIP DESTROYED", True, (255, 80, 80))
                 self.screen.blit(txt, (S.SCREEN_W // 2 - txt.get_width() // 2,
@@ -980,9 +980,9 @@ class Game:
         pygame.display.flip()
 
     def _render_sector_hud(self):
-        font     = pygame.font.SysFont("monospace", 14)
-        font_sm  = pygame.font.SysFont("monospace", 12)
-        font_hd  = pygame.font.SysFont("monospace", 14, bold=True)
+        font     = get_font(14)
+        font_sm  = get_font(12)
+        font_hd  = get_font(14, bold=True)
         rm    = self.run_mgr
         sec_w = S.SCREEN_W
         t     = pygame.time.get_ticks() / 1000.0
@@ -1011,7 +1011,7 @@ class Game:
             pygame.draw.rect(self.screen, (60, 50, 20), (px, pip_y, pip_w, pip_h), 1)
 
         # Label upcoming shop stops and the delivery
-        pip_label_font = pygame.font.SysFont("monospace", 9)
+        pip_label_font = get_font(9)
         for i in range(S.SECTORS_PER_RUN):
             px = pip_x0 + i * (pip_w + pip_gap)
             if i in S.SHOP_SECTORS:
@@ -1120,7 +1120,7 @@ class Game:
         if self._torch_warn_t > 0:
             pulse = abs(math.sin(t * 9.0))
             r_val = int(200 + 55 * pulse)
-            torch_font = pygame.font.SysFont("monospace", 20, bold=True)
+            torch_font = get_font(20, bold=True)
             torch_surf = torch_font.render(
                 f"!! SNAP TETHER — MODULE LOSS IN  {self._torch_warn_t:.1f}s !!",
                 True, (r_val, 30, 20))
@@ -1156,8 +1156,8 @@ class Game:
         pygame.draw.rect(self.screen, border_col, (x, y, W, H), 2)
 
         # Header chip — left-justified title with thin underline
-        title_font = pygame.font.SysFont("monospace", 14, bold=True)
-        sub_font   = pygame.font.SysFont("monospace", 11)
+        title_font = get_font(14, bold=True)
+        sub_font   = get_font(11)
         title_surf = title_font.render(ev.title, True, (240, 200, 90))
         self.screen.blit(title_surf, (x + 12, y + 8))
         # COMMS tag right-justified
@@ -1177,7 +1177,7 @@ class Game:
         pygame.draw.rect(self.screen, fill_col, (x + 12, bar_y, fill_w, bar_h))
 
         # Choice prompts — bottom row
-        choice_font = pygame.font.SysFont("monospace", 13, bold=True)
+        choice_font = get_font(13, bold=True)
         accept = choice_font.render(f"[Y]  {ev.accept_label}", True, (110, 220, 130))
         ignore = choice_font.render(f"  -  {ev.ignore_label}", True, (150, 150, 150))
         sec_txt = choice_font.render(f"{fe.t_remaining:0.1f}s", True, (200, 160, 90))
@@ -1207,9 +1207,9 @@ class Game:
         pygame.draw.rect(panel, (0, 220, 90, a), (0, 0, W, H), 2)
         pygame.draw.rect(panel, (0, 110, 45, a), (4, 4, W - 8, H - 8), 1)
 
-        font_hd = pygame.font.SysFont("monospace", 19, bold=True)
-        font_md = pygame.font.SysFont("monospace", 17)
-        font_sm = pygame.font.SysFont("monospace", 13)
+        font_hd = get_font(19, bold=True)
+        font_md = get_font(17)
+        font_sm = get_font(13)
 
         # Header
         hdr = font_hd.render(
@@ -1262,7 +1262,7 @@ class Game:
         t        = pygame.time.get_ticks() / 1000.0
         blink    = int(t * 2) % 2 == 0
 
-        font = pygame.font.SysFont("monospace", 14, bold=True)
+        font = get_font(14, bold=True)
         col  = (255, 80, 0) if speed > 400 else S.AMBER_TERM
 
         strip = pygame.Surface((S.SCREEN_W, 20), pygame.SRCALPHA)
@@ -1370,8 +1370,8 @@ class Game:
                     int(col[2] * pulse * 0.35))
         pygame.draw.circle(self.screen, glow_col, (cx, cy - 30), 80, 4)
 
-        fh = pygame.font.SysFont("monospace", 28, bold=True)
-        fs = pygame.font.SysFont("monospace", 14)
+        fh = get_font(28, bold=True)
+        fs = get_font(14)
         title = fh.render(self._terminal_win_str, True, col)
         self.screen.blit(title, (cx - title.get_width() // 2, cy - 50))
 
@@ -1465,27 +1465,27 @@ class Game:
                 surf.blit(halo, (tx - tube_w // 2 - 20, tube_top - 20))
 
                 # "DECANTING" label below active tube
-                fa = pygame.font.SysFont("monospace", 9, bold=True)
+                fa = get_font(9, bold=True)
                 lbl = fa.render("DECANTING", True,
                                 (0, int(130 * glow_pulse), int(220 * glow_pulse)))
                 surf.blit(lbl, (tx - lbl.get_width() // 2, tr.bottom + 14))
 
         # Nova Soma logo on back wall (dim, corporate)
-        f_logo = pygame.font.SysFont("monospace", 11, bold=True)
+        f_logo = get_font(11, bold=True)
         logo = f_logo.render("NOVA SOMA SOLUTIONS — DECANTING WARD 7", True, (20, 22, 28))
         surf.blit(logo, (W // 2 - logo.get_width() // 2, gy - 22))
 
     def _render_decanting(self):
         t = pygame.time.get_ticks() / 1000.0
-        font_sm  = pygame.font.SysFont("monospace", 13)
-        font     = pygame.font.SysFont("monospace", 17)
-        font_hd  = pygame.font.SysFont("monospace", 11)
+        font_sm  = get_font(13)
+        font     = get_font(17)
+        font_hd  = get_font(11)
 
         # Clone tube hospital background
         self._draw_clone_tube_bg(t)
 
         # Nova Soma header — rotating tagline per clone
-        header = pygame.font.SysFont("monospace", 14, bold=True)
+        header = get_font(14, bold=True)
         tagline = self._DECANT_TAGLINES[
             self.meta.clone_count % len(self._DECANT_TAGLINES)]
         tagline_surf = header.render(
@@ -1521,7 +1521,7 @@ class Game:
              (160, 160, 170), font),
             ("", None, font_sm),
             (f"OUTSTANDING BALANCE:   {self.meta.debt:,} cr",
-             S.AMBER_TERM, pygame.font.SysFont("monospace", 20, bold=True)),
+             S.AMBER_TERM, get_font(20, bold=True)),
             ("", None, font_sm),
             ("This invoice is non-negotiable. Debt is hereditary and compound.",
              (60, 60, 68), font_sm),
@@ -1553,8 +1553,8 @@ class Game:
                 self.screen.blit(stats_panel, (stats_x, stats_y))
                 pygame.draw.rect(self.screen, (35, 50, 70),
                                  (stats_x, stats_y, stats_w, stats_h), 1)
-                f_hdr = pygame.font.SysFont("monospace", 10, bold=True)
-                f_body = pygame.font.SysFont("monospace", 9)
+                f_hdr = get_font(10, bold=True)
+                f_body = get_font(9)
                 hdr = f_hdr.render("CAREER LEDGER", True, (95, 150, 180))
                 self.screen.blit(hdr, (stats_x + 10, stats_y + 8))
                 # Run + career summaries combined
@@ -1580,7 +1580,7 @@ class Game:
         # Bax wake-up line — use the line cached at death time (not re-rolled each frame)
         bax_line = self._decant_bax_line or random.choice(self._DECANT_BAX).format(
             n=self.meta.clone_count)
-        font_bax = pygame.font.SysFont("monospace", 12)
+        font_bax = get_font(12)
         bax_surf = font_bax.render(bax_line, True, (100, 130, 100))
         self.screen.blit(bax_surf,
                          (S.SCREEN_W // 2 - bax_surf.get_width() // 2,
@@ -1664,9 +1664,9 @@ class Game:
                          (0, S.SCREEN_H - bar_h), (S.SCREEN_W, S.SCREEN_H - bar_h), 1)
 
         # --- Completed chapter banner ---
-        f_label = pygame.font.SysFont("monospace", 13, bold=True)
-        f_title = pygame.font.SysFont("monospace", 34, bold=True)
-        f_sub   = pygame.font.SysFont("monospace", 14, italic=True)
+        f_label = get_font(13, bold=True)
+        f_title = get_font(34, bold=True)
+        f_sub   = get_font(14, italic=True)
 
         # Stamp
         label = f_label.render(f"CHAPTER {completed}  ::  DELIVERED",
@@ -1696,7 +1696,7 @@ class Game:
         shown += cursor
 
         # Wrapped render
-        f_bax = pygame.font.SysFont("monospace", 17)
+        f_bax = get_font(17)
         max_w = S.SCREEN_W - 220
         words = shown.split(" ")
         lines: list[str] = []
@@ -1724,9 +1724,9 @@ class Game:
         # --- Next chapter or campaign end card ---
         next_y = S.SCREEN_H - bar_h - 140
         if is_end:
-            f_end_l = pygame.font.SysFont("monospace", 12, bold=True)
-            f_end_t = pygame.font.SysFont("monospace", 28, bold=True)
-            f_end_s = pygame.font.SysFont("monospace", 13)
+            f_end_l = get_font(12, bold=True)
+            f_end_t = get_font(28, bold=True)
+            f_end_s = get_font(13)
             pulse = 0.5 + 0.5 * math.sin(t * 1.6)
             end_col = (int(160 + 80 * pulse), int(220 * pulse + 35), int(40 + 40 * pulse))
             top_label = f_end_l.render("CAMPAIGN COMPLETE", True, (140, 200, 80))
@@ -1738,9 +1738,9 @@ class Game:
             ss = f_end_s.render(stats, True, (170, 170, 190))
             self.screen.blit(ss, (cx - ss.get_width() // 2, next_y + 56))
         else:
-            f_n_l = pygame.font.SysFont("monospace", 12, bold=True)
-            f_n_t = pygame.font.SysFont("monospace", 26, bold=True)
-            f_n_s = pygame.font.SysFont("monospace", 13, italic=True)
+            f_n_l = get_font(12, bold=True)
+            f_n_t = get_font(26, bold=True)
+            f_n_s = get_font(13, italic=True)
             next_name = self._CHAPTER_NAMES.get(next_ch, f"CHAPTER {next_ch}")
             next_sub  = self._CHAPTER_SUBTITLES.get(next_ch, "")
             label_next = f_n_l.render(f"NEXT  //  CHAPTER {next_ch}", True, (180, 130, 30))
@@ -1760,7 +1760,7 @@ class Game:
         pygame.draw.rect(self.screen, (220, 160, 30),
                          pygame.Rect(bar_x, bar_y, int(bar_w * progress), 4))
 
-        f_foot = pygame.font.SysFont("monospace", 12)
+        f_foot = get_font(12)
         prompt = (f"[ ENTER ]  return to depot"
                   if is_end else
                   f"[ ENTER ]  load next chapter   //   auto in {self._interstitial_t:.0f}s")
@@ -1817,7 +1817,7 @@ class Game:
                          (0, S.SCREEN_H - bar_h), (S.SCREEN_W, S.SCREEN_H - bar_h), 1)
 
         # --- Top bar text: classification stamp + chapter ---
-        font_corp = pygame.font.SysFont("monospace", 12)
+        font_corp = get_font(12)
         stamp = font_corp.render(
             "CLASSIFIED // NOVA SOMA ENTERTAINMENT DIVISION // INTERNAL USE",
             True, (130, 95, 30))
@@ -1826,7 +1826,7 @@ class Game:
         self.screen.blit(ver, (S.SCREEN_W - ver.get_width() - 16, 22))
 
         # --- Title with chromatic aberration ---
-        font_title = pygame.font.SysFont("monospace", 96, bold=True)
+        font_title = get_font(96, bold=True)
         title_str  = "DEAD DRIFT"
         ty = 138
 
@@ -1857,7 +1857,7 @@ class Game:
         pygame.draw.line(self.screen, (200, 140, 0), (ul_x + ul_w, ul_y - cap), (ul_x + ul_w, ul_y + 2), 2)
 
         # --- Tagline ---
-        font_sub = pygame.font.SysFont("monospace", 18)
+        font_sub = get_font(18)
         tagline_lines = [
             "A NEWTONIAN COURIER SIMULATION  //  FOR THE TERMINALLY INDEBTED",
             "5 sectors. crushing debt. one rusted ship. one bolted-on droid.",
@@ -1881,7 +1881,7 @@ class Game:
             self._render_menu_cargo_dossier(t)
 
         # --- Lore strap line (above bottom bar) ---
-        font_lore = pygame.font.SysFont("monospace", 13)
+        font_lore = get_font(13)
         lore_lines = [
             "Union of Repo Men, Local 404. They will come for what you carry.",
             "5 sectors → cargo drop-off → debt reduction.  Snap the tether.  Don't die again.",
@@ -1916,9 +1916,9 @@ class Game:
             pygame.draw.line(self.screen, (200, 70, 70), c, (c[0] + sx * 10, c[1]), 2)
             pygame.draw.line(self.screen, (200, 70, 70), c, (c[0], c[1] + sy * 10), 2)
 
-        font_h = pygame.font.SysFont("monospace", 11, bold=True)
-        font_d = pygame.font.SysFont("monospace", 22, bold=True)
-        font_s = pygame.font.SysFont("monospace", 11)
+        font_h = get_font(11, bold=True)
+        font_d = get_font(22, bold=True)
+        font_s = get_font(11)
 
         hdr = font_h.render("OUTSTANDING BALANCE", True, (200, 80, 80))
         self.screen.blit(hdr, (panel.left + 12, panel.top + 8))
@@ -1945,8 +1945,8 @@ class Game:
             pygame.draw.line(self.screen, (80, 160, 220), c, (c[0] + sx * 10, c[1]), 2)
             pygame.draw.line(self.screen, (80, 160, 220), c, (c[0], c[1] + sy * 10), 2)
 
-        font_h = pygame.font.SysFont("monospace", 11, bold=True)
-        font_v = pygame.font.SysFont("monospace", 12)
+        font_h = get_font(11, bold=True)
+        font_v = get_font(12)
 
         hdr = font_h.render("PILOT MANIFEST", True, (120, 200, 255))
         self.screen.blit(hdr, (panel.left + 12, panel.top + 8))
@@ -1975,7 +1975,7 @@ class Game:
             pygame.draw.line(self.screen, (80, 110, 150), c, (c[0] + sx * 10, c[1]), 2)
             pygame.draw.line(self.screen, (80, 110, 150), c, (c[0], c[1] + sy * 10), 2)
 
-        font = pygame.font.SysFont("monospace", 10, bold=True)
+        font = get_font(10, bold=True)
         hdr = font.render("HULL SCHEMATIC // RUSTBUCKET-α", True, (110, 150, 200))
         self.screen.blit(hdr, (panel.left + 8, panel.top + 6))
 
@@ -2008,7 +2008,7 @@ class Game:
             pygame.draw.circle(self.screen, (200, 230, 255), p, 2)
 
         # Bottom label strip
-        font_s = pygame.font.SysFont("monospace", 9)
+        font_s = get_font(9)
         s1 = font_s.render(f"ROT  {ry:5.2f} rad", True, (90, 120, 160))
         s2 = font_s.render(f"MASS  1.0t  //  HULL {int(S.HULL_MAX)}", True, (90, 120, 160))
         self.screen.blit(s1, (panel.left + 8, panel.bottom - 24))
@@ -2075,9 +2075,9 @@ class Game:
     def _render_main_menu_actions(self, t: float) -> None:
         cx = S.SCREEN_W // 2
         py = int(S.SCREEN_H * 0.54)
-        font_h = pygame.font.SysFont("monospace", 13, bold=True)
-        font_row = pygame.font.SysFont("monospace", 20, bold=True)
-        font_sm = pygame.font.SysFont("monospace", 11)
+        font_h = get_font(13, bold=True)
+        font_row = get_font(20, bold=True)
+        font_sm = get_font(11)
         pulse = 0.5 + 0.5 * math.sin(t * 3.0)
 
         sid = self.save_mgr.active_slot_id
@@ -2089,7 +2089,7 @@ class Game:
         hdr = font_sm.render(hdr_text, True, (120, 120, 150))
 
         if self._run_just_completed:
-            font_c = pygame.font.SysFont("monospace", 14, bold=True)
+            font_c = get_font(14, bold=True)
             cs = font_c.render("// RUN COMPLETE //  DEBT REDUCED  //",
                                True, S.GREEN_TERM)
             self.screen.blit(cs, (cx - cs.get_width() // 2, py - 48))
@@ -2202,9 +2202,9 @@ class Game:
 
         cx = S.SCREEN_W // 2
         cy = S.SCREEN_H // 2 - 40
-        font_t = pygame.font.SysFont("monospace", 32, bold=True)
-        font_r = pygame.font.SysFont("monospace", 22, bold=True)
-        font_s = pygame.font.SysFont("monospace", 12)
+        font_t = get_font(32, bold=True)
+        font_r = get_font(22, bold=True)
+        font_s = get_font(12)
 
         title = font_t.render("—  PAUSED  —", True, S.AMBER_TERM)
         self.screen.blit(title, (cx - title.get_width() // 2, cy))
@@ -2249,8 +2249,8 @@ class Game:
         bar_h = 56
         cy   = S.SCREEN_H - bar_h - 118   # lower on screen, below main menu box
 
-        font_h  = pygame.font.SysFont("monospace", 10, bold=True)
-        font_sm = pygame.font.SysFont("monospace", 9)
+        font_h  = get_font(10, bold=True)
+        font_sm = get_font(9)
 
         for i, (chap, title, desc1, desc2, col, accent) in enumerate(_CARGO_CARDS):
             cx_card = x0 + i * (card_w + gap)
@@ -2340,8 +2340,8 @@ class Game:
             pygame.draw.line(self.screen, (60, 240, 110),
                              c, (c[0], c[1] + sy * 14), 2)
 
-        font_h = pygame.font.SysFont("monospace", 12, bold=True)
-        font_v = pygame.font.SysFont("monospace", 11)
+        font_h = get_font(12, bold=True)
+        font_v = get_font(11)
 
         title = font_h.render(
             "LINGUISTIC PROCESSOR INITIALISING — STAND BY",
@@ -2371,7 +2371,7 @@ class Game:
         bar_h = 56
         bar_y = S.SCREEN_H - bar_h
         # Inside the letterbox bar — scrolling ticker
-        font = pygame.font.SysFont("monospace", 14, bold=True)
+        font = get_font(14, bold=True)
         text = (
             "  >>  NOVA SOMA :: DEBT IS OPPORTUNITY  "
             "  >>  CLONE FASTER. EARN FASTER. THRIVE.  "
@@ -2417,8 +2417,8 @@ class Game:
             pygame.draw.line(self.screen, (200, 150, 50), c, (c[0] + sx * 14, c[1]), 2)
             pygame.draw.line(self.screen, (200, 150, 50), c, (c[0], c[1] + sy * 14), 2)
 
-        font_h = pygame.font.SysFont("monospace", 11, bold=True)
-        font_s = pygame.font.SysFont("monospace", 10)
+        font_h = get_font(11, bold=True)
+        font_s = get_font(10)
         hdr = font_h.render("BAX // NAV-MORALE", True, (255, 190, 50))
         sub = font_s.render("bolt-on advisor droid", True, (110, 100, 80))
         self.screen.blit(hdr, (panel.centerx - hdr.get_width() // 2, panel.top + 10))

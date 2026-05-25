@@ -181,9 +181,7 @@ Spec + implementation status → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLA
 
 - Per-chapter corridor music tracks (Epic 4.6) and full string audit (Epic 9.4) still open
 - Cargo dossier carousel (Epic 8.2) and Hardcore variant (Epic 8.4 stretch) still open
-- Several `Epic 1.2` font-cache adoption hot paths still call raw `SysFont`
-  inside per-frame draws (cleanup in progress).
 
-(Market + docking graphics, Bax's Records (Epic 8.3), and the lazy NLTK
-bootstrap (Epic 1.10) all shipped May 2026 — see
-`docs/DOCUMENTATION_STATUS.md`.)
+(Market + docking graphics, Bax's Records (Epic 8.3), the lazy NLTK
+bootstrap (Epic 1.10), and the font-cache adoption sweep (Epic 1.2) all
+shipped May 2026 — see `docs/DOCUMENTATION_STATUS.md`.)

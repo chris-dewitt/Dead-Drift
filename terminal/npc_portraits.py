@@ -7,6 +7,7 @@ import math
 import random
 import pygame
 from config import settings as S
+from core.text import get_font
 
 _NAME_TO_KEY = {
     "GARY":                    "gary",
@@ -240,7 +241,7 @@ def _draw_crt_bezel(surface: pygame.Surface, rect: pygame.Rect,
     pygame.draw.line(surface, (100, 64, 0),
                      (label_rect.left, label_rect.bottom),
                      (label_rect.right, label_rect.bottom), 1)
-    font = pygame.font.SysFont("monospace", 8, bold=True)
+    font = get_font(8, bold=True)
     blink = (int(t * 2) % 2 == 0)
     dot_col = (230, 60, 30) if blink else (70, 20, 10)
     pygame.draw.circle(surface, dot_col,
@@ -463,7 +464,7 @@ def _gary(surface, cx, cy, s, disposition, t):
     badge = pygame.Rect(int(cx - 18 * s), int(cy + 52 * s), int(16 * s), int(11 * s))
     pygame.draw.rect(surface, (18, 13, 0), badge)
     pygame.draw.rect(surface, amb, badge, 1)
-    font = pygame.font.SysFont("monospace", max(7, int(7 * s)))
+    font = get_font(max(7, int(7 * s)))
     surface.blit(font.render("404", True, amb), badge.topleft)
 
 
@@ -572,7 +573,7 @@ def _synthetic_droid(surface, cx, cy, s, disposition, t):
 
     # "LOYALTY SUBROUTINE" label when in friendship mode
     if disposition >= 3:
-        font = pygame.font.SysFont("monospace", max(8, int(8 * s)))
+        font = get_font(max(8, int(8 * s)))
         pulse_a = int(180 + 75 * math.sin(t * 3.0))
         label_col = tuple(min(255, int(c * pulse_a / 255)) for c in eye_col)
         label = font.render("LOYALTY SUBROUTINE", True, label_col)
@@ -705,7 +706,7 @@ def _kress(surface, cx, cy, s, disposition, t):
         pygame.draw.circle(surface, (0, alpha_val, int(alpha_val * 0.4)), (sx, sy), 1)
 
     # "COMM LINK" label at top
-    font = pygame.font.SysFont("monospace", max(9, int(10 * s)))
+    font = get_font(max(9, int(10 * s)))
     lbl = font.render("COMM LINK · CHANNEL 7", True, (0, 120, 60))
     surface.blit(lbl, (int(cx - lbl.get_width() // 2), int(cy - 88 * s)))
 
@@ -765,7 +766,7 @@ def _kress(surface, cx, cy, s, disposition, t):
 # ---------------------------------------------------------------------------
 def _unknown(surface, cx, cy, s, disposition, t):
     pygame.draw.circle(surface, (35, 35, 35), (int(cx), int(cy)), int(60 * s), 2)
-    font = pygame.font.SysFont("monospace", max(12, int(38 * s)))
+    font = get_font(max(12, int(38 * s)))
     surf = font.render("?", True, S.AMBER_TERM)
     surface.blit(surf, (int(cx - surf.get_width() // 2),
                         int(cy - surf.get_height() // 2)))
@@ -791,9 +792,9 @@ _DISPATCH = {
 def _backdrop_gary(surface, inner, t):
     """Local 404 field barge cockpit — cramped, functional, overworked."""
     cx = inner.centerx
-    font6  = pygame.font.SysFont("monospace", 6, bold=True)
-    font7  = pygame.font.SysFont("monospace", 7)
-    font8  = pygame.font.SysFont("monospace", 8, bold=True)
+    font6  = get_font(6, bold=True)
+    font7  = get_font(7)
+    font8  = get_font(8, bold=True)
 
     # ── Back wall: heavy horizontal hull-plate seams ───────────────────────
     for i in range(5):
@@ -972,8 +973,8 @@ def _backdrop_gary(surface, inner, t):
 def _backdrop_synthetic_droid(surface, inner, t):
     """Nova Soma sterile processing room — white-green clinical tech horror."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # ── Grid floor — perspective lines converging at horizon ──────────────────
     floor_y  = inner.bottom - 10
@@ -1135,8 +1136,8 @@ def _backdrop_synthetic_droid(surface, inner, t):
 def _backdrop_union_dispatcher(surface, inner, t):
     """Massive union dispatch centre — rows of terminals receding in perspective."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # ── Ceiling: fluorescent light strips with flicker ────────────────────────
     flick = 0.82 + 0.18 * (math.sin(t * 7.1) > 0.55)
@@ -1269,8 +1270,8 @@ def _backdrop_union_dispatcher(surface, inner, t):
 def _backdrop_kress(surface, inner, t):
     """Dimly lit black-market stall — contraband airlock junction."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # ── Corrugated metal wall — vertical corrugation stripes ─────────────────
     for i in range(0, inner.width, 7):
@@ -1400,8 +1401,8 @@ def _backdrop_kress(surface, inner, t):
 def _backdrop_insurance_adjuster(surface, inner, t):
     """Sterile Nova Soma claims office — cubicle hell, ancient terminal, dead plant."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # ── Ceiling tile grid (fluorescent office look) ───────────────────────────
     flick_off = 0.90 + 0.10 * math.sin(t * 4.8)
@@ -1510,8 +1511,8 @@ def _backdrop_insurance_adjuster(surface, inner, t):
 def _backdrop_sandra(surface, inner, t):
     """High-spec courier cockpit — clean, green, perfect. Annoyingly good."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # ── Clean hull panelling — tight seams ────────────────────────────────────
     for i in range(4):
@@ -1619,8 +1620,8 @@ def _backdrop_sandra(surface, inner, t):
 def _backdrop_pirate(surface, inner, t):
     """Battered outer-belt pirate vessel — scavenged, cracked, hostile."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # ── Exposed hull plating — irregular dark metal ───────────────────────────
     for i in range(0, inner.width, 9):
@@ -1752,8 +1753,8 @@ def _backdrop_pirate(surface, inner, t):
 def _backdrop_underground_dj(surface, inner, t):
     """Cramped pirate radio broadcast booth — reel-to-reel, vinyl, contraband freq."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # ── Acoustic foam panels on walls — grid of small squares ────────────────
     foam_col = (22, 20, 24)
@@ -1772,7 +1773,7 @@ def _backdrop_underground_dj(surface, inner, t):
     glow_s = pygame.Surface((70, 26), pygame.SRCALPHA)
     pygame.draw.rect(glow_s, (220, 30, 30, int(50 * glow_pulse)), (0, 0, 70, 26))
     surface.blit(glow_s, (cx - 35, inner.top + 1))
-    font8b = pygame.font.SysFont("monospace", 9, bold=True)
+    font8b = get_font(9, bold=True)
     oa = font8b.render("ON AIR", True, (255, 55, 38))
     surface.blit(oa, (sign.centerx - oa.get_width()//2, sign.centery - oa.get_height()//2))
 
@@ -2447,7 +2448,7 @@ def _backdrop_toll_authority(surface, inner, t):
     scr_rect = pygame.Rect(inner.right - 40, inner.top + 20, 30, 22)
     pygame.draw.rect(surface, (20, 60, 20), scr_rect)
     pygame.draw.rect(surface, (0, 90, 40), scr_rect, 1)
-    font7 = pygame.font.SysFont("monospace", 6)
+    font7 = get_font(6)
     for row, txt in enumerate(["LEVY:1500", "STATUS:OK", "QUEUE:18"]):
         s = font7.render(txt, True, (0, 200, 80))
         surface.blit(s, (scr_rect.left + 2, scr_rect.top + 2 + row * 7))
@@ -2599,8 +2600,8 @@ _BACKDROPS["toll_authority"] = _backdrop_toll_authority
 
 def _backdrop_nervous_fence(surface, inner, t):
     """Bootleg relay closet: stolen route maps, cables, and half-legal gear."""
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
     cx = inner.centerx
 
     # Patchwork wall panels
@@ -2781,8 +2782,8 @@ def _nervous_fence(surface, cx, cy, s, disposition, t):
 
 def _backdrop_cargo_inspector(surface, inner, t):
     """Sterile STA checkpoint office: scanner arch, forms, and manifest board."""
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
     cx = inner.centerx
 
     # Office wall and harsh light
@@ -2950,7 +2951,7 @@ _BACKDROPS["cargo_inspector"] = _backdrop_cargo_inspector
 
 def _backdrop_dray(surface, inner, t):
     """Cramped relay bunk: ratty bunk wall, discarded ration wrappers, bored ambience."""
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
+    font6 = get_font(6, bold=True)
     cx = inner.centerx
 
     # Bunk wall — dented, sticker-covered metal panels
@@ -3109,8 +3110,8 @@ def _dray(surface, cx, cy, s, disposition, t):
 def _backdrop_nova_soma_collections(surface, inner, t):
     """Corporate wellness UI: clean gradients, progress rings, soft pastel branding."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # Background: clean dark blue-grey with subtle grid
     pygame.draw.rect(surface, (14, 18, 26), inner)
@@ -3153,7 +3154,7 @@ def _backdrop_nova_soma_collections(surface, inner, t):
 
     # Scrolling marquee at the bottom
     marquee_txt = "NOVA SOMA COLLECTIONS • YOUR WELLNESS IS OUR PRIORITY • "
-    marquee_font = pygame.font.SysFont("monospace", 6)
+    marquee_font = get_font(6)
     msurf = marquee_font.render(marquee_txt, True, (80, 200, 190))
     scroll_x = inner.left + inner.width - int((t * 28) % (inner.width + msurf.get_width()))
     prev_clip = surface.get_clip()
@@ -3282,7 +3283,7 @@ def _nova_soma_collections(surface, cx, cy, s, disposition, t):
                      border_radius=max(1, int(2 * s)), width=1)
 
     if s >= 0.55 and rdp_h >= 12:
-        rd_font = pygame.font.SysFont("monospace", max(5, int(6 * s)))
+        rd_font = get_font(max(5, int(6 * s)))
         tick    = int(t * (5.0 if hostile else 1.8))
 
         def _hx(seed, n=3):
@@ -3308,7 +3309,7 @@ def _nova_soma_collections(surface, cx, cy, s, disposition, t):
                 surface.blit(rtxt, (rdp_x + max(2, int(3 * s)), ry))
 
     # ── LOGOTYPE ──────────────────────────────────────────────────────────────
-    font_lbl = pygame.font.SysFont("monospace", max(6, int(6 * s)), bold=True)
+    font_lbl = get_font(max(6, int(6 * s)), bold=True)
     la  = int(80 + 40 * math.sin(t * 0.75))
     lc  = (int(cyan[0] * la // 120), int(cyan[1] * la // 120), int(cyan[2] * la // 120))
     ls  = font_lbl.render("NOVA SOMA", True, lc)
@@ -3328,8 +3329,8 @@ def _nova_soma_collections(surface, cx, cy, s, disposition, t):
 
 def _backdrop_mira_voss(surface, inner, t):
     """Industrial repair bay: exposed conduit, tool wall, welding sparks."""
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
     cx = inner.centerx
 
     # Grimy workshop walls — alternating dark metal plates
@@ -3422,7 +3423,7 @@ def _mira_voss(surface, cx, cy, s, disposition, t):
     badge = pygame.Rect(int(cx + 14 * s), int(cy + 30 * s), int(18 * s), int(12 * s))
     pygame.draw.rect(surface, (30, 22, 12), badge)
     pygame.draw.rect(surface, accent, badge, 1)
-    font = pygame.font.SysFont("monospace", max(6, int(6 * s)))
+    font = get_font(max(6, int(6 * s)))
     badge_lbl = font.render("CERT", True, accent)
     surface.blit(badge_lbl, (badge.left + 3, badge.top + 2))
 
