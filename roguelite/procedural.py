@@ -106,7 +106,9 @@ _SECTOR_NAMES = [
     "NON-CORE POPULATION DENSITY GRID",
 ]
 
-# What people used to call them before Nova Soma "rationalised the nomenclature"
+# What people used to call them before Nova Soma "rationalised the nomenclature".
+# Every crossed-out name is a person, a colony, or a promise that lost. The
+# rename is the joke. Keep them human, keep them specific, keep them sad.
 _FORMERLY_NAMES = [
     "HOME",
     "THE QUIET BELT",
@@ -117,6 +119,33 @@ _FORMERLY_NAMES = [
     "THE WIDOW'S CROSSING",
     "MILLER STATION",
     "THE COMMONS",
+    "DOVE'S REST",
+    "HOLLOW BEND",
+    "THE LONG MARKET",
+    "TANNERY FLATS",
+    "POPLAR YARDS",
+    "ST. JUDE'S ANCHORAGE",
+    "MARJORIE'S CUT",
+    "THE FISHERMAN'S DRIFT",
+    "SHEPHERD'S APPROACH",
+    "OUR LADY OF THE LANES",
+    "BRENNAN COLONY",
+    "THE TWO-PIER REACH",
+    "GOLDIE'S WAY",
+    "THE FREEHOLDER'S RIM",
+    "ELDERSHORE",
+    "MORRIGAN'S LEDGER",
+    "THE SUNDAY ROAD",
+    "WHISTLER'S MARCH",
+    "CRADLE BAY",
+    "THE ORPHAN STRAITS",
+    "NORTHWICK STATION",
+    "PADRAIG'S TURN",
+    "MAY GARDENS",
+    "THE LAST STRIKE LINE",
+    "PILGRIM CROSSING",
+    "OWEN'S RUN",
+    "EMILY-AT-THE-DOCKS",
 ]
 
 
@@ -141,8 +170,9 @@ def generate_sector(index: int, difficulty: float = 1.0,
     ambush  = index >= 5 and rng.random() < 0.25 * difficulty
 
     name     = rng.choice(_SECTOR_NAMES)
-    # ~45% chance the sector has a "formerly" name people remember
-    formerly = rng.choice(_FORMERLY_NAMES) if rng.random() < 0.45 else ""
+    # ~70% chance the sector has a "formerly" name people remember.
+    # Theme intent: every renamed place was once someone's home or livelihood.
+    formerly = rng.choice(_FORMERLY_NAMES) if rng.random() < 0.70 else ""
 
     # Epic 12.3 — each sector rolls one dominant hazard and one dominant
     # opportunity. Sector 0 is always a clean baseline.

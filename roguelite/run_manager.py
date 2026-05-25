@@ -13,6 +13,7 @@ from roguelite.meta_progression import MetaProgression
 from roguelite.mutators import MutatorRegistry
 from roguelite.stats_tracker import StatsTracker
 from roguelite.tutorial import TutorialManager
+from roguelite.flight_events import FlightEventManager
 from antagonists.repo_barge import RepoBarge
 from antagonists.debris import DebrisRock
 from antagonists.fuel_canister import FuelCanister
@@ -267,6 +268,8 @@ class RunManager:
         self._bax_opinion_fired: set[tuple[str, int]] = set()
         # Epic 11.2 — long-fight tracking
         self._barge_pursuit_t = 0.0
+        # Epic 13.2 / #17 — flight events with player choice
+        self.flight_events = FlightEventManager()
         self._long_fight_emitted = False
         # Epic 11.2 — close-call tracking: per-object min-distance witnesses
         self._close_witness: dict[int, float] = {}  # id(obj) -> last_dist
@@ -304,6 +307,9 @@ class RunManager:
         self.bax_context["last_sector_reached"]    = 0
         self.bax_context["exploits_used_run"]      = 0
         self.bax_context["slingshot_used_run"]     = False
+        # Epic 13.4 — keep current chapter live for theme handlers
+        self.bax_context["chapter_at_session_start"] = self._current_chapter()
+        self.flight_events.reset()
         self._barge_pursuit_t   = 0.0
         self._long_fight_emitted = False
         self._run_seed = secrets.randbelow(2 ** 31)
@@ -540,6 +546,7 @@ class RunManager:
         self._check_proximity()
         self._check_random_event(dt)
         self._check_comms(dt)
+        self.flight_events.update(dt, self)
 
     def handle_key(self, event: pygame.event.Event):
         # Route to cargo's key handler first (e.g. TriplicateForm popup)
@@ -553,6 +560,9 @@ class RunManager:
             self._open_kress_terminal()
         elif event.key == pygame.K_e and self._aiship_hail_pending is not None:
             self._open_aiship_terminal()
+        elif event.key == pygame.K_y and self.flight_events.active is not None:
+            # Epic 13.2 — accept the pending flight event choice
+            self.flight_events.accept(self)
 
     def _open_kress_terminal(self):
         from core.event_bus import EVT_KRESS_DIALLED
@@ -669,7 +679,10 @@ class RunManager:
         if self._event_cd > 0:
             return
         self._event_cd = random.uniform(S.EVENT_INTERVAL_MIN, S.EVENT_INTERVAL_MAX)
-        kind = random.choice(["comms", "comms", "debris", "scan"])
+        # Epic 13.2 — bias the pool toward player-choice flight events. Manager
+        # gates per-event prereqs + cooldowns and silently no-ops if blocked.
+        kind = random.choice(["comms", "debris", "scan",
+                              "flight_event", "flight_event"])
 
         if kind == "comms":
             bus.emit(EVT_COMMS_INTERCEPT)
@@ -681,6 +694,10 @@ class RunManager:
             bus.emit(EVT_SCAN_PING,
                      pos_x=random.randint(120, S.SCREEN_W - 120),
                      pos_y=random.randint(100, S.FLIGHT_H - 60))
+        elif kind == "flight_event":
+            if not self.flight_events.try_start(self):
+                # Blocked (cooldown / no eligible event) — fall back to flavor
+                bus.emit(EVT_COMMS_INTERCEPT)
 
     def _check_comms(self, dt: float):
         self._kress_cd    -= dt
@@ -1011,6 +1028,14 @@ class RunManager:
         self._pending_advance = True
 
     def on_terminal_complete(self, outcome):
+        # Return to flight at rest — the ship was visually frozen during the
+        # terminal but its velocity was preserved; resuming flight at the
+        # pre-terminal momentum is disorienting. Skip when an intercepting
+        # barge is alive: that's a continuing combat encounter, momentum stays.
+        if self._ship is not None and self._intercepting_barge is None:
+            self._ship.body.vel    = Vec2()
+            self._ship.body._force = Vec2()
+
         # ESC abort: static burst deals hull damage, no reward
         if outcome == "abort":
             if self._ship is not None:

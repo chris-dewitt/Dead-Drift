@@ -12,3 +12,4 @@ pytest_tmp/
 assets/audio/
 data/
 *.sqlite3
+"data/bax_vocabulary.json" 
