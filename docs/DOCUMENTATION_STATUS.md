@@ -18,10 +18,13 @@
 | 5 | `MAX_VELOCITY` | **280 px/s** — overdrive cap **420 px/s** | Done |
 | 6 | `SOUNDTRACK_PLAN.md` | Implementation status section | Done |
 | 7 | `README.md` | Full feature list | Done |
-| 8 | Phase 1/2 sweep (May 25 2026) | Epics 1.2, 1.4, 1.8, 7.2, 7.3, 7.4 shipped on `rhubarb/phase-1-2-implementation`; checkboxes flipped in `IMPROVEMENT_PLAN.md` | Done |
-| 9 | Post-review sweep (May 25 2026) | **Epic 8.3 Bax's Records** screen + lore-fragment persistence shipped. Doc drift cleared: 3.1 hazard wiring, 4.2 black wipe / `ENTERING:` caption, 4.7 corridor end-card stats, and 7.1 cockpit hull-glow flipped to `[x]` after verifying live code. | Done |
-| 10 | Replay/audio sweep (May 25 2026) | **Epic 4.6** per-chapter corridor music shipped (`EVT_CORRIDOR_ENTER/BOSS_ROOM/EXIT` + `_CORR_SIG_CH` + per-chapter intervals/volumes). **Epic 8.2** cargo dossier carousel shipped (`renderer/cargo_carousel.py`, `RunManager.set_chapter_override`). **Epic 8.4** HARDCORE chapter variant shipped (timer ×0.7, +0.3 difficulty, extra barge per sector ≥2, no shops, 1-checkpoint corridor, hardcore best-time per chapter). Epic 8 fully closed. | Done |
-| 11 | Polish + playtest sweep (May 25 2026) | **Playtest backlog** closed: barge hit-stagger + harpoon flash visibility (`antagonists/repo_barge.py`, `renderer/vector_renderer.py`); two new union reps (Idealist Eddie / Corrupt Vinny) wired into the barge intercept rotation, with portraits + Bax opinions; NPC keyword normalization (universal `fuck off` easter egg in `BaseNPC.respond`, Felix gossip path, Dray gripe + standardised `BRIBE [X cr]` label, Krellborn extended threat keywords + harder filler). **Epic 11.1c** harmonica heal session (`H` key in flight). **Epic 13.1** money source labels on `EVT_DEBT_UPDATE` + HUD floater. **Epic 10.4** corridor decay layer (deep parallax, cracked numbered panels, scratched Nova Soma branding, floor wear, pipe drips, per-room directional lighting). **Epic 14.1** boss-room set pieces per chapter. | Done |
+| 8 | Phase 1/2 sweep (May 25 2026) | Epics 1.2, 1.4, 1.8, 7.2, 7.3, 7.4 shipped on `rhubarb/phase-1-2-implementation` | Done |
+| 9 | Post-review sweep (May 25 2026) | Epic 8.3 Bax's Records + lore-fragment persistence; doc drift cleared on 3.1, 4.2, 4.7, 7.1 | Done |
+| 10 | Replay/audio sweep (May 25 2026) | Epics 4.6, 8.2, 8.4 shipped; Epic 8 fully closed | Done |
+| 11 | Polish + playtest sweep (May 25 2026) | Barge hit-stagger, harpoon flash, two new union reps (Eddie/Vinny), NPC keyword normalisation, harmonica heal, money source labels, corridor decay layer, boss-room set pieces | Done |
+| 12 | Repo barges = Gary / Union only | **Locked** — Phase 0.7; in-flight barges always Gary or new union reps, never pirates | Locked |
+| 13 | Dock Union / Gary identity | **Locked** — Epic 5.4; landing dock = Gary as receiving officer | Locked |
+| 14 | Non-Union faction ship silhouettes | **Locked** — Epic 3.7; pirates/DJs/Kress/Sandra need own hull art | Locked |
 
 ---
 
@@ -34,12 +37,30 @@
 | 3 | **ESC leaves the market** | **Fixed** — shop ESC routes to `ShopScreen` before pause handling |
 | 4 | **Improve market graphics** | **Fixed** — shop browse view has stall dressing, item glyphs, and purchase-state badges |
 | 5 | **Improve docking graphics** | **Fixed** — chapter-specific station silhouettes and bay dressing are procedural |
-| 6 | **Cargo-specific dialogue for all NPCs** | **Fixed** — terminal run context carries cargo identity and every NPC has authored cargo-specific flavor |
-| 7 | **Terminal outcome reveal visual pass** | **Fixed** — release/exploit/impound/paradox outcomes now have visual holds, stingers, portrait freezes, and distinct captions |
+| 6 | **Cargo-specific dialogue for all NPCs** | **Fixed** — terminal run context carries cargo identity; every NPC has cargo flavor |
+| 7 | **Terminal outcome reveal visual pass** | **Fixed** — release/exploit/impound/paradox have holds, stingers, portrait freezes, captions |
 | 8 | **NLP exploit dossier footer** | **Fixed** — terminal close shows Bax's filed-method footer in the dossier panel |
-| 9 | **Terminal keyword chips reflect known exploits** | **Fixed** — terminals receive Bax's vault and discovered paths render as dim ★ chips |
+| 9 | **Terminal keyword chips reflect known exploits** | **Fixed** — terminals receive Bax's vault; discovered paths render as dim ★ chips |
+| 10 | **Shroom control inversion (Ch.2 cargo)** | **Open (bug)** — playtest: inversion not felt in-flight; code exists, wiring unverified |
+| 11 | **Barge intercept = Gary / Union only** | **Fixed** — `open_barge_terminal()` now routes to Gary/Eddie/Vinny only (cursor sweep) |
+| 12 | **Dock Union identity (Gary, Local 404)** | **Open (polish)** — generic dock crew; Gary not at landing; locked as Epic 5.4 target |
+| 13 | **Non-Union NPCs → distinct ship hulls** | **Open** — pirates/DJs/etc. terminal-only; only player + barge + alien in flight |
+| 14 | **Ch.3 Paperwork corridor** | **Open (bug)** — `OneWayWall` never used for collision; clerk dialog modal locks all input |
 
-Phase 0 trust fixes plus the full Epic 6 terminal polish set are tracked as shipped in `docs/IMPROVEMENT_PLAN.md`.
+---
+
+## Live playtest log (Chris)
+
+Add rows as you play; agents update Phase 0 / epics from here.
+
+| Date | Finding | Doc / phase |
+|------|---------|-------------|
+| May 2026 | Epistemological Shrooms — periodic control inversion not working in flight | Phase 0.6 |
+| May 2026 | Repo barges should always be Gary — **only Union** on barges; no pirates on barge comm | Phase 0.7 |
+| May 2026 | Update the docks — Union / Gary identity at landing | Phase 0.8, Epic 5.4 |
+| May 2026 | Pirates, radio DJs, etc. need **different spaceship types** (not barges) | Phase 0.9, Epic 3.7 |
+| May 2026 | **Ch.3 document / Paperwork corridor** — problem in delivery corridor (see Phase 0.10) | Phase 0.10 |
+| May 2026 | **Ch.3 repro detail:** at ladder / documents → all keys dead (incl. ESC/pause). Clerk dialog modal lock | Phase 0.10 |
 
 ---
 
@@ -47,16 +68,17 @@ Phase 0 trust fixes plus the full Epic 6 terminal polish set are tracked as ship
 
 | Doc | Role | Accuracy |
 |-----|------|----------|
-| `docs/IMPROVEMENT_PLAN.md` | Master implementation plan + checkboxes | Current (Phase 0 + Phase 1/2 shipped May 2026) |
+| `docs/IMPROVEMENT_PLAN.md` | Master implementation plan + checkboxes | Current (all Phase 0 + Epics 1–14 swept May 2026) |
+| `docs/ALIVENESS_PUSH.md` | Next push plan (60+ items, 8 phases) | Current (May 25 2026) |
 | `docs/DECISION_BRIEFS.md` | Historical decision briefs §3–§4 | Current — resolved May 2026 |
 | `docs/CORRIDOR_DESIGN.md` | Corridor level design | Mostly current |
 | `docs/BAX_VOICE.md` | Bax line bank | Current as writing spec |
-| `docs/SOUNDTRACK_PLAN.md` | Audio spec + **implementation status** | Current |
-| `docs/BAX_HUMS_IMPL.md` | Bax-hums implementation handoff plan | Historical — feature shipped May 2026 (commit `42a66d3`) |
-| `docs/NEXT_PUSH.md` | Active push priority stack + design decisions | Current |
-| `docs/SESSION_STATUS_MAY2026.md` | Phase 1/2 implementation report | Current (May 25 2026) |
-| `docs/PLAYTEST_FEEDBACK.md` | Player feedback backlog (not yet scheduled) | Current (May 25 2026) |
-| `CLAUDE.md` | Agent pointer | Current (replaces stale monolith) |
+| `docs/SOUNDTRACK_PLAN.md` | Audio spec + implementation status | Current (v2 May 2026) |
+| `docs/BAX_HUMS_IMPL.md` | Bax-hums implementation handoff plan | Historical — shipped May 2026 |
+| `docs/NEXT_PUSH.md` | Previous push priority stack (Epic 9–14) | Historical — superseded by ALIVENESS_PUSH.md |
+| `docs/SESSION_STATUS_MAY2026.md` | Phase 1/2 implementation report | Current |
+| `docs/PLAYTEST_FEEDBACK.md` | Player feedback backlog | Current (May 25 2026) |
+| `CLAUDE.md` | Agent pointer | Current |
 | `WORKING_ON.md` | Agent subsystem claim coordination | Current |
 | `docs/CLAUDE_ARCHIVED.md` | Old agent/GDD excerpt | Historical only |
 | `docs/DEAD_DRIFT_GDD_ARCHIVED.md` | Original pitch GDD | Historical only |
@@ -64,16 +86,12 @@ Phase 0 trust fixes plus the full Epic 6 terminal polish set are tracked as ship
 
 ---
 
-## Design decisions — resolved
+## Minor drift (fix when touching code)
 
-**All design forks resolved May 2026.** Historical detail: [DECISION_BRIEFS.md](DECISION_BRIEFS.md) (superseded options kept for record).
-
----
-
-## Minor drift (no design fork — fix when touching code)
-
-*(none currently tracked — the `roguelite/tutorial.py` docstring drift was
-fixed in the same commit that landed this row update.)*
+| Item | Issue |
+|------|--------|
+| `roguelite/shop.py` line 12 | Dead `SHOP_SECTORS = {3, 6}`; live `{1, 3}` in `settings.py` |
+| `delivery/corridor/base.py` | `OneWayWall` imported but never wired for collision — Ch.3 cubicle zigzag non-functional |
 
 ---
 

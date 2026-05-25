@@ -44,6 +44,8 @@ meantime. Sandbox flight without NLTK at all: `play.py`.
 
 Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sentient Paperwork, Schrödinger VIP). Each cargo adds a unique mid-flight mechanic.
 
+> **Known issue (May 2026 playtest):** Ch.2 Epistemological Shrooms — periodic control inversion is **not working in flight** despite implementation in `cargo/epi_shrooms.py`. Tracked in `docs/IMPROVEMENT_PLAN.md` Phase 0.6. Other cargos: verify individually.
+
 ---
 
 ## Core Mechanics
@@ -54,6 +56,7 @@ Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sent
 - Sector **themes** (8 types): wrecks, mines, ice, trash, flares, toll checkpoints, etc.
 - Repo **Barge** state machine: patrol → chase → aim → intercept → clamp → torch (unbolt modules)
 - **Tether:** spring force toward barge; snap with lateral velocity
+- **Design lock (May 2026):** Repo barges = **Local 404 Union only**; barge intercept comm = **Gary**. Pirates, DJs, and other factions use **different ship hulls** — not barges. See `docs/IMPROVEMENT_PLAN.md` Phase 0.7–0.9.
 - Gun, debris, fuel canisters, satellites, hazards wired per theme
 
 ### Hotwired signal chain
