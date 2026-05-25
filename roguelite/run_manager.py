@@ -1181,6 +1181,11 @@ class RunManager:
         bus.emit(EVT_SECTOR_CLEAR, sector_num=self._sector_index)
 
         if self._sector_index >= S.SECTORS_PER_RUN:
+            # Aliveness A.2: clear shroom inversion at run-end so a stale
+            # `controls_inverted` flag can't carry into delivery / next run.
+            cargo = getattr(self._ship, "cargo", None) if self._ship else None
+            if cargo is not None and hasattr(cargo, "force_clear_inversion"):
+                cargo.force_clear_inversion(self._ship)
             bus.emit(EVT_RUN_END, success=True)
             return
 
