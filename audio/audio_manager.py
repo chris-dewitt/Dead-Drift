@@ -54,6 +54,7 @@ _SLIDE_CH   = 26   # mournful slide-blues notes
 _HUM_CH       = 27   # tape hum bed (subliminal glue layer)
 _BARGE_CH     = 28   # barge motif drone
 _HUM_VOICE_CH = 29   # Bax hums (§7.4) — own channel so voice-duck doesn't grab it
+_CORR_SIG_CH  = 30   # Epic 4.6 — chapter signature loop during corridor (delivery)
 _SFX_POOL     = 10   # channels 10-19: one-shot SFX pool
 
 _BAX_CHARS_PER_SEC = 32.0
@@ -353,6 +354,27 @@ class AudioManager:
         # --- Chapter inflection modules (lazy-loaded) ---
         self._chapter_modules: dict[int, object] = {}
 
+        # --- Epic 4.6 — chapter-keyed corridor signature loop ---
+        # Each chapter exposes signature_instrument(); we loop it on
+        # _CORR_SIG_CH at a chapter-specific cadence while in
+        # SCENE_DELIVERY. Boss-room entry boosts the volume.
+        self._corr_sig_ch: pygame.mixer.Channel | None = None
+        self._corr_sig_cd: float = 0.0
+        # Per-chapter (interval_seconds, base_volume) profiles:
+        #   Ch.1 vinyl-warm distorted harmonica — frequent, mid-volume
+        #   Ch.2 sparse off-kilter bowed-saw    — slow, eerie
+        #   Ch.3 typewriter march               — steady, percussive
+        #   Ch.4 hotel-lobby jazz w/ glitch     — sparse, lush, occasionally drops
+        self._corr_sig_profiles: dict[int, tuple[float, float]] = {
+            1: (3.4, 0.42),
+            2: (5.0, 0.30),
+            3: (1.6, 0.36),
+            4: (4.0, 0.28),
+        }
+        # Cached signature sounds per chapter so we don't rebuild on every cue.
+        self._corr_sig_cache: dict[int, list[pygame.mixer.Sound]] = {}
+        self._corridor_intensity: float = 0.0   # 0=intro 0.5=mid 1.0=boss room
+
         self._build()
         self._start_loops()
         self._wire()
@@ -531,6 +553,10 @@ class AudioManager:
         # Radio piggybacks on the slide channel (only one ever active at a time)
         self._radio_ch = self._slide_ch
 
+        # Epic 4.6 — chapter signature loop channel for corridor music.
+        self._corr_sig_ch = pygame.mixer.Channel(_CORR_SIG_CH)
+        self._corr_sig_ch.set_volume(0.0)
+
     def _wire(self):
         bus.subscribe(EVT_HULL_DAMAGE,    self._on_hull)
         bus.subscribe(EVT_TETHER_HIT,     self._on_clang)
@@ -558,6 +584,12 @@ class AudioManager:
         bus.subscribe(EVT_MODULE_UNBOLTED, self._on_module_unbolted)
         bus.subscribe(EVT_TORCH_ACTIVE,   self._on_torch_active)
         bus.subscribe(EVT_RUN_START,      self._on_run_start)
+        # Epic 4.6 — corridor phase events drive signature loop intensity.
+        from core.event_bus import (EVT_CORRIDOR_ENTER, EVT_CORRIDOR_BOSS_ROOM,
+                                    EVT_CORRIDOR_EXIT)
+        bus.subscribe(EVT_CORRIDOR_ENTER,     self._on_corridor_enter)
+        bus.subscribe(EVT_CORRIDOR_BOSS_ROOM, self._on_corridor_boss_room)
+        bus.subscribe(EVT_CORRIDOR_EXIT,      self._on_corridor_exit)
 
     # ------------------------------------------------------------------
     def update(self, speed: float, dt: float = 0.016,
@@ -590,6 +622,7 @@ class AudioManager:
         self._tick_snap_resolve(dt)
         self._tick_slingshot_modulation(dt)
         self._tick_decanting(dt)
+        self._tick_corridor_signature(dt)
         self._tick_menu_idle(dt)
         self._tick_chapter_cargo(dt)
         # Plan §2.4 — keep the active stem count at or below 5 by ducking the
@@ -953,6 +986,109 @@ class AudioManager:
             self._gtr_ch.set_volume(self._music_gain() * (vol / self._master) if self._master else 0)
             self._gtr_ch.play(snd)
             self._gtr_cd = random.uniform(lo, hi)
+
+    # ── Epic 4.6 — corridor signature loop ────────────────────────────
+    def _on_corridor_enter(self, chapter: int = None, **_) -> None:
+        """Delivery scene started — swell the chapter signature loop in.
+        Initial intensity = 0.5 (mid). Boss-room trigger raises it to 1.0.
+        """
+        if chapter is not None and chapter != self._chapter:
+            try:
+                self.load_chapter(int(chapter))
+            except Exception:
+                pass
+        self._corridor_intensity = 0.5
+        # Fire the first signature cue immediately so the player hears the
+        # chapter palette the moment they enter the corridor.
+        self._corr_sig_cd = 0.0
+
+    def _on_corridor_boss_room(self, chapter: int = None, **_) -> None:
+        """Corridor boss room entered — peak the chapter signature volume."""
+        self._corridor_intensity = 1.0
+        # Re-fire the signature cue right at the boss-room entry so the
+        # peak lands with the room transition.
+        self._corr_sig_cd = 0.05
+
+    def _on_corridor_exit(self, **_) -> None:
+        """Delivery sequence ending — fade the corridor signature out."""
+        self._corridor_intensity = 0.0
+        if self._corr_sig_ch is not None:
+            self._corr_sig_ch.set_volume(0.0)
+
+    def _build_corridor_signature(self, chapter: int) -> list[pygame.mixer.Sound]:
+        """Lazily build a small bank of signature instrument sounds for
+        the given chapter so we can vary them without re-synthesising on
+        every cue. Falls back to a single root-pitch hit on any error."""
+        cached = self._corr_sig_cache.get(chapter)
+        if cached:
+            return cached
+        sounds: list[pygame.mixer.Sound] = []
+        mod = self._chapter_modules.get(chapter)
+        sig = getattr(mod, "signature_instrument", None) if mod else None
+        if sig is None:
+            return []
+        root = getattr(mod, "HOME_KEY_ROOT", _CHAPTER_ROOTS.get(chapter, 220.0))
+        # Build a small palette: root, +5 (P5), +12 (octave) at varied
+        # durations. Wrapped in try/except so a synthesis exception in
+        # one entry doesn't kill the whole chapter's audio.
+        steps = [(0,  0.85),
+                 (5,  0.70),
+                 (12, 0.55),
+                 (3,  0.95),
+                 (-2, 0.65)]
+        for st, dur in steps:
+            try:
+                freq = root * (2.0 ** (st / 12.0))
+                snd = sig(freq=freq, duration=dur)
+                if snd is not None:
+                    sounds.append(snd)
+            except Exception:
+                continue
+        if not sounds:
+            try:
+                sounds.append(sig(freq=root, duration=0.85))
+            except Exception:
+                pass
+        self._corr_sig_cache[chapter] = sounds
+        return sounds
+
+    def _tick_corridor_signature(self, dt: float) -> None:
+        """While in DELIVERY scene, schedule the chapter signature
+        instrument at the per-chapter cadence. Volume is the chapter
+        base scaled by `_corridor_intensity` (0..1) and ducked by voice."""
+        if self._corr_sig_ch is None:
+            return
+        if self._scene != SCENE_DELIVERY or self._corridor_intensity <= 0.0:
+            self._corr_sig_ch.set_volume(0.0)
+            return
+        if self._corr_sig_ch.get_busy():
+            return
+        self._corr_sig_cd -= dt
+        if self._corr_sig_cd > 0.0:
+            return
+        sounds = self._build_corridor_signature(self._chapter)
+        if not sounds:
+            # Nothing to play — push the cooldown so we don't busy-loop.
+            self._corr_sig_cd = 4.0
+            return
+        interval, base_vol = self._corr_sig_profiles.get(
+            self._chapter, (4.0, 0.32))
+        # Boss-room peak boosts both density and volume (~1.6× louder,
+        # ~0.65× interval).
+        intensity = max(0.0, min(1.0, self._corridor_intensity))
+        vol = base_vol * (0.55 + 0.65 * intensity) * self._music_gain() / max(1e-3, self._master)
+        snd = random.choice(sounds)
+        try:
+            self._corr_sig_ch.set_volume(min(1.0, vol))
+            self._corr_sig_ch.play(snd)
+        except Exception:
+            pass
+        # Slight randomisation around the chapter cadence for organic feel.
+        spread = 0.45
+        next_cd = interval * (1.0 - spread / 2.0 + random.random() * spread)
+        # Boss room: tighter cadence (more density).
+        next_cd *= (1.0 - 0.35 * intensity)
+        self._corr_sig_cd = max(0.6, next_cd)
 
     def _tick_slide_notes(self, dt: float):
         if not self._slide_notes or self._slide_ch is None:

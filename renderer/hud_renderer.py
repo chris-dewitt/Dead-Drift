@@ -18,6 +18,43 @@ class HUDRenderer:
             self._hud = HUD(ship)
         self._hud.update(1 / 60)
         self._hud.draw(self.surface, snap_charge=self._snap_charge(run_mgr))
+        # Epic 11.1c — harmonica heal session indicator.
+        self._draw_harm_session(run_mgr)
+
+    def _draw_harm_session(self, run_mgr) -> None:
+        if run_mgr is None or not getattr(run_mgr, "harm_session_active", False):
+            return
+        from core.text import get_font
+        pct = float(run_mgr.harm_session_pct())
+        # Small panel anchored to the upper-centre of the flight area.
+        w, h = 240, 36
+        cx = self.surface.get_width() // 2
+        rect = pygame.Rect(cx - w // 2, 12, w, h)
+        bg = pygame.Surface((w, h), pygame.SRCALPHA)
+        bg.fill((20, 8, 14, 220))
+        self.surface.blit(bg, rect.topleft)
+        pygame.draw.rect(self.surface, (220, 140, 60), rect, 1)
+        # Brass corner brackets — diegetic harp-case feel.
+        for c, sx, sy in (
+            (rect.topleft, 1, 1), (rect.topright, -1, 1),
+            (rect.bottomleft, 1, -1), (rect.bottomright, -1, -1),
+        ):
+            pygame.draw.line(self.surface, (255, 180, 90),
+                             c, (c[0] + sx * 10, c[1]), 2)
+            pygame.draw.line(self.surface, (255, 180, 90),
+                             c, (c[0], c[1] + sy * 10), 2)
+        # Title
+        f_h = get_font(10, bold=True)
+        title = f_h.render("BAX  HARMONICA  HEAL", True, (240, 200, 120))
+        self.surface.blit(title, (rect.left + 8, rect.top + 4))
+        # Progress bar
+        bar = pygame.Rect(rect.left + 8, rect.bottom - 10,
+                          rect.width - 16, 6)
+        pygame.draw.rect(self.surface, (60, 40, 18), bar)
+        fill = bar.copy()
+        fill.width = int(bar.width * pct)
+        pygame.draw.rect(self.surface, (255, 180, 60), fill)
+        pygame.draw.rect(self.surface, (160, 110, 40), bar, 1)
 
     def _snap_charge(self, run_mgr) -> float | None:
         if run_mgr is None:

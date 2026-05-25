@@ -8,6 +8,7 @@ import random
 import pygame
 
 from renderer.sci_fi_ui import draw_mario_brick_platform
+from core.text import get_font
 
 CORRIDOR_W = 400
 CORRIDOR_H = 360
@@ -382,7 +383,7 @@ class NPCEncounter(Element):
                              (sx + 10, FLOOR_Y - 50),
                              (sx, FLOOR_Y - 40),
                              (sx - 10, FLOOR_Y - 50)], 1)
-        f = pygame.font.SysFont("monospace", 9)
+        f = get_font(9)
         s = f.render(self.npc_name[:8], True, col)
         surf.blit(s, (sx - s.get_width() // 2, FLOOR_Y - 78))
 
@@ -453,7 +454,7 @@ class Secret(Element):
             p3 = (sx + int(10 * math.cos(math.radians((a + 1) * 72 - 90))),
                   sy + int(10 * math.sin(math.radians((a + 1) * 72 - 90))))
             pygame.draw.polygon(surf, col, [p1, p2, p3])
-        f = pygame.font.SysFont("monospace", 7)
+        f = get_font(7)
         s = f.render("★", True, col)
         surf.blit(s, (sx - s.get_width() // 2, sy - 22))
 
@@ -476,7 +477,7 @@ class Checkpoint(Element):
         pygame.draw.line(surf, col, (sx, CEIL_Y), (sx, FLOOR_Y), 2)
         # Banner
         pygame.draw.rect(surf, col, (sx, CEIL_Y + 10, 50, 16))
-        f = pygame.font.SysFont("monospace", 9, bold=True)
+        f = get_font(9, bold=True)
         s = f.render("SAVE", True, (0, 0, 0))
         surf.blit(s, (sx + 4, CEIL_Y + 12))
 
@@ -584,9 +585,227 @@ class BossRoomTrigger(Element):
         pul = int(180 + 75 * math.sin(t * 2.0))
         col = (pul, int(pul * 0.5), 0)
         pygame.draw.line(surf, col, (sx, CEIL_Y), (sx, FLOOR_Y), 3)
-        f = pygame.font.SysFont("monospace", 9, bold=True)
+        f = get_font(9, bold=True)
         s = f.render("BOSS", True, col)
         surf.blit(s, (sx + 4, CEIL_Y + 4))
+
+
+# ---------------------------------------------------------------------------
+# Epic 14.1 — Boss room set-piece tableau
+# ---------------------------------------------------------------------------
+
+class BossRoomActor(Element):
+    """A pure-render boss-room set piece.
+
+    Each chapter's final room slots in one of these to give the boss
+    encounter physical presence (Gary doing something absurd, the
+    mycelium chamber breathing, three Form 7-B officials, the quantum
+    observation deck). The draw function receives `(surf, sx, t,
+    palette)` where `sx` is the screen-space x of the actor's anchor.
+    """
+    def __init__(self, x: float, draw_fn, path_tag: str | None = None):
+        super().__init__(x, path_tag)
+        self._draw_fn = draw_fn
+
+    def draw(self, surf, camera_x, t, palette):
+        sx = int(self.x - camera_x)
+        if -240 < sx < CORRIDOR_W + 240:
+            try:
+                self._draw_fn(surf, sx, t, palette)
+            except Exception:
+                pass
+
+
+def boss_actor_gary_den(surf, sx, t, palette):
+    """Ch.1 — Gary at his desk, mid-microwave-meal, harpoon controller down.
+
+    Gary is leaned back, harpoon controller dropped on the desk, eating
+    a microwave meal. His radio is playing static blues. A 'NOT NOW'
+    sign hangs on the wall behind him. This is the most off-duty
+    Gary will ever look on the job."""
+    # Desk
+    desk_y = FLOOR_Y - 36
+    pygame.draw.rect(surf, (90, 50, 20),
+                     pygame.Rect(sx - 50, desk_y, 110, 32))
+    pygame.draw.rect(surf, (140, 80, 30),
+                     pygame.Rect(sx - 50, desk_y, 110, 32), 2)
+    # Microwave meal — steam wisps
+    pygame.draw.rect(surf, (160, 120, 40),
+                     pygame.Rect(sx - 18, desk_y - 8, 22, 8))
+    pygame.draw.rect(surf, (200, 160, 60),
+                     pygame.Rect(sx - 18, desk_y - 8, 22, 8), 1)
+    for i in range(3):
+        sw_y = desk_y - 14 - int(6 * abs(math.sin(t * 1.4 + i)))
+        pygame.draw.line(surf, (200, 200, 220),
+                         (sx - 14 + i * 8, sw_y),
+                         (sx - 14 + i * 8, sw_y - 6), 1)
+    # Harpoon controller — tossed casually on the desk (cable trailing)
+    pygame.draw.rect(surf, (60, 60, 80),
+                     pygame.Rect(sx + 12, desk_y - 4, 36, 6))
+    pygame.draw.line(surf, (80, 80, 100),
+                     (sx + 12, desk_y - 1), (sx - 4, desk_y + 14), 1)
+    # Gary — leaned back, head + body silhouette
+    body_y = desk_y - 30
+    pygame.draw.rect(surf, (210, 140, 50),
+                     pygame.Rect(sx - 14, body_y, 28, 30))   # hi-vis torso
+    pygame.draw.circle(surf, (230, 200, 170),
+                       (sx, body_y - 10), 10)                 # head
+    # Eyes — closed (eating)
+    pygame.draw.line(surf, (40, 40, 30),
+                     (sx - 4, body_y - 12), (sx, body_y - 12), 1)
+    pygame.draw.line(surf, (40, 40, 30),
+                     (sx + 1, body_y - 12), (sx + 5, body_y - 12), 1)
+    # 'NOT NOW' sign hung on the wall
+    sign_y = CEIL_Y + 30
+    sign_rect = pygame.Rect(sx - 30, sign_y, 60, 20)
+    pygame.draw.rect(surf, (60, 30, 30), sign_rect)
+    pygame.draw.rect(surf, (220, 80, 60), sign_rect, 1)
+    f = get_font(8, bold=True)
+    sg = f.render("NOT NOW", True, (220, 80, 60))
+    surf.blit(sg, (sign_rect.centerx - sg.get_width() // 2,
+                   sign_rect.centery - sg.get_height() // 2))
+    # Radio — flickering speaker glow
+    rad_y = desk_y - 6
+    pygame.draw.rect(surf, (40, 40, 50),
+                     pygame.Rect(sx + 50, rad_y, 22, 14))
+    pulse = 0.5 + 0.5 * math.sin(t * 5.0)
+    pygame.draw.circle(surf, (int(200 * pulse), int(80 * pulse), 30),
+                       (sx + 61, rad_y + 7), 3)
+
+
+def boss_actor_mycelium_chamber(surf, sx, t, palette):
+    """Ch.2 — the walls are *alive*. Bioluminescent threads, breathing pulse.
+
+    Three pulsing nodes sprout from the walls + ceiling, each connected
+    by glowing fungal threads. A panicking researcher stands centre,
+    hands on head, while spore motes drift across the room."""
+    breath = 0.55 + 0.45 * math.sin(t * 1.2)
+    glow_col = (int(80 * breath), int(220 * breath), int(140 * breath))
+    # Three nodes
+    for off in (-100, 0, 100):
+        nx = sx + off
+        ny = CEIL_Y + 24 + int(6 * math.sin(t * 1.4 + off * 0.04))
+        pygame.draw.circle(surf, glow_col, (nx, ny), 14, 0)
+        pygame.draw.circle(surf, (180, 255, 200), (nx, ny), 5, 0)
+        # Threads — spiral down toward floor
+        for k in range(3):
+            angle = t * 0.6 + k * math.tau / 3 + off * 0.01
+            ex = nx + int(40 * math.cos(angle))
+            ey = ny + 60 + int(20 * math.sin(angle * 1.3))
+            pygame.draw.line(surf, glow_col, (nx, ny), (ex, ey), 1)
+    # Spore motes drifting
+    for i in range(8):
+        mx = (sx - 60 + (t * 30 + i * 30) % 240)
+        my = CEIL_Y + 80 + int(20 * math.sin(t * 1.1 + i * 0.7))
+        pygame.draw.circle(surf, (120, 220, 100, 220), (int(mx), int(my)), 1)
+    # Researcher silhouette — hands on head
+    rx, ry = sx - 6, FLOOR_Y - 38
+    pygame.draw.rect(surf, (210, 210, 220),
+                     pygame.Rect(rx - 7, ry, 14, 26))         # lab coat
+    pygame.draw.circle(surf, (220, 200, 180),
+                       (rx, ry - 8), 6)                         # head
+    # Hands on head — angled
+    pygame.draw.line(surf, (220, 200, 180),
+                     (rx - 4, ry), (rx - 8, ry - 14), 2)
+    pygame.draw.line(surf, (220, 200, 180),
+                     (rx + 4, ry), (rx + 8, ry - 14), 2)
+
+
+def boss_actor_compliance_tribunal(surf, sx, t, palette):
+    """Ch.3 — three officials behind a panel, reading Form 7-B aloud.
+
+    Three identical silhouettes at a long table. Their heads scan
+    in slow sync. A 'FORM 7-B' header floats overhead. A small podium
+    in front holds the form being read. They never look up."""
+    # Long bench
+    bench_y = FLOOR_Y - 30
+    bench_rect = pygame.Rect(sx - 90, bench_y, 180, 28)
+    pygame.draw.rect(surf, (120, 100, 60), bench_rect)
+    pygame.draw.rect(surf, (180, 160, 90), bench_rect, 2)
+    # Three officials
+    for i, off in enumerate((-60, 0, 60)):
+        ox = sx + off
+        # Body — grey suit
+        pygame.draw.rect(surf, (90, 90, 110),
+                         pygame.Rect(ox - 12, bench_y - 30, 24, 30))
+        # Head — slight scan rotation, in sync
+        scan = math.sin(t * 0.9) * 4
+        pygame.draw.circle(surf, (230, 220, 200),
+                           (int(ox + scan), bench_y - 40), 8)
+        # Glasses
+        pygame.draw.rect(surf, (40, 40, 60),
+                         pygame.Rect(int(ox + scan) - 7, bench_y - 41, 14, 4),
+                         1)
+        # Form clutched in front
+        pygame.draw.rect(surf, (240, 230, 200),
+                         pygame.Rect(ox - 6, bench_y - 6, 12, 14))
+    # FORM 7-B header
+    f = get_font(11, bold=True)
+    hdr = f.render("FORM 7-B :: COMPLIANCE TRIBUNAL", True, (180, 200, 80))
+    surf.blit(hdr, (sx - hdr.get_width() // 2, CEIL_Y + 18))
+    # Stamp pulse — 'APPROVED / DENIED' alternating in red, low
+    stamp = "APPROVED" if int(t) % 2 == 0 else "DENIED"
+    stamp_col = (60, 200, 90) if stamp == "APPROVED" else (200, 80, 60)
+    sf = get_font(9, bold=True)
+    ss = sf.render(stamp, True, stamp_col)
+    surf.blit(ss, (sx - ss.get_width() // 2, CEIL_Y + 36))
+
+
+def boss_actor_quantum_observation(surf, sx, t, palette):
+    """Ch.4 — the observation deck. A box on a pedestal. Reality flickers.
+
+    A central crate sits on a low pedestal. The crate's lid jitters
+    between open and closed faster than the eye can catch. A '?' icon
+    flicks between visible and not. Spectator silhouettes line the
+    back wall. The room palette periodically glitches to its inverse
+    for a single frame — 'observation collapses payout' made visual."""
+    # Pedestal
+    pad_y = FLOOR_Y - 18
+    pygame.draw.rect(surf, (180, 160, 100),
+                     pygame.Rect(sx - 30, pad_y, 60, 18))
+    pygame.draw.rect(surf, (240, 220, 140),
+                     pygame.Rect(sx - 30, pad_y, 60, 18), 2)
+    # The box itself — superposition flicker
+    box_y = pad_y - 32
+    flicker = (t * 9.0) % 1.0
+    if flicker < 0.5:
+        # Closed
+        pygame.draw.rect(surf, (40, 24, 60),
+                         pygame.Rect(sx - 18, box_y, 36, 32))
+        pygame.draw.rect(surf, (180, 130, 220),
+                         pygame.Rect(sx - 18, box_y, 36, 32), 2)
+        f = get_font(14, bold=True)
+        q = f.render("?", True, (220, 180, 255))
+        surf.blit(q, (sx - q.get_width() // 2,
+                      box_y + (32 - q.get_height()) // 2))
+    else:
+        # Open  - lid pops up, swirling glow inside
+        pygame.draw.rect(surf, (40, 24, 60),
+                         pygame.Rect(sx - 18, box_y + 6, 36, 26))
+        pygame.draw.rect(surf, (180, 130, 220),
+                         pygame.Rect(sx - 18, box_y + 6, 36, 26), 2)
+        # Lid floating
+        pygame.draw.rect(surf, (180, 130, 220),
+                         pygame.Rect(sx - 18, box_y - 10, 36, 4))
+        # Inner swirl
+        for k in range(5):
+            ang = t * 4 + k * math.tau / 5
+            sx_in = sx + int(math.cos(ang) * 8)
+            sy_in = box_y + 18 + int(math.sin(ang) * 6)
+            pygame.draw.circle(surf, (220, 200, 255), (sx_in, sy_in), 2)
+    # Spectators — back wall silhouettes, motionless
+    for off in (-90, -50, 50, 90):
+        sxs = sx + off
+        pygame.draw.rect(surf, (20, 12, 30),
+                         pygame.Rect(sxs - 6, CEIL_Y + 30, 12, 26))
+        pygame.draw.circle(surf, (20, 12, 30),
+                           (sxs, CEIL_Y + 26), 4)
+    # Glitch frame: every ~1.4s, flash an inverse-colour overlay strip
+    if (t * 0.7) % 1.4 < 0.04:
+        ov = pygame.Surface((CORRIDOR_W // 4, FLOOR_Y - CEIL_Y - 4),
+                            pygame.SRCALPHA)
+        ov.fill((255, 255, 255, 60))
+        surf.blit(ov, (sx - CORRIDOR_W // 8, CEIL_Y + 2))
 
 
 # ---------------------------------------------------------------------------
@@ -665,7 +884,7 @@ class QuantumDoor(Element):
                              (sx - self.W // 2, CEIL_Y, self.W, self.H), 2)
             # Door knob
             pygame.draw.circle(surf, col, (sx + self.W // 2 - 6, (CEIL_Y + FLOOR_Y) // 2), 4)
-            f = pygame.font.SysFont("monospace", 9)
+            f = get_font(9)
             txt = "UP" if self._state == "idle" else "OPEN" if self._state == "open" else ""
             if txt:
                 s = f.render(txt, True, col)
@@ -784,7 +1003,7 @@ class SteamVent(Element):
                 surf.blit(steam, (sx - wd + jitter, int(self.y) - 8 - yo - 4))
         # Disabled: dim grey, "DSBLD" tag
         elif self._phase == self.PHASE_DISABLED:
-            f = pygame.font.SysFont("monospace", 7, bold=True)
+            f = get_font(7, bold=True)
             tg = f.render("OFFLINE", True, (90, 90, 90))
             surf.blit(tg, (sx - tg.get_width() // 2, int(self.y) - 36))
 
@@ -838,7 +1057,7 @@ class Tripwire(Element):
             pulse = abs(math.sin(t * 14.0))
             col   = (255, int(180 * pulse), int(60 * pulse))
             pygame.draw.line(surf, col, (x0, int(self.y)), (x1, int(self.y)), 2)
-            f = pygame.font.SysFont("monospace", 8, bold=True)
+            f = get_font(8, bold=True)
             al = f.render("ALERT", True, col)
             surf.blit(al, (sx - al.get_width() // 2, int(self.y) - 12))
         else:

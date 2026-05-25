@@ -2,6 +2,7 @@ from __future__ import annotations
 import math
 import random
 import pygame
+from core.text import get_font
 from ship.modules.thruster import Thruster
 from cargo.acoustic_archive import AcousticArchive
 from cargo.epi_shrooms import EpistemologicalShrooms
@@ -307,9 +308,9 @@ class LoadoutDraft:
                     (ban_x + cx_off + ci * 6 + 6, ban_y + 16),
                     (ban_x + cx_off + ci * 6, ban_y + 26),
                 ])
-        f_lbl = pygame.font.SysFont("monospace", 12, bold=True)
-        f_nm  = pygame.font.SysFont("monospace", 14, bold=True)
-        f_txt = pygame.font.SysFont("monospace", 10)
+        f_lbl = get_font(12, bold=True)
+        f_nm  = get_font(14, bold=True)
+        f_txt = get_font(10)
         lbl = f_lbl.render("THIS RUN:", True, (200, 130, 0))
         surface.blit(lbl, (ban_x + 56, ban_y + 4))
         nm  = f_nm.render(m.name, True, (255, 200, 60))
@@ -339,9 +340,9 @@ class LoadoutDraft:
 
     # ------------------------------------------------------------------ header
     def _draw_header(self, surface, t):
-        font_corp  = pygame.font.SysFont("monospace", 12)
-        font_brand = pygame.font.SysFont("monospace", 22, bold=True)
-        font_ch    = pygame.font.SysFont("monospace", 13)
+        font_corp  = get_font(12)
+        font_brand = get_font(22, bold=True)
+        font_ch    = get_font(13)
 
         # Top bar: dark band with amber border
         pygame.draw.rect(surface, (10, 8, 4), pygame.Rect(0, 0, S.SCREEN_W, self.HEADER_H))
@@ -384,12 +385,12 @@ class LoadoutDraft:
 
     def _draw_column(self, surface, slot_i, x, label, t):
         active = (slot_i == self._slot)
-        font_lbl   = pygame.font.SysFont("monospace", 14, bold=True)
-        font_name  = pygame.font.SysFont("monospace", 22, bold=True)
-        font_sub   = pygame.font.SysFont("monospace", 12)
-        font_tag   = pygame.font.SysFont("monospace", 11, italic=True)
-        font_stat  = pygame.font.SysFont("monospace", 12)
-        font_page  = pygame.font.SysFont("monospace", 11)
+        font_lbl   = get_font(14, bold=True)
+        font_name  = get_font(22, bold=True)
+        font_sub   = get_font(12)
+        font_tag   = get_font(11, italic=True)
+        font_stat  = get_font(12)
+        font_page  = get_font(11)
 
         col_y_top = self.HEADER_H + 18
         preview_rect = pygame.Rect(x, col_y_top + 22, self.COL_W, self.PREVIEW_H)
@@ -506,7 +507,7 @@ class LoadoutDraft:
             pygame.draw.circle(surface, col_main, p, 2)
 
         # "Spec" label inside panel
-        font_spec = pygame.font.SysFont("monospace", 10)
+        font_spec = get_font(10)
         spec = font_spec.render("HULL SCHEMATIC // ROT 0.45 rad/s", True, (60, 70, 80))
         surface.blit(spec, (rect.left + 8, rect.bottom - 18))
 
@@ -560,7 +561,7 @@ class LoadoutDraft:
             for bx in (cx - 36, cx - 18, cx):
                 pygame.draw.circle(surface, dim, (bx, by), 2)
 
-        font_spec = pygame.font.SysFont("monospace", 10)
+        font_spec = get_font(10)
         spec = font_spec.render("THRUSTER // PLASMA EXHAUST PROFILE", True, (60, 70, 80))
         surface.blit(spec, (rect.left + 8, rect.bottom - 18))
 
@@ -581,7 +582,7 @@ class LoadoutDraft:
         else:
             self._draw_cargo_vip(surface, cx, cy, t)
 
-        font_spec = pygame.font.SysFont("monospace", 10)
+        font_spec = get_font(10)
         label = f"PAYLOAD // {key}"
         spec = font_spec.render(label, True, (60, 70, 80))
         surface.blit(spec, (rect.left + 8, rect.bottom - 18))
@@ -605,7 +606,7 @@ class LoadoutDraft:
         hy = cy + int(math.sin(rot) * 40)
         pygame.draw.circle(surface, (80, 80, 90), (hx, hy), 5)
         # Tiny "side A" text
-        font = pygame.font.SysFont("monospace", 8, bold=True)
+        font = get_font(8, bold=True)
         sa = font.render("SIDE A", True, (255, 220, 150))
         surface.blit(sa, (cx - sa.get_width() // 2, cy + 10))
 
@@ -648,8 +649,8 @@ class LoadoutDraft:
         pygame.draw.rect(surface, (240, 220, 170), top_rect)
         pygame.draw.rect(surface, amber, top_rect, 2)
         # Form header
-        font_h = pygame.font.SysFont("monospace", 10, bold=True)
-        font_b = pygame.font.SysFont("monospace", 8)
+        font_h = get_font(10, bold=True)
+        font_b = get_font(8)
         hdr = font_h.render("FORM 27-B", True, (90, 60, 0))
         surface.blit(hdr, (cx - 30, cy - 45))
         # Lines simulating fields
@@ -688,7 +689,7 @@ class LoadoutDraft:
                          (box.left + 6, box.top + 16),
                          (box.right - 6, box.top + 16), 1)
         # Big quantum question mark — flickering between ? and !
-        font_q = pygame.font.SysFont("monospace", 64, bold=True)
+        font_q = get_font(64, bold=True)
         glyph = "?" if int(t * 3.5) % 4 != 0 else "!"
         col   = (210, 100, 240) if glyph == "?" else (255, 220, 50)
         qs = font_q.render(glyph, True, col)
@@ -716,8 +717,8 @@ class LoadoutDraft:
             scale=1.55, speaking=abs(math.sin(t * 2.1)) > 0.85,
         )
 
-        font_cap = pygame.font.SysFont("monospace", 11, bold=True)
-        font_line = pygame.font.SysFont("monospace", 15)
+        font_cap = get_font(11, bold=True)
+        font_line = get_font(15)
         cap = font_cap.render("BAX // NAV-MORALE  —  on your current selection:",
                               True, (180, 130, 30))
         surface.blit(cap, (panel.left + 108, panel.top + 14))
@@ -730,7 +731,7 @@ class LoadoutDraft:
 
     # ------------------------------------------------------------------ hint
     def _draw_hint(self, surface, t):
-        font = pygame.font.SysFont("monospace", 13)
+        font = get_font(13)
         y = S.SCREEN_H - self.TICKER_H - 30
 
         if self._slot < 2:
@@ -751,7 +752,7 @@ class LoadoutDraft:
         pygame.draw.rect(surface, (10, 8, 4), pygame.Rect(0, bar_y, S.SCREEN_W, h))
         pygame.draw.line(surface, (140, 90, 0), (0, bar_y), (S.SCREEN_W, bar_y), 1)
 
-        font = pygame.font.SysFont("monospace", 13, bold=True)
+        font = get_font(13, bold=True)
         full = _PROPAGANDA + _PROPAGANDA
         text_surf = font.render(full, True, (210, 150, 30))
 

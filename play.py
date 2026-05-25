@@ -27,6 +27,7 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 from config import settings as S
+from core.text import get_font
 from physics.body import RigidBody2D, Vec2
 from physics.gravity import GravityWell, ThreeBodySystem
 from ship.ship import PlayerShip
@@ -83,7 +84,7 @@ def main():
     pygame.display.set_caption(f"{S.TITLE} - Flight Demo")
     screen = pygame.display.set_mode((S.SCREEN_W, S.SCREEN_H))
     clock  = pygame.time.Clock()
-    font   = pygame.font.SysFont("monospace", 14)
+    font   = get_font(14)
 
     # Build the world
     ship    = PlayerShip()
@@ -158,7 +159,7 @@ def main():
 
         # Show "DESTROYED" overlay if hull is gone
         if not ship.is_alive:
-            big = pygame.font.SysFont("monospace", 32, bold=True)
+            big = get_font(32, bold=True)
             msg = big.render("HULL BREACH - press R to reset", True, S.RED_WARN)
             screen.blit(msg, (S.SCREEN_W // 2 - msg.get_width() // 2, S.SCREEN_H // 2))
 

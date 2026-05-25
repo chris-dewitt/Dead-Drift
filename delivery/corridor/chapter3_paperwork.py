@@ -7,11 +7,13 @@ import math
 import random
 import pygame
 
+from core.text import get_font
 from delivery.corridor.elements import (
     Platform, MovingPlatform, CollapsingPlatform, Ladder,
     OneWayWall, NPCEncounter, Collectible, Secret, Checkpoint,
     BossRoomTrigger,
     SteamVent, Tripwire, SecurityBeam,
+    BossRoomActor, boss_actor_compliance_tribunal,
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H,
 )
 from delivery.corridor.base import Room, Corridor
@@ -28,6 +30,17 @@ _PAL_R1 = {
     "brick":         (120, 100, 40),
     "brick_hi":      (255, 230, 120),
     "light":         (255, 240, 140),
+    # Epic 10.4 — government grey-beige fluorescent wash
+    "light_tint":    (220, 210, 140),
+    "light_alpha":   16,
+    "deep_struct":   (40,  40,  20),
+    "panel_num":     (180, 170,  80),
+    "crack":         (60,  60,  30),
+    "branding":      (90,  90,  50),
+    "scrub":         (60,  50,  20),
+    "floor_grid":    (90,  80,  40),
+    "floor_wear":    (60,  56,  28),
+    "drip":          (180, 170,  60),
 }
 _PAL_R2 = {
     "bg":            (8, 8, 6),
@@ -162,19 +175,19 @@ def _bg_r1(surf, camera_x, t, pal):
             pygame.draw.line(surf, (100, 12, 6), (bx + 4, by + 4), (bx + bw - 4, by + 4), 1)
             pygame.draw.line(surf, (100, 12, 6), (bx + 4, by + bh - 4), (bx + bw - 4, by + bh - 4), 1)
             # Main slogan text
-            f_big = pygame.font.SysFont("monospace", 11, bold=True)
+            f_big = get_font(11, bold=True)
             txt_surf = f_big.render("YOUR DEBT IS YOUR PURPOSE", True, (210, 28, 14))
             surf.blit(txt_surf, (bx + 12, by + 9))
             # Union logo block on left
             pygame.draw.rect(surf, (90, 12, 6), (bx - 28, by, 26, bh))
             pygame.draw.rect(surf, (170, 25, 18), (bx - 28, by, 26, bh), 1)
-            f_tiny = pygame.font.SysFont("monospace", 7)
+            f_tiny = get_font(7)
             surf.blit(f_tiny.render("URM", True, (210, 38, 28)), (bx - 26, by + 4))
             surf.blit(f_tiny.render("L404", True, (210, 38, 28)), (bx - 26, by + 13))
             surf.blit(f_tiny.render("INTL", True, (210, 38, 28)), (bx - 26, by + 21))
 
     # --- Desk rows with monitors and hunched worker silhouettes ---
-    f_mon = pygame.font.SysFont("monospace", 7)
+    f_mon = get_font(7)
     mon_lines = ["DEBT:", "QUOTA", "CLONE", "STATUS", "ARREARS", "FILING", "DELINQ"]
     for wx_d in range(140, CORRIDOR_W + 1600, 250):
         sx_d = int(wx_d - bg_off)
@@ -352,7 +365,7 @@ def _bg_r2(surf, camera_x, t, pal):
             surf.blit(rotated_p, (sx_fall + drift_x, fall_y))
 
     # --- OVERDUE stamp on floor (large, rotated, repeating) ---
-    f_stamp = pygame.font.SysFont("monospace", 17, bold=True)
+    f_stamp = get_font(17, bold=True)
     stamp_period = 380
     stamp_world_off = int(camera_x * 0.15)
     for soff in range(-stamp_period, CORRIDOR_W + stamp_period + 1, stamp_period):
@@ -479,8 +492,8 @@ def _bg_r3(surf, camera_x, t, pal):
         pygame.draw.rect(surf, (160, 120, 30), (px_off, py, pw, ph), 2)
         # Inner decorative border
         pygame.draw.rect(surf, (100, 75, 18), (px_off + 3, py + 3, pw - 6, ph - 6), 1)
-        f_plaque_big = pygame.font.SysFont("monospace", 9, bold=True)
-        f_plaque_sm = pygame.font.SysFont("monospace", 7)
+        f_plaque_big = get_font(9, bold=True)
+        f_plaque_sm = get_font(7)
         s1 = f_plaque_big.render("EMPLOYEE OF INFINITY", True, (190, 145, 38))
         surf.blit(s1, (px_off + 6, py + 6))
         # Running timer (counts up relentlessly)
@@ -545,7 +558,7 @@ def _bg_r3(surf, camera_x, t, pal):
     # Name plate
     pygame.draw.rect(surf, (30, 20, 6), (desk_x + 55, desk_y + 18, 55, 8))
     pygame.draw.rect(surf, (130, 100, 22), (desk_x + 55, desk_y + 18, 55, 8), 1)
-    f_name = pygame.font.SysFont("monospace", 6)
+    f_name = get_font(6)
     surf.blit(f_name.render("DISPATCHER", True, (160, 120, 28)), (desk_x + 57, desk_y + 20))
 
     # --- Executive seated silhouette (just head + shoulders above desk) ---
@@ -712,6 +725,10 @@ def build() -> Corridor:
             "You're — you're physically here? In my office? With the forms? Fine. Sign the ledger.",
             _DISPATCHER_RESPONSES,
         ),
+        # Epic 14.1 — Compliance Tribunal: three officials reading
+        # Form 7-B aloud. Heads scan in slow sync. APPROVED / DENIED
+        # alternates above them.
+        BossRoomActor(420, boss_actor_compliance_tribunal),
     ]
     room3 = Room(
         length     = 500,

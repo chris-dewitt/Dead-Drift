@@ -1205,6 +1205,14 @@ class Bax(Subscriber):
             "Toll Authority. Pay or run. There's no third option. Don't think there is. "
             "There isn't.",
         ],
+        "idealist_rep": [
+            "Eddie Marlowe. He BELIEVES, mate. The Charter, the union, the lot. "
+            "Bribe him and he'll cry on you. Quote his own scripture back at him.",
+        ],
+        "corrupt_rep": [
+            "Vinny Brogan. Greasy. Cheap to bribe, expensive to threaten. "
+            "He's a step from the pirates — sometimes useful, sometimes a problem.",
+        ],
     }
 
     def _on_terminal_open(self, npc=None, **_):

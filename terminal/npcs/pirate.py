@@ -65,6 +65,12 @@ class Pirate(BaseNPC):
     _THREAT_KEYWORDS = [
         "blow", "shoot", "destroy", "wreck", "guns", "weapons",
         "ordnance", "blast", "open fire", "fire on", "torch you",
+        # Playtest fix: extended pirate-hostility keywords so credible
+        # threats land more often.
+        "vent your hold", "vent the hold", "hull breach", "rip you",
+        "scuttle you", "send you home", "snap your spine",
+        "atomise", "atomize", "punch through", "burn through",
+        "frag", "frag you", "kill you", "scrap you", "split you",
     ]
     _LEGAL_KEYWORDS = [
         "union", "charter", "article", "lawful", "illegal", "law",
@@ -88,6 +94,9 @@ class Pirate(BaseNPC):
 
     # ------------------------------------------------------------------
     def _intro_line(self) -> str:
+        # Playtest fix: lean harder into menace. The pirate's intro now
+        # reliably establishes 'this is a person who has killed couriers
+        # before' before any negotiation begins.
         return random.choice([
             "*static* You're in OUR sector now. No Union out here. "
             "No charter. No 'fees.' Just us, you, and what's in your hold. "
@@ -104,6 +113,19 @@ class Pirate(BaseNPC):
             "*scratchy* This isn't a Union channel. This isn't a Union sector. "
             "Your debt is irrelevant. Your cargo is interesting. "
             "Pick your next words very, very carefully.",
+
+            "Krellborn. Outer Belt. *quiet* I've already counted seven "
+            "couriers this cycle. They all wanted to talk first. "
+            "Most of them stopped talking. You'd like to talk?",
+
+            "*calm voice* Fourteen couriers. That's how many times my crew "
+            "has rerouted a hold this month. None of them filed reports. "
+            "Mostly because they couldn't. *hull lock engages* "
+            "You're number fifteen. Or you're not. Choice is yours.",
+
+            "*low* Here's how this opens. I'm two minutes from your hull. "
+            "I have ordnance. I have crew. I have the patience of a "
+            "tomb. Don't lie. Don't beg. Don't quote articles. *click*",
         ])
 
     def exploits(self) -> dict[str, str]:
@@ -286,6 +308,9 @@ class Pirate(BaseNPC):
         ]
 
     def _pirate_filler(self) -> str:
+        # Playtest fix: filler made colder, with more body-count menace
+        # and crew-on-the-way pressure so silence on this channel feels
+        # genuinely dangerous rather than chatty.
         return random.choice([
             "Channel's open. Clock's ticking. Say something useful.",
             "*scratchy* I have eight other ships to process tonight. "
@@ -307,6 +332,14 @@ class Pirate(BaseNPC):
             "Either we never meet again, or you become a manifest entry.",
             "Twenty years out here. I've heard every plea, every threat, "
             "every clever angle. Surprise me. Or don't.",
+            "*footsteps approaching the comm* That's my second. "
+            "He doesn't talk. He just opens hulls. *quiet* "
+            "Make it good before he gets here.",
+            "*loading sound* Boarding charge primed. "
+            "I haven't decided whether to use it. Help me decide.",
+            "I keep a tally on the bulkhead. Notch for every courier. "
+            "*scrape* That's the sound of me adding yours, just in case. "
+            "Talk me out of it.",
 
             "*low whistle* You know Kress? Eastern channels, old miner? "
             "Good man. Doesn't apologize for a single thing. "

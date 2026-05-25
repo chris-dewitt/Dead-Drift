@@ -7,10 +7,12 @@ import math
 import random
 import pygame
 
+from core.text import get_font
 from delivery.corridor.elements import (
     Platform, MovingPlatform, Hazard, MovingHazard, Ladder,
     NPCEncounter, Collectible, Secret, Checkpoint, StealthZone,
     BossRoomTrigger, QuantumDoor,
+    BossRoomActor, boss_actor_quantum_observation,
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H,
 )
 from delivery.corridor.base import Room, Corridor
@@ -27,6 +29,17 @@ _PAL_R1 = {
     "brick":         (180, 140, 40),
     "brick_hi":      (255, 220, 100),
     "light":         (255, 200, 80),
+    # Epic 10.4 — gold-marble luxury hotel lighting
+    "light_tint":    (220, 180, 110),
+    "light_alpha":   20,
+    "deep_struct":   (40,  20,  60),
+    "panel_num":     (200, 150,  60),
+    "crack":         (80,  60,  20),
+    "branding":      (150, 110,  60),
+    "scrub":         (60,  40,  20),
+    "floor_grid":    (90,  70,  40),
+    "floor_wear":    (70,  56,  30),
+    "drip":          (255, 200,  90),
 }
 _PAL_R2 = {
     "bg":            (8, 6, 10),
@@ -181,7 +194,7 @@ def _bg_r1(surf, camera_x, t, pal):
 def _bg_r2(surf, camera_x, t, pal):
     """Guest floor 47 — identical doors, long hallway."""
     bg_off = camera_x * 0.5
-    f = pygame.font.SysFont("monospace", 8)
+    f = get_font(8)
     # Doors along both walls
     for wx in range(80, 3000, 160):
         sx = int(wx - bg_off)
@@ -384,6 +397,10 @@ def build() -> Corridor:
             "Is the passenger alive or deceased? The claim is already filed either way.",
             _MORWENNA_RESPONSES,
         ),
+        # Epic 14.1 — Quantum Observation Deck: a box on a pedestal,
+        # lid superposition-flickering, spectator silhouettes, periodic
+        # observation glitch frame.
+        BossRoomActor(360, boss_actor_quantum_observation),
     ]
     room3 = Room(
         length     = 450,

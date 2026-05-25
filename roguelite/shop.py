@@ -51,15 +51,12 @@ _LOCATIONS = [
 _STEAM_X_FRACS = [0.06, 0.28, 0.72, 0.94]
 _ITEM_ICON_SIZE = 44
 
-# Module-level font cache — avoids re-creating fonts every frame
-_FONT_CACHE: dict[tuple, pygame.font.Font] = {}
-
-
 def _font(size: int, bold: bool = False) -> pygame.font.Font:
-    key = (size, bold)
-    if key not in _FONT_CACHE:
-        _FONT_CACHE[key] = pygame.font.SysFont("monospace", size, bold=bold)
-    return _FONT_CACHE[key]
+    """Thin wrapper preserved for back-compat — defers to the central
+    cached helper so all shop renders honour the global readability
+    settings (Epic 1.2)."""
+    from core.text import get_font
+    return get_font(size, bold=bold)
 
 
 # ---------------------------------------------------------------------------
@@ -252,7 +249,7 @@ class ShopScreen:
             self._flash(f"Insufficient credits. Need {item.cost - self._balance:,} more.")
             return
         self.run_mgr._run_debt_reduced -= item.cost
-        self.run_mgr.meta.add_debt(item.cost)
+        self.run_mgr.meta.add_debt(item.cost, source=f"SHOP: {item.name.upper()}")
         self._bought.add(self._cursor)
         item.apply(self.ship, self.run_mgr)
         self._flash(f"Purchased: {item.name}.")

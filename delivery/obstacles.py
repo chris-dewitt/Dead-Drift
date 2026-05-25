@@ -7,6 +7,8 @@ import math
 import random
 import pygame
 
+from core.text import get_font
+
 CORRIDOR_H  = 360   # total corridor pixel height
 FLOOR_Y     = 320   # y of the floor surface (within corridor)
 CEIL_Y      = 40    # y of ceiling
@@ -57,7 +59,7 @@ class Guard:
                            (sx, sy - 14), 4)
         # Alert exclamation
         if self._alert > 0:
-            f = pygame.font.SysFont("monospace", 14, bold=True)
+            f = get_font(14, bold=True)
             s = f.render("!", True, (255, 230, 0))
             surface.blit(s, (sx - s.get_width() // 2, sy - 30))
 

@@ -131,3 +131,11 @@ EVT_FIRST_TETHER_SNAP   = "first_tether_snap"   # tether snapped first time this
 # Epic 12 — Replayability events
 EVT_MUTATOR_SET     = "mutator_set"     # payload: mutator_key (or None)
 EVT_UNLOCK_EARNED   = "unlock_earned"   # payload: key, label
+
+# Epic 8 — Meta-progression / replay events
+EVT_LORE_FOUND      = "lore_found"      # payload: text, chapter (corridor secret)
+
+# Epic 4.6 — corridor music phases
+EVT_CORRIDOR_ENTER     = "corridor_enter"      # payload: chapter
+EVT_CORRIDOR_BOSS_ROOM = "corridor_boss_room"  # payload: chapter (boss-room trigger)
+EVT_CORRIDOR_EXIT      = "corridor_exit"       # payload: chapter

@@ -7,7 +7,7 @@ from config import settings as S
 from core.state_manager import StateManager, GameState
 from renderer.visual_fx import VisualFX
 from core.transitions import TransitionManager
-from core.text import install_font_patch
+from core.text import install_font_patch, get_font
 from core.event_bus import bus, EVT_SHIP_DESTROYED, EVT_RUN_END, EVT_TORCH_ACTIVE, EVT_DEBT_DING, EVT_BAX_SPEAK
 from roguelite.meta_progression import MetaProgression
 from roguelite.save_manager import SaveManager
@@ -55,6 +55,16 @@ class Game:
         # Route every pygame.font.SysFont("monospace", ...) call through
         # the bundled DejaVu Sans Mono with a +2pt size bump.
         install_font_patch()
+        # Epic 1.10 — kick the NLTK download off the main thread the
+        # moment we boot. The menu opens immediately; the splash + Bax
+        # line only appear if the player tries to open a terminal before
+        # the download finishes.
+        try:
+            from terminal import nlp_bootstrap
+            if not nlp_bootstrap.already_present():
+                nlp_bootstrap.start_in_background()
+        except Exception:
+            pass
         self.screen  = pygame.display.set_mode((S.SCREEN_W, S.SCREEN_H))
         pygame.display.set_caption(S.TITLE)
         self.clock   = pygame.time.Clock()
@@ -136,6 +146,20 @@ class Game:
         # Jukebox menu state — only enterable after a campaign clear
         self._jukebox_cursor: int = 0
 
+        # Bax's Records (Epic 8.3) — main-menu folder with 4 tabs.
+        self._records_tab:    int = 0
+        self._records_scroll: int = 0
+
+        # Cargo Dossier carousel (Epic 8.2) — replay any cleared chapter.
+        self._dossier_cursor: int = 0
+
+        # Epic 1.10 — NLP linguistic-processor splash. Set the first time a
+        # terminal opens while the NLTK bootstrap is still in flight; cleared
+        # once the bootstrap reports ready.
+        self._nlp_splash_active:    bool  = False
+        self._nlp_splash_t:         float = 0.0
+        self._nlp_warmup_line_fired: bool = False
+
         self._wire_events()
 
     def _bind_meta_from_active_slot(self) -> None:
@@ -159,9 +183,15 @@ class Game:
         bus.subscribe(EVT_SHIP_DESTROYED, self._on_ship_destroyed)
         bus.subscribe(EVT_RUN_END,        self._on_run_end)
         bus.subscribe(EVT_TORCH_ACTIVE,   self._on_torch_active)
-        from core.event_bus import EVT_DELIVERY_DONE, EVT_RUN_START
+        from core.event_bus import EVT_DELIVERY_DONE, EVT_RUN_START, EVT_LORE_FOUND
         bus.subscribe(EVT_DELIVERY_DONE,  self._on_delivery_done)
         bus.subscribe(EVT_RUN_START,      self._on_bax_hum_run_start)
+        bus.subscribe(EVT_LORE_FOUND,     self._on_lore_found)
+
+    def _on_lore_found(self, text: str = "", chapter: int = 0, **_) -> None:
+        """Persist corridor lore scraps into MetaProgression for Bax's Records."""
+        if self.meta is not None and text:
+            self.meta.add_lore_fragment(text, chapter=chapter)
 
     # ------------------------------------------------------------------
     # State → musical scene mapping. Drives AudioManager.set_scene().
@@ -384,7 +414,12 @@ class Game:
         rows.extend([
             ("NEW GAME", True, "new"),
             ("LOAD GAME", True, "load"),
+            ("BAX'S RECORDS", True, "records"),
         ])
+        # Cargo dossiers unlock after the player has cleared at least one
+        # chapter — gives them somewhere to replay from. (Epic 8.2)
+        if self.meta.chapters_completed:
+            rows.append(("CARGO DOSSIERS", True, "dossiers"))
         # Jukebox unlocks after the player has completed all 4 chapters at least once
         if self.meta.campaign_cleared_at_least_once:
             rows.append(("BAX'S TAPES", True, "jukebox"))
@@ -446,6 +481,13 @@ class Game:
         elif action == "jukebox":
             self._menu_mode = "jukebox"
             self._jukebox_cursor = 0
+        elif action == "records":
+            self._menu_mode = "records"
+            self._records_tab = 0
+            self._records_scroll = 0
+        elif action == "dossiers":
+            self._menu_mode = "dossiers"
+            self._dossier_cursor = 0
         elif action == "quit":
             self.running = False
 
@@ -482,6 +524,19 @@ class Game:
     def _begin_run_from_menu(self) -> None:
         self._run_just_completed = False
         self.save_mgr.delete_run_checkpoint()
+        # Clear any previous carousel chapter override so the natural
+        # progression resumes from the menu's CONTINUE / NEW GAME paths.
+        self.run_mgr.set_chapter_override(None)
+        self.run_mgr.start_run(self.ship)
+        self._goto(GameState.LOADOUT_DRAFT)
+
+    def _begin_run_from_carousel(self, chapter: int) -> None:
+        """Epic 8.2 — start a fresh run targeting the carousel-selected chapter.
+        Clears any active mid-run checkpoint so we don't load into a
+        different chapter's saved sector."""
+        self._run_just_completed = False
+        self.save_mgr.delete_run_checkpoint()
+        self.run_mgr.set_chapter_override(int(chapter))
         self.run_mgr.start_run(self.ship)
         self._goto(GameState.LOADOUT_DRAFT)
 
@@ -523,6 +578,66 @@ class Game:
                 heard = set(self.meta.bax_hums_heard)
                 if self._jukebox_cursor in heard and self.audio:
                     self.audio.play_bax_hum(self._jukebox_cursor)
+            elif event.key == pygame.K_ESCAPE:
+                self._menu_mode = "main"
+            return
+
+        if self._menu_mode == "dossiers":
+            from renderer.cargo_carousel import card_count, card_chapter
+            n = card_count()
+            if event.key in (pygame.K_RIGHT, pygame.K_d):
+                self._dossier_cursor = (self._dossier_cursor + 1) % n
+            elif event.key in (pygame.K_LEFT, pygame.K_a):
+                self._dossier_cursor = (self._dossier_cursor - 1) % n
+            elif event.key == pygame.K_h:
+                # Toggle HARDCORE arming for the selected chapter (if unlocked).
+                ch = card_chapter(self._dossier_cursor)
+                if self.meta.is_hardcore_unlocked(ch):
+                    self.meta.set_hardcore_for_next_run(not self.meta.is_hardcore)
+            elif event.key == pygame.K_RETURN:
+                ch = card_chapter(self._dossier_cursor)
+                completed = ch in self.meta.chapters_completed
+                allow_jump = (
+                    completed
+                    or (ch - 1) in self.meta.chapters_completed
+                    or ch == 1
+                )
+                if allow_jump:
+                    # If hardcore is armed but the chapter isn't unlocked
+                    # for hardcore, drop the flag silently.
+                    if self.meta.is_hardcore and not self.meta.is_hardcore_unlocked(ch):
+                        self.meta.clear_hardcore_flag()
+                    self._menu_mode = "main"
+                    self._begin_run_from_carousel(ch)
+            elif event.key == pygame.K_ESCAPE:
+                self._menu_mode = "main"
+            return
+
+        if self._menu_mode == "records":
+            from renderer.records_screen import tab_count, max_scroll
+            n_tabs = tab_count()
+            if event.key in (pygame.K_TAB, pygame.K_RIGHT, pygame.K_d):
+                self._records_tab = (self._records_tab + 1) % n_tabs
+                self._records_scroll = 0
+            elif event.key in (pygame.K_LEFT, pygame.K_a):
+                self._records_tab = (self._records_tab - 1) % n_tabs
+                self._records_scroll = 0
+            elif event.key in (pygame.K_UP, pygame.K_w):
+                self._records_scroll = max(0, self._records_scroll - 1)
+            elif event.key in (pygame.K_DOWN, pygame.K_s):
+                limit = max_scroll(self._records_tab,
+                                   meta=self.meta,
+                                   vault=getattr(self.bax, "vault", None),
+                                   stats=getattr(self.run_mgr, "stats", None))
+                self._records_scroll = min(limit, self._records_scroll + 1)
+            elif event.key == pygame.K_PAGEUP:
+                self._records_scroll = max(0, self._records_scroll - 5)
+            elif event.key == pygame.K_PAGEDOWN:
+                limit = max_scroll(self._records_tab,
+                                   meta=self.meta,
+                                   vault=getattr(self.bax, "vault", None),
+                                   stats=getattr(self.run_mgr, "stats", None))
+                self._records_scroll = min(limit, self._records_scroll + 5)
             elif event.key == pygame.K_ESCAPE:
                 self._menu_mode = "main"
             return
@@ -581,6 +696,11 @@ class Game:
                     self.audio.cycle_radio_station()
                     self.audio._play_current_radio_station()
                 return
+            # H = Epic 11.1c harmonica heal session. Locks rotation,
+            # +5 hull over 6s, blocked within 300 px of an active barge.
+            if event.key == pygame.K_h:
+                self.run_mgr.start_harmonica_session()
+                return
             self.run_mgr.handle_key(event)
         elif state == GameState.TERMINAL:
             if self.run_mgr.active_terminal is not None:
@@ -634,6 +754,10 @@ class Game:
                 if self._delivery_delay_t <= 0:
                     self._delivery_pending = False
                     self._delivery = DeliverySequence(self.meta, chapter=self._delivery_chapter)
+                    # Epic 8.4 — pass total run time so HARDCORE best-time
+                    # recording uses real flight elapsed seconds, not delivery scene time.
+                    self._delivery._total_time_for_hardcore = float(
+                        getattr(self.run_mgr, "_run_total_time", 0.0))
                     self._goto(GameState.DELIVERY)
             else:
                 self._torch_warn_t = max(0.0, self._torch_warn_t - dt)
@@ -750,12 +874,18 @@ class Game:
                 hull_pct=self.ship.hull_pct if self.ship else 1.0,
             )
 
-    # ── Epic 16 — debt float label ─────────────────────────────────────────
-    def _on_debt_update_hud(self, delta=0, total=0, **_):
+    # ── Epic 16 / 13.1 — debt float label ─────────────────────────────────
+    def _on_debt_update_hud(self, delta=0, total=0, source="", **_):
         if delta == 0:
             return
         sign = "+" if delta > 0 else "−"
-        self._debt_float_label = f"{sign}{abs(int(delta)):,} cr"
+        # Epic 13.1: append the source label (e.g. INTEREST, SLINGSHOT,
+        # SHOP) to the floater so the player can read what just happened
+        # without unpacking the debt counter.
+        if source:
+            self._debt_float_label = f"{sign}{abs(int(delta)):,} cr · {source}"
+        else:
+            self._debt_float_label = f"{sign}{abs(int(delta)):,} cr"
         self._debt_float_t = 2.0
 
     # ── Epic 18 — difficulty selector ──────────────────────────────────────
@@ -801,9 +931,9 @@ class Game:
         self.screen.blit(bg, (x, y))
         pygame.draw.rect(self.screen, (160, 110, 30), (x, y, W, H), 2)
 
-        fhd  = pygame.font.SysFont("monospace", 17, bold=True)
-        frow = pygame.font.SysFont("monospace", 15, bold=True)
-        fsub = pygame.font.SysFont("monospace", 11)
+        fhd  = get_font(17, bold=True)
+        frow = get_font(15, bold=True)
+        fsub = get_font(11)
 
         title = fhd.render("NOVA SOMA COURIER RISK ASSESSMENT", True, (220, 185, 80))
         self.screen.blit(title, (cx - title.get_width() // 2, y + 14))
@@ -858,7 +988,7 @@ class Game:
             frac = self._death_hold_t / 0.9   # 1.0 at start, 0.0 at end
             r    = int(200 * frac)
             self.screen.fill((r, 0, 0))
-            f = pygame.font.SysFont("monospace", 28, bold=True)
+            f = get_font(28, bold=True)
             if frac > 0.4:
                 txt = f.render("SHIP DESTROYED", True, (255, 80, 80))
                 self.screen.blit(txt, (S.SCREEN_W // 2 - txt.get_width() // 2,
@@ -883,6 +1013,9 @@ class Game:
             # Terminal win overlay — show outcome message before returning to flight
             if self._terminal_win_hold_t > 0 and self._terminal_win_str:
                 self._render_terminal_win_overlay()
+            # Epic 1.10 — splash overlay while NLTK data is being fetched
+            # in the background. Non-blocking — player can still type.
+            self._maybe_render_nlp_splash()
 
         elif state == GameState.LOADOUT_DRAFT:
             self.run_mgr.draft.render(self.screen)
@@ -916,9 +1049,9 @@ class Game:
         pygame.display.flip()
 
     def _render_sector_hud(self):
-        font     = pygame.font.SysFont("monospace", 14)
-        font_sm  = pygame.font.SysFont("monospace", 12)
-        font_hd  = pygame.font.SysFont("monospace", 14, bold=True)
+        font     = get_font(14)
+        font_sm  = get_font(12)
+        font_hd  = get_font(14, bold=True)
         rm    = self.run_mgr
         sec_w = S.SCREEN_W
         t     = pygame.time.get_ticks() / 1000.0
@@ -947,7 +1080,7 @@ class Game:
             pygame.draw.rect(self.screen, (60, 50, 20), (px, pip_y, pip_w, pip_h), 1)
 
         # Label upcoming shop stops and the delivery
-        pip_label_font = pygame.font.SysFont("monospace", 9)
+        pip_label_font = get_font(9)
         for i in range(S.SECTORS_PER_RUN):
             px = pip_x0 + i * (pip_w + pip_gap)
             if i in S.SHOP_SECTORS:
@@ -1056,7 +1189,7 @@ class Game:
         if self._torch_warn_t > 0:
             pulse = abs(math.sin(t * 9.0))
             r_val = int(200 + 55 * pulse)
-            torch_font = pygame.font.SysFont("monospace", 20, bold=True)
+            torch_font = get_font(20, bold=True)
             torch_surf = torch_font.render(
                 f"!! SNAP TETHER — MODULE LOSS IN  {self._torch_warn_t:.1f}s !!",
                 True, (r_val, 30, 20))
@@ -1092,8 +1225,8 @@ class Game:
         pygame.draw.rect(self.screen, border_col, (x, y, W, H), 2)
 
         # Header chip — left-justified title with thin underline
-        title_font = pygame.font.SysFont("monospace", 14, bold=True)
-        sub_font   = pygame.font.SysFont("monospace", 11)
+        title_font = get_font(14, bold=True)
+        sub_font   = get_font(11)
         title_surf = title_font.render(ev.title, True, (240, 200, 90))
         self.screen.blit(title_surf, (x + 12, y + 8))
         # COMMS tag right-justified
@@ -1113,7 +1246,7 @@ class Game:
         pygame.draw.rect(self.screen, fill_col, (x + 12, bar_y, fill_w, bar_h))
 
         # Choice prompts — bottom row
-        choice_font = pygame.font.SysFont("monospace", 13, bold=True)
+        choice_font = get_font(13, bold=True)
         accept = choice_font.render(f"[Y]  {ev.accept_label}", True, (110, 220, 130))
         ignore = choice_font.render(f"  -  {ev.ignore_label}", True, (150, 150, 150))
         sec_txt = choice_font.render(f"{fe.t_remaining:0.1f}s", True, (200, 160, 90))
@@ -1143,9 +1276,9 @@ class Game:
         pygame.draw.rect(panel, (0, 220, 90, a), (0, 0, W, H), 2)
         pygame.draw.rect(panel, (0, 110, 45, a), (4, 4, W - 8, H - 8), 1)
 
-        font_hd = pygame.font.SysFont("monospace", 19, bold=True)
-        font_md = pygame.font.SysFont("monospace", 17)
-        font_sm = pygame.font.SysFont("monospace", 13)
+        font_hd = get_font(19, bold=True)
+        font_md = get_font(17)
+        font_sm = get_font(13)
 
         # Header
         hdr = font_hd.render(
@@ -1198,7 +1331,7 @@ class Game:
         t        = pygame.time.get_ticks() / 1000.0
         blink    = int(t * 2) % 2 == 0
 
-        font = pygame.font.SysFont("monospace", 14, bold=True)
+        font = get_font(14, bold=True)
         col  = (255, 80, 0) if speed > 400 else S.AMBER_TERM
 
         strip = pygame.Surface((S.SCREEN_W, 20), pygame.SRCALPHA)
@@ -1306,8 +1439,8 @@ class Game:
                     int(col[2] * pulse * 0.35))
         pygame.draw.circle(self.screen, glow_col, (cx, cy - 30), 80, 4)
 
-        fh = pygame.font.SysFont("monospace", 28, bold=True)
-        fs = pygame.font.SysFont("monospace", 14)
+        fh = get_font(28, bold=True)
+        fs = get_font(14)
         title = fh.render(self._terminal_win_str, True, col)
         self.screen.blit(title, (cx - title.get_width() // 2, cy - 50))
 
@@ -1401,27 +1534,27 @@ class Game:
                 surf.blit(halo, (tx - tube_w // 2 - 20, tube_top - 20))
 
                 # "DECANTING" label below active tube
-                fa = pygame.font.SysFont("monospace", 9, bold=True)
+                fa = get_font(9, bold=True)
                 lbl = fa.render("DECANTING", True,
                                 (0, int(130 * glow_pulse), int(220 * glow_pulse)))
                 surf.blit(lbl, (tx - lbl.get_width() // 2, tr.bottom + 14))
 
         # Nova Soma logo on back wall (dim, corporate)
-        f_logo = pygame.font.SysFont("monospace", 11, bold=True)
+        f_logo = get_font(11, bold=True)
         logo = f_logo.render("NOVA SOMA SOLUTIONS — DECANTING WARD 7", True, (20, 22, 28))
         surf.blit(logo, (W // 2 - logo.get_width() // 2, gy - 22))
 
     def _render_decanting(self):
         t = pygame.time.get_ticks() / 1000.0
-        font_sm  = pygame.font.SysFont("monospace", 13)
-        font     = pygame.font.SysFont("monospace", 17)
-        font_hd  = pygame.font.SysFont("monospace", 11)
+        font_sm  = get_font(13)
+        font     = get_font(17)
+        font_hd  = get_font(11)
 
         # Clone tube hospital background
         self._draw_clone_tube_bg(t)
 
         # Nova Soma header — rotating tagline per clone
-        header = pygame.font.SysFont("monospace", 14, bold=True)
+        header = get_font(14, bold=True)
         tagline = self._DECANT_TAGLINES[
             self.meta.clone_count % len(self._DECANT_TAGLINES)]
         tagline_surf = header.render(
@@ -1457,7 +1590,7 @@ class Game:
              (160, 160, 170), font),
             ("", None, font_sm),
             (f"OUTSTANDING BALANCE:   {self.meta.debt:,} cr",
-             S.AMBER_TERM, pygame.font.SysFont("monospace", 20, bold=True)),
+             S.AMBER_TERM, get_font(20, bold=True)),
             ("", None, font_sm),
             ("This invoice is non-negotiable. Debt is hereditary and compound.",
              (60, 60, 68), font_sm),
@@ -1489,8 +1622,8 @@ class Game:
                 self.screen.blit(stats_panel, (stats_x, stats_y))
                 pygame.draw.rect(self.screen, (35, 50, 70),
                                  (stats_x, stats_y, stats_w, stats_h), 1)
-                f_hdr = pygame.font.SysFont("monospace", 10, bold=True)
-                f_body = pygame.font.SysFont("monospace", 9)
+                f_hdr = get_font(10, bold=True)
+                f_body = get_font(9)
                 hdr = f_hdr.render("CAREER LEDGER", True, (95, 150, 180))
                 self.screen.blit(hdr, (stats_x + 10, stats_y + 8))
                 # Run + career summaries combined
@@ -1516,7 +1649,7 @@ class Game:
         # Bax wake-up line — use the line cached at death time (not re-rolled each frame)
         bax_line = self._decant_bax_line or random.choice(self._DECANT_BAX).format(
             n=self.meta.clone_count)
-        font_bax = pygame.font.SysFont("monospace", 12)
+        font_bax = get_font(12)
         bax_surf = font_bax.render(bax_line, True, (100, 130, 100))
         self.screen.blit(bax_surf,
                          (S.SCREEN_W // 2 - bax_surf.get_width() // 2,
@@ -1600,9 +1733,9 @@ class Game:
                          (0, S.SCREEN_H - bar_h), (S.SCREEN_W, S.SCREEN_H - bar_h), 1)
 
         # --- Completed chapter banner ---
-        f_label = pygame.font.SysFont("monospace", 13, bold=True)
-        f_title = pygame.font.SysFont("monospace", 34, bold=True)
-        f_sub   = pygame.font.SysFont("monospace", 14, italic=True)
+        f_label = get_font(13, bold=True)
+        f_title = get_font(34, bold=True)
+        f_sub   = get_font(14, italic=True)
 
         # Stamp
         label = f_label.render(f"CHAPTER {completed}  ::  DELIVERED",
@@ -1632,7 +1765,7 @@ class Game:
         shown += cursor
 
         # Wrapped render
-        f_bax = pygame.font.SysFont("monospace", 17)
+        f_bax = get_font(17)
         max_w = S.SCREEN_W - 220
         words = shown.split(" ")
         lines: list[str] = []
@@ -1660,9 +1793,9 @@ class Game:
         # --- Next chapter or campaign end card ---
         next_y = S.SCREEN_H - bar_h - 140
         if is_end:
-            f_end_l = pygame.font.SysFont("monospace", 12, bold=True)
-            f_end_t = pygame.font.SysFont("monospace", 28, bold=True)
-            f_end_s = pygame.font.SysFont("monospace", 13)
+            f_end_l = get_font(12, bold=True)
+            f_end_t = get_font(28, bold=True)
+            f_end_s = get_font(13)
             pulse = 0.5 + 0.5 * math.sin(t * 1.6)
             end_col = (int(160 + 80 * pulse), int(220 * pulse + 35), int(40 + 40 * pulse))
             top_label = f_end_l.render("CAMPAIGN COMPLETE", True, (140, 200, 80))
@@ -1674,9 +1807,9 @@ class Game:
             ss = f_end_s.render(stats, True, (170, 170, 190))
             self.screen.blit(ss, (cx - ss.get_width() // 2, next_y + 56))
         else:
-            f_n_l = pygame.font.SysFont("monospace", 12, bold=True)
-            f_n_t = pygame.font.SysFont("monospace", 26, bold=True)
-            f_n_s = pygame.font.SysFont("monospace", 13, italic=True)
+            f_n_l = get_font(12, bold=True)
+            f_n_t = get_font(26, bold=True)
+            f_n_s = get_font(13, italic=True)
             next_name = self._CHAPTER_NAMES.get(next_ch, f"CHAPTER {next_ch}")
             next_sub  = self._CHAPTER_SUBTITLES.get(next_ch, "")
             label_next = f_n_l.render(f"NEXT  //  CHAPTER {next_ch}", True, (180, 130, 30))
@@ -1696,7 +1829,7 @@ class Game:
         pygame.draw.rect(self.screen, (220, 160, 30),
                          pygame.Rect(bar_x, bar_y, int(bar_w * progress), 4))
 
-        f_foot = pygame.font.SysFont("monospace", 12)
+        f_foot = get_font(12)
         prompt = (f"[ ENTER ]  return to depot"
                   if is_end else
                   f"[ ENTER ]  load next chapter   //   auto in {self._interstitial_t:.0f}s")
@@ -1753,7 +1886,7 @@ class Game:
                          (0, S.SCREEN_H - bar_h), (S.SCREEN_W, S.SCREEN_H - bar_h), 1)
 
         # --- Top bar text: classification stamp + chapter ---
-        font_corp = pygame.font.SysFont("monospace", 12)
+        font_corp = get_font(12)
         stamp = font_corp.render(
             "CLASSIFIED // NOVA SOMA ENTERTAINMENT DIVISION // INTERNAL USE",
             True, (130, 95, 30))
@@ -1762,7 +1895,7 @@ class Game:
         self.screen.blit(ver, (S.SCREEN_W - ver.get_width() - 16, 22))
 
         # --- Title with chromatic aberration ---
-        font_title = pygame.font.SysFont("monospace", 96, bold=True)
+        font_title = get_font(96, bold=True)
         title_str  = "DEAD DRIFT"
         ty = 138
 
@@ -1793,7 +1926,7 @@ class Game:
         pygame.draw.line(self.screen, (200, 140, 0), (ul_x + ul_w, ul_y - cap), (ul_x + ul_w, ul_y + 2), 2)
 
         # --- Tagline ---
-        font_sub = pygame.font.SysFont("monospace", 18)
+        font_sub = get_font(18)
         tagline_lines = [
             "A NEWTONIAN COURIER SIMULATION  //  FOR THE TERMINALLY INDEBTED",
             "5 sectors. crushing debt. one rusted ship. one bolted-on droid.",
@@ -1817,7 +1950,7 @@ class Game:
             self._render_menu_cargo_dossier(t)
 
         # --- Lore strap line (above bottom bar) ---
-        font_lore = pygame.font.SysFont("monospace", 13)
+        font_lore = get_font(13)
         lore_lines = [
             "Union of Repo Men, Local 404. They will come for what you carry.",
             "5 sectors → cargo drop-off → debt reduction.  Snap the tether.  Don't die again.",
@@ -1852,9 +1985,9 @@ class Game:
             pygame.draw.line(self.screen, (200, 70, 70), c, (c[0] + sx * 10, c[1]), 2)
             pygame.draw.line(self.screen, (200, 70, 70), c, (c[0], c[1] + sy * 10), 2)
 
-        font_h = pygame.font.SysFont("monospace", 11, bold=True)
-        font_d = pygame.font.SysFont("monospace", 22, bold=True)
-        font_s = pygame.font.SysFont("monospace", 11)
+        font_h = get_font(11, bold=True)
+        font_d = get_font(22, bold=True)
+        font_s = get_font(11)
 
         hdr = font_h.render("OUTSTANDING BALANCE", True, (200, 80, 80))
         self.screen.blit(hdr, (panel.left + 12, panel.top + 8))
@@ -1881,8 +2014,8 @@ class Game:
             pygame.draw.line(self.screen, (80, 160, 220), c, (c[0] + sx * 10, c[1]), 2)
             pygame.draw.line(self.screen, (80, 160, 220), c, (c[0], c[1] + sy * 10), 2)
 
-        font_h = pygame.font.SysFont("monospace", 11, bold=True)
-        font_v = pygame.font.SysFont("monospace", 12)
+        font_h = get_font(11, bold=True)
+        font_v = get_font(12)
 
         hdr = font_h.render("PILOT MANIFEST", True, (120, 200, 255))
         self.screen.blit(hdr, (panel.left + 12, panel.top + 8))
@@ -1911,7 +2044,7 @@ class Game:
             pygame.draw.line(self.screen, (80, 110, 150), c, (c[0] + sx * 10, c[1]), 2)
             pygame.draw.line(self.screen, (80, 110, 150), c, (c[0], c[1] + sy * 10), 2)
 
-        font = pygame.font.SysFont("monospace", 10, bold=True)
+        font = get_font(10, bold=True)
         hdr = font.render("HULL SCHEMATIC // RUSTBUCKET-α", True, (110, 150, 200))
         self.screen.blit(hdr, (panel.left + 8, panel.top + 6))
 
@@ -1944,7 +2077,7 @@ class Game:
             pygame.draw.circle(self.screen, (200, 230, 255), p, 2)
 
         # Bottom label strip
-        font_s = pygame.font.SysFont("monospace", 9)
+        font_s = get_font(9)
         s1 = font_s.render(f"ROT  {ry:5.2f} rad", True, (90, 120, 160))
         s2 = font_s.render(f"MASS  1.0t  //  HULL {int(S.HULL_MAX)}", True, (90, 120, 160))
         self.screen.blit(s1, (panel.left + 8, panel.bottom - 24))
@@ -2011,9 +2144,9 @@ class Game:
     def _render_main_menu_actions(self, t: float) -> None:
         cx = S.SCREEN_W // 2
         py = int(S.SCREEN_H * 0.54)
-        font_h = pygame.font.SysFont("monospace", 13, bold=True)
-        font_row = pygame.font.SysFont("monospace", 20, bold=True)
-        font_sm = pygame.font.SysFont("monospace", 11)
+        font_h = get_font(13, bold=True)
+        font_row = get_font(20, bold=True)
+        font_sm = get_font(11)
         pulse = 0.5 + 0.5 * math.sin(t * 3.0)
 
         sid = self.save_mgr.active_slot_id
@@ -2025,7 +2158,7 @@ class Game:
         hdr = font_sm.render(hdr_text, True, (120, 120, 150))
 
         if self._run_just_completed:
-            font_c = pygame.font.SysFont("monospace", 14, bold=True)
+            font_c = get_font(14, bold=True)
             cs = font_c.render("// RUN COMPLETE //  DEBT REDUCED  //",
                                True, S.GREEN_TERM)
             self.screen.blit(cs, (cx - cs.get_width() // 2, py - 48))
@@ -2060,6 +2193,26 @@ class Game:
 
         if self._menu_mode == "jukebox":
             self._render_jukebox_panel(t, py, font_h, font_row, font_sm)
+            return
+
+        if self._menu_mode == "records":
+            from renderer.records_screen import draw_records
+            draw_records(self.screen,
+                         meta=self.meta,
+                         vault=getattr(self.bax, "vault", None),
+                         stats=getattr(self.run_mgr, "stats", None),
+                         tab_idx=self._records_tab,
+                         scroll=self._records_scroll,
+                         t=t)
+            return
+
+        if self._menu_mode == "dossiers":
+            from renderer.cargo_carousel import draw_carousel
+            draw_carousel(self.screen,
+                          meta=self.meta,
+                          stats=getattr(self.run_mgr, "stats", None),
+                          cursor=self._dossier_cursor,
+                          t=t)
             return
 
         if self._menu_mode in ("pick_new", "pick_load"):
@@ -2127,9 +2280,9 @@ class Game:
 
         cx = S.SCREEN_W // 2
         cy = S.SCREEN_H // 2 - 40
-        font_t = pygame.font.SysFont("monospace", 32, bold=True)
-        font_r = pygame.font.SysFont("monospace", 22, bold=True)
-        font_s = pygame.font.SysFont("monospace", 12)
+        font_t = get_font(32, bold=True)
+        font_r = get_font(22, bold=True)
+        font_s = get_font(12)
 
         title = font_t.render("—  PAUSED  —", True, S.AMBER_TERM)
         self.screen.blit(title, (cx - title.get_width() // 2, cy))
@@ -2174,8 +2327,8 @@ class Game:
         bar_h = 56
         cy   = S.SCREEN_H - bar_h - 118   # lower on screen, below main menu box
 
-        font_h  = pygame.font.SysFont("monospace", 10, bold=True)
-        font_sm = pygame.font.SysFont("monospace", 9)
+        font_h  = get_font(10, bold=True)
+        font_sm = get_font(9)
 
         for i, (chap, title, desc1, desc2, col, accent) in enumerate(_CARGO_CARDS):
             cx_card = x0 + i * (card_w + gap)
@@ -2211,11 +2364,92 @@ class Game:
                 self.screen.blit(ds, (cx_card + 6, cy + 40 + j * 14))
 
     # ------------------------------------------------------------------
+    def _maybe_render_nlp_splash(self):
+        """Epic 1.10 — overlay shown while the NLTK bootstrap is downloading.
+
+        First time a terminal opens before the bootstrap has finished:
+          * fire a one-shot Bax warm-up line,
+          * paint a 'LINGUISTIC PROCESSOR INITIALISING — STAND BY' card
+            with the current package name + a small spinner.
+
+        Once `nlp_bootstrap.is_ready()` flips, the splash fades and is
+        cleared. The terminal stays usable throughout — the parser falls
+        back to regex tokenisation while the bundle is still in flight.
+        """
+        try:
+            from terminal import nlp_bootstrap
+        except Exception:
+            return
+
+        if nlp_bootstrap.is_ready():
+            if self._nlp_splash_active:
+                self._nlp_splash_active = False
+                self._nlp_splash_t      = 0.0
+            return
+
+        # Arm on first terminal-state render after boot, before the
+        # bootstrap finishes.
+        if not self._nlp_splash_active:
+            self._nlp_splash_active = True
+            self._nlp_splash_t      = 0.0
+            if not self._nlp_warmup_line_fired:
+                self._nlp_warmup_line_fired = True
+                bus.emit(EVT_BAX_SPEAK, priority=True,
+                         line="Right, give us a sec — the comms array's still warmin' up.")
+
+        self._nlp_splash_t += self._dt
+
+        # Card centred horizontally, near the top of the terminal area.
+        card_w, card_h = 460, 78
+        cx = S.SCREEN_W // 2
+        card_y = 96
+        card = pygame.Rect(cx - card_w // 2, card_y, card_w, card_h)
+
+        backdrop = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+        backdrop.fill((6, 14, 8, 230))
+        self.screen.blit(backdrop, card.topleft)
+        pygame.draw.rect(self.screen, (40, 220, 90), card, 1)
+        for c, sx, sy in (
+            (card.topleft, 1, 1), (card.topright, -1, 1),
+            (card.bottomleft, 1, -1), (card.bottomright, -1, -1),
+        ):
+            pygame.draw.line(self.screen, (60, 240, 110),
+                             c, (c[0] + sx * 14, c[1]), 2)
+            pygame.draw.line(self.screen, (60, 240, 110),
+                             c, (c[0], c[1] + sy * 14), 2)
+
+        font_h = get_font(12, bold=True)
+        font_v = get_font(11)
+
+        title = font_h.render(
+            "LINGUISTIC PROCESSOR INITIALISING — STAND BY",
+            True, (90, 255, 130))
+        self.screen.blit(title, (cx - title.get_width() // 2, card.top + 12))
+
+        label = nlp_bootstrap.progress_label()
+        remaining = nlp_bootstrap.packages_remaining()
+        sub = font_v.render(
+            f"{label}     ({remaining} package{'s' if remaining != 1 else ''} pending)",
+            True, (140, 200, 160))
+        self.screen.blit(sub, (cx - sub.get_width() // 2, card.top + 36))
+
+        spin_chars = "|/-\\"
+        spinner = spin_chars[int(self._nlp_splash_t * 8) % len(spin_chars)]
+        sp = font_h.render(spinner, True, (90, 255, 130))
+        self.screen.blit(sp, (card.right - 22, card.top + 12))
+
+        # Soft scanline strip drifting through the card to feel diegetic.
+        strip_y = card.top + int((self._nlp_splash_t * 60) % card.h)
+        pygame.draw.line(self.screen, (90, 255, 130, 80),
+                         (card.left + 4, strip_y),
+                         (card.right - 4, strip_y), 1)
+
+    # ------------------------------------------------------------------
     def _render_menu_propaganda(self, t: float):
         bar_h = 56
         bar_y = S.SCREEN_H - bar_h
         # Inside the letterbox bar — scrolling ticker
-        font = pygame.font.SysFont("monospace", 14, bold=True)
+        font = get_font(14, bold=True)
         text = (
             "  >>  NOVA SOMA :: DEBT IS OPPORTUNITY  "
             "  >>  CLONE FASTER. EARN FASTER. THRIVE.  "
@@ -2261,8 +2495,8 @@ class Game:
             pygame.draw.line(self.screen, (200, 150, 50), c, (c[0] + sx * 14, c[1]), 2)
             pygame.draw.line(self.screen, (200, 150, 50), c, (c[0], c[1] + sy * 14), 2)
 
-        font_h = pygame.font.SysFont("monospace", 11, bold=True)
-        font_s = pygame.font.SysFont("monospace", 10)
+        font_h = get_font(11, bold=True)
+        font_s = get_font(10)
         hdr = font_h.render("BAX // NAV-MORALE", True, (255, 190, 50))
         sub = font_s.render("bolt-on advisor droid", True, (110, 100, 80))
         self.screen.blit(hdr, (panel.centerx - hdr.get_width() // 2, panel.top + 10))

@@ -36,7 +36,7 @@ def test_shop_browse_screen_renders_polished_market_surface():
         _run_tether_hits=0,
         _sector_index=0,
         sector_num=2,
-        meta=SimpleNamespace(add_debt=lambda amount: None),
+        meta=SimpleNamespace(add_debt=lambda amount: None, debt=42000),
     )
     ship = SimpleNamespace(hull=S.HULL_MAX, cargo=None)
     shop = ShopScreen(run_mgr, ship)

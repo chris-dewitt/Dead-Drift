@@ -7,6 +7,7 @@ import random
 import pygame
 
 
+from core.text import get_font
 def draw_space_crawl(surface: pygame.Surface, lines: list[str], t: float,
                      *, y_start: int = 72, speed: float = 28.0) -> None:
     """Star-Wars parody crawl — yellow italic-ish block drifting upward."""
@@ -15,8 +16,8 @@ def draw_space_crawl(surface: pygame.Surface, lines: list[str], t: float,
     ov.fill((0, 0, 0, 140))
     surface.blit(ov, (0, 0))
 
-    f_title = pygame.font.SysFont("monospace", 11, bold=True)
-    f_body = pygame.font.SysFont("monospace", 10)
+    f_title = get_font(11, bold=True)
+    f_body = get_font(10)
     block_h = 20 + len(lines) * 16
     scroll_y = y_start - int(t * speed) % (h + block_h + 80)
 
@@ -55,7 +56,7 @@ def draw_corporate_pipe(surf: pygame.Surface, sx: int, y: int, h: int,
     lip_h = 10
     pygame.draw.rect(surf, hi, (sx - pw // 2 - 3, y - lip_h, pw + 6, lip_h))
     pygame.draw.rect(surf, (255, 80, 80), (sx - pw // 2 + 2, y + h // 3, pw - 4, 3))
-    f = pygame.font.SysFont("monospace", 6)
+    f = get_font(6)
     lbl = f.render("NS", True, (20, 20, 20))
     surf.blit(lbl, (sx - lbl.get_width() // 2, y + 4))
 
@@ -314,7 +315,7 @@ def draw_landing_star_destroyer(surface: pygame.Surface, cx: int, cy: int,
                      (cx + sw // 4, cy - th // 2, tw, th))
     # Running gag label
     if scale > 0.4:
-        f = pygame.font.SysFont("monospace", max(8, int(10 * scale)), bold=True)
+        f = get_font(max(8, int(10 * scale)), bold=True)
         s = f.render("DEFINITELY NOT A TRAP", True, (255, 80, 80))
         surface.blit(s, (cx - s.get_width() // 2, cy + sh // 3 + 6))
     # Engine glow
