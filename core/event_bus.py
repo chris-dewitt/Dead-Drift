@@ -134,3 +134,8 @@ EVT_UNLOCK_EARNED   = "unlock_earned"   # payload: key, label
 
 # Epic 8 — Meta-progression / replay events
 EVT_LORE_FOUND      = "lore_found"      # payload: text, chapter (corridor secret)
+
+# Epic 4.6 — corridor music phases
+EVT_CORRIDOR_ENTER     = "corridor_enter"      # payload: chapter
+EVT_CORRIDOR_BOSS_ROOM = "corridor_boss_room"  # payload: chapter (boss-room trigger)
+EVT_CORRIDOR_EXIT      = "corridor_exit"       # payload: chapter

@@ -24,7 +24,8 @@ from delivery.corridor.elements import (
 from core.event_bus import (bus, EVT_BAX_SPEAK, EVT_DELIVERY_DONE,
                             EVT_CORRIDOR_RUN, EVT_CORRIDOR_JUMP,
                             EVT_CORRIDOR_SECRET, EVT_CORRIDOR_DEATH,
-                            EVT_LORE_FOUND)
+                            EVT_LORE_FOUND, EVT_CORRIDOR_ENTER,
+                            EVT_CORRIDOR_BOSS_ROOM, EVT_CORRIDOR_EXIT)
 
 GRAVITY   = 980.0
 JUMP_VY   = -440.0
@@ -277,6 +278,12 @@ class Corridor:
 
         # Fire entry Bax line for Room 0
         self._fire_room_enter(0)
+
+        # Epic 4.6 — corridor music: signal entry so the audio manager can
+        # swell the chapter signature loop in.
+        self._boss_room_emitted = False
+        self._exit_emitted      = False
+        bus.emit(EVT_CORRIDOR_ENTER, chapter=self.chapter)
 
     # ── Public API ───────────────────────────────────────────────────────
 
@@ -662,8 +669,14 @@ class Corridor:
     def _check_boss_triggers(self, room: Room):
         for el in self._visible_elements(room):
             if isinstance(el, BossRoomTrigger):
-                if el.check(self._px) and el.bax_line:
-                    bus.emit(EVT_BAX_SPEAK, line=el.bax_line)
+                if el.check(self._px):
+                    if el.bax_line:
+                        bus.emit(EVT_BAX_SPEAK, line=el.bax_line)
+                    # Epic 4.6 — first boss-room trigger this corridor peaks
+                    # the chapter signature music. Idempotent per corridor.
+                    if not self._boss_room_emitted:
+                        self._boss_room_emitted = True
+                        bus.emit(EVT_CORRIDOR_BOSS_ROOM, chapter=self.chapter)
 
     def _check_stealth(self, room: Room, dt: float):
         if self._stun_t > 0:
@@ -724,6 +737,9 @@ class Corridor:
     def _finish(self):
         self._done = True
         bus.emit(EVT_DELIVERY_DONE)
+        if not self._exit_emitted:
+            self._exit_emitted = True
+            bus.emit(EVT_CORRIDOR_EXIT, chapter=self.chapter)
         total_t = self._elapsed
         room    = self.rooms[self._room_idx]
         if total_t <= room.star3_t and self._hits == 0:
