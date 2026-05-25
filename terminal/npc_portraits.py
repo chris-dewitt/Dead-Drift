@@ -3009,90 +3009,201 @@ def _backdrop_dray(surface, inner, t):
 
 
 def _dray(surface, cx, cy, s, disposition, t):
-    """Dray: bored slacker in a battered courier helmet, slouched, perpetually unbothered."""
-    skin   = (200, 165, 125)
-    skin_d = (110, 82, 52)
-    helm   = (58, 68, 72)      # scuffed grey-blue helmet shell
-    helm_l = (90, 108, 115)
-    visor  = (10, 48, 60)      # dark tinted visor, cracked edge
-    accent = (160, 210, 130)   # relay-band green
-    collar = (44, 38, 32)      # worn courier jacket
+    """Dray: visor PUSHED UP on his helmet, sleepy eyes visible, a stim
+    cigarette dangling off his lip, courier jacket open over a faded
+    band shirt. Reads as 'this guy is on his break and you're bothering
+    him' from across the room.
 
-    # Slouched torso
+    Aliveness B.5 rework — earlier portrait hid Dray entirely behind a
+    tinted visor; players couldn't read his disposition or remember him.
+    The new portrait commits to the slacker energy: bored eyes, lazy
+    smile / smirk, smoke trail, visible band-shirt slogan."""
+    skin   = (210, 175, 135)
+    skin_d = (130, 95, 60)
+    skin_s = (90, 65, 38)
+    helm   = (58, 68, 72)
+    helm_l = (110, 130, 138)
+    visor  = (40, 110, 130)      # raised visor — daylight side
+    accent = (160, 210, 130)
+    jacket = (54, 48, 38)
+    jacket_hi = (90, 78, 56)
+    shirt  = (40, 30, 80)        # faded band shirt
+    hair   = (60, 45, 30)
+
+    cx_i = int(cx)
+    cy_i = int(cy)
+
+    # ── Slouched torso: jacket open over a faded band shirt ──────────
     torso_pts = [
-        (int(cx - 42 * s), int(cy + 80 * s)),
-        (int(cx + 46 * s), int(cy + 80 * s)),
-        (int(cx + 38 * s), int(cy + 24 * s)),
-        (int(cx - 32 * s), int(cy + 24 * s)),
+        (cx_i - int(44 * s), cy_i + int(80 * s)),
+        (cx_i + int(48 * s), cy_i + int(80 * s)),
+        (cx_i + int(36 * s), cy_i + int(22 * s)),
+        (cx_i - int(34 * s), cy_i + int(22 * s)),
     ]
-    pygame.draw.polygon(surface, collar, torso_pts)
-    pygame.draw.polygon(surface, (72, 62, 50), torso_pts, 1)
-    # Courier delivery stripe — faded
-    pygame.draw.line(surface, (70, 70, 50),
-                     (int(cx - 8 * s), int(cy + 26 * s)),
-                     (int(cx - 8 * s), int(cy + 78 * s)), max(2, int(3 * s)))
+    pygame.draw.polygon(surface, jacket, torso_pts)
+    pygame.draw.polygon(surface, jacket_hi, torso_pts, 1)
+    # Band shirt triangle showing through open jacket
+    shirt_pts = [
+        (cx_i, cy_i + int(28 * s)),
+        (cx_i - int(18 * s), cy_i + int(80 * s)),
+        (cx_i + int(18 * s), cy_i + int(80 * s)),
+    ]
+    pygame.draw.polygon(surface, shirt, shirt_pts)
+    # Band logo  small triangle inside the shirt area
+    pygame.draw.polygon(surface, (200, 180, 120),
+                        [(cx_i - int(8 * s), cy_i + int(56 * s)),
+                         (cx_i,              cy_i + int(46 * s)),
+                         (cx_i + int(8 * s), cy_i + int(56 * s))], 1)
 
-    # Neck
-    pygame.draw.rect(surface, skin_d,
-                     (int(cx - 10 * s), int(cy + 14 * s),
-                      int(20 * s), int(14 * s)))
+    # Jacket collar lapel  asymmetric, popped on one side
+    pygame.draw.polygon(surface, jacket_hi,
+                        [(cx_i - int(34 * s), cy_i + int(22 * s)),
+                         (cx_i - int(10 * s), cy_i + int(34 * s)),
+                         (cx_i - int(34 * s), cy_i + int(40 * s))])
 
-    # Helmet shell — round top
-    helm_rect = pygame.Rect(int(cx - 46 * s), int(cy - 58 * s),
-                             int(92 * s), int(82 * s))
+    # ── Neck ─────────────────────────────────────────────────────────
+    pygame.draw.rect(surface, skin_d, pygame.Rect(
+        cx_i - int(12 * s), cy_i + int(10 * s),
+        int(24 * s), int(16 * s)))
+
+    # ── Helmet shell  battered grey-blue, visor RAISED ───────────────
+    helm_rect = pygame.Rect(cx_i - int(48 * s), cy_i - int(60 * s),
+                             int(96 * s), int(76 * s))
     pygame.draw.ellipse(surface, helm, helm_rect)
     pygame.draw.ellipse(surface, helm_l, helm_rect, 2)
-
-    # Scuff marks on helmet
+    # Scuff marks (deterministic for the seed)
     rng = random.Random(13)
     for _ in range(5):
-        scx = int(cx + rng.uniform(-34, 34) * s)
-        scy = int(cy + rng.uniform(-48, -6) * s)
+        scx = cx_i + int(rng.uniform(-34, 34) * s)
+        scy = cy_i + int(rng.uniform(-52, -16) * s)
         pygame.draw.line(surface, (38, 46, 50),
-                         (scx, scy), (scx + rng.randint(3, 9), scy + rng.randint(-2, 2)), 1)
+                         (scx, scy),
+                         (scx + rng.randint(3, 9),
+                          scy + rng.randint(-2, 2)), 1)
 
-    # Visor — takes up most of the face
-    visor_rect = pygame.Rect(int(cx - 38 * s), int(cy - 40 * s),
-                              int(76 * s), int(38 * s))
+    # Visor PUSHED UP onto the crown of the helmet  flipped lid look
+    visor_rect = pygame.Rect(cx_i - int(40 * s), cy_i - int(74 * s),
+                              int(80 * s), int(22 * s))
     pygame.draw.ellipse(surface, visor, visor_rect)
-    pygame.draw.ellipse(surface, (20, 80, 100), visor_rect, 2)
-    # Visor crack — bottom right corner
-    pygame.draw.line(surface, (60, 100, 120),
-                     (int(cx + 22 * s), int(cy - 8 * s)),
-                     (int(cx + 36 * s), int(cy - 22 * s)), 1)
-    pygame.draw.line(surface, (60, 100, 120),
-                     (int(cx + 22 * s), int(cy - 8 * s)),
-                     (int(cx + 30 * s), int(cy - 4 * s)), 1)
+    pygame.draw.ellipse(surface, (90, 180, 200), visor_rect, 2)
+    # Crack in raised visor  partial line
+    pygame.draw.line(surface, (180, 220, 230),
+                     (cx_i + int(8 * s), cy_i - int(66 * s)),
+                     (cx_i + int(30 * s), cy_i - int(60 * s)), 1)
 
-    # Eyes behind visor — barely visible through tint
-    eye_vis = max(30, 80 - max(0, -disposition) * 10)
-    ey = int(cy - 24 * s)
-    eye_surf = pygame.Surface((int(76 * s), int(10 * s)), pygame.SRCALPHA)
-    for ex_off, col in [(-16, (0, 200, 130, eye_vis)), (12, (0, 200, 130, eye_vis))]:
-        pygame.draw.circle(eye_surf,
-                           col,
-                           (int(38 * s + ex_off * s), int(5 * s)),
-                           max(2, int(4 * s)))
-    surface.blit(eye_surf, (int(cx - 38 * s), ey - int(5 * s)))
+    # A few strands of hair flopping out below helmet brim
+    pygame.draw.line(surface, hair,
+                     (cx_i - int(28 * s), cy_i - int(22 * s)),
+                     (cx_i - int(22 * s), cy_i - int(12 * s)),
+                     max(2, int(3 * s)))
+    pygame.draw.line(surface, hair,
+                     (cx_i + int(26 * s), cy_i - int(22 * s)),
+                     (cx_i + int(20 * s), cy_i - int(8 * s)),
+                     max(2, int(3 * s)))
 
-    # Chin guard below visor
-    chin_rect = pygame.Rect(int(cx - 32 * s), int(cy - 4 * s),
-                             int(64 * s), int(20 * s))
-    pygame.draw.ellipse(surface, helm, chin_rect)
-    pygame.draw.ellipse(surface, helm_l, chin_rect, 1)
+    # ── Face: eyebrows + sleepy eyes (visor is up, we can SEE him) ───
+    # Eyebrows  one raised slightly higher than the other (cocky)
+    pygame.draw.line(surface, hair,
+                     (cx_i - int(22 * s), cy_i - int(24 * s)),
+                     (cx_i - int(8 * s),  cy_i - int(28 * s)),
+                     max(2, int(3 * s)))   # left brow raised
+    pygame.draw.line(surface, hair,
+                     (cx_i + int(8 * s),  cy_i - int(24 * s)),
+                     (cx_i + int(22 * s), cy_i - int(24 * s)),
+                     max(2, int(3 * s)))   # right brow flat
 
-    # Relay badge on helmet side — accent pip
+    # Sleepy eyes  half-lidded, depending on disposition
+    blink_phase = abs(math.sin(t * 0.9 + 1.2))
+    half_lid = blink_phase < 0.55 or disposition < 0
+    for ex_off in (-13, 13):
+        eye_cx = cx_i + int(ex_off * s)
+        eye_cy = cy_i - int(14 * s)
+        if half_lid:
+            pygame.draw.line(surface, skin_s,
+                             (eye_cx - int(5 * s), eye_cy),
+                             (eye_cx + int(5 * s), eye_cy),
+                             max(2, int(3 * s)))
+        else:
+            pygame.draw.circle(surface, (240, 230, 200),
+                               (eye_cx, eye_cy), max(2, int(4 * s)))
+            pygame.draw.circle(surface, (10, 22, 12),
+                               (eye_cx, eye_cy), max(1, int(2 * s)))
+            # Pupil drifts slightly  reads as 'looking through you'
+            drift = int(2 * math.sin(t * 0.3 + ex_off))
+            pygame.draw.circle(surface, (10, 22, 12),
+                               (eye_cx + drift, eye_cy), 1)
+
+    # Nose  short line for definition
+    pygame.draw.line(surface, skin_s,
+                     (cx_i, cy_i - int(8 * s)),
+                     (cx_i + int(2 * s), cy_i + int(2 * s)),
+                     max(1, int(2 * s)))
+
+    # Stubble — diagonal hatching across jaw
+    for i in range(-4, 5):
+        sx = cx_i + i * int(4 * s)
+        sy = cy_i + int(10 * s)
+        pygame.draw.line(surface, skin_s,
+                         (sx - 1, sy),
+                         (sx + 2, sy + 3), 1)
+
+    # Mouth  lopsided smirk (or flat line when annoyed)
+    mouth_y = cy_i + int(6 * s)
+    if disposition >= 2:
+        # Smirk
+        pygame.draw.line(surface, skin_s,
+                         (cx_i - int(8 * s), mouth_y + 1),
+                         (cx_i + int(8 * s), mouth_y - 2),
+                         max(2, int(2 * s)))
+    elif disposition <= -2:
+        # Flat line
+        pygame.draw.line(surface, skin_s,
+                         (cx_i - int(8 * s), mouth_y),
+                         (cx_i + int(8 * s), mouth_y),
+                         max(2, int(2 * s)))
+    else:
+        # Default  slight smirk, lips parted
+        pygame.draw.line(surface, skin_s,
+                         (cx_i - int(9 * s), mouth_y),
+                         (cx_i + int(7 * s), mouth_y - 1),
+                         max(2, int(2 * s)))
+
+    # ── Stim cig dangling from the right corner of his mouth ─────────
+    cig_x = cx_i + int(10 * s)
+    cig_y = mouth_y
+    pygame.draw.line(surface, (240, 235, 200),
+                     (cig_x, cig_y),
+                     (cig_x + int(12 * s), cig_y + int(2 * s)),
+                     max(2, int(2 * s)))
+    # Lit tip — orange ember that pulses
+    ember = 0.55 + 0.45 * math.sin(t * 4.2)
+    pygame.draw.circle(surface, (int(255 * ember), int(110 * ember), 30),
+                       (cig_x + int(12 * s), cig_y + int(2 * s)),
+                       max(1, int(2 * s)))
+    # Smoke trail  drifting up-right
+    for k in range(4):
+        sk_t = (t * 1.3 + k * 0.25) % 1.0
+        sk_x = cig_x + int(12 * s + sk_t * 14)
+        sk_y = cig_y + int(2 * s - sk_t * 22)
+        sk_a = int(160 * (1 - sk_t))
+        sk_r = max(1, int((1 + sk_t * 3) * s))
+        smoke = pygame.Surface((sk_r * 2 + 2, sk_r * 2 + 2),
+                               pygame.SRCALPHA)
+        pygame.draw.circle(smoke, (180, 180, 200, sk_a),
+                           (sk_r + 1, sk_r + 1), sk_r)
+        surface.blit(smoke, (sk_x - sk_r - 1, sk_y - sk_r - 1))
+
+    # ── Relay badge on helmet side  blinks softly ───────────────────
     pygame.draw.circle(surface, accent,
-                       (int(cx + 34 * s), int(cy - 44 * s)), max(3, int(4 * s)))
+                       (cx_i + int(36 * s), cy_i - int(40 * s)),
+                       max(3, int(4 * s)))
     pygame.draw.circle(surface, (10, 60, 40),
-                       (int(cx + 34 * s), int(cy - 44 * s)), max(3, int(4 * s)), 1)
-    blink_pip = int(t * 1.4) % 2 == 0
-    if blink_pip:
+                       (cx_i + int(36 * s), cy_i - int(40 * s)),
+                       max(3, int(4 * s)), 1)
+    if int(t * 1.4) % 2 == 0:
         pygame.draw.circle(surface, (*accent, 180),
-                           (int(cx + 34 * s), int(cy - 44 * s)), max(5, int(6 * s)), 1)
-
-    # Bored posture tilt — head slightly cocked (nudge cx)
-    # (already baked into torso asymmetry above)
+                           (cx_i + int(36 * s), cy_i - int(40 * s)),
+                           max(5, int(6 * s)), 1)
 
     # Comm speaker grille on chin guard
     for grille_x in range(-12, 14, 5):

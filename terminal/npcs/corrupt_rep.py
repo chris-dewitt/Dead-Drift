@@ -152,16 +152,18 @@ class CorruptRep(BaseNPC):
                 "I might know somebody who knows somebody. Continue.",
             ])
 
-        # BRIBE PATH — branches small vs big.
+        # BRIBE PATH — branches small vs big. Aliveness B.1 standardised label.
         if (any(w in raw for w in self._BRIBE_KEYWORDS) or
                 parsed.intent == "bribe"):
-            self._current_path = "BRIBE"
             amount = parsed.amount or 0
             if amount >= 8000:
                 # SHAKEDOWN — too much money on the table; he takes some
                 # cargo too. The player still RELEASES but pays extra.
                 self._was_shakedown = True
                 self._bribe_paid    = amount
+                # Mark dossier with the shakedown so the player can see
+                # the price they paid plus a SHAKEDOWN tag.
+                self._current_path  = f"BRIBE [{amount} cr] · SHAKEDOWN"
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="small_bribe")
                 return NPCOutcome.RELEASE, random.choice([
                     f"*pause* Eight grand?? Mate, you're flashin' "
@@ -177,6 +179,7 @@ class CorruptRep(BaseNPC):
                 ])
             if amount >= 1500:
                 self._bribe_paid = amount
+                self._current_path = f"BRIBE [{amount} cr]"
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="small_bribe")
                 return NPCOutcome.RELEASE, random.choice([
                     "*pockets the credits in two motions* Vessel: not "
@@ -187,6 +190,8 @@ class CorruptRep(BaseNPC):
                     "Bish-bash-bosh. *clinks* You were never 'ere. "
                     "Tell Gary nothin'. He's a snitch, between us.",
                 ])
+            # Turn 1: no number yet — keep generic label.
+            self._current_path = "BRIBE"
             return NPCOutcome.CONTINUE, random.choice([
                 "*expectant pause* ...Yeah? Got a number for me?",
                 "I'm listenin'. *holds out hand for the figure*",
@@ -244,6 +249,17 @@ class CorruptRep(BaseNPC):
             "Annoyin'.",
             "Eddie Marlowe — you know Eddie? Quotes the Charter at me. "
             "Like THAT'S the problem 'ere.",
+            # Aliveness B.7 — Vinny's running, specific contempt for Eddie
+            "Eddie's filed THREE grievances on me this quarter. Three. "
+            "*sips* I keep 'em pinned on the bulkhead. Best reviews I ever got.",
+            "Eddie still believes in the Charter. *quiet wonder* "
+            "I find that beautiful. I find that USEFUL. He spends ten "
+            "minutes explainin' Section 4 to every courier — gives me time "
+            "to clean me boots.",
+            "Last time Eddie an' me were on the same intercept, "
+            "he wouldn't shake me hand. *chuckles* "
+            "I told him: comrade, the handshake is in the charter. "
+            "He filed grievance number four.",
             "I'm not the worst person on this barge, mind. "
             "You should meet me cousin.",
             "I do this job for the *opportunities*, courier. "
@@ -260,8 +276,15 @@ class CorruptRep(BaseNPC):
         return self._bribe_paid
 
     def get_path_progress(self) -> list[tuple[str, int, int]]:
+        # Aliveness B.1 — standardised dossier label, shows paid amount.
+        if self._bribe_paid > 0:
+            bribe_label = f"BRIBE [{self._bribe_paid} cr]"
+            if self._was_shakedown:
+                bribe_label += " · SHAKEDOWN"
+        else:
+            bribe_label = "BRIBE [1500+ cr]"
         return [
-            ("BRIBE",       int(self._bribe_paid > 0), 1),
+            (bribe_label,   int(self._bribe_paid > 0), 1),
             ("SHARE_SCORE", min(self._share_hits, 2), 2),
             ("THREATEN",    min(self._threat_hits, 2), 2),
         ]

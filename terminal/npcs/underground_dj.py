@@ -329,4 +329,31 @@ class UndergroundDJ(BaseNPC):
             "He won't trade it. "
             "He WILL describe it to me every time we talk. "
             "*sighs* That's the underground economy. What do you need?",
+
+            # Aliveness B.7 — specific memorable cross-references that
+            # build a web through casual mention. These are designed to
+            # be the kind of thing a player tells a friend about.
+
+            # The Gary training tape  the headline B.7 hook
+            "Wanna hear something special? *flips reel* "
+            "I got my hands on a Local 404 cadet training video. "
+            "Old Gary Pruitt giving the orientation. Twenty years younger. "
+            "I run it overnight when nobody's listening. *quietly* "
+            "He had THE SAME hat then. The exact same hat. "
+            "It's the most depressing thing I've ever broadcast.",
+
+            "Last week I aired forty minutes of unedited Gary intake calls. "
+            "Just the audio. *static* Half the listeners thought it was "
+            "performance art. The other half called in angry that I "
+            "stopped. Gary, mate, you're a star. *laughs* Don't tell him.",
+
+            "Eddie Marlowe from Local 404 once tried to phone in a "
+            "request. *deadpan* He wanted me to play the Union charter. "
+            "I told him I don't take requests from cops. *pause* "
+            "He sent a follow-up form. Form 9-A. Asking why.",
+
+            "Vinny Brogan tunes in for the song requests. Marrow knows "
+            "his alias. He doesn't know I know. *grin* That's leverage, "
+            "by the way. Sometimes things you don't say are the load-bearing "
+            "thing. Anyway  what do you want?",
         ])

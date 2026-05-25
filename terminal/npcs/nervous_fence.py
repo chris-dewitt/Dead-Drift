@@ -119,6 +119,8 @@ class NervousFence(BaseNPC):
         self._ctx           = run_context or {}
         self._deal_offered  = False
         self._paid          = False
+        # Aliveness B.1 — actual credit amount paid (drives standard label)
+        self._bribe_paid    = 0
         self._distract_t    = 0
         self._sympathy_t    = 0
         self._legit_t       = 0
@@ -253,9 +255,29 @@ class NervousFence(BaseNPC):
             ])
 
         # ------------ CREDIT BRIBE ------------------------------------
+        # Aliveness B.8 — too-low bribe gets a specific counter-offer
+        # naming the floor, not vague filler.
+        if (parsed.amount is not None
+                and 0 < parsed.amount < _CREDIT_AMOUNT):
+            self._current_path = "BRIBE"
+            return NPCOutcome.CONTINUE, random.choice([
+                f"*nervous laugh* {parsed.amount}? Felix's floor is "
+                f"{_CREDIT_AMOUNT}. *exact* It's not negotiable. Well — it IS, "
+                "but it's not, and we'd both rather not have that conversation.",
+                f"You said {parsed.amount} credits. The number is {_CREDIT_AMOUNT}. "
+                "That's the broker rate. I have overheads. Power costs. "
+                "Trauma costs. Round up.",
+                f"{parsed.amount}? *pause* I'd love to. Genuinely. "
+                "But the floor's {_CREDIT_AMOUNT} and the floor is the floor. "
+                "*hopeful* Try {_CREDIT_AMOUNT}?".format(
+                    _CREDIT_AMOUNT=_CREDIT_AMOUNT),
+            ])
+
         if parsed.amount is not None and parsed.amount >= _CREDIT_AMOUNT:
             self._paid = True
-            self._current_path = "CREDIT DEAL"
+            self._bribe_paid = parsed.amount
+            # Aliveness B.1 — standardised dossier label
+            self._current_path = f"BRIBE [{parsed.amount} cr]"
             bus.emit(EVT_NLP_EXPLOIT, npc="nervous_fence", exploit_key="credit_deal")
             if self._vault:
                 self._vault.record("nervous_fence", "CREDIT_DEAL")
@@ -660,7 +682,10 @@ class NervousFence(BaseNPC):
     def get_path_progress(self) -> list[tuple[str, int, int]]:
         return [
             ("CARGO DEAL",   int(self._deal_offered),         1),
-            ("CREDIT DEAL",  int(self._paid),                  1),
+            # Aliveness B.1 — standardised label, falls back to floor.
+            ((f"BRIBE [{self._bribe_paid} cr]" if self._bribe_paid > 0
+              else f"BRIBE [{_CREDIT_AMOUNT}+ cr]"),
+             int(self._paid), 1),
             ("SYMPATHY",     min(self._sympathy_t, 2),         2),
             ("DISTRACT",     min(self._distract_t, 3),         3),
             ("LEGITIMACY",   min(self._legit_t, 2),            2),

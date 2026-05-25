@@ -240,6 +240,26 @@ class Dray(BaseNPC):
             "I'm not bitter. I'm slightly bitter.",
             "Heard a Bax-class droid on a passing courier last week. They get weirdly attached. "
             "You got one?",
+            # Aliveness B.5 — expanded lore. Dray drops more about his
+            # background, the route he's worked, why he's still here.
+            "Started this job for the dental plan. Did you know there is NO dental plan? "
+            "I found out year three. Filed a complaint. The complaint also has no dental.",
+            "Used to fly the Outer Belt circuit with a partner. Calla. "
+            "She got promoted out of dispatch and ghosted me. Whatever. *long drag* Continue.",
+            "I'm on year four. Six routes. Two warnings. One commendation, which they "
+            "rescinded when I asked what it was for.",
+            "My ship's name is Spitting Sigma. Don't ask. I was nineteen. I named it. "
+            "I cannot change it. The Union won't process the form.",
+            "Nova Soma sent me a birthday card last year. Just my courier number on it. "
+            "Not my name. I cried a little bit. Don't tell anyone.",
+            "I think about that pilot Connie sometimes. Kress mentions her. "
+            "I never met her but I miss her, somehow. *quiet* Carry on.",
+            "Pulled my pilot's licence test grades last quarter. C+. Bottom of my class. "
+            "Yet here I am. Top of the dispatch board for sector eleven. Make of that what you will.",
+            "*static crunch* That's me crushing the empty pack. "
+            "I have one of these. Per shift. Allegedly. Continue.",
+            "If you ever see Marrow's frequency, write it down. I lost mine in a fire. "
+            "Long story. Bad one. *pause* Anyway. Your route.",
         ])
 
     def get_path_progress(self) -> list[tuple[str, int, int]]:

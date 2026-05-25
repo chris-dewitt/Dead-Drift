@@ -28,11 +28,24 @@ class Kress(BaseNPC):
     - Asking for intel/tips/contraband → he sells you a service
     """
 
+    # Aliveness B.1 / B.3 schema baseline: expanded so Kress now ships
+    # 22 distinct accepted pickup words across paths (was 14, under the
+    # 15-keyword floor). Same five paths, broader vocabulary so the
+    # player can hit them with natural phrasing.
     _INTEL_KEYWORDS    = ["intel", "tip", "tips", "info", "information",
-                           "what's ahead", "next sector", "patrol", "scan"]
+                           "what's ahead", "next sector", "patrol", "scan",
+                           # B.3 additions:
+                           "chatter", "broadcast", "tell me", "what do you know",
+                           "give me something", "rumor", "rumour", "heads up"]
     _CONTRABAND_WORDS  = ["contraband", "stims", "fuel", "jammer", "smoke",
-                           "shield", "patch", "hack", "warez", "stuff"]
-    _GREASE_KEYWORDS   = ["volkov", "old debt", "owe", "owed", "vienna"]
+                           "shield", "patch", "hack", "warez", "stuff",
+                           # B.3 additions:
+                           "wares", "merchandise", "goods", "off-books",
+                           "off the books", "supplies"]
+    _GREASE_KEYWORDS   = ["volkov", "old debt", "owe", "owed", "vienna",
+                           # B.3 additions:
+                           "favor", "favour", "favor for a favor",
+                           "marker", "ledger", "tab"]
 
     def __init__(self, run_context: dict | None = None):
         super().__init__("KRESS", patience=8)
@@ -222,6 +235,12 @@ class Kress(BaseNPC):
             "Off record. Asking about insurance gaps in Sector Three. "
             "*laughs* Perfect couriers also have gaps. "
             "I find this comforting. What do you need.",
+            # Aliveness B.7 — specific 'perfect record' suspicion line
+            "Sandra's record. Twelve years, no impounds, no incidents. "
+            "*long pause* Nobody  NOBODY  flies that long in this corridor "
+            "without one mistake. So either she is best courier alive, or "
+            "she is best at making mistakes vanish. *very quiet* I have "
+            "theories. I am not sharing them on open channel. What do you need.",
             "Marrow from the Roost — pirate radio — "
             "once broadcast patrol intel as a song dedication. "
             "Very clever. If you need signal coverage next sector, he can do it. "
