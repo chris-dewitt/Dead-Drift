@@ -72,40 +72,40 @@ Move startup NLTK download to first-terminal-open trigger. Splash overlay + Bax 
 
 ## Phase B — NPC Foundation
 
-### B.1 NPC keyword/bribe schema — [ ]
+### B.1 NPC keyword/bribe schema — [x]
 Standardize every NPC:
 - **Keywords:** minimum 15 accepted pickup words per NPC
 - **Bribes:** consistent `BRIBE [X cr]` format (no vague verbs)
 - **Exploits:** comparable count and difficulty across NPCs
 - Build a single audit table in `docs/NPC_SCHEMA.md` showing current vs target
 
-### B.2 Universal cheat code easter egg — [ ]
+### B.2 Universal cheat code easter egg — [x]
 `fuck off` (case-insensitive) works on every NPC as guaranteed pass/escape. **Easter egg only:** never advertised in keyword hints, tutorial, README, docs, or in-game text. Players discover organically.
 
-### B.3 Felix expansion — [ ]
+### B.3 Felix expansion — [x]
 Add to 15+ keyword baseline. `gossip` either works or is removed from any hint. Re-audit exploits.
 
-### B.4 Krellborn rework — [ ]
+### B.4 Krellborn rework — [x]
 Scarier tone. Keyword audit to 15+ baseline. Distinct pirate voice character — currently doesn't land as a threat.
 
-### B.5 Dray rework — [ ]
+### B.5 Dray rework — [x]
 - New portrait (current one is weak)
 - Expanded lore/background
 - `gripe` either works or is removed
 - `bribed` → `BRIBE [X cr]` standardized format
 - Push to 15+ keywords
 
-### B.6 Two new Union barge riders — [ ]
+### B.6 Two new Union barge riders — [x]
 Replace Gary monoculture in late sectors:
 - **Idealist Union Rep** — true-believer, quotes Union charter unironically, talks "shared prosperity" while clamping your hull. Earnest, irritating to negotiate with.
 - **Corrupt Union Rep** — crooked, organized crime ties, takes bribes but might rob you anyway. Different cynicism from Gary's.
 
 Each needs: portrait, dialogue tree, 15+ keywords, exploits, bribe paths.
 
-### B.7 NPC cross-references — [ ]
+### B.7 NPC cross-references — [x]
 Characters mention each other in dialogue. Marrow plays unauthorized Gary training videos on her pirate station. Kress mutters about Sandra's "perfect record." Builds a web through casual mention.
 
-### B.8 Bribe negotiation mini-game — [ ]
+### B.8 Bribe negotiation mini-game — [x]
 Bribes become 2–3 turn negotiations. Cheap NPCs accept low. Greedy ones counter-offer. Some refuse in character (*"I don't take bribes from Union men"* / *"…add another zero"*).
 
 ---
