@@ -87,14 +87,12 @@ class RepoBarge:
                 self.state = BargeState.CHASE
 
         elif self.state == BargeState.CHASE:
-          
-elif self.state == BargeState.CHASE:
-    self._move_toward(ship.pos, self._chase_speed, dt)
-    if dist_sq < self.CLAMP_RANGE * self.CLAMP_RANGE:
-        if self._intercept_cd <= 0:
-            self._open_comm()
-        else:
-            self._enter_aim()
+            self._move_toward(ship.pos, self._chase_speed, dt)
+            if dist_sq < self.CLAMP_RANGE * self.CLAMP_RANGE:
+                if self._intercept_cd <= 0:
+                    self._open_comm()
+                else:
+                    self._enter_aim()
 
         elif self.state == BargeState.AIM:
             self._move_toward(ship.pos, self.AIM_SPEED, dt)
