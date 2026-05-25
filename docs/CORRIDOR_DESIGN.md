@@ -232,6 +232,19 @@ No combat in corridors. The flight scenes are where ship combat happens. The cor
 
 ---
 
+## Known issues (May 2026 playtest + code review)
+
+| Chapter | Issue | Status |
+|---------|--------|--------|
+| **Ch.3 Paperwork** | **Input lock at ladder / documents** — clerk `_CorridorDialog` modal; ESC/pause don't work in `DELIVERY` state | Open — Chris repro May 2026 |
+| **Ch.3 Paperwork** | `OneWayWall` cubicle zigzag (Room 1) — walls drawn but **collision not wired** in `base.py` | Open — Phase 0.10 |
+| **Ch.3 Paperwork** | Clerk "5-second delay" penalties are text-only | Open |
+| **Ch.3 Paperwork** | Only 1 checkpoint (Room 1 exit); File Room 4 has none | Open |
+
+Chris playtest: document chapter corridor reported broken. See `docs/IMPROVEMENT_PLAN.md` Epic 4.8.
+
+---
+
 ## Implementation Notes for the Team
 
 - **Build the framework first** (`base.py` + element classes). Get one trivial test corridor working end-to-end before content-loading any of the four chapters.

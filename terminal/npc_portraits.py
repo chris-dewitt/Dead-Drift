@@ -7,6 +7,7 @@ import math
 import random
 import pygame
 from config import settings as S
+from core.text import get_font
 
 _NAME_TO_KEY = {
     "GARY":                    "gary",
@@ -23,6 +24,8 @@ _NAME_TO_KEY = {
     "DRAY":                    "dray",
     "NOVA SOMA COLLECTIONS":   "nova_soma_collections",
     "MIRA VOSS":               "mira_voss",
+    "EDMUND":                  "idealist_rep",
+    "VINCE":                   "corrupt_rep",
 }
 
 _REACTION_ACCENTS = {
@@ -40,6 +43,8 @@ _REACTION_ACCENTS = {
     "dray": (160, 210, 130),
     "nova_soma_collections": (100, 230, 215),
     "mira_voss": (240, 140, 50),
+    "idealist_rep": (200, 220, 80),    # earnest gold-green
+    "corrupt_rep":  (220, 90, 60),     # opportunistic rust-orange
     "unknown": S.AMBER_TERM,
 }
 
@@ -240,7 +245,7 @@ def _draw_crt_bezel(surface: pygame.Surface, rect: pygame.Rect,
     pygame.draw.line(surface, (100, 64, 0),
                      (label_rect.left, label_rect.bottom),
                      (label_rect.right, label_rect.bottom), 1)
-    font = pygame.font.SysFont("monospace", 8, bold=True)
+    font = get_font(8, bold=True)
     blink = (int(t * 2) % 2 == 0)
     dot_col = (230, 60, 30) if blink else (70, 20, 10)
     pygame.draw.circle(surface, dot_col,
@@ -463,7 +468,7 @@ def _gary(surface, cx, cy, s, disposition, t):
     badge = pygame.Rect(int(cx - 18 * s), int(cy + 52 * s), int(16 * s), int(11 * s))
     pygame.draw.rect(surface, (18, 13, 0), badge)
     pygame.draw.rect(surface, amb, badge, 1)
-    font = pygame.font.SysFont("monospace", max(7, int(7 * s)))
+    font = get_font(max(7, int(7 * s)))
     surface.blit(font.render("404", True, amb), badge.topleft)
 
 
@@ -572,7 +577,7 @@ def _synthetic_droid(surface, cx, cy, s, disposition, t):
 
     # "LOYALTY SUBROUTINE" label when in friendship mode
     if disposition >= 3:
-        font = pygame.font.SysFont("monospace", max(8, int(8 * s)))
+        font = get_font(max(8, int(8 * s)))
         pulse_a = int(180 + 75 * math.sin(t * 3.0))
         label_col = tuple(min(255, int(c * pulse_a / 255)) for c in eye_col)
         label = font.render("LOYALTY SUBROUTINE", True, label_col)
@@ -705,7 +710,7 @@ def _kress(surface, cx, cy, s, disposition, t):
         pygame.draw.circle(surface, (0, alpha_val, int(alpha_val * 0.4)), (sx, sy), 1)
 
     # "COMM LINK" label at top
-    font = pygame.font.SysFont("monospace", max(9, int(10 * s)))
+    font = get_font(max(9, int(10 * s)))
     lbl = font.render("COMM LINK · CHANNEL 7", True, (0, 120, 60))
     surface.blit(lbl, (int(cx - lbl.get_width() // 2), int(cy - 88 * s)))
 
@@ -765,7 +770,7 @@ def _kress(surface, cx, cy, s, disposition, t):
 # ---------------------------------------------------------------------------
 def _unknown(surface, cx, cy, s, disposition, t):
     pygame.draw.circle(surface, (35, 35, 35), (int(cx), int(cy)), int(60 * s), 2)
-    font = pygame.font.SysFont("monospace", max(12, int(38 * s)))
+    font = get_font(max(12, int(38 * s)))
     surf = font.render("?", True, S.AMBER_TERM)
     surface.blit(surf, (int(cx - surf.get_width() // 2),
                         int(cy - surf.get_height() // 2)))
@@ -791,9 +796,9 @@ _DISPATCH = {
 def _backdrop_gary(surface, inner, t):
     """Local 404 field barge cockpit — cramped, functional, overworked."""
     cx = inner.centerx
-    font6  = pygame.font.SysFont("monospace", 6, bold=True)
-    font7  = pygame.font.SysFont("monospace", 7)
-    font8  = pygame.font.SysFont("monospace", 8, bold=True)
+    font6  = get_font(6, bold=True)
+    font7  = get_font(7)
+    font8  = get_font(8, bold=True)
 
     # ── Back wall: heavy horizontal hull-plate seams ───────────────────────
     for i in range(5):
@@ -972,8 +977,8 @@ def _backdrop_gary(surface, inner, t):
 def _backdrop_synthetic_droid(surface, inner, t):
     """Nova Soma sterile processing room — white-green clinical tech horror."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # ── Grid floor — perspective lines converging at horizon ──────────────────
     floor_y  = inner.bottom - 10
@@ -1135,8 +1140,8 @@ def _backdrop_synthetic_droid(surface, inner, t):
 def _backdrop_union_dispatcher(surface, inner, t):
     """Massive union dispatch centre — rows of terminals receding in perspective."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # ── Ceiling: fluorescent light strips with flicker ────────────────────────
     flick = 0.82 + 0.18 * (math.sin(t * 7.1) > 0.55)
@@ -1269,8 +1274,8 @@ def _backdrop_union_dispatcher(surface, inner, t):
 def _backdrop_kress(surface, inner, t):
     """Dimly lit black-market stall — contraband airlock junction."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # ── Corrugated metal wall — vertical corrugation stripes ─────────────────
     for i in range(0, inner.width, 7):
@@ -1400,8 +1405,8 @@ def _backdrop_kress(surface, inner, t):
 def _backdrop_insurance_adjuster(surface, inner, t):
     """Sterile Nova Soma claims office — cubicle hell, ancient terminal, dead plant."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # ── Ceiling tile grid (fluorescent office look) ───────────────────────────
     flick_off = 0.90 + 0.10 * math.sin(t * 4.8)
@@ -1510,8 +1515,8 @@ def _backdrop_insurance_adjuster(surface, inner, t):
 def _backdrop_sandra(surface, inner, t):
     """High-spec courier cockpit — clean, green, perfect. Annoyingly good."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # ── Clean hull panelling — tight seams ────────────────────────────────────
     for i in range(4):
@@ -1619,8 +1624,8 @@ def _backdrop_sandra(surface, inner, t):
 def _backdrop_pirate(surface, inner, t):
     """Battered outer-belt pirate vessel — scavenged, cracked, hostile."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # ── Exposed hull plating — irregular dark metal ───────────────────────────
     for i in range(0, inner.width, 9):
@@ -1752,8 +1757,8 @@ def _backdrop_pirate(surface, inner, t):
 def _backdrop_underground_dj(surface, inner, t):
     """Cramped pirate radio broadcast booth — reel-to-reel, vinyl, contraband freq."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # ── Acoustic foam panels on walls — grid of small squares ────────────────
     foam_col = (22, 20, 24)
@@ -1772,7 +1777,7 @@ def _backdrop_underground_dj(surface, inner, t):
     glow_s = pygame.Surface((70, 26), pygame.SRCALPHA)
     pygame.draw.rect(glow_s, (220, 30, 30, int(50 * glow_pulse)), (0, 0, 70, 26))
     surface.blit(glow_s, (cx - 35, inner.top + 1))
-    font8b = pygame.font.SysFont("monospace", 9, bold=True)
+    font8b = get_font(9, bold=True)
     oa = font8b.render("ON AIR", True, (255, 55, 38))
     surface.blit(oa, (sign.centerx - oa.get_width()//2, sign.centery - oa.get_height()//2))
 
@@ -2447,7 +2452,7 @@ def _backdrop_toll_authority(surface, inner, t):
     scr_rect = pygame.Rect(inner.right - 40, inner.top + 20, 30, 22)
     pygame.draw.rect(surface, (20, 60, 20), scr_rect)
     pygame.draw.rect(surface, (0, 90, 40), scr_rect, 1)
-    font7 = pygame.font.SysFont("monospace", 6)
+    font7 = get_font(6)
     for row, txt in enumerate(["LEVY:1500", "STATUS:OK", "QUEUE:18"]):
         s = font7.render(txt, True, (0, 200, 80))
         surface.blit(s, (scr_rect.left + 2, scr_rect.top + 2 + row * 7))
@@ -2599,8 +2604,8 @@ _BACKDROPS["toll_authority"] = _backdrop_toll_authority
 
 def _backdrop_nervous_fence(surface, inner, t):
     """Bootleg relay closet: stolen route maps, cables, and half-legal gear."""
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
     cx = inner.centerx
 
     # Patchwork wall panels
@@ -2781,8 +2786,8 @@ def _nervous_fence(surface, cx, cy, s, disposition, t):
 
 def _backdrop_cargo_inspector(surface, inner, t):
     """Sterile STA checkpoint office: scanner arch, forms, and manifest board."""
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
     cx = inner.centerx
 
     # Office wall and harsh light
@@ -2950,7 +2955,7 @@ _BACKDROPS["cargo_inspector"] = _backdrop_cargo_inspector
 
 def _backdrop_dray(surface, inner, t):
     """Cramped relay bunk: ratty bunk wall, discarded ration wrappers, bored ambience."""
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
+    font6 = get_font(6, bold=True)
     cx = inner.centerx
 
     # Bunk wall — dented, sticker-covered metal panels
@@ -3109,8 +3114,8 @@ def _dray(surface, cx, cy, s, disposition, t):
 def _backdrop_nova_soma_collections(surface, inner, t):
     """Corporate wellness UI: clean gradients, progress rings, soft pastel branding."""
     cx = inner.centerx
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
 
     # Background: clean dark blue-grey with subtle grid
     pygame.draw.rect(surface, (14, 18, 26), inner)
@@ -3153,7 +3158,7 @@ def _backdrop_nova_soma_collections(surface, inner, t):
 
     # Scrolling marquee at the bottom
     marquee_txt = "NOVA SOMA COLLECTIONS • YOUR WELLNESS IS OUR PRIORITY • "
-    marquee_font = pygame.font.SysFont("monospace", 6)
+    marquee_font = get_font(6)
     msurf = marquee_font.render(marquee_txt, True, (80, 200, 190))
     scroll_x = inner.left + inner.width - int((t * 28) % (inner.width + msurf.get_width()))
     prev_clip = surface.get_clip()
@@ -3282,7 +3287,7 @@ def _nova_soma_collections(surface, cx, cy, s, disposition, t):
                      border_radius=max(1, int(2 * s)), width=1)
 
     if s >= 0.55 and rdp_h >= 12:
-        rd_font = pygame.font.SysFont("monospace", max(5, int(6 * s)))
+        rd_font = get_font(max(5, int(6 * s)))
         tick    = int(t * (5.0 if hostile else 1.8))
 
         def _hx(seed, n=3):
@@ -3308,7 +3313,7 @@ def _nova_soma_collections(surface, cx, cy, s, disposition, t):
                 surface.blit(rtxt, (rdp_x + max(2, int(3 * s)), ry))
 
     # ── LOGOTYPE ──────────────────────────────────────────────────────────────
-    font_lbl = pygame.font.SysFont("monospace", max(6, int(6 * s)), bold=True)
+    font_lbl = get_font(max(6, int(6 * s)), bold=True)
     la  = int(80 + 40 * math.sin(t * 0.75))
     lc  = (int(cyan[0] * la // 120), int(cyan[1] * la // 120), int(cyan[2] * la // 120))
     ls  = font_lbl.render("NOVA SOMA", True, lc)
@@ -3328,8 +3333,8 @@ def _nova_soma_collections(surface, cx, cy, s, disposition, t):
 
 def _backdrop_mira_voss(surface, inner, t):
     """Industrial repair bay: exposed conduit, tool wall, welding sparks."""
-    font6 = pygame.font.SysFont("monospace", 6, bold=True)
-    font7 = pygame.font.SysFont("monospace", 7)
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
     cx = inner.centerx
 
     # Grimy workshop walls — alternating dark metal plates
@@ -3422,7 +3427,7 @@ def _mira_voss(surface, cx, cy, s, disposition, t):
     badge = pygame.Rect(int(cx + 14 * s), int(cy + 30 * s), int(18 * s), int(12 * s))
     pygame.draw.rect(surface, (30, 22, 12), badge)
     pygame.draw.rect(surface, accent, badge, 1)
-    font = pygame.font.SysFont("monospace", max(6, int(6 * s)))
+    font = get_font(max(6, int(6 * s)))
     badge_lbl = font.render("CERT", True, accent)
     surface.blit(badge_lbl, (badge.left + 3, badge.top + 2))
 
@@ -3550,3 +3555,357 @@ _DISPATCH["nova_soma_collections"]  = _nova_soma_collections
 _BACKDROPS["nova_soma_collections"] = _backdrop_nova_soma_collections
 _DISPATCH["mira_voss"]              = _mira_voss
 _BACKDROPS["mira_voss"]             = _backdrop_mira_voss
+
+
+# ---------------------------------------------------------------------------
+# Idealist Union Rep — Edmund "Eddie" Marlowe
+# ---------------------------------------------------------------------------
+
+def _idealist_rep(surface, cx, cy, s, disposition, t):
+    """Edmund Marlowe — Local 404 true believer.
+
+    Visual signature: high collar with charter pin, neat side-parted hair,
+    earnest open expression. Same Local 404 hi-vis sash as Gary, but pressed.
+    """
+    skin     = (220, 195, 165)
+    skin_d   = (170, 140, 110)
+    hair     = (110, 70,  35)
+    hi_vis   = (220, 200, 70)   # gold-yellow union sash
+    pin      = (200, 80,  80)   # red charter pin
+    eye_col  = (15, 20, 30)
+    cy = int(cy)
+    cx = int(cx)
+
+    # Collar / shoulders — high formal collar, pressed
+    pygame.draw.polygon(surface, hi_vis, [
+        (int(cx - 50 * s), int(cy + 78 * s)),
+        (int(cx + 50 * s), int(cy + 78 * s)),
+        (int(cx + 38 * s), int(cy + 22 * s)),
+        (int(cx - 38 * s), int(cy + 22 * s)),
+    ])
+    # Sash diagonal line
+    pygame.draw.line(surface, (180, 160, 50),
+                     (int(cx - 32 * s), int(cy + 38 * s)),
+                     (int(cx + 32 * s), int(cy + 70 * s)),
+                     max(2, int(3 * s)))
+    # Charter pin
+    pygame.draw.circle(surface, pin,
+                       (int(cx + 22 * s), int(cy + 50 * s)),
+                       max(3, int(5 * s)))
+    pygame.draw.circle(surface, (255, 255, 255),
+                       (int(cx + 22 * s), int(cy + 50 * s)),
+                       max(1, int(2 * s)))
+
+    # Neck
+    pygame.draw.rect(surface, skin, pygame.Rect(
+        int(cx - 12 * s), int(cy + 12 * s),
+        int(24 * s), int(20 * s)))
+    pygame.draw.line(surface, skin_d,
+                     (int(cx - 12 * s), int(cy + 32 * s)),
+                     (int(cx + 12 * s), int(cy + 32 * s)), 1)
+
+    # Head — slightly narrow, eager
+    head_rect = pygame.Rect(
+        int(cx - 38 * s), int(cy - 50 * s),
+        int(76 * s), int(72 * s))
+    pygame.draw.ellipse(surface, skin, head_rect)
+    pygame.draw.ellipse(surface, skin_d, head_rect, 1)
+
+    # Hair — neat side part, glossy
+    pygame.draw.polygon(surface, hair, [
+        (int(cx - 38 * s), int(cy - 32 * s)),
+        (int(cx + 38 * s), int(cy - 36 * s)),
+        (int(cx + 36 * s), int(cy - 50 * s)),
+        (int(cx - 36 * s), int(cy - 50 * s)),
+    ])
+    # Side part highlight
+    pygame.draw.line(surface, (160, 110, 50),
+                     (int(cx - 16 * s), int(cy - 50 * s)),
+                     (int(cx - 6 * s), int(cy - 32 * s)),
+                     max(1, int(2 * s)))
+
+    # Eyes — wide, sincere
+    blink = abs(math.sin(t * 1.4)) < 0.96
+    for ex in (-14, 14):
+        eye_x = int(cx + ex * s)
+        eye_y = int(cy - 8 * s)
+        if blink:
+            pygame.draw.circle(surface, (255, 255, 255), (eye_x, eye_y),
+                               max(2, int(4 * s)))
+            pygame.draw.circle(surface, eye_col, (eye_x, eye_y),
+                               max(1, int(2 * s)))
+        else:
+            pygame.draw.line(surface, eye_col,
+                             (eye_x - 3, eye_y), (eye_x + 3, eye_y), 1)
+    # Eyebrows — slightly raised, hopeful
+    for ex in (-14, 14):
+        pygame.draw.line(surface, hair,
+                         (int(cx + ex * s - 5), int(cy - 18 * s)),
+                         (int(cx + ex * s + 5), int(cy - 16 * s)),
+                         max(1, int(2 * s)))
+
+    # Nose
+    pygame.draw.line(surface, skin_d,
+                     (int(cx), int(cy - 4 * s)),
+                     (int(cx + 2 * s), int(cy + 6 * s)), 1)
+
+    # Mouth — open, mid-quote, depending on disposition
+    mouth_y = int(cy + 16 * s)
+    if disposition >= 2:
+        # Mid-grin, charter just made his day
+        pygame.draw.arc(surface, skin_d, pygame.Rect(
+            int(cx - 14 * s), int(mouth_y - 6),
+            int(28 * s), int(12 * s)), 3.4, 6.0, 2)
+    elif disposition <= -2:
+        # Pained — your bribe offer wounded him
+        pygame.draw.arc(surface, skin_d, pygame.Rect(
+            int(cx - 12 * s), int(mouth_y - 2),
+            int(24 * s), int(10 * s)), 0.4, 2.7, 2)
+    else:
+        # Default: lips parted, mid-sentence
+        pygame.draw.line(surface, skin_d,
+                         (int(cx - 10 * s), mouth_y),
+                         (int(cx + 10 * s), mouth_y), 2)
+
+
+# ---------------------------------------------------------------------------
+# Corrupt Union Rep — Vince "Two-Tap" Brogan
+# ---------------------------------------------------------------------------
+
+def _corrupt_rep(surface, cx, cy, s, disposition, t):
+    """Vince Brogan — opportunistic Local 404 with side hustles.
+
+    Visual signature: grimy hi-vis (faded, stained), missed-shave,
+    droopy mustache, side-mounted earpiece, slight smirk. Same shape
+    as Gary but visibly less professional.
+    """
+    skin     = (200, 160, 130)
+    skin_d   = (140, 100, 70)
+    hair     = (40,  35, 30)
+    stubble  = (70, 55, 40)
+    hi_vis   = (165, 130, 35)   # faded/dirty union sash
+    sash_dim = (110, 85, 25)
+    earpiece = (40, 40, 50)
+    cy = int(cy)
+    cx = int(cx)
+
+    # Collar / shoulders — slumped, lapel undone
+    pygame.draw.polygon(surface, hi_vis, [
+        (int(cx - 50 * s), int(cy + 78 * s)),
+        (int(cx + 50 * s), int(cy + 78 * s)),
+        (int(cx + 36 * s), int(cy + 24 * s)),
+        (int(cx - 36 * s), int(cy + 24 * s)),
+    ])
+    # Stains
+    pygame.draw.circle(surface, (90, 60, 30),
+                       (int(cx - 18 * s), int(cy + 50 * s)),
+                       max(3, int(5 * s)))
+    pygame.draw.circle(surface, (90, 60, 30),
+                       (int(cx + 14 * s), int(cy + 64 * s)),
+                       max(2, int(3 * s)))
+    # Lapel notch — undone
+    pygame.draw.line(surface, sash_dim,
+                     (int(cx - 6 * s), int(cy + 26 * s)),
+                     (int(cx - 14 * s), int(cy + 60 * s)),
+                     max(2, int(3 * s)))
+
+    # Neck — wider, more hunched
+    pygame.draw.rect(surface, skin, pygame.Rect(
+        int(cx - 14 * s), int(cy + 12 * s),
+        int(28 * s), int(20 * s)))
+
+    # Head — slightly wider/heavier than Eddie
+    head_rect = pygame.Rect(
+        int(cx - 42 * s), int(cy - 52 * s),
+        int(84 * s), int(76 * s))
+    pygame.draw.ellipse(surface, skin, head_rect)
+    pygame.draw.ellipse(surface, skin_d, head_rect, 1)
+
+    # Stubble across jaw — diagonal hatching
+    for i in range(-3, 4):
+        sx = int(cx + i * 6 * s)
+        sy = int(cy + 8 * s)
+        pygame.draw.line(surface, stubble,
+                         (sx - 1, sy),
+                         (sx + 2, sy + 4), 1)
+
+    # Hair — receding, messy
+    pygame.draw.polygon(surface, hair, [
+        (int(cx - 34 * s), int(cy - 36 * s)),
+        (int(cx + 34 * s), int(cy - 38 * s)),
+        (int(cx + 28 * s), int(cy - 50 * s)),
+        (int(cx - 26 * s), int(cy - 52 * s)),
+    ])
+    # Hairline tooth (receding)
+    pygame.draw.polygon(surface, skin, [
+        (int(cx - 4 * s), int(cy - 36 * s)),
+        (int(cx + 4 * s), int(cy - 36 * s)),
+        (int(cx),         int(cy - 26 * s)),
+    ])
+
+    # Earpiece — black bud + dangling wire
+    pygame.draw.circle(surface, earpiece,
+                       (int(cx + 38 * s), int(cy - 10 * s)),
+                       max(2, int(4 * s)))
+    pygame.draw.line(surface, (60, 60, 70),
+                     (int(cx + 38 * s), int(cy - 6 * s)),
+                     (int(cx + 44 * s), int(cy + 12 * s)), 1)
+
+    # Eyes — narrow, calculating
+    blink = abs(math.sin(t * 1.1 + 0.4)) < 0.93
+    for ex in (-14, 14):
+        eye_x = int(cx + ex * s)
+        eye_y = int(cy - 6 * s)
+        if blink:
+            pygame.draw.line(surface, (15, 15, 20),
+                             (eye_x - 4, eye_y), (eye_x + 4, eye_y), 2)
+            pygame.draw.circle(surface, (15, 15, 20), (eye_x, eye_y - 1),
+                               max(1, int(2 * s)))
+        else:
+            pygame.draw.line(surface, (15, 15, 20),
+                             (eye_x - 4, eye_y), (eye_x + 4, eye_y), 1)
+    # Eyebrows — heavy, slightly raised
+    for ex in (-14, 14):
+        pygame.draw.line(surface, hair,
+                         (int(cx + ex * s - 7), int(cy - 16 * s)),
+                         (int(cx + ex * s + 5), int(cy - 14 * s)),
+                         max(2, int(3 * s)))
+
+    # Mustache — droopy
+    pygame.draw.arc(surface, hair, pygame.Rect(
+        int(cx - 14 * s), int(cy + 6 * s),
+        int(28 * s), int(10 * s)), 3.4, 6.0, max(2, int(3 * s)))
+
+    # Mouth — smirk lopsided to the right
+    mouth_y = int(cy + 18 * s)
+    if disposition >= 2:
+        # Real grin, bribe taken
+        pygame.draw.arc(surface, skin_d, pygame.Rect(
+            int(cx - 14 * s), int(mouth_y - 4),
+            int(28 * s), int(14 * s)), 3.5, 6.1, 2)
+    else:
+        pygame.draw.line(surface, skin_d,
+                         (int(cx - 10 * s), mouth_y + 1),
+                         (int(cx + 10 * s), mouth_y - 2), 2)
+
+
+def _backdrop_idealist_rep(surface, inner, t):
+    """Eddie's barge cockpit — pinned charter poster, neatly stowed clipboard,
+    framed photo of his union induction class."""
+    cx = inner.centerx
+    cy = inner.centery
+    fnt = get_font(6, bold=True)
+    fnt2 = get_font(5)
+
+    # Charter poster — mounted, pristine
+    poster = pygame.Rect(inner.left + 18, inner.top + 18, 60, 80)
+    pygame.draw.rect(surface, (245, 235, 200), poster)
+    pygame.draw.rect(surface, (130, 90, 30), poster, 1)
+    title = fnt.render("LOCAL 404", True, (180, 50, 50))
+    surface.blit(title, (poster.left + 4, poster.top + 4))
+    sub = fnt2.render("CHARTER", True, (60, 50, 30))
+    surface.blit(sub, (poster.left + 4, poster.top + 12))
+    # Article rows
+    for i in range(6):
+        y = poster.top + 22 + i * 8
+        pygame.draw.line(surface, (140, 110, 70),
+                         (poster.left + 4, y), (poster.right - 4, y), 1)
+
+    # Framed photo (dim back wall)
+    frame = pygame.Rect(inner.right - 70, inner.top + 22, 50, 36)
+    pygame.draw.rect(surface, (140, 100, 50), frame)
+    pygame.draw.rect(surface, (240, 220, 170), frame, 1)
+    # Three silhouette heads
+    for i, off in enumerate((-12, 0, 12)):
+        pygame.draw.circle(surface, (60, 60, 80),
+                           (frame.centerx + off, frame.centery - 4), 4)
+        pygame.draw.rect(surface, (60, 60, 80),
+                         pygame.Rect(frame.centerx + off - 6,
+                                     frame.centery, 12, 14))
+
+    # Clipboard hung neatly
+    clip = pygame.Rect(inner.left + 12, inner.bottom - 60, 38, 50)
+    pygame.draw.rect(surface, (220, 215, 180), clip)
+    pygame.draw.rect(surface, (90, 70, 40), clip, 1)
+    pygame.draw.rect(surface, (160, 130, 60),
+                     pygame.Rect(clip.centerx - 6, clip.top - 4, 12, 6))
+
+    # Scroll text along bottom — drifting charter quote
+    scroll_t = (t * 14) % 240
+    line = "ARTICLE 7 :: SOLIDARITY :: SHARED PROSPERITY :: SECTION 4.2  "
+    txt = fnt.render(line * 3, True, (110, 130, 70))
+    band_y = inner.bottom - 12
+    surface.set_clip(pygame.Rect(inner.left + 80, band_y - 2,
+                                  inner.width - 100, 12))
+    surface.blit(txt, (inner.left + 80 - int(scroll_t), band_y))
+    surface.set_clip(None)
+
+
+def _backdrop_corrupt_rep(surface, inner, t):
+    """Vinny's barge cockpit — second-hand chair, cigarette burns,
+    a half-empty bottle, dim red running lights."""
+    cx = inner.centerx
+    cy = inner.centery
+    fnt = get_font(6, bold=True)
+
+    # Hazy red light bath across the back wall
+    hazy = pygame.Surface((inner.width, inner.height), pygame.SRCALPHA)
+    hazy.fill((90, 30, 30, 38))
+    surface.blit(hazy, (inner.left, inner.top))
+
+    # Bare bulb — flickers
+    bulb_pulse = 0.55 + 0.45 * abs(math.sin(t * 6.3))
+    pygame.draw.circle(surface, (int(220 * bulb_pulse), int(80 * bulb_pulse), 30),
+                       (inner.centerx + 30, inner.top + 14),
+                       int(6 + 3 * bulb_pulse))
+    pygame.draw.line(surface, (60, 60, 70),
+                     (inner.centerx + 30, inner.top),
+                     (inner.centerx + 30, inner.top + 8), 1)
+
+    # Half-empty bottle on the dash
+    bx = inner.left + 22
+    by = inner.bottom - 56
+    pygame.draw.rect(surface, (50, 80, 50),
+                     pygame.Rect(bx, by, 12, 38))
+    pygame.draw.rect(surface, (110, 160, 110),
+                     pygame.Rect(bx, by, 12, 38), 1)
+    pygame.draw.rect(surface, (40, 60, 30),
+                     pygame.Rect(bx + 1, by + 16, 10, 20))
+    pygame.draw.rect(surface, (200, 160, 80),
+                     pygame.Rect(bx + 2, by + 4, 8, 6))   # label
+
+    # Cigarette burns — three small dots across the dash
+    for i, dx in enumerate((40, 70, 100)):
+        pygame.draw.circle(surface, (40, 20, 10),
+                           (bx + dx, by + 30 + (i % 2) * 4), 2)
+
+    # Cracked dispatch screen — broken with static
+    scr = pygame.Rect(inner.right - 78, inner.top + 18, 60, 44)
+    pygame.draw.rect(surface, (8, 16, 16), scr)
+    pygame.draw.rect(surface, (60, 80, 80), scr, 1)
+    # Crack — diagonal lines
+    pygame.draw.line(surface, (160, 160, 160),
+                     (scr.left + 10, scr.top + 6),
+                     (scr.right - 12, scr.bottom - 8), 1)
+    pygame.draw.line(surface, (160, 160, 160),
+                     (scr.right - 18, scr.top + 4),
+                     (scr.left + 14, scr.bottom - 4), 1)
+    static_y = scr.top + int((t * 60) % scr.height)
+    pygame.draw.line(surface, (140, 140, 140),
+                     (scr.left + 2, static_y),
+                     (scr.right - 2, static_y), 1)
+
+    # Hand-written sticky note
+    note = pygame.Rect(inner.right - 60, inner.bottom - 42, 44, 28)
+    pygame.draw.rect(surface, (220, 200, 80), note)
+    pygame.draw.rect(surface, (140, 110, 30), note, 1)
+    nt = fnt.render("PAY DAY", True, (90, 50, 20))
+    surface.blit(nt, (note.left + 6, note.top + 4))
+    nt2 = fnt.render("KRELLBORN", True, (60, 30, 10))
+    surface.blit(nt2, (note.left + 6, note.top + 14))
+
+
+_DISPATCH["idealist_rep"]  = _idealist_rep
+_DISPATCH["corrupt_rep"]   = _corrupt_rep
+_BACKDROPS["idealist_rep"] = _backdrop_idealist_rep
+_BACKDROPS["corrupt_rep"]  = _backdrop_corrupt_rep

@@ -7,11 +7,13 @@ import math
 import random
 import pygame
 
+from core.text import get_font
 from delivery.corridor.elements import (
     Platform, MovingPlatform, Hazard, MovingHazard, Ladder,
     ToggleBeam, NPCEncounter, Collectible, Secret, Checkpoint,
     BossRoomTrigger, StealthZone, SporeZone,
     SteamVent, Tripwire, SecurityBeam,
+    BossRoomActor, boss_actor_mycelium_chamber,
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H,
 )
 from delivery.corridor.base import Room, Corridor
@@ -28,6 +30,17 @@ _PAL_R1 = {
     "brick":         (50, 30, 90),
     "brick_hi":      (140, 100, 255),
     "light":         (120, 180, 255),
+    # Epic 10.4 — sterile cold biolab lighting
+    "light_tint":    (60,  120, 200),
+    "light_alpha":   22,
+    "deep_struct":   (8,   20,  40),
+    "panel_num":     (90, 130, 200),
+    "crack":         (30,  50,  90),
+    "branding":      (70,  90, 130),
+    "scrub":         (30,  40,  80),
+    "floor_grid":    (40,  60, 100),
+    "floor_wear":    (30,  44,  72),
+    "drip":          (120, 200, 255),
 }
 _PAL_R2 = {
     "bg":            (2, 6, 8),
@@ -57,7 +70,7 @@ _PAL_R3 = {
 def _bg_r1(surf, camera_x, t, pal):
     """Decontam chamber — drifting spores, UV strips, vivid biohazard signs, warning lines."""
     bg_off = camera_x * 0.5
-    f8 = pygame.font.SysFont("monospace", 8)
+    f8 = get_font(8)
 
     # ── Clean lab wall panels ─────────────────────────────────────────────
     for wx in range(0, 2600, 190):
@@ -457,6 +470,9 @@ def build() -> Corridor:
             "The... the jar. Yes. I'll take it now. Thank you for — for bringing it safely.",
             _LAB_TECH_RESPONSES,
         ),
+        # Epic 14.1 — mycelium chamber tableau: pulsing wall nodes,
+        # drifting spore motes, panicking researcher silhouette.
+        BossRoomActor(380, boss_actor_mycelium_chamber),
     ]
     room3 = Room(
         length     = 450,

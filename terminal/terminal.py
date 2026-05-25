@@ -7,6 +7,7 @@ from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import NLPParser
 from terminal.npc_portraits import draw_portrait
 from renderer.sci_fi_ui import draw_terminal_backdrop
+from core.text import get_font
 from core.event_bus import (
     bus,
     EVT_BAX_SPEAK,
@@ -520,12 +521,12 @@ class Terminal:
     # ------------------------------------------------------------------
     def _get_font(self) -> pygame.font.Font:
         if self._font is None:
-            self._font = pygame.font.SysFont("monospace", 17)
+            self._font = get_font(17)
         return self._font
 
     def _get_font_sm(self) -> pygame.font.Font:
         if self._font_sm is None:
-            self._font_sm = pygame.font.SysFont("monospace", 13)
+            self._font_sm = get_font(13)
         return self._font_sm
 
     # ------------------------------------------------------------------
@@ -805,7 +806,7 @@ class Terminal:
         ROW_Y = HDR_H // 2   # vertical centre of header = 30
 
         # NPC name (left)
-        fn_title = pygame.font.SysFont("monospace", 17, bold=True)
+        fn_title = get_font(17, bold=True)
         nm = fn_title.render(self.npc.name.upper(), True, (255, 186, 34))
         surface.blit(nm, (M, ROW_Y - nm.get_height() // 2))
 
@@ -852,7 +853,7 @@ class Terminal:
             if age < 1.8:
                 sign = "+" if delta > 0 else ""
                 col  = (0, 230, 100) if delta > 0 else (230, 60, 60)
-                fs   = pygame.font.SysFont("monospace", 14, bold=True)
+                fs   = get_font(14, bold=True)
                 ds   = fs.render(f"{sign}{delta} DISP", True, col)
                 surface.blit(ds, (bx + bw // 2 - ds.get_width() // 2,
                                   by - 18 - int(age * 14)))
@@ -939,7 +940,7 @@ class Terminal:
         wrap_cols    = max(30, (dl_w - 4 * char_w) // char_w)
         wrap_cols_sm = max(36, (dl_w - 4 * char_w_sm) // char_w_sm)
 
-        fn_sp = pygame.font.SysFont("monospace", 14, bold=True)
+        fn_sp = get_font(14, bold=True)
 
         blocks: list[tuple[str, bool, bool, bool, bool, list[str]]] = []
         for i, (speaker, text) in enumerate(self._history):
@@ -1370,7 +1371,7 @@ class Terminal:
         elif self._outcome in (NPCOutcome.IMPOUND, "abort"):
             self._draw_terminal_failure(surface, W, H, t, outcome_age)
 
-        ofont = pygame.font.SysFont("monospace", 19, bold=True)
+        ofont = get_font(19, bold=True)
         osurf = ofont.render(olbl, True, ocol)
         ox = W // 2 - osurf.get_width() // 2
         oy = H // 2 - osurf.get_height() // 2
@@ -1387,7 +1388,7 @@ class Terminal:
 
         surface.blit(osurf, (ox, oy))
 
-        sub_font = pygame.font.SysFont("monospace", 14)
+        sub_font = get_font(14)
         sub_lbl  = detail
         sub_col  = tuple(int(c * 0.7) for c in ocol)
         sub      = sub_font.render(sub_lbl, True, sub_col)
@@ -1397,7 +1398,7 @@ class Terminal:
     def _draw_exploit_cascade(self, surface: pygame.Surface, W: int, H: int,
                               t: float, age: float) -> None:
         layer = pygame.Surface((W, H), pygame.SRCALPHA)
-        font = pygame.font.SysFont("monospace", 12, bold=True)
+        font = get_font(12, bold=True)
         glyphs = "01#%$X"
         alpha = int(155 * max(0.25, min(1.0, 1.2 - age * 0.16)))
         for x in range(18, W, 28):
@@ -1425,7 +1426,7 @@ class Terminal:
                 (255, 255, 255, alpha // 2),
             ])
             pygame.draw.rect(layer, col, (x_off, y, W, h))
-        font = pygame.font.SysFont("monospace", 13, bold=True)
+        font = get_font(13, bold=True)
         for i, txt in enumerate(("ERR:SELF_REF", "STACK:////", "CAUSE:PARADOX")):
             x = 38 + i * 150 + int(math.sin(t * 9 + i) * 6)
             y = 74 + i * 42

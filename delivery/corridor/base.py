@@ -11,6 +11,7 @@ import random
 import pygame
 
 from renderer.sci_fi_ui import draw_courier_sprite
+from core.text import get_font
 
 from delivery.corridor.elements import (
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H, PLAYER_W,
@@ -22,7 +23,9 @@ from delivery.corridor.elements import (
 )
 from core.event_bus import (bus, EVT_BAX_SPEAK, EVT_DELIVERY_DONE,
                             EVT_CORRIDOR_RUN, EVT_CORRIDOR_JUMP,
-                            EVT_CORRIDOR_SECRET, EVT_CORRIDOR_DEATH)
+                            EVT_CORRIDOR_SECRET, EVT_CORRIDOR_DEATH,
+                            EVT_LORE_FOUND, EVT_CORRIDOR_ENTER,
+                            EVT_CORRIDOR_BOSS_ROOM, EVT_CORRIDOR_EXIT)
 
 GRAVITY   = 980.0
 JUMP_VY   = -440.0
@@ -112,9 +115,9 @@ class _CorridorDialog:
         pygame.draw.rect(surf, (0, 200, 100),
                          (dx, dy, self.DIALOG_W, self.DIALOG_H), 2)
 
-        f_name  = pygame.font.SysFont("monospace", 11, bold=True)
-        f_text  = pygame.font.SysFont("monospace", 10)
-        f_input = pygame.font.SysFont("monospace", 11)
+        f_name  = get_font(11, bold=True)
+        f_text  = get_font(10)
+        f_input = get_font(11)
 
         # NPC name header
         ns = f_name.render(f"[ {self._enc.npc_name} ]", True, (0, 230, 110))
@@ -275,6 +278,12 @@ class Corridor:
 
         # Fire entry Bax line for Room 0
         self._fire_room_enter(0)
+
+        # Epic 4.6 — corridor music: signal entry so the audio manager can
+        # swell the chapter signature loop in.
+        self._boss_room_emitted = False
+        self._exit_emitted      = False
+        bus.emit(EVT_CORRIDOR_ENTER, chapter=self.chapter)
 
     # ── Public API ───────────────────────────────────────────────────────
 
@@ -481,6 +490,11 @@ class Corridor:
             room.bg_draw_fn(surf, self._cam_x, t, pal)
         else:
             self._draw_default_bg(surf, t, pal)
+        # Epic 10.4 — additive corridor visual layer: cracked / numbered
+        # panels, floor wear, drips, deep parallax, directional light.
+        # Renders behind everything else but on top of the per-room
+        # custom backdrop so chapter art still drives the look.
+        self._draw_corridor_decay(surf, t, pal, room)
 
         # Ceiling + floor
         pygame.draw.rect(surf, pal.get("ceiling_fill", (18, 30, 18)),
@@ -511,7 +525,7 @@ class Corridor:
         if (room.branch_x is not None
                 and abs(self._px - room.branch_x) < 80
                 and self._active_path is None):
-            f = pygame.font.SysFont("monospace", 10)
+            f = get_font(10)
             s = f.render("W/↑ = HIGH PATH  ·  keep running = LOW PATH",
                          True, (200, 200, 0))
             surf.blit(s, (CORRIDOR_W // 2 - s.get_width() // 2, CEIL_Y + 8))
@@ -541,7 +555,7 @@ class Corridor:
             surf.blit(ov, (0, 0))
             # Caption — visible as screen fades back in (dir=1); fades with overlay
             if self._transition_caption and alpha > 0:
-                fc = pygame.font.SysFont("monospace", 14, bold=True)
+                fc = get_font(14, bold=True)
                 cs = fc.render(self._transition_caption, True, (0, 220, 100))
                 cap = pygame.Surface(cs.get_size(), pygame.SRCALPHA)
                 cap.blit(cs, (0, 0))
@@ -637,6 +651,8 @@ class Corridor:
                     bus.emit(EVT_CORRIDOR_SECRET)
                     if lore:
                         bus.emit(EVT_BAX_SPEAK, line=lore[:60])
+                        # Epic 8.3 — persist for Bax's Records, Tab 4.
+                        bus.emit(EVT_LORE_FOUND, text=lore, chapter=self.chapter)
 
     def _check_npc_encounters(self, room: Room):
         if self._dialog is not None:
@@ -658,8 +674,14 @@ class Corridor:
     def _check_boss_triggers(self, room: Room):
         for el in self._visible_elements(room):
             if isinstance(el, BossRoomTrigger):
-                if el.check(self._px) and el.bax_line:
-                    bus.emit(EVT_BAX_SPEAK, line=el.bax_line)
+                if el.check(self._px):
+                    if el.bax_line:
+                        bus.emit(EVT_BAX_SPEAK, line=el.bax_line)
+                    # Epic 4.6 — first boss-room trigger this corridor peaks
+                    # the chapter signature music. Idempotent per corridor.
+                    if not self._boss_room_emitted:
+                        self._boss_room_emitted = True
+                        bus.emit(EVT_CORRIDOR_BOSS_ROOM, chapter=self.chapter)
 
     def _check_stealth(self, room: Room, dt: float):
         if self._stun_t > 0:
@@ -720,6 +742,9 @@ class Corridor:
     def _finish(self):
         self._done = True
         bus.emit(EVT_DELIVERY_DONE)
+        if not self._exit_emitted:
+            self._exit_emitted = True
+            bus.emit(EVT_CORRIDOR_EXIT, chapter=self.chapter)
         total_t = self._elapsed
         room    = self.rooms[self._room_idx]
         if total_t <= room.star3_t and self._hits == 0:
@@ -802,13 +827,129 @@ class Corridor:
 
         # ── Layer 5: background warning text stencils on wall ─────────────────
         warn_off = int(self._cam_x * 0.3) % 320
-        f_stencil = pygame.font.SysFont("monospace", 9)
+        f_stencil = get_font(9)
         for wx in range(-warn_off, CORRIDOR_W + 320, 320):
             msgs = ["AUTHORISED PERSONNEL ONLY", "SECTION 7-C", "NO CARGO BEYOND THIS POINT",
                     "TRANSIT ZONE — KEEP MOVING", "UNION LOCALS ONLY", "CLEARANCE REQUIRED"]
             msg = msgs[(abs(wx) // 320) % len(msgs)]
             stencil = f_stencil.render(msg, True, pal.get("stencil", (0, 45, 22)))
             surf.blit(stencil, (wx, FLOOR_Y - 18))
+
+    # ── Epic 10.4 — corridor decay layer ────────────────────────────────
+    def _draw_corridor_decay(self, surf, t, pal, room):
+        """Cracked + numbered panels, floor wear, drips, deep parallax,
+        and per-room directional lighting. Additive — drawn after the
+        chapter's bespoke backdrop so chapter art still leads."""
+        # Layer A — deep second parallax: dim distant station structure.
+        # Painted on the wall band between CEIL_Y and FLOOR_Y, very dim.
+        deep_off = int(self._cam_x * 0.08) % 240
+        deep_col = pal.get("deep_struct", (0, 30, 18))
+        for px in range(-deep_off, CORRIDOR_W + 240, 240):
+            # Skeletal frame: vertical I-beam + cross-brace.
+            pygame.draw.line(surf, deep_col,
+                             (px + 60, CEIL_Y + 10),
+                             (px + 60, FLOOR_Y - 10), 1)
+            pygame.draw.line(surf, deep_col,
+                             (px + 60, CEIL_Y + 30),
+                             (px + 180, FLOOR_Y - 30), 1)
+            pygame.draw.line(surf, deep_col,
+                             (px + 60, FLOOR_Y - 30),
+                             (px + 180, CEIL_Y + 30), 1)
+            # Distant rectangular window — black hole in the wall.
+            win_h = 18
+            win_y = CEIL_Y + 70
+            pygame.draw.rect(surf, (4, 4, 8),
+                             pygame.Rect(px + 110, win_y, 28, win_h))
+
+        # Layer B — numbered + cracked wall panels. Sparse — every 4th
+        # default panel slot gets a number stamp + crack.
+        panel_w = 240
+        num_off = int(self._cam_x * 0.18) % panel_w
+        f_num = get_font(7, bold=True)
+        for px in range(-num_off, CORRIDOR_W + panel_w, panel_w):
+            slot = (abs(hash((px // panel_w, room.length))) % 5)
+            if slot == 0:
+                # Numbered plate + cracks
+                num_lbl = f_num.render(
+                    f"S-{(abs(hash((px, room.length))) % 99) + 1:02d}-C",
+                    True, pal.get("panel_num", (0, 90, 50)))
+                surf.blit(num_lbl, (px + 14, CEIL_Y + 28))
+                # Hairline crack
+                pygame.draw.line(surf, pal.get("crack", (0, 50, 30)),
+                                 (px + 8, CEIL_Y + 60),
+                                 (px + 22, CEIL_Y + 90), 1)
+                pygame.draw.line(surf, pal.get("crack", (0, 50, 30)),
+                                 (px + 22, CEIL_Y + 90),
+                                 (px + 14, CEIL_Y + 110), 1)
+            elif slot == 2:
+                # Scratched-off Nova Soma branding — rendered as faded
+                # block with diagonal scrub marks across it.
+                brand_rect = pygame.Rect(px + 16, CEIL_Y + 40, 60, 14)
+                pygame.draw.rect(surf, (16, 22, 18), brand_rect)
+                lbl = f_num.render("NOVA SOMA", True,
+                                   pal.get("branding", (60, 80, 60)))
+                surf.blit(lbl, (brand_rect.left + 2, brand_rect.top + 3))
+                # Scrub marks
+                for sx in range(brand_rect.left + 2, brand_rect.right, 6):
+                    pygame.draw.line(surf, pal.get("scrub", (40, 30, 20)),
+                                     (sx, brand_rect.top + 1),
+                                     (sx + 4, brand_rect.bottom - 1), 1)
+
+        # Layer C — floor wear: subtle grid + lightened high-traffic patches.
+        grid_off = int(self._cam_x * 0.7) % 32
+        floor_grid = pal.get("floor_grid", (0, 60, 30))
+        for sx in range(-grid_off, CORRIDOR_W + 32, 32):
+            pygame.draw.line(surf, floor_grid,
+                             (sx, FLOOR_Y + 1),
+                             (sx, CORRIDOR_H), 1)
+        # Worn patches every ~140 px — slight lighter overlay.
+        wear_off = int(self._cam_x * 0.7) % 280
+        wear_col = pal.get("floor_wear", (24, 36, 24))
+        for sx in range(-wear_off, CORRIDOR_W + 280, 280):
+            pygame.draw.ellipse(surf, wear_col,
+                                pygame.Rect(sx, FLOOR_Y + 4, 80, 8))
+
+        # Layer D — pipe drips: a couple of points along the ceiling that
+        # release a slow droplet every couple of seconds.
+        drip_col = pal.get("drip", (0, 110, 70))
+        for i, drip_world_x in enumerate((220, 760, 1320, 1880)):
+            sx = int(drip_world_x - self._cam_x * 1.0)
+            if sx < -20 or sx > CORRIDOR_W + 20:
+                continue
+            cycle = (t + i * 0.7) % 2.6
+            if cycle < 0.4:
+                # Pipe puddle highlight only.
+                pygame.draw.line(surf, drip_col,
+                                 (sx - 5, CEIL_Y + 22),
+                                 (sx + 5, CEIL_Y + 22), 1)
+            elif cycle < 1.6:
+                # Drop falling.
+                fall_pct = (cycle - 0.4) / 1.2
+                drop_y = int(CEIL_Y + 22 + fall_pct * (FLOOR_Y - CEIL_Y - 28))
+                pygame.draw.circle(surf, drip_col, (sx, drop_y), 2)
+            else:
+                # Splash on floor.
+                radius = int(2 + 2 * (cycle - 1.6))
+                pygame.draw.circle(surf, drip_col,
+                                   (sx, FLOOR_Y - 4), radius, 1)
+
+        # Layer E — directional lighting overlay. Each room can declare:
+        #   "light_tint": (r, g, b)  e.g. (60, 90, 150) for cold blue
+        #   "light_alpha": int 0..255
+        # Default chapters can opt-in by adding the keys; otherwise no-op.
+        tint = pal.get("light_tint")
+        if tint is not None:
+            alpha = int(pal.get("light_alpha", 32))
+            tint_surf = pygame.Surface((CORRIDOR_W, CORRIDOR_H), pygame.SRCALPHA)
+            tint_surf.fill((tint[0], tint[1], tint[2], alpha))
+            surf.blit(tint_surf, (0, 0))
+
+        # Layer F — red emergency wash when invert / spore-zone is active.
+        if self._invert_t > 0:
+            wash = pygame.Surface((CORRIDOR_W, CORRIDOR_H), pygame.SRCALPHA)
+            pulse = 0.5 + 0.5 * math.sin(t * 6.0)
+            wash.fill((180, 30, 30, int(40 + 30 * pulse)))
+            surf.blit(wash, (0, 0))
 
     def _draw_player(self, surf, t):
         px       = _PLAYER_X_FIXED
@@ -856,7 +997,7 @@ class Corridor:
             # Small box with question mark
             pygame.draw.rect(surf, (60, 20, 80), (bx + 2, by + 2, 14, 18))
             pygame.draw.rect(surf, (120, 60, 160), (bx + 2, by + 2, 14, 18), 1)
-            f = pygame.font.SysFont("monospace", 9, bold=True)
+            f = get_font(9, bold=True)
             s = f.render("?", True, (180, 100, 220))
             surf.blit(s, (bx + 5, by + 6))
         else:
@@ -865,8 +1006,8 @@ class Corridor:
             pygame.draw.rect(surf, (255, 190, 0), (bx, by + 4, 10, 14), 1)
 
     def _draw_hud(self, surf, t, room):
-        f    = pygame.font.SysFont("monospace", 13)
-        fsm  = pygame.font.SysFont("monospace", 10)
+        f    = get_font(13)
+        fsm  = get_font(10)
         t_col = (0, 220, 100) if self._elapsed < room.star3_t else \
                 (255, 180, 0) if self._elapsed < room.star2_t else (220, 60, 60)
         surf.blit(f.render(f"TIME  {self._elapsed:>5.1f}s", True, t_col), (6, 4))
@@ -913,9 +1054,9 @@ class Corridor:
         ov.fill((0, 0, 0, 170))
         surf.blit(ov, (0, 0))
 
-        fh  = pygame.font.SysFont("monospace", 20, bold=True)
-        f   = pygame.font.SysFont("monospace", 12)
-        fsm = pygame.font.SysFont("monospace", 11)
+        fh  = get_font(20, bold=True)
+        f   = get_font(12)
+        fsm = get_font(11)
 
         label_col = [(220, 60, 60), (255, 180, 0), (0, 240, 110)][self._stars - 1]
         label_txt = ["★☆☆  1 STAR", "★★☆  2 STARS", "★★★  3 STARS!"][self._stars - 1]

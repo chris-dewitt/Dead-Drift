@@ -14,18 +14,25 @@
 
 | Epic | Done | Partial | Open | Notes |
 |------|------|---------|------|-------|
-| **Phase 0** — Trust fixes | 5 | 0 | 0 | Shipped: controls/trust blockers closed |
-| **1** — Code hygiene | 6 | 2 | 2 | Font cache + NLTK lazy still open |
-| **2** — Flight feel | 7 | 0 | 0 | Flight-feel pass complete |
-| **3** — Sector variety | 2 | 4 | 0 | Hazards via themes; collapsing well / debris cloud unwired |
-| **4** — Corridor | 5 | 4 | 0 | Framework shipped; music + full scoring card partial; movement/control bugs fixed |
-| **5** — Landing | 2 | 1 | 0 | Docking graphics shipped; Records/end-card hook remains partial |
-| **6** — Terminal polish | 8 | 0 | 0 | Complete: keystrokes, portraits, backdrops, outcome beats, chips, dossier, market, and cargo dialogue |
-| **7** — Bax | 1 | 2 | 2 | Lines mostly ported; portrait glow + hull pitch open |
-| **8** — Meta replay | 1 | 0 | 3 | Stepped death done; Records + carousel not built |
-| **9** — Award push (see `NEXT_PUSH.md`) | 3 | 1 | 18 | 9.2 CRT visual overhaul + 9.3 popup gate + Nova Soma dossier parity shipped; 9.1 NPC cross-refs partial |
+| **Phase 0** — Trust fixes | 5 | 0 | 5 | 0.1–0.5 shipped; 0.6–0.10 open (playtest bugs) |
+| **1** — Code hygiene | 8 | 2 | 0 | All items shipped |
+| **2** — Flight feel | 7 | 0 | 0 | Complete |
+| **3** — Sector variety | 3 | 3 | 0 | Themes drive hazards; collapsing well + debris cloud wired |
+| **4** — Corridor | 7 | 2 | 0 | Per-chapter music + captions + end-card live |
+| **5** — Landing | 2 | 1 | 0 | Docking graphics shipped; Gary-at-dock open (Epic 5.4) |
+| **6** — Terminal polish | 8 | 0 | 0 | Complete |
+| **7** — Bax | 2 | 1 | 1 | Hull-glow + pitch tiers live; harmonica play-along open |
+| **8** — Meta replay | 4 | 0 | 0 | Records + carousel + HARDCORE all shipped |
+| **9** — Award push | 3 | 1 | 18 | CRT overhaul + popup gate shipped; NPC cross-refs partial |
 
-**Rough overall:** ~63% complete · ~22% partial · ~14% not started (by checkbox count).
+**Plus from `NEXT_PUSH.md` (this push, May 25 2026):**
+- Playtest backlog closed: barge hit-stagger + harpoon flash visibility, two new union reps (Idealist Eddie + Corrupt Vinny), NPC keyword normalization (universal `fuck off` easter egg, Felix gossip path, Dray gripe + standardised BRIBE label, Krellborn extended threat keywords + harder filler).
+- Epic 11.1c — Bax harmonica heal session shipped (H-key in flight, +5 hull over 6s, rotation lock, barge-proximity gate).
+- Epic 13.1 — money source labels on every `EVT_DEBT_UPDATE` (HUD floater shows `+800 cr · SLINGSHOT`, etc.).
+- Epic 10.4 — corridor decay layer (deep parallax, numbered/cracked panels, scratched Nova Soma branding, floor wear, pipe drips, per-room directional lighting).
+- Epic 14.1 — boss-room set pieces (Gary's den / mycelium chamber / compliance tribunal / quantum observation deck).
+
+**Rough overall:** ~78% complete · ~13% partial · ~9% not started (by checkbox count).
 
 ---
 
@@ -43,6 +50,11 @@ Tracked here and in `docs/DOCUMENTATION_STATUS.md`. These override epic list ord
 | Cargo-specific dialogue for all NPCs | Epic 6 / terminal polish | [x] |
 | Terminal outcome reveal visual pass | Epic 6 / terminal polish | [x] |
 | Terminal keyword chips reflect known exploits | Epic 6 / terminal polish | [x] |
+| Shroom control inversion (Ch.2 cargo) | Phase 0.6 | [ ] |
+| Barge intercept = Gary / Union only | Phase 0.7 | [x] (swept in cursor branch) |
+| Dock Union identity (Gary, Local 404) | Phase 0.8 + Epic 5.4 | [ ] |
+| Non-Union NPCs → distinct ship hulls | Phase 0.9 + Epic 3.7 | [ ] |
+| Ch.3 Paperwork corridor broken / wrong | Phase 0.10 + Epic 4.8 | [ ] |
 
 ---
 
@@ -81,6 +93,83 @@ Dead constant `{3, 6}`; live config is `settings.SHOP_SECTORS = {1, 3}`.
 
 **Shipped May 2026:** Removed the stale local constant and pointed shop documentation at `config.settings.SHOP_SECTORS`.
 
+### 0.6 Epistemological Shrooms — control inversion not working in play — [ ]
+**Playtest (Chris, May 2026):** With Ch.2 / Epistemological Shrooms cargo, periodic control inversion does not appear to fire in-flight.
+
+**Expected (design):** Every 10–20 s (`SPORE_INTERVAL_MIN/MAX`), controls invert for 6 s (`SPORE_DURATION` in `config/settings.py`). `ship.controls_inverted` swaps WASD/arrow input in `ship/ship.py`. Renderer shows spore vignette / `!! CONTROLS INVERTED !!` overlay (`renderer/vector_renderer.py`). Bax reacts via `EVT_SPORE_INVERTED`. Loadout draft advertises: *"Controls invert periodically."*
+
+**Code present (May 2026 review):** `cargo/epi_shrooms.py` timer + `_trigger()` sets `ship.controls_inverted`; `run_manager.update()` calls `cargo.update()` before `ship.update()` in `core/game.py` — order is correct. Headless sim of `cargo.update()` alone triggers inversion ~14 s after sector start.
+
+**Likely failure modes to check when fixing:**
+1. Player picked a non-shroom cargo from the draft pool (Ch.2 offers shrooms + two random others).
+2. Thruster overheat trap (0.1) — ship stops responding; can be mistaken for inversion not firing.
+3. Visual/audio fires but input swap too subtle — verify `controls_inverted` at runtime (debug HUD or Bax line).
+4. Checkpoint restore dropping cargo timer state (`run_checkpoint.py` saves `_next_cd` / `_invert_active` — verify on load).
+5. **Corridor vs flight:** Ch.2 delivery corridor has separate spore-zone inversion (`delivery/corridor/base.py` `SporeZone`, ~1.5 s) — distinct from in-flight cargo; test both.
+
+**Fix direction:** Reproduce in Ch.2 flight with shrooms selected; add temporary debug readout if needed; trace `cargo.update` → `controls_inverted` → `_read_input` each frame; confirm overlay + Bax line on trigger.
+
+### 0.7 Repo barges = Gary / Union only (no pirates on barge comm) — [ ]
+**Playtest / design lock (Chris, May 2026):** When a **Local 404 repo barge** intercepts the player, the comm is **Gary Pruitt** — every time. Only the **Union** operates repo barges. Pirates, DJs, fences, etc. do **not** piggyback the barge relay.
+
+**Current code (wrong):** `run_manager.open_barge_terminal()` — Gary ~30% chance; else random from `union_dispatcher`, `synthetic_droid`, `insurance_adjuster`, `pirate` (`roguelite/run_manager.py`). Bax even warns about pirates on the repo frequency.
+
+**Fix direction:**
+- Barge intercept → always `open_terminal("gary", intercepted=True)` (or Union dispatcher **as Gary's supervisor on the same barge**, if we want variety — still Union crew, never pirates).
+- Move `pirate`, `underground_dj`, `nervous_fence`, etc. to **non-barge** encounter channels only (sector **J** jump terminal, **K** Kress hail, random comms events, distinct fly-by ships — see 0.9).
+- Audit Bax framing lines that mention pirates on barge frequency.
+
+### 0.8 Dock visuals — Union Local 404 + Gary identity — [ ]
+**Playtest / design lock (Chris, May 2026):** Update the **landing / dock sequence** so it reads as a Union facility with Gary's presence — not generic green technicians only.
+
+**Current code:** `delivery/delivery_sequence.py` Beat 2 `_draw_land` — `UNION LOCAL 404` placard + anonymous ground crew silhouettes. No Gary portrait, no dock-master dialogue tied to Gary. `docs/CORRIDOR_DESIGN.md` Ch.1 already spec's Gary at handoff (off-duty, sheepish) — landing dock should foreshadow that.
+
+**Fix direction (Epic 5.4):**
+- Dock master / receiving officer silhouette or CRT portrait = **Gary** (or chapter-appropriate Union contact — Ch.1 Gary, Ch.2 lab tech, etc. per corridor spec).
+- Union amber hazard palette, Local 404 signage, repo-barge bay markers visible in background.
+- Beat 2 miss lines reference Gary / dock master as Union, not anonymous "dock master muttering."
+- Align with Chris priority **#5 improve docking graphics**.
+
+### 0.9 Non-Union NPCs need distinct spaceship types — [ ]
+**Playtest / design lock (Chris, May 2026):** **Pirates, radio DJs (Marrow), Kress, fences, Sandra**, etc. must appear in space on **their own hull silhouettes** — not repo barges, not the player courier wedge.
+
+**Current code:**
+- In-flight threats: player ship + `RepoBarge` (Union industrial) + optional `AlienShip` fly-through (`antagonists/alien_ship.py`).
+- Pirates / Marrow / Kress / Sandra: **terminal-only** (no vessel in the flight scene).
+- Pirate can incorrectly appear via barge comm (0.7).
+
+**Fix direction (Epic 3.7):**
+- Define a small **hull registry** in `renderer/vector_renderer.py` (or `antagonists/vessels/`) — e.g. `PirateSkiff`, `BroadcastRelay`, `ComplianceCourier` (Sandra), `OuterBeltHauler` (Kress).
+- Wire spawn paths: pirate hail → pirate skiff enters range or trails player; **K** / DJ events → relay dish ship; keep **repo barge** silhouette exclusive to Local 404.
+- Jump-terminal NPCs can stay voice-only until ship is on-screen, but the visual rule is: **if you see a ship, its hull matches the faction.**
+
+### 0.10 Ch.3 Paperwork corridor — broken in play — [ ]
+**Playtest (Chris, May 2026):** Problem in the **document chapter** delivery corridor (`delivery/corridor/chapter3_paperwork.py`).
+
+**Chris repro (May 2026):** In **File Room 4** (at the **ladder**, paper/documents visible), input suddenly died — **movement, ESC, pause (1), everything unresponsive**.
+
+**Likely cause (code review):** A **clerk `NPCEncounter` mini-dialog** (`_CorridorDialog`) opened — Form 27-B / purpose-of-visit / Brenda prompt (reads as a “document” blocking the screen). While `_dialog is not None`:
+- `Corridor.update()` **returns early** — no ladder climb, no movement.
+- `Corridor.handle_key()` sends keys **only** to the dialog (typing + ENTER); **ESC is swallowed** with no dismiss.
+- `GameState.DELIVERY` is **not** in `Game._PAUSEABLE` — ESC / **1** never open pause during the corridor run.
+
+So the game is not frozen; it is **modal-locked** waiting for typed input + RETURN, with no escape hatch and no pause. If the dialog overlay was missed or didn’t read as interactive, it feels like a hard lock.
+
+**Other confirmed gaps (same chapter):**
+
+1. **`OneWayWall` collision not wired** — Room 1 cubicle zigzag is decorative only (`elements.py` has `blocks()`; `base.py` never calls it).
+2. **Clerk penalty delays** — `outcome: "penalty"` is text-only (no 5 s wait).
+3. **Only one checkpoint** — Room 1 exit; File Room 4 has none.
+4. **Branch path filter** — high + low elements visible until branch chosen.
+
+**Fix direction (Epic 4.8):**
+- **ESC** in corridor dialog → skip with penalty pass (or open pause menu).
+- Add **`GameState.DELIVERY` to `_PAUSEABLE`** (or forward ESC from corridor to pause).
+- On-screen hint: `TYPE RESPONSE · ENTER · ESC TO SKIP`.
+- Optional: **defer NPC trigger** until courier is grounded (not `_on_ladder`).
+- Wire `OneWayWall.blocks()` before horizontal movement.
+- Room 2 mid-room checkpoint + vertical route QA.
+
 ---
 
 ## Locked design decisions (decisions log)
@@ -115,6 +204,9 @@ These are the directional answers backing this plan. Don't re-litigate — imple
 - **Threat-level music layer:** add a low harmonica drone that fades in within 320 px of a barge (uses existing `EVT_BARGE_NEARBY`).
 - **North-star metric:** each chapter feels mechanically distinct on first playthrough AND replay rate after campaign clear is non-zero.
 - **Next Fest demo focus:** all four headline pillars must ship — corridor overhaul, sector variety, control feel, terminal & cockpit polish.
+- **Repo barges (Union only):** `RepoBarge` is Local 404 exclusively. Barge comm intercept = **Gary** (Union). No pirates or non-Union NPCs on the barge channel. **Locked May 2026 (Chris playtest).**
+- **Faction ship silhouettes:** Non-Union NPCs (pirates, Marrow/DJ relay, Kress, Sandra, fences) each get a **distinct vector hull** when they appear in the flight scene — not repo barges. **Locked May 2026.**
+- **Dock identity:** Landing sequence docks read as Union facilities; Gary / chapter contact visible at dock (see Epic 5.4). **Locked May 2026.**
 
 ---
 
@@ -126,12 +218,24 @@ These are the directional answers backing this plan. Don't re-litigate — imple
 The `/dead-drift/` subtree is a ~3,500-LOC near-duplicate of the live root, including an older `main.py` whose NLTK bootstrap uses the broken pre-`punkt_tab` paths. Nothing in the live game imports it. **Delete the entire directory.** Pre-flight: run a project-wide grep for any string referencing the path (build scripts, CI configs, README links) and clear them before the rm.
 
 ### 1.2 Font caching helper — [x]
-At least 40 `pygame.font.SysFont(...)` calls live inside per-frame draw paths in `core/game.py` (with smaller pockets in `terminal/terminal.py`, `delivery/delivery_sequence.py`, `roguelite/shop.py`, `renderer/cockpit_renderer.py`, `roguelite/loadout_draft.py`, `delivery/platformer.py`, `delivery/obstacles.py`, `play.py`, `ship/hud.py`). Each call is a font lookup; at 60 FPS, this is hundreds of redundant constructions per second.
+Originally 200+ `pygame.font.SysFont(...)` calls lived inside per-frame draw paths in `core/game.py` (with smaller pockets in `terminal/terminal.py`, `delivery/delivery_sequence.py`, `roguelite/shop.py`, `renderer/cockpit_renderer.py`, `roguelite/loadout_draft.py`, `delivery/platformer.py`, `delivery/obstacles.py`, `play.py`, `ship/hud.py`). Each call was a font lookup; at 60 FPS, this was hundreds of redundant constructions per second.
 
 Land a single `Game._font(size: int, bold: bool = False, italic: bool = False)` helper that memoizes by `(size, bold, italic)`. Route every existing `pygame.font.SysFont("monospace", …)` through it. Keep the API tight — one helper, used everywhere.
 
 **May 2026:** `core/text.py` `get_font()` + `install_font_patch()` exist; `roguelite/shop.py` has local cache. `core/game.py`, `delivery/delivery_sequence.py`, and others still call raw `SysFont` in draw paths.
 **Phase 1 (May 25 2026):** `install_font_patch()` now called from `play.py` `main()` ahead of any `SysFont` lookups, so the patch covers every draw path — shipped.
+**Phase 3 (May 25 2026):** Direct `get_font()` adoption swept across every
+hot draw path. `core/game.py`, `delivery/{platformer,obstacles,delivery_sequence}.py`,
+`delivery/corridor/{base,elements,chapter1..4}.py`, `terminal/{terminal,npc_portraits}.py`,
+`renderer/{vector_renderer,sci_fi_ui,cockpit_renderer}.py`, `ship/hud.py`,
+`roguelite/{loadout_draft,shop}.py`, and `play.py` all now call
+`from core.text import get_font` instead of `pygame.font.SysFont("monospace", ...)`.
+`core/text.get_font()` gained an `italic=` flag so the three italic
+call-sites adopt it cleanly. `roguelite/shop.py`'s local
+`_FONT_CACHE` dict is gone; the helper now defers to `get_font()`.
+The legacy comment in `core/game.py:55` is the only remaining
+`SysFont` mention in the production tree, and `tests/test_font_cache.py`
+asserts no real call sites linger.
 
 ### 1.3 Event bus fixes — [x]
 `core/event_bus.py` has two latent issues:
@@ -169,8 +273,21 @@ Don't bother below ~10 calls/frame paths; the rest aren't hot.
 
 ### 1.9 Move `random` import to module top in `ship/loadout.py` — [x]
 
-### 1.10 NLTK lazy bootstrap with splash — [ ]
+### 1.10 NLTK lazy bootstrap with splash — [x]
 Today `main.py` blocks at startup downloading NLTK data with zero in-game feedback. Move the bootstrap behind a lazy load triggered on first terminal-open. While packages download, render an in-game splash overlay ("LINGUISTIC PROCESSOR INITIALIZING — STAND BY") with a brief Bax line: *"Right, give us a sec — the comms array's still warmin' up."* Boot to main menu instantly; defer the download.
+
+**May 2026:** Shipped. `terminal/nlp_bootstrap.py` runs the four-package
+download on a daemon thread; `main.py` no longer blocks at import (the
+old `_bootstrap_nltk` is gone). `Game.__init__` calls
+`nlp_bootstrap.start_in_background()` right after `pygame.init()` (only
+if `already_present()` is False, so warm boots are zero-cost).
+`Game._maybe_render_nlp_splash()` paints the green-amber `LINGUISTIC
+PROCESSOR INITIALISING — STAND BY` card with the current package label,
+a pending count, and a small spinner; first activation fires the
+priority Bax line via `EVT_BAX_SPEAK`. The parser already degrades
+gracefully so the player can still type while the bundle is in flight,
+and the splash auto-clears once `is_ready()` flips. Tests cover the
+public API, idempotent thread spawn, and the renderer wiring.
 
 ### 1.11 EpistemologicalShrooms passive growth bug — [x]
 `cargo/epi_shrooms.py:update` grows `spore_level` purely on time (`+= dt * 0.018`), reaching max in ~55 seconds regardless of damage. The docstring claims damage drives it. Either:
@@ -245,8 +362,8 @@ Result: runs that arrive at sector 5 fragile aren't curb-stomped; clean runs sti
 
 **Goal:** Every sector in a run feels genuinely different. The Nova Soma corporate-renaming flavor text gets to mean something — when a sector says "OPTIMISED COMPLIANCE ZONE, formerly THE WIDOW'S CROSSING," the gameplay there is recognizable. Crucial constraint: **the player must not feel overwhelmed.** Variety, not density. Each sector picks one or two signature elements and leans into them.
 
-### 3.1 Wire the five existing hazards — [~]
-`SectorLayout.hazards` is generated each sector and never read. Wire each into a real sector modifier (read by `RunManager` and `VectorRenderer`):
+### 3.1 Wire the five existing hazards — [x]
+`SectorLayout.hazards` is generated each sector and read by `RunManager` (per-frame) and `VectorRenderer`:
 
 - **`asteroid_field`** — `DEBRIS_COUNT × 1.6`, debris HP slightly higher (more shootable). Visual: denser dust haze, more drifting micro-particles in background.
 - **`solar_flare`** — every ~22 seconds, a screen-edge solar flare warning pulses for 2 seconds, then a 4-second sweep across the sector. While the sweep is active: HUD scramble pulse (one second of glitch), gun fizzles 3× more often, Bax: *"Solar flare incoming. Yeah, ROMANTIC. Shield your eyes, the ship has none."*
@@ -256,7 +373,7 @@ Result: runs that arrive at sector 5 fragile aren't curb-stomped; clean runs sti
 
 Lock: maximum **two hazards per sector**. The hazard count cap in `_pick_hazards` should be reduced from `1 + int(difficulty)` (currently scales up to 3) to **`min(2, 1 + (difficulty > 1.5))`** — i.e. one hazard at low difficulty, two at high. Difference-by-design, not chaos-by-default.
 
-**May 2026:** Obstacle logic is **theme-driven** in `run_manager`, not read from `SectorLayout.hazards`. Solar flare + toll — partial/full via themes. **`collapsing_gravity_well` and `debris_cloud` — not wired.** Asteroid density via Junk-Belt debris boost only.
+**May 2026:** Obstacle logic is theme-driven in `run_manager` for asteroid density / solar flare / toll, **plus** `_load_sector_obstacles` now also reads `sector.hazards` and instantiates `CollapsingGravityWell` and `DebrisCloud` when present. Both update each frame and the renderer pulls `run_mgr.debris_cloud` for the visibility overlay.
 
 ### 3.2 Six new obstacle classes — [~]
 
@@ -350,6 +467,20 @@ When a sector loads (currently `EVT_SECTOR_START`), draw a 2-second sector-intro
 
 Fades out after 2 seconds. Reinforces the "every sector feels different" promise visually.
 
+### 3.7 Non-Union vessel silhouettes — [ ]
+**Chris lock (May 2026):** Pirates, underground DJs, Outer Belt contacts, Sandra's compliance courier, etc. each fly a **recognizable hull type** — not a repo barge.
+
+| Faction / NPC | Hull sketch (implementation-agnostic) | When it appears |
+|---------------|--------------------------------------|-----------------|
+| **Local 404 Union** | Existing `RepoBarge` — massive industrial, amber hazards | Hunt / tether / intercept |
+| **Outer Belt pirate** | Asymmetric skiff, jury-rigged plates, red running lights | Pirate hail comms, hostile proximity |
+| **Marrow / pirate radio** | Small relay ship — dish antenna, patchwork solar panels | **K** events, DJ terminal, fly-by |
+| **Kress (bill collector)** | Sleek corporate shuttle — Nova Soma livery, too clean | Random collector transmission |
+| **Sandra Vega-Marsh** | Poster-perfect compliance courier — symmetrical, sterile white | Gate / jump terminal (optional fly-by) |
+| **Alien** | Existing `AlienShip` asymmetric fin | Rare fly-through (keep) |
+
+**Fix direction:** Vector polygons only (`pygame.draw`), same art bible as player ship. Renderer draws faction hull before opening terminal where possible so the player *sees* who is hailing them.
+
 ---
 
 ## Epic 4 — The Mario Corridor: Delivery Sequence Overhaul
@@ -387,7 +518,7 @@ The Corridor must support every one of these as first-class concepts:
 - **Bax voice-over** — Bax narrates contextually throughout. Coach-mode commentary on jumps, panic on stealth-near-misses, glee on secrets. Lines drafted in `docs/BAX_VOICE.md` under "corridor" contexts.
 - **Boss room** — last 10–15 seconds of every corridor: small "act" before the cargo handover. The contact NPC is present (Gary for Ch.1, the lab tech for Ch.2, the dispatcher for Ch.3, the hotel concierge for Ch.4). Brief exchange, money changes hands, cargo drops.
 
-**May 2026:** Scrolling camera, checkpoints, branching, collectibles, secrets, NPC encounters, stealth zones, Bax lines — largely shipped. **Black wipe + "ENTERING: &lt;ROOM NAME&gt;" caption — not implemented.** Mini-terminal UX may need polish pass.
+**May 2026:** Scrolling camera, checkpoints, branching, collectibles, secrets, NPC encounters, stealth zones, Bax lines — largely shipped. Black wipe + `ENTERING: <ROOM NAME>` caption shipped. `OneWayWall` collision not yet wired (breaks Ch.3 Room 1 cubicle zigzag — tracked as Phase 0.10 / Epic 4.8).
 
 ### 4.3 Visual style (hybrid) — [~]
 
@@ -421,7 +552,7 @@ When the courier is hit, the cargo silhouette flashes. When the cargo takes a "r
 
 **May 2026:** Per-chapter silhouettes in `corridor/base.py`. Hit flash — partial; crack-on-big-hit — verify per chapter.
 
-### 4.6 Corridor music — [ ]
+### 4.6 Corridor music — [x]
 Each chapter's corridor has a unique audio cue track that plays only during corridor execution. The track is a longer, melodic blues-jazz piece (procedurally generated using the existing `audio/synth.py` infrastructure) themed to that chapter:
 - **Ch.1:** distorted vinyl-warm bassline + dirty harmonica
 - **Ch.2:** sparse off-kilter percussion with reverb-drowned synths
@@ -430,7 +561,19 @@ Each chapter's corridor has a unique audio cue track that plays only during corr
 
 Music swells on entry, ducks during NPC dialogue, peaks in the boss room.
 
-**May 2026:** Delivery scene audio exists; dedicated per-chapter corridor tracks per spec — not verified as complete.
+**May 2026:** Shipped. New events `EVT_CORRIDOR_ENTER`,
+`EVT_CORRIDOR_BOSS_ROOM`, and `EVT_CORRIDOR_EXIT` fire from
+`delivery/corridor/base.py` (entry on `Corridor.__init__`, boss-room
+trigger on first BossRoomTrigger pass — idempotent — and exit on
+`_finish()`). `AudioManager` allocates `_CORR_SIG_CH` (channel 30) and
+schedules each chapter's `signature_instrument()` at a per-chapter
+cadence + base volume profile (Ch.1 vinyl-warm harmonica every ~3.4s @
+0.42, Ch.2 sparse bowed-saw every ~5.0s @ 0.30, Ch.3 typewriter march
+every ~1.6s @ 0.36, Ch.4 hotel-lobby jazz every ~4.0s @ 0.28). Corridor
+intensity drives volume + cadence: 0.5 on entry, 1.0 in the boss room
+(~1.6× louder, 0.65× cadence). Voice ducking handles the dialogue duck
+via the existing `_music_gain()` path. Tests in
+`tests/test_corridor_music.py`.
 
 ### 4.7 Corridor scoring — [~]
 At corridor completion, show a brief end-card:
@@ -442,7 +585,7 @@ At corridor completion, show a brief end-card:
 
 Roll these into the chapter's run summary and into Bax's Records (Epic 8).
 
-**May 2026:** Star rating (1–3) at corridor end — yes. Full end-card (time, collectibles/total, secrets, damage, bonus cr) — **not built.** Bax's Records hook — blocked on Epic 8.
+**May 2026:** Star rating (1–3) plus full end-card stats (time, damage taken, collectibles found / total, secrets, bonus credits) render at corridor end — see `_render_summary` in `delivery/corridor/base.py`. Lore scraps from `Secret` pickups now route through `EVT_LORE_FOUND` → `MetaProgression.add_lore_fragment` and surface in **Bax's Records → LORE FRAGMENTS** (Epic 8.3).
 
 ### 4.8 Corridor jump locomotion bug — [x]
 Player playtest note: in the corridor, jump currently reads like a vertical up/down hop from the same spot, which can leave the courier with no practical way to get off or across from that location. Jump should preserve normal horizontal movement and allow the player to leave the takeoff position, clear gaps, and exit platforms naturally.
@@ -453,6 +596,19 @@ Player playtest note: in the corridor, jump currently reads like a vertical up/d
 Player playtest note: ladder movement has the same stuck-in-place feel as the jump issue. The courier can climb up/down, but cannot reliably get off the ladder onto nearby platforms; when reaching the bottom, player control can be lost or fail to return cleanly.
 
 **May 2026 implementation:** Ladder capture now requires climb intent unless already climbing, horizontal input steps off ladders, and bottom dismounts restore grounded control instead of repeatedly recapturing the player.
+
+### 4.8 Ch.3 Paperwork corridor — fix pass — [ ]
+**Playtest + code review (May 2026).** Content file exists (`chapter3_paperwork.py` — Intake Floor, File Room 4, Executive Processing) but framework gaps make the chapter feel broken.
+
+| Room | Design intent | Current gap |
+|------|---------------|-------------|
+| **1 — Intake Floor** | `OneWayWall` cubicle zigzag → 3 mandatory clerks | Walls decorative; collision unwired |
+| **2 — File Room 4** | Vertical climb, high/low branch, 2 secrets | No mid-room checkpoint; branch filter shows both paths pre-choice |
+| **3 — Executive Processing** | Union Dispatcher boss handoff | Verify dialog keywords + room end trigger |
+
+See **Phase 0.10** for fix list. Test end-to-end after `OneWayWall` wiring before polish pass.
+
+**Modal dialog lock (Chris repro):** Clerk encounters freeze movement and block pause until the player types a response and presses ENTER. ESC must dismiss or pause must work in `DELIVERY` — see Phase 0.10.
 
 ---
 
@@ -495,6 +651,17 @@ Each chapter has a different station for the landing:
 Each station is a vector illustration rendered procedurally — same constraints as the rest of the renderer (no sprite assets).
 
 **May 2026:** Chapter-themed station names/colors plus distinct procedural station silhouettes are shipped: Ch.1 cargo harbour, Ch.2 biolab ring outpost, Ch.3 Nova Soma compliance slab, and Ch.4 luxury orbital hotel. Landing/beat-3 bay dressing also changes per chapter.
+
+### 5.4 Union dock identity (Gary + Local 404) — [ ]
+**Chris lock (May 2026):** The landing dock is a **Union Local 404** facility. **Gary** (Ch.1) or the chapter's receiving contact should be visible — portrait, silhouette, or named placard — not anonymous green technicians alone.
+
+**Targets:**
+- `delivery/delivery_sequence.py` — Beat 2 landing bay + Beat 3 clamp cutscene.
+- Per-chapter dock contact table (align with `docs/CORRIDOR_DESIGN.md` boss rooms): Ch.1 Gary, Ch.2 lab tech, Ch.3 Union dispatcher desk, Ch.4 hotel concierge.
+- Union signage, amber hazard stripes, repo-barge maintenance bay in background (ties flight barges to dock fantasy).
+- Optional: Gary CRT bust on dock wall reacting to perfect vs rough landing (reuse `terminal/npc_portraits.py` pipeline).
+
+**May 2026:** Generic `UNION LOCAL 404` placard exists; Gary not present at dock. Chris playtest — **update the docks**.
 
 ---
 
@@ -591,13 +758,15 @@ Implementation direction:
 
 **See `docs/BAX_VOICE.md` for the full line bank, tone guide, and per-context drafts.**
 
-### 7.1 Cockpit portrait hull-damage glow — [ ]
+### 7.1 Cockpit portrait hull-damage glow — [x]
 
 Bax's portrait in the cockpit strip currently doesn't react visually to ship damage. Make it:
 
 - **Color gradient mapped to hull%:** at 100–60% hull, ambient amber glow around the portrait. At 60–30%, glow shifts to orange + light pulse on each hull-damage event. At < 30%, glow becomes red + persistent flicker.
 - **Diegetic deterioration on hits:** every `EVT_HULL_DAMAGE` event triggers a brief portrait reaction — eyes widen for 0.4 seconds, scanlines on the portrait glitch harder for 0.6 seconds, antenna sparks for 0.3 seconds. Repeated hits compound the glitch intensity (cooldown of 1.5 seconds before glitch resets).
 - **At < 10% hull:** portrait holds a "panic" expression statically — eyes wide, mouth open, antenna fully sparking. Bax's voice pitch shifts subtly higher in the audio system (see 7.4).
+
+**May 2026:** Shipped. `CockpitRenderer` subscribes to `EVT_HULL_DAMAGE`, drives an amber→orange→red ambient glow keyed on hull%, fires the eyes-widen / scanline-glitch / antenna-spark reaction with the 1.5s cooldown, and switches to a panic-glow flicker plus persistent antenna sparks under 10% hull. Voice pitch shift lives in 7.4 (`_play_voice_blip` reads hull% and selects from `BAX_PITCH_TIERS`).
 
 ### 7.2 New voice contexts (~100 lines drafted) — [x]
 
@@ -657,7 +826,7 @@ In `roguelite/meta_progression.py:apply_death_penalty`, scale `WRECKAGE_TOW_FEE`
 
 `CLONE_FLUID_FEE` and `BASE_CLONE_DEBT` stay flat. Net effect: early deaths are recoverable; late deaths bite hard. Tracks the GDD's "the deeper you go, the more they own you" tone.
 
-### 8.2 Cargo dossier carousel (chapter replay) — [ ]
+### 8.2 Cargo dossier carousel (chapter replay) — [x]
 
 Replace the current "linear-list main menu" approach with a visual carousel:
 
@@ -667,7 +836,20 @@ Replace the current "linear-list main menu" approach with a visual carousel:
 
 Cards for unfinished chapters render dimmed with a "??? — uncovered" stamp. Players see progress at a glance.
 
-### 8.3 Bax's Records screen — [ ]
+**May 2026:** Shipped. `renderer/cargo_carousel.py` paints a 5-card
+horizontal carousel (focused card centred + flanking siblings scaled
++ alpha-faded). Each card draws the chapter cargo silhouette
+(vinyl/biolab jar/forms/box-with-?), the `✓ DELIVERED` or
+`??? UNCOVERED` stamp, deepest-sector / best-run-credits stats
+pulled from `StatsTracker.career`, and the HARDCORE row when
+applicable (Epic 8.4). Main-menu adds a `CARGO DOSSIERS` row that
+unlocks after the first chapter clear. Key handler: `←/→` cycle,
+`H` arms HARDCORE for the next run when unlocked, `ENTER` calls
+new `RunManager.set_chapter_override()` and starts a fresh run on
+the selected chapter, `ESC` returns to the main menu. Tests in
+`tests/test_cargo_carousel.py`.
+
+### 8.3 Bax's Records screen — [x]
 
 New main-menu entry: **"BAX'S RECORDS"**. Opens a multi-tab interface:
 
@@ -676,12 +858,43 @@ New main-menu entry: **"BAX'S RECORDS"**. Opens a multi-tab interface:
 - **Tab 3 — Vulnerability Database:** the NLP exploit dossier. Per-NPC entries showing which exploit keys the player has discovered (e.g. "GARY — BLEVINS ★ discovered Run 7"). Undiscovered exploits show as "???". Sourced from `VocabularyVault`.
 - **Tab 4 — Lore Fragments:** scraps collected from corridor secrets (Epic 4.2). Each is a short paragraph — Bax's notes, fragments of Nova Soma internal memos, etc.
 
+**May 2026:** Shipped. `renderer/records_screen.py` draws the manila-folder
+file-cabinet view; `core/game.py` adds the `BAX'S RECORDS` row, a
+`records` menu mode, and TAB / arrow / page-key handlers for navigation.
+Tab 1 surfaces clone count, runs started/completed, deaths (estimated),
+lifetime debt accrued / paid, and a chapter bar of deepest sector
+reached. Tab 2 reads career + current-run rows from `StatsTracker`. Tab
+3 lists every NPC from the `npc_logic` registry with their discovered
+backdoors from `VocabularyVault` (undiscovered → `???`). Tab 4 paints
+each lore scrap as a chapter-tagged card; pickup is wired through the
+new `EVT_LORE_FOUND` event from corridor `Secret.try_collect`, which
+`Game._on_lore_found` persists via `MetaProgression.add_lore_fragment`.
+Smoke + persistence tests in `tests/test_bax_records.py`.
+
 Aesthetically: file-cabinet metaphor. Each tab is a manila folder being pulled out. Diegetic, low-fi.
 
-### 8.4 Chapter retry — hardcore variant (stretch) — [ ]
+### 8.4 Chapter retry — hardcore variant (stretch) — [x]
 *If time allows pre-Next-Fest:* unlock a "HARDCORE" toggle per chapter after first clear. Modifiers: tighter sector timers, more barges, only 1 checkpoint in corridor, no shop stops. Pure-pride mode. Best HARDCORE clear time per chapter shown in the cargo dossier card.
 
 If time is short, defer to post-Next-Fest.
+
+**May 2026:** Shipped. `MetaProgression` gains
+`hardcore_unlocked: list[int]`, `hardcore_best_s: dict`,
+`hardcore_active: bool`, plus
+`unlock_hardcore_for_chapter() / is_hardcore_unlocked() /
+set_hardcore_for_next_run() / clear_hardcore_flag() /
+record_hardcore_clear() / hardcore_best_time()`. First clear of any
+chapter unlocks its hardcore variant; the cargo dossier card surfaces
+the unlock + best time and `H` arms the flag for the next run.
+RunManager applies the modifiers when `is_hardcore_run()` is True:
+`hardcore_sector_dur(20.0) → 14.0` (×0.7 timer), `_difficulty()`
+gets +0.3, an extra patrolling barge spawns in every sector ≥2, and
+the post-sector shop trigger is suppressed. `make_corridor(chapter,
+hardcore=True)` strips all `Checkpoint` elements at construction time
+so the player only respawns at room start. On `complete_chapter()`
+delivery records the run's total flight time as the hardcore best
+(if better) and clears the flag. Tests in
+`tests/test_hardcore_mode.py`.
 
 ---
 

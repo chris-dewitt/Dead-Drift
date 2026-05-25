@@ -20,7 +20,11 @@ python test_stage.py  # dev — jump to a specific screen/sector
 python audio_dev.py   # dev — tune procedural audio
 ```
 
-**First launch:** `main.py` downloads NLTK data before the game loop (terminal NLP). Sandbox flight without that: `play.py`.
+**First launch:** `main.py` boots the menu instantly. The terminal NLP
+data is fetched on a background thread; if you open a terminal before
+it lands you'll see a brief `LINGUISTIC PROCESSOR INITIALISING — STAND
+BY` splash and the parser falls back to regex tokenisation in the
+meantime. Sandbox flight without NLTK at all: `play.py`.
 
 **Saves:** Three campaign slots under `data/saves/`. Mid-run checkpoints autosave every **25 seconds** in flight and on sector/shop transitions. Legacy `data/run_history.json` migrates into slot 1 on first launch.
 
@@ -40,6 +44,8 @@ python audio_dev.py   # dev — tune procedural audio
 
 Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sentient Paperwork, Schrödinger VIP). Each cargo adds a unique mid-flight mechanic.
 
+> **Known issue (May 2026 playtest):** Ch.2 Epistemological Shrooms — periodic control inversion is **not working in flight** despite implementation in `cargo/epi_shrooms.py`. Tracked in `docs/IMPROVEMENT_PLAN.md` Phase 0.6. Other cargos: verify individually.
+
 ---
 
 ## Core Mechanics
@@ -50,6 +56,7 @@ Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sent
 - Sector **themes** (8 types): wrecks, mines, ice, trash, flares, toll checkpoints, etc.
 - Repo **Barge** state machine: patrol → chase → aim → intercept → clamp → torch (unbolt modules)
 - **Tether:** spring force toward barge; snap with lateral velocity
+- **Design lock (May 2026):** Repo barges = **Local 404 Union only**; barge intercept comm = **Gary**. Pirates, DJs, and other factions use **different ship hulls** — not barges. See `docs/IMPROVEMENT_PLAN.md` Phase 0.7–0.9.
 - Gun, debris, fuel canisters, satellites, hazards wired per theme
 
 ### Hotwired signal chain
@@ -175,6 +182,18 @@ Spec + implementation status → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLA
 
 ## Known issues / open polish
 
-- Market graphics need another polish pass
-- Docking graphics can be pushed further
-- NLTK bootstrap is still eager on `main.py` first launch; lazy in-game splash remains open
+- Full string audit (Epic 9.4) still open
+- Harmonica `play along` (Epic 11.1b) deferred — high effort, low
+  immediate value
+- A few `NEXT_PUSH.md` items remain (sector-5 capstones 19, death
+  highlight reel 20, full Bax `theme` polish 21)
+
+(Market + docking graphics, Bax's Records (Epic 8.3), the lazy NLTK
+bootstrap (Epic 1.10), the font-cache adoption sweep (Epic 1.2),
+per-chapter corridor music (Epic 4.6), the cargo dossier carousel
+(Epic 8.2), the HARDCORE chapter variant (Epic 8.4), the harmonica
+heal session (Epic 11.1c), money source labels (Epic 13.1), the
+corridor decay layer (Epic 10.4), boss-room set pieces (Epic 14.1),
+the new union reps + NPC keyword normalization, and the barge feel
++ harpoon visibility playtest fixes all shipped May 2026 — see
+`docs/DOCUMENTATION_STATUS.md`.)

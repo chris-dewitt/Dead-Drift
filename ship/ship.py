@@ -31,6 +31,10 @@ class PlayerShip:
         self._external_thrust_scale = 1.0
         self.last_damage_source = "unknown"
         self._iframe_t       = 0.0   # mercy window after taking hull damage
+        # Epic 11.1c — harmonica heal session: while True, rotation is
+        # locked and the ship slowly recovers hull. Set/cleared by
+        # `RunManager`. Player can still use thrust to cancel.
+        self.harm_session_active = False
         self.chain.install(self._life_sup, 0)
         self.chain.install(self._thruster, 1)
 
@@ -70,10 +74,14 @@ class PlayerShip:
         if inv:
             left, right, fwd, rev = right, left, rev, fwd
 
-        if left:
-            self.body.rotate(-S.ROTATION_SPEED * dt)
-        if right:
-            self.body.rotate(S.ROTATION_SPEED * dt)
+        # Epic 11.1c: rotation locked during a harmonica session so the
+        # ship drifts straight while Bax plays. Thrust still cancels the
+        # session via the cancel-on-input check below in RunManager.
+        if not self.harm_session_active:
+            if left:
+                self.body.rotate(-S.ROTATION_SPEED * dt)
+            if right:
+                self.body.rotate(S.ROTATION_SPEED * dt)
 
         thrusters = self.chain.get_active("propulsion")
         if fwd:
