@@ -869,25 +869,33 @@ class RunManager:
         self._last_voice_char_t = self._t
 
     def open_barge_terminal(self, barge) -> Terminal:
-        """Mid-flight intercept: repo comm — Gary is common but not guaranteed.
+        """Mid-flight repo intercept: Local 404 / Union ONLY.
 
-        Playtest fix (May 2026): added IDEALIST and CORRUPT reps to the
-        Local 404 rotation so late-sector pickups feel less repetitive."""
+        Aliveness A.3 (May 2026 design lock): only Union personnel operate
+        repo barges. Pirates / synthetic droids / insurance adjusters do
+        NOT piggyback the barge relay  they have their own comm channels
+        elsewhere. The barge pool is restricted to Gary, the two new
+        Union reps (Idealist Eddie / Corrupt Vinny), and the Union
+        Dispatcher.
+
+        Gary is the most common voice on the barge (his beat) but not
+        guaranteed  the new reps land in late sectors so the player
+        sees Union variety without breaking the design lock."""
         self._intercepting_barge = barge
-        pool = ["union_dispatcher", "synthetic_droid",
-                "idealist_rep", "corrupt_rep"]
+        # Union-only rotation. The Dispatcher only comes through the
+        # repo channel for paperwork-style intercepts (sectors >= 2).
+        pool = ["idealist_rep", "corrupt_rep"]
         if self._sector_index >= 2:
-            pool.append("insurance_adjuster")
-        if self._sector_index >= 4:
-            pool.append("pirate")
-        # Gary share dropped 30% -> 22% so the two new reps land more often.
-        if self._sector_index >= 1 and random.random() < 0.22:
+            pool.append("union_dispatcher")
+        # Gary keeps a strong majority share  he is the canonical
+        # Local 404 repo voice.
+        if self._sector_index < 1 or random.random() < 0.45:
             npc_type = "gary"
         else:
             npc_type = random.choice(pool)
         if npc_type == "gary":
             bus.emit(EVT_BAX_SPEAK, line=random.choice([
-                "Gary Pruitt on the comm. Repo intercept. Same tricks — deal, bribe, sympathy.",
+                "Gary Pruitt on the comm. Repo intercept. Same tricks  deal, bribe, sympathy.",
                 "Local 404 hail. It's Gary again. Talk 'im down before the 'arpoon.",
                 "Barge is hailing. Gary Pruitt. Outstanding fees. You know the script.",
             ]))
@@ -897,27 +905,15 @@ class RunManager:
                 "Union dispatcher on the barge channel. Paperwork angle might work.",
                 "That's Central Dispatch, not Gary for once. Forms, grievance, or break-room chat.",
             ],
-            "synthetic_droid": [
-                "TK-9 answering the barge relay. Paradox or SQL — same as the gates.",
-                "Droid on the intercept comm. Logic exploits only. No charm.",
-            ],
-            "insurance_adjuster": [
-                "Insurance adjuster piggybacking the repo signal. Claims and forms.",
-                "Morwenna on the line via the barge relay. Legal pressure might work.",
-            ],
-            "pirate": [
-                "That's NOT Gary — pirate relay on the barge frequency. Talk weird.",
-                "Pirate cuttin' through the repo comm. No Article 7 here.",
-            ],
             "idealist_rep": [
-                "Eddie Marlowe — TRUE BELIEVER on the comm. Quote the Charter back at 'im.",
+                "Eddie Marlowe  TRUE BELIEVER on the comm. Quote the Charter back at 'im.",
                 "It's Eddie. Honest, earnest, *insufferable*. Charter clauses or break 'is ideology.",
                 "Idealist Local 404 rep. Bribes BACKFIRE here. Cite the Charter, comrade.",
             ],
             "corrupt_rep": [
                 "Vinny Brogan on the relay. Crooked as a hat-stand. Cash works. So does threats.",
                 "404's resident skim merchant. Small bribes, share-of-score, audit threats.",
-                "Vince Brogan, opportunist. He'll take a bribe — or rob you outright. Be careful.",
+                "Vince Brogan, opportunist. He'll take a bribe  or rob you outright. Be careful.",
             ],
         }
         bus.emit(EVT_BAX_SPEAK, line=random.choice(
