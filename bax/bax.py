@@ -3,7 +3,7 @@ import random
 from collections import deque
 from bax.vocabulary_vault import VocabularyVault
 from bax.mixologist import Mixologist
-from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
+from core.event_bus import (bus, Subscriber, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_TETHER_HIT, EVT_TETHER_SNAP,
                              EVT_MODULE_UNBOLTED, EVT_BAX_SPEAK,
                              EVT_NLP_EXPLOIT, EVT_SLINGSHOT,
@@ -286,6 +286,27 @@ _FIRST_BARGE_KILL_OF_RUN = [
     "First barge of the run goes BOOM. I'd buy you a drink if I had a stomach. Or money.",
 ]
 
+# Epic 7.3 — per-pool voice mode tags. Pools not listed default to "standard".
+# Modes consumed by audio_manager._on_bax_speak to shift pitch/volume:
+#   standard         → baseline
+#   manic_glee       → pitch up a tier (combined with hull tier)
+#   dark_vulnerable  → quieter, no pitch boost (panic / corridor death)
+#   corridor_coach   → baseline (cadence-driven; no audio shift today)
+_LINE_MODE: dict[str, str] = {
+    "sustained_fire":         "manic_glee",
+    "first_barge_kill":       "manic_glee",
+    "barge_destroyed":        "manic_glee",
+    "first_kill_of_sector":   "manic_glee",
+    "corridor_secret":        "manic_glee",
+    "dock_perfect":           "manic_glee",
+    "panic_under_10":         "dark_vulnerable",
+    "low_hull":               "dark_vulnerable",
+    "corridor_death":         "dark_vulnerable",
+    "corridor_run":           "corridor_coach",
+    "corridor_jump":          "corridor_coach",
+}
+
+
 _FIRST_KILL_OF_SECTOR = [
     "First kill of the sector. Knew you had it in you, mate.",
     "Right — that's one. The rest of 'em saw what you did. They're worried.",
@@ -437,7 +458,7 @@ _DOCK_ROUGH = [
 ]
 
 
-class Bax:
+class Bax(Subscriber):
     """
     Rusted Cockney droid bolted to the dash.
     Navigator, mechanic, and primary liability.
@@ -448,6 +469,7 @@ class Bax:
     _GRACE     = 5.0    # no contextual lines in first few seconds
 
     def __init__(self, ship, meta):
+        super().__init__()
         self.ship        = ship
         self._meta       = meta
         self.vault       = VocabularyVault()
@@ -494,6 +516,9 @@ class Bax:
             available = pool
         line = random.choice(available)
         seen.append(line)
+        # Epic 7.3 — record the mode for the next speak() so audio_manager
+        # can colour Bax's voice (pitch/volume) without changing call sites.
+        self._next_mode = _LINE_MODE.get(pool_name, "standard")
         return line
 
     def _ctx_ok(self, key: str, cooldown: float) -> bool:
@@ -505,50 +530,50 @@ class Bax:
 
     # ------------------------------------------------------------------
     def _wire_events(self):
-        bus.subscribe(EVT_HULL_DAMAGE,     self._on_hull_damage)
-        bus.subscribe(EVT_HULL_CRITICAL,   self._on_hull_critical)
-        bus.subscribe(EVT_TETHER_HIT,      self._on_tether_hit)
-        bus.subscribe(EVT_TETHER_SNAP,     self._on_tether_snap)
-        bus.subscribe(EVT_THRUSTER_OVERHEAT, self._on_thruster_overheat)
-        bus.subscribe(EVT_MODULE_UNBOLTED, self._on_module_unbolted)
-        bus.subscribe(EVT_NLP_EXPLOIT,     self._on_exploit_found)
-        bus.subscribe(EVT_SLINGSHOT,        self._on_slingshot)
-        bus.subscribe(EVT_BARGE_NEARBY,    self._on_barge_nearby)
-        bus.subscribe(EVT_CANISTER_GRAB,   self._on_canister_grab)
-        bus.subscribe(EVT_COMMS_INTERCEPT,  self._on_comms_intercept)
-        bus.subscribe(EVT_DEBRIS_SHOWER,    self._on_debris_shower)
-        bus.subscribe(EVT_SCAN_PING,        self._on_scan_ping)
-        bus.subscribe(EVT_GUN_MALFUNCTION,  self._on_gun_malfunction)
-        bus.subscribe(EVT_SPORE_INVERTED,   self._on_spore_inverted)
-        bus.subscribe(EVT_BARGE_INTERCEPT,  self._on_barge_intercept)
-        bus.subscribe(EVT_KRESS_DIALLED,    self._on_kress_dialled)
-        bus.subscribe(EVT_SATELLITE_HIT,    self._on_satellite_hit)
-        bus.subscribe(EVT_ALIEN_SIGHTING,   self._on_alien_sighting)
-        bus.subscribe(EVT_TORCH_ACTIVE,     self._on_torch_active)
-        bus.subscribe(EVT_HARPOON_ARMING,   self._on_harpoon_arming)
-        bus.subscribe(EVT_SHIP_DESTROYED,   self._on_ship_destroyed)
-        bus.subscribe(EVT_RUN_START,        self._on_run_start)
-        bus.subscribe(EVT_SHOP_ENTER,       self._on_shop_enter)
-        bus.subscribe(EVT_SHOP_BUY,         self._on_shop_buy)
-        bus.subscribe(EVT_SHOP_SKIP,        self._on_shop_skip)
-        bus.subscribe(EVT_FINAL_SECTOR,     self._on_final_sector)
-        bus.subscribe(EVT_SECTOR_START,     self._on_sector_start)
-        bus.subscribe(EVT_GUN_FIRE,         self._on_gun_fire)
-        bus.subscribe(EVT_BARGE_KILLED,     self._on_barge_killed)
-        bus.subscribe(EVT_CORRIDOR_RUN,     self._on_corridor_run)
-        bus.subscribe(EVT_CORRIDOR_JUMP,    self._on_corridor_jump)
-        bus.subscribe(EVT_CORRIDOR_SECRET,  self._on_corridor_secret)
-        bus.subscribe(EVT_CORRIDOR_DEATH,   self._on_corridor_death)
-        bus.subscribe(EVT_DOCK_APPROACH,    self._on_dock_approach)
-        bus.subscribe(EVT_DOCK_PERFECT,     self._on_dock_perfect)
-        bus.subscribe(EVT_DOCK_ROUGH,       self._on_dock_rough)
+        self.subscribe(EVT_HULL_DAMAGE,     self._on_hull_damage)
+        self.subscribe(EVT_HULL_CRITICAL,   self._on_hull_critical)
+        self.subscribe(EVT_TETHER_HIT,      self._on_tether_hit)
+        self.subscribe(EVT_TETHER_SNAP,     self._on_tether_snap)
+        self.subscribe(EVT_THRUSTER_OVERHEAT, self._on_thruster_overheat)
+        self.subscribe(EVT_MODULE_UNBOLTED, self._on_module_unbolted)
+        self.subscribe(EVT_NLP_EXPLOIT,     self._on_exploit_found)
+        self.subscribe(EVT_SLINGSHOT,        self._on_slingshot)
+        self.subscribe(EVT_BARGE_NEARBY,    self._on_barge_nearby)
+        self.subscribe(EVT_CANISTER_GRAB,   self._on_canister_grab)
+        self.subscribe(EVT_COMMS_INTERCEPT,  self._on_comms_intercept)
+        self.subscribe(EVT_DEBRIS_SHOWER,    self._on_debris_shower)
+        self.subscribe(EVT_SCAN_PING,        self._on_scan_ping)
+        self.subscribe(EVT_GUN_MALFUNCTION,  self._on_gun_malfunction)
+        self.subscribe(EVT_SPORE_INVERTED,   self._on_spore_inverted)
+        self.subscribe(EVT_BARGE_INTERCEPT,  self._on_barge_intercept)
+        self.subscribe(EVT_KRESS_DIALLED,    self._on_kress_dialled)
+        self.subscribe(EVT_SATELLITE_HIT,    self._on_satellite_hit)
+        self.subscribe(EVT_ALIEN_SIGHTING,   self._on_alien_sighting)
+        self.subscribe(EVT_TORCH_ACTIVE,     self._on_torch_active)
+        self.subscribe(EVT_HARPOON_ARMING,   self._on_harpoon_arming)
+        self.subscribe(EVT_SHIP_DESTROYED,   self._on_ship_destroyed)
+        self.subscribe(EVT_RUN_START,        self._on_run_start)
+        self.subscribe(EVT_SHOP_ENTER,       self._on_shop_enter)
+        self.subscribe(EVT_SHOP_BUY,         self._on_shop_buy)
+        self.subscribe(EVT_SHOP_SKIP,        self._on_shop_skip)
+        self.subscribe(EVT_FINAL_SECTOR,     self._on_final_sector)
+        self.subscribe(EVT_SECTOR_START,     self._on_sector_start)
+        self.subscribe(EVT_GUN_FIRE,         self._on_gun_fire)
+        self.subscribe(EVT_BARGE_KILLED,     self._on_barge_killed)
+        self.subscribe(EVT_CORRIDOR_RUN,     self._on_corridor_run)
+        self.subscribe(EVT_CORRIDOR_JUMP,    self._on_corridor_jump)
+        self.subscribe(EVT_CORRIDOR_SECRET,  self._on_corridor_secret)
+        self.subscribe(EVT_CORRIDOR_DEATH,   self._on_corridor_death)
+        self.subscribe(EVT_DOCK_APPROACH,    self._on_dock_approach)
+        self.subscribe(EVT_DOCK_PERFECT,     self._on_dock_perfect)
+        self.subscribe(EVT_DOCK_ROUGH,       self._on_dock_rough)
         # Epic 11.2 / 11.4 — skill events + NPC opinions on terminal open
-        bus.subscribe(EVT_CLOSE_CALL,          self._on_close_call)
-        bus.subscribe(EVT_SKILL_MANEUVER,      self._on_skill_maneuver)
-        bus.subscribe(EVT_LONG_FIGHT_SURVIVED, self._on_long_fight_survived)
-        bus.subscribe(EVT_FIRST_TETHER_SNAP,   self._on_first_tether_snap)
-        bus.subscribe(EVT_TERMINAL_OPEN,       self._on_terminal_open)
-        bus.subscribe(EVT_UNLOCK_EARNED,       self._on_unlock_earned)
+        self.subscribe(EVT_CLOSE_CALL,          self._on_close_call)
+        self.subscribe(EVT_SKILL_MANEUVER,      self._on_skill_maneuver)
+        self.subscribe(EVT_LONG_FIGHT_SURVIVED, self._on_long_fight_survived)
+        self.subscribe(EVT_FIRST_TETHER_SNAP,   self._on_first_tether_snap)
+        self.subscribe(EVT_TERMINAL_OPEN,       self._on_terminal_open)
+        self.subscribe(EVT_UNLOCK_EARNED,       self._on_unlock_earned)
 
     def update(self, dt: float):
         self._t       += dt
@@ -610,7 +635,9 @@ class Bax:
     def speak(self, line: str):
         if self._speak_cd > 0:
             return
-        bus.emit(EVT_BAX_SPEAK, line=line)
+        mode = getattr(self, "_next_mode", "standard")
+        self._next_mode = "standard"
+        bus.emit(EVT_BAX_SPEAK, line=line, mode=mode)
         self._speak_cd = 3.2
 
     # ------------------------------------------------------------------

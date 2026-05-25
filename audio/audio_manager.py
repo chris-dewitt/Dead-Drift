@@ -232,6 +232,8 @@ class AudioManager:
         self._voices:   dict[str, list[pygame.mixer.Sound]] = {}
         # Epic 7.4 — Bax voice hull-tier variants (higher pitch under damage)
         self._bax_voice_tiers: list[list[pygame.mixer.Sound]] = []
+        # Epic 7.3 — current Bax line mode (set on EVT_BAX_SPEAK)
+        self._bax_mode: str = "standard"
 
         self._master      = 0.70
         self._in_terminal = False
@@ -1145,20 +1147,32 @@ class AudioManager:
 
     def _play_voice_blip(self, speaker: str, channel: pygame.mixer.Channel | None):
         key = resolve_voice_key(speaker or "")
-        # Bax under damage: voice pitches up (Epic 7.4).
+        vol_scale = 1.0
+        # Bax: combine hull tier (Epic 7.4) with line mode (Epic 7.3).
         if key == "bax" and self._bax_voice_tiers:
             if self._hull_pct < 0.10:
-                blips = self._bax_voice_tiers[2]   # +12%
+                hull_tier = 2   # +12%
             elif self._hull_pct < 0.30:
-                blips = self._bax_voice_tiers[1]   # +5%
+                hull_tier = 1   # +5%
             else:
-                blips = self._bax_voice_tiers[0]   # baseline
+                hull_tier = 0   # baseline
+            # Mode adjustments:
+            #   manic_glee bumps tier up one (capped at 2)
+            #   dark_vulnerable drops volume; keeps tier
+            mode = self._bax_mode
+            if mode == "manic_glee":
+                tier = min(2, hull_tier + 1)
+            else:
+                tier = hull_tier
+            if mode == "dark_vulnerable":
+                vol_scale = 0.72
+            blips = self._bax_voice_tiers[tier]
         else:
             blips = self._voices.get(key) or self._voices.get("default")
         if not blips or channel is None:
             return
         snd = random.choice(blips)
-        channel.set_volume(self._master * self._VOICE_BLIP_VOL)
+        channel.set_volume(self._master * self._VOICE_BLIP_VOL * vol_scale)
         channel.play(snd)
 
     # ------------------------------------------------------------------
@@ -1232,13 +1246,14 @@ class AudioManager:
         # spaced by the emitter, so no cooldown needed here.
         self._play_sfx("torch_clap", 0.50)
 
-    def _on_bax_speak(self, line: str = "", **_):
+    def _on_bax_speak(self, line: str = "", mode: str = "standard", **_):
         if not line:
             return
         self._bax_speaking  = True
         self._bax_speak_t   = 0.0
         self._bax_speak_dur = len(line) / _BAX_CHARS_PER_SEC
         self._bax_blip_cd   = 0.0
+        self._bax_mode      = mode or "standard"
 
     def _on_comms_speak(self, speaker: str = "", line: str = "", **_):
         """Duck music for radio/comms lines (Kress, Medi-Corp, etc.)."""
