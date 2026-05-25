@@ -55,6 +55,16 @@ class Game:
         # Route every pygame.font.SysFont("monospace", ...) call through
         # the bundled DejaVu Sans Mono with a +2pt size bump.
         install_font_patch()
+        # Epic 1.10 — kick the NLTK download off the main thread the
+        # moment we boot. The menu opens immediately; the splash + Bax
+        # line only appear if the player tries to open a terminal before
+        # the download finishes.
+        try:
+            from terminal import nlp_bootstrap
+            if not nlp_bootstrap.already_present():
+                nlp_bootstrap.start_in_background()
+        except Exception:
+            pass
         self.screen  = pygame.display.set_mode((S.SCREEN_W, S.SCREEN_H))
         pygame.display.set_caption(S.TITLE)
         self.clock   = pygame.time.Clock()
@@ -139,6 +149,13 @@ class Game:
         # Bax's Records (Epic 8.3) — main-menu folder with 4 tabs.
         self._records_tab:    int = 0
         self._records_scroll: int = 0
+
+        # Epic 1.10 — NLP linguistic-processor splash. Set the first time a
+        # terminal opens while the NLTK bootstrap is still in flight; cleared
+        # once the bootstrap reports ready.
+        self._nlp_splash_active:    bool  = False
+        self._nlp_splash_t:         float = 0.0
+        self._nlp_warmup_line_fired: bool = False
 
         self._wire_events()
 
@@ -927,6 +944,9 @@ class Game:
             # Terminal win overlay — show outcome message before returning to flight
             if self._terminal_win_hold_t > 0 and self._terminal_win_str:
                 self._render_terminal_win_overlay()
+            # Epic 1.10 — splash overlay while NLTK data is being fetched
+            # in the background. Non-blocking — player can still type.
+            self._maybe_render_nlp_splash()
 
         elif state == GameState.LOADOUT_DRAFT:
             self.run_mgr.draft.render(self.screen)
@@ -2264,6 +2284,87 @@ class Game:
                 ds = font_sm.render(dline, True,
                                     tuple(int(c * dim * 0.8) for c in accent))
                 self.screen.blit(ds, (cx_card + 6, cy + 40 + j * 14))
+
+    # ------------------------------------------------------------------
+    def _maybe_render_nlp_splash(self):
+        """Epic 1.10 — overlay shown while the NLTK bootstrap is downloading.
+
+        First time a terminal opens before the bootstrap has finished:
+          * fire a one-shot Bax warm-up line,
+          * paint a 'LINGUISTIC PROCESSOR INITIALISING — STAND BY' card
+            with the current package name + a small spinner.
+
+        Once `nlp_bootstrap.is_ready()` flips, the splash fades and is
+        cleared. The terminal stays usable throughout — the parser falls
+        back to regex tokenisation while the bundle is still in flight.
+        """
+        try:
+            from terminal import nlp_bootstrap
+        except Exception:
+            return
+
+        if nlp_bootstrap.is_ready():
+            if self._nlp_splash_active:
+                self._nlp_splash_active = False
+                self._nlp_splash_t      = 0.0
+            return
+
+        # Arm on first terminal-state render after boot, before the
+        # bootstrap finishes.
+        if not self._nlp_splash_active:
+            self._nlp_splash_active = True
+            self._nlp_splash_t      = 0.0
+            if not self._nlp_warmup_line_fired:
+                self._nlp_warmup_line_fired = True
+                bus.emit(EVT_BAX_SPEAK, priority=True,
+                         line="Right, give us a sec — the comms array's still warmin' up.")
+
+        self._nlp_splash_t += self._dt
+
+        # Card centred horizontally, near the top of the terminal area.
+        card_w, card_h = 460, 78
+        cx = S.SCREEN_W // 2
+        card_y = 96
+        card = pygame.Rect(cx - card_w // 2, card_y, card_w, card_h)
+
+        backdrop = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+        backdrop.fill((6, 14, 8, 230))
+        self.screen.blit(backdrop, card.topleft)
+        pygame.draw.rect(self.screen, (40, 220, 90), card, 1)
+        for c, sx, sy in (
+            (card.topleft, 1, 1), (card.topright, -1, 1),
+            (card.bottomleft, 1, -1), (card.bottomright, -1, -1),
+        ):
+            pygame.draw.line(self.screen, (60, 240, 110),
+                             c, (c[0] + sx * 14, c[1]), 2)
+            pygame.draw.line(self.screen, (60, 240, 110),
+                             c, (c[0], c[1] + sy * 14), 2)
+
+        font_h = pygame.font.SysFont("monospace", 12, bold=True)
+        font_v = pygame.font.SysFont("monospace", 11)
+
+        title = font_h.render(
+            "LINGUISTIC PROCESSOR INITIALISING — STAND BY",
+            True, (90, 255, 130))
+        self.screen.blit(title, (cx - title.get_width() // 2, card.top + 12))
+
+        label = nlp_bootstrap.progress_label()
+        remaining = nlp_bootstrap.packages_remaining()
+        sub = font_v.render(
+            f"{label}     ({remaining} package{'s' if remaining != 1 else ''} pending)",
+            True, (140, 200, 160))
+        self.screen.blit(sub, (cx - sub.get_width() // 2, card.top + 36))
+
+        spin_chars = "|/-\\"
+        spinner = spin_chars[int(self._nlp_splash_t * 8) % len(spin_chars)]
+        sp = font_h.render(spinner, True, (90, 255, 130))
+        self.screen.blit(sp, (card.right - 22, card.top + 12))
+
+        # Soft scanline strip drifting through the card to feel diegetic.
+        strip_y = card.top + int((self._nlp_splash_t * 60) % card.h)
+        pygame.draw.line(self.screen, (90, 255, 130, 80),
+                         (card.left + 4, strip_y),
+                         (card.right - 4, strip_y), 1)
 
     # ------------------------------------------------------------------
     def _render_menu_propaganda(self, t: float):

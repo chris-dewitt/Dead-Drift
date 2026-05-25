@@ -15,7 +15,7 @@
 | Epic | Done | Partial | Open | Notes |
 |------|------|---------|------|-------|
 | **Phase 0** — Trust fixes | 5 | 0 | 0 | Shipped: controls/trust blockers closed |
-| **1** — Code hygiene | 6 | 2 | 2 | Font cache + NLTK lazy still open |
+| **1** — Code hygiene | 7 | 2 | 1 | NLTK lazy bootstrap shipped; remaining gap = font-cache cleanup |
 | **2** — Flight feel | 7 | 0 | 0 | Flight-feel pass complete |
 | **3** — Sector variety | 3 | 3 | 0 | Themes drive hazards; collapsing well + debris cloud now also wired from `SectorLayout.hazards` |
 | **4** — Corridor | 6 | 3 | 0 | Framework shipped; black wipe + `ENTERING:` caption + end-card stats live; music remains open |
@@ -169,8 +169,21 @@ Don't bother below ~10 calls/frame paths; the rest aren't hot.
 
 ### 1.9 Move `random` import to module top in `ship/loadout.py` — [x]
 
-### 1.10 NLTK lazy bootstrap with splash — [ ]
+### 1.10 NLTK lazy bootstrap with splash — [x]
 Today `main.py` blocks at startup downloading NLTK data with zero in-game feedback. Move the bootstrap behind a lazy load triggered on first terminal-open. While packages download, render an in-game splash overlay ("LINGUISTIC PROCESSOR INITIALIZING — STAND BY") with a brief Bax line: *"Right, give us a sec — the comms array's still warmin' up."* Boot to main menu instantly; defer the download.
+
+**May 2026:** Shipped. `terminal/nlp_bootstrap.py` runs the four-package
+download on a daemon thread; `main.py` no longer blocks at import (the
+old `_bootstrap_nltk` is gone). `Game.__init__` calls
+`nlp_bootstrap.start_in_background()` right after `pygame.init()` (only
+if `already_present()` is False, so warm boots are zero-cost).
+`Game._maybe_render_nlp_splash()` paints the green-amber `LINGUISTIC
+PROCESSOR INITIALISING — STAND BY` card with the current package label,
+a pending count, and a small spinner; first activation fires the
+priority Bax line via `EVT_BAX_SPEAK`. The parser already degrades
+gracefully so the player can still type while the bundle is in flight,
+and the splash auto-clears once `is_ready()` flips. Tests cover the
+public API, idempotent thread spawn, and the renderer wiring.
 
 ### 1.11 EpistemologicalShrooms passive growth bug — [x]
 `cargo/epi_shrooms.py:update` grows `spore_level` purely on time (`+= dt * 0.018`), reaching max in ~55 seconds regardless of damage. The docstring claims damage drives it. Either:

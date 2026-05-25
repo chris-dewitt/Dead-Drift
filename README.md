@@ -20,7 +20,11 @@ python test_stage.py  # dev — jump to a specific screen/sector
 python audio_dev.py   # dev — tune procedural audio
 ```
 
-**First launch:** `main.py` downloads NLTK data before the game loop (terminal NLP). Sandbox flight without that: `play.py`.
+**First launch:** `main.py` boots the menu instantly. The terminal NLP
+data is fetched on a background thread; if you open a terminal before
+it lands you'll see a brief `LINGUISTIC PROCESSOR INITIALISING — STAND
+BY` splash and the parser falls back to regex tokenisation in the
+meantime. Sandbox flight without NLTK at all: `play.py`.
 
 **Saves:** Three campaign slots under `data/saves/`. Mid-run checkpoints autosave every **25 seconds** in flight and on sector/shop transitions. Legacy `data/run_history.json` migrates into slot 1 on first launch.
 
@@ -175,8 +179,11 @@ Spec + implementation status → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLA
 
 ## Known issues / open polish
 
-- NLTK bootstrap is still eager on `main.py` first launch; lazy in-game splash remains open (Epic 1.10)
 - Per-chapter corridor music tracks (Epic 4.6) and full string audit (Epic 9.4) still open
 - Cargo dossier carousel (Epic 8.2) and Hardcore variant (Epic 8.4 stretch) still open
+- Several `Epic 1.2` font-cache adoption hot paths still call raw `SysFont`
+  inside per-frame draws (cleanup in progress).
 
-(Market and docking graphics passes shipped May 2026 — see `docs/DOCUMENTATION_STATUS.md`.)
+(Market + docking graphics, Bax's Records (Epic 8.3), and the lazy NLTK
+bootstrap (Epic 1.10) all shipped May 2026 — see
+`docs/DOCUMENTATION_STATUS.md`.)
