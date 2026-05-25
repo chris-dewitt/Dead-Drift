@@ -13,6 +13,7 @@ from delivery.corridor.elements import (
     OneWayWall, NPCEncounter, Collectible, Secret, Checkpoint,
     BossRoomTrigger,
     SteamVent, Tripwire, SecurityBeam,
+    BossRoomActor, boss_actor_compliance_tribunal,
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H,
 )
 from delivery.corridor.base import Room, Corridor
@@ -29,6 +30,17 @@ _PAL_R1 = {
     "brick":         (120, 100, 40),
     "brick_hi":      (255, 230, 120),
     "light":         (255, 240, 140),
+    # Epic 10.4 — government grey-beige fluorescent wash
+    "light_tint":    (220, 210, 140),
+    "light_alpha":   16,
+    "deep_struct":   (40,  40,  20),
+    "panel_num":     (180, 170,  80),
+    "crack":         (60,  60,  30),
+    "branding":      (90,  90,  50),
+    "scrub":         (60,  50,  20),
+    "floor_grid":    (90,  80,  40),
+    "floor_wear":    (60,  56,  28),
+    "drip":          (180, 170,  60),
 }
 _PAL_R2 = {
     "bg":            (8, 8, 6),
@@ -713,6 +725,10 @@ def build() -> Corridor:
             "You're — you're physically here? In my office? With the forms? Fine. Sign the ledger.",
             _DISPATCHER_RESPONSES,
         ),
+        # Epic 14.1 — Compliance Tribunal: three officials reading
+        # Form 7-B aloud. Heads scan in slow sync. APPROVED / DENIED
+        # alternates above them.
+        BossRoomActor(420, boss_actor_compliance_tribunal),
     ]
     room3 = Room(
         length     = 500,

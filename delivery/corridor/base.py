@@ -490,6 +490,11 @@ class Corridor:
             room.bg_draw_fn(surf, self._cam_x, t, pal)
         else:
             self._draw_default_bg(surf, t, pal)
+        # Epic 10.4 — additive corridor visual layer: cracked / numbered
+        # panels, floor wear, drips, deep parallax, directional light.
+        # Renders behind everything else but on top of the per-room
+        # custom backdrop so chapter art still drives the look.
+        self._draw_corridor_decay(surf, t, pal, room)
 
         # Ceiling + floor
         pygame.draw.rect(surf, pal.get("ceiling_fill", (18, 30, 18)),
@@ -829,6 +834,122 @@ class Corridor:
             msg = msgs[(abs(wx) // 320) % len(msgs)]
             stencil = f_stencil.render(msg, True, pal.get("stencil", (0, 45, 22)))
             surf.blit(stencil, (wx, FLOOR_Y - 18))
+
+    # ── Epic 10.4 — corridor decay layer ────────────────────────────────
+    def _draw_corridor_decay(self, surf, t, pal, room):
+        """Cracked + numbered panels, floor wear, drips, deep parallax,
+        and per-room directional lighting. Additive — drawn after the
+        chapter's bespoke backdrop so chapter art still leads."""
+        # Layer A — deep second parallax: dim distant station structure.
+        # Painted on the wall band between CEIL_Y and FLOOR_Y, very dim.
+        deep_off = int(self._cam_x * 0.08) % 240
+        deep_col = pal.get("deep_struct", (0, 30, 18))
+        for px in range(-deep_off, CORRIDOR_W + 240, 240):
+            # Skeletal frame: vertical I-beam + cross-brace.
+            pygame.draw.line(surf, deep_col,
+                             (px + 60, CEIL_Y + 10),
+                             (px + 60, FLOOR_Y - 10), 1)
+            pygame.draw.line(surf, deep_col,
+                             (px + 60, CEIL_Y + 30),
+                             (px + 180, FLOOR_Y - 30), 1)
+            pygame.draw.line(surf, deep_col,
+                             (px + 60, FLOOR_Y - 30),
+                             (px + 180, CEIL_Y + 30), 1)
+            # Distant rectangular window — black hole in the wall.
+            win_h = 18
+            win_y = CEIL_Y + 70
+            pygame.draw.rect(surf, (4, 4, 8),
+                             pygame.Rect(px + 110, win_y, 28, win_h))
+
+        # Layer B — numbered + cracked wall panels. Sparse — every 4th
+        # default panel slot gets a number stamp + crack.
+        panel_w = 240
+        num_off = int(self._cam_x * 0.18) % panel_w
+        f_num = get_font(7, bold=True)
+        for px in range(-num_off, CORRIDOR_W + panel_w, panel_w):
+            slot = (abs(hash((px // panel_w, room.length))) % 5)
+            if slot == 0:
+                # Numbered plate + cracks
+                num_lbl = f_num.render(
+                    f"S-{(abs(hash((px, room.length))) % 99) + 1:02d}-C",
+                    True, pal.get("panel_num", (0, 90, 50)))
+                surf.blit(num_lbl, (px + 14, CEIL_Y + 28))
+                # Hairline crack
+                pygame.draw.line(surf, pal.get("crack", (0, 50, 30)),
+                                 (px + 8, CEIL_Y + 60),
+                                 (px + 22, CEIL_Y + 90), 1)
+                pygame.draw.line(surf, pal.get("crack", (0, 50, 30)),
+                                 (px + 22, CEIL_Y + 90),
+                                 (px + 14, CEIL_Y + 110), 1)
+            elif slot == 2:
+                # Scratched-off Nova Soma branding — rendered as faded
+                # block with diagonal scrub marks across it.
+                brand_rect = pygame.Rect(px + 16, CEIL_Y + 40, 60, 14)
+                pygame.draw.rect(surf, (16, 22, 18), brand_rect)
+                lbl = f_num.render("NOVA SOMA", True,
+                                   pal.get("branding", (60, 80, 60)))
+                surf.blit(lbl, (brand_rect.left + 2, brand_rect.top + 3))
+                # Scrub marks
+                for sx in range(brand_rect.left + 2, brand_rect.right, 6):
+                    pygame.draw.line(surf, pal.get("scrub", (40, 30, 20)),
+                                     (sx, brand_rect.top + 1),
+                                     (sx + 4, brand_rect.bottom - 1), 1)
+
+        # Layer C — floor wear: subtle grid + lightened high-traffic patches.
+        grid_off = int(self._cam_x * 0.7) % 32
+        floor_grid = pal.get("floor_grid", (0, 60, 30))
+        for sx in range(-grid_off, CORRIDOR_W + 32, 32):
+            pygame.draw.line(surf, floor_grid,
+                             (sx, FLOOR_Y + 1),
+                             (sx, CORRIDOR_H), 1)
+        # Worn patches every ~140 px — slight lighter overlay.
+        wear_off = int(self._cam_x * 0.7) % 280
+        wear_col = pal.get("floor_wear", (24, 36, 24))
+        for sx in range(-wear_off, CORRIDOR_W + 280, 280):
+            pygame.draw.ellipse(surf, wear_col,
+                                pygame.Rect(sx, FLOOR_Y + 4, 80, 8))
+
+        # Layer D — pipe drips: a couple of points along the ceiling that
+        # release a slow droplet every couple of seconds.
+        drip_col = pal.get("drip", (0, 110, 70))
+        for i, drip_world_x in enumerate((220, 760, 1320, 1880)):
+            sx = int(drip_world_x - self._cam_x * 1.0)
+            if sx < -20 or sx > CORRIDOR_W + 20:
+                continue
+            cycle = (t + i * 0.7) % 2.6
+            if cycle < 0.4:
+                # Pipe puddle highlight only.
+                pygame.draw.line(surf, drip_col,
+                                 (sx - 5, CEIL_Y + 22),
+                                 (sx + 5, CEIL_Y + 22), 1)
+            elif cycle < 1.6:
+                # Drop falling.
+                fall_pct = (cycle - 0.4) / 1.2
+                drop_y = int(CEIL_Y + 22 + fall_pct * (FLOOR_Y - CEIL_Y - 28))
+                pygame.draw.circle(surf, drip_col, (sx, drop_y), 2)
+            else:
+                # Splash on floor.
+                radius = int(2 + 2 * (cycle - 1.6))
+                pygame.draw.circle(surf, drip_col,
+                                   (sx, FLOOR_Y - 4), radius, 1)
+
+        # Layer E — directional lighting overlay. Each room can declare:
+        #   "light_tint": (r, g, b)  e.g. (60, 90, 150) for cold blue
+        #   "light_alpha": int 0..255
+        # Default chapters can opt-in by adding the keys; otherwise no-op.
+        tint = pal.get("light_tint")
+        if tint is not None:
+            alpha = int(pal.get("light_alpha", 32))
+            tint_surf = pygame.Surface((CORRIDOR_W, CORRIDOR_H), pygame.SRCALPHA)
+            tint_surf.fill((tint[0], tint[1], tint[2], alpha))
+            surf.blit(tint_surf, (0, 0))
+
+        # Layer F — red emergency wash when invert / spore-zone is active.
+        if self._invert_t > 0:
+            wash = pygame.Surface((CORRIDOR_W, CORRIDOR_H), pygame.SRCALPHA)
+            pulse = 0.5 + 0.5 * math.sin(t * 6.0)
+            wash.fill((180, 30, 30, int(40 + 30 * pulse)))
+            surf.blit(wash, (0, 0))
 
     def _draw_player(self, surf, t):
         px       = _PLAYER_X_FIXED

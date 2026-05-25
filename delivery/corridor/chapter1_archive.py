@@ -12,6 +12,7 @@ from delivery.corridor.elements import (
     Platform, MovingPlatform, Hazard, MovingHazard, Ladder,
     NPCEncounter, Collectible, Secret, Checkpoint, BossRoomTrigger,
     SteamVent, Tripwire, SecurityBeam,
+    BossRoomActor, boss_actor_gary_den,
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H,
 )
 from delivery.corridor.base import Room, Corridor, STAR_3_TIME, STAR_2_TIME
@@ -29,6 +30,17 @@ _PAL_R1 = {
     "brick":         (160, 60,  20),
     "brick_hi":      (255, 180,  70),
     "light":         (255, 140,  80),
+    # Epic 10.4 — directional light overlay + decay layer keys
+    "light_tint":    (210, 120,  60),   # warm amber dock lighting
+    "light_alpha":   18,
+    "deep_struct":   (50,  20,  10),
+    "panel_num":     (200, 90,  40),
+    "crack":         (60,  20,  10),
+    "branding":      (90,  60,  40),
+    "scrub":         (60,  30,  20),
+    "floor_grid":    (90,  40,  20),
+    "floor_wear":    (60,  34,  18),
+    "drip":          (255, 140,  60),
 }
 _PAL_R2 = {
     "bg":            (8,  4,  8),
@@ -535,6 +547,9 @@ def build() -> Corridor:
             180,
             bax_line="There's Gary. Off-duty Gary. He's gonna pretend he doesn't know us. Play along.",
         ),
+        # Epic 14.1 — Gary's den tableau: Gary at his desk eating, harpoon
+        # controller dropped on the table, 'NOT NOW' sign on the wall.
+        BossRoomActor(280, boss_actor_gary_den),
     ]
     room3 = Room(
         length     = r3_len,
