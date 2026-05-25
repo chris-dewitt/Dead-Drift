@@ -2,7 +2,8 @@ from __future__ import annotations
 import math
 import pygame
 from config import settings as S
-from core.event_bus import bus, EVT_BAX_SPEAK, EVT_COMMS_SPEAK, EVT_DEBT_UPDATE, EVT_HULL_DAMAGE
+from core.event_bus import (bus, Subscriber, EVT_BAX_SPEAK, EVT_COMMS_SPEAK,
+                            EVT_DEBT_UPDATE, EVT_HULL_DAMAGE)
 
 _STRIP_TOP = S.SCREEN_H - S.COCKPIT_H   # y=640
 _INFO_W    = 162                          # left info panel width
@@ -40,7 +41,7 @@ def _hsv(h, s=1.0, v=1.0):
     return (int(r*255), int(g*255), int(b*255))
 
 
-class CockpitRenderer:
+class CockpitRenderer(Subscriber):
     """
     Bottom strip — info panel (left) · speech (centre) · Bax portrait (right).
     Handles Bax speech and external comms (KRESS, bill collectors).
@@ -49,6 +50,7 @@ class CockpitRenderer:
 
     def __init__(self, surface: pygame.Surface,
                  ship=None, run_mgr=None, meta=None):
+        super().__init__()
         self.surface  = surface
         self._ship    = ship
         self._run_mgr = run_mgr
@@ -75,10 +77,10 @@ class CockpitRenderer:
         self._dmg_cd         = 0.0   # cooldown between reactions (1.5s)
         self._hull_flicker_t = 0.0   # persistent flicker phase
 
-        bus.subscribe(EVT_BAX_SPEAK,   self._on_bax_speak)
-        bus.subscribe(EVT_COMMS_SPEAK, self._on_comms_speak)
-        bus.subscribe(EVT_DEBT_UPDATE, self._on_debt_update)
-        bus.subscribe(EVT_HULL_DAMAGE, self._on_hull_damage_cockpit)
+        self.subscribe(EVT_BAX_SPEAK,   self._on_bax_speak)
+        self.subscribe(EVT_COMMS_SPEAK, self._on_comms_speak)
+        self.subscribe(EVT_DEBT_UPDATE, self._on_debt_update)
+        self.subscribe(EVT_HULL_DAMAGE, self._on_hull_damage_cockpit)
 
     # ------------------------------------------------------------------
     def _on_bax_speak(self, line: str, priority: bool = False, **_):

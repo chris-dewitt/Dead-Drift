@@ -30,6 +30,37 @@ class EventBus:
 # Global singleton — import and use anywhere.
 bus = EventBus()
 
+
+class Subscriber:
+    """
+    Mixin for any system that owns event subscriptions and may be torn down
+    or rebuilt (Epic 1.4).  Track subscriptions made via self.subscribe() so
+    unsubscribe_all() can release them in one call — prevents handlers on
+    dead instances firing after a rebuild.
+
+    Usage:
+        class Bax(Subscriber):
+            def __init__(self):
+                super().__init__()
+                self.subscribe(EVT_HULL_DAMAGE, self._on_hull_damage)
+                ...
+
+            def teardown(self):
+                self.unsubscribe_all()
+    """
+
+    def __init__(self):
+        self._subscriptions: list[tuple[str, Callable]] = []
+
+    def subscribe(self, event: str, callback: Callable) -> None:
+        bus.subscribe(event, callback)
+        self._subscriptions.append((event, callback))
+
+    def unsubscribe_all(self) -> None:
+        for event, callback in self._subscriptions:
+            bus.unsubscribe(event, callback)
+        self._subscriptions.clear()
+
 # --- Canonical event names ---
 EVT_HULL_DAMAGE    = "hull_damage"       # payload: amount
 EVT_HULL_CRITICAL  = "hull_critical"     # payload: hp
