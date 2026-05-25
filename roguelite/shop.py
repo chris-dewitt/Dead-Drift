@@ -474,8 +474,11 @@ class ShopScreen:
                 ss = _font(9, bold=True).render(f"SHORT {short:,}", True, (140, 44, 44))
                 surf.blit(ss, (row.right - ss.get_width() - 14, item_y + 50))
             elif selected and can_buy:
-                ok = _font(9, bold=True).render("CREDIT LINE OK", True, (55, 150, 72))
-                surf.blit(ok, (row.right - ok.get_width() - 14, item_y + 50))
+                cur_debt = self.run_mgr.meta.debt
+                after    = cur_debt + item.cost
+                proj = _font(9, bold=True).render(
+                    f"DEBT  {cur_debt:,} → {after:,}", True, (55, 150, 72))
+                surf.blit(proj, (row.right - proj.get_width() - 14, item_y + 50))
 
             item_y += 94
 
