@@ -249,6 +249,17 @@ class CorruptRep(BaseNPC):
             "Annoyin'.",
             "Eddie Marlowe — you know Eddie? Quotes the Charter at me. "
             "Like THAT'S the problem 'ere.",
+            # Aliveness B.7 — Vinny's running, specific contempt for Eddie
+            "Eddie's filed THREE grievances on me this quarter. Three. "
+            "*sips* I keep 'em pinned on the bulkhead. Best reviews I ever got.",
+            "Eddie still believes in the Charter. *quiet wonder* "
+            "I find that beautiful. I find that USEFUL. He spends ten "
+            "minutes explainin' Section 4 to every courier — gives me time "
+            "to clean me boots.",
+            "Last time Eddie an' me were on the same intercept, "
+            "he wouldn't shake me hand. *chuckles* "
+            "I told him: comrade, the handshake is in the charter. "
+            "He filed grievance number four.",
             "I'm not the worst person on this barge, mind. "
             "You should meet me cousin.",
             "I do this job for the *opportunities*, courier. "

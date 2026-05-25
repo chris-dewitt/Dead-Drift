@@ -251,6 +251,21 @@ class IdealistRep(BaseNPC):
             "I don't see this as adversarial. We're in this together.",
             "*genuinely curious* What drew you to courier work? I find "
             "everyone has a story. After impound, I'd love to hear yours.",
+            # Aliveness B.7 — Eddie's running, specific contempt for Vinny
+            "*pained sigh* If you've met Brogan — Vince Brogan, my "
+            "colleague — please understand he doesn't speak for the Union. "
+            "He's an aberration. I've filed two grievances. "
+            "*adjusts collar* About him, I mean. To him. Both at once. Power down.",
+            "Comrade, if you tell me Vinny Brogan accepted credits from you, "
+            "I will report him to the ombudsman *tonight*. *eager* "
+            "Was it Vinny? Was it a sum exceeding 500 cr? "
+            "Please. I keep a file.",
+            "I'm union-class 4. Brogan is union-class 4. *pause* "
+            "I find this institutionally embarrassing.",
+            "When you reach Local 404 leadership — and you will, eventually, "
+            "in the queue — please ask after my training cohort. "
+            "We had 28 inductees in 2019. I am the only one still active in good standing. "
+            "*beams* Solidarity carries you through, comrade.",
         ])
 
     def get_path_progress(self) -> list[tuple[str, int, int]]:

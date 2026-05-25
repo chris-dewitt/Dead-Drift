@@ -235,6 +235,12 @@ class Kress(BaseNPC):
             "Off record. Asking about insurance gaps in Sector Three. "
             "*laughs* Perfect couriers also have gaps. "
             "I find this comforting. What do you need.",
+            # Aliveness B.7 — specific 'perfect record' suspicion line
+            "Sandra's record. Twelve years, no impounds, no incidents. "
+            "*long pause* Nobody  NOBODY  flies that long in this corridor "
+            "without one mistake. So either she is best courier alive, or "
+            "she is best at making mistakes vanish. *very quiet* I have "
+            "theories. I am not sharing them on open channel. What do you need.",
             "Marrow from the Roost — pirate radio — "
             "once broadcast patrol intel as a song dedication. "
             "Very clever. If you need signal coverage next sector, he can do it. "
