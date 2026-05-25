@@ -175,6 +175,8 @@ Spec + implementation status → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLA
 
 ## Known issues / open polish
 
-- Market graphics need another polish pass
-- Docking graphics can be pushed further
-- NLTK bootstrap is still eager on `main.py` first launch; lazy in-game splash remains open
+- NLTK bootstrap is still eager on `main.py` first launch; lazy in-game splash remains open (Epic 1.10)
+- Per-chapter corridor music tracks (Epic 4.6) and full string audit (Epic 9.4) still open
+- Cargo dossier carousel (Epic 8.2) and Hardcore variant (Epic 8.4 stretch) still open
+
+(Market and docking graphics passes shipped May 2026 — see `docs/DOCUMENTATION_STATUS.md`.)

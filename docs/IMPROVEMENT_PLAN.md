@@ -17,15 +17,15 @@
 | **Phase 0** — Trust fixes | 5 | 0 | 0 | Shipped: controls/trust blockers closed |
 | **1** — Code hygiene | 6 | 2 | 2 | Font cache + NLTK lazy still open |
 | **2** — Flight feel | 7 | 0 | 0 | Flight-feel pass complete |
-| **3** — Sector variety | 2 | 4 | 0 | Hazards via themes; collapsing well / debris cloud unwired |
-| **4** — Corridor | 5 | 4 | 0 | Framework shipped; music + full scoring card partial; movement/control bugs fixed |
-| **5** — Landing | 2 | 1 | 0 | Docking graphics shipped; Records/end-card hook remains partial |
+| **3** — Sector variety | 3 | 3 | 0 | Themes drive hazards; collapsing well + debris cloud now also wired from `SectorLayout.hazards` |
+| **4** — Corridor | 6 | 3 | 0 | Framework shipped; black wipe + `ENTERING:` caption + end-card stats live; music remains open |
+| **5** — Landing | 2 | 1 | 0 | Docking graphics shipped; end-card hook closed via Bax's Records |
 | **6** — Terminal polish | 8 | 0 | 0 | Complete: keystrokes, portraits, backdrops, outcome beats, chips, dossier, market, and cargo dialogue |
-| **7** — Bax | 1 | 2 | 2 | Lines mostly ported; portrait glow + hull pitch open |
-| **8** — Meta replay | 1 | 0 | 3 | Stepped death done; Records + carousel not built |
+| **7** — Bax | 2 | 1 | 1 | Hull-glow portrait + pitch tiers + reference past runs live; harmonica play-along open (see Epic 11) |
+| **8** — Meta replay | 2 | 0 | 2 | Stepped death + **Bax's Records (8.3)** shipped; cargo carousel + Hardcore stretch open |
 | **9** — Award push (see `NEXT_PUSH.md`) | 3 | 1 | 18 | 9.2 CRT visual overhaul + 9.3 popup gate + Nova Soma dossier parity shipped; 9.1 NPC cross-refs partial |
 
-**Rough overall:** ~63% complete · ~22% partial · ~14% not started (by checkbox count).
+**Rough overall:** ~67% complete · ~19% partial · ~14% not started (by checkbox count).
 
 ---
 
@@ -245,8 +245,8 @@ Result: runs that arrive at sector 5 fragile aren't curb-stomped; clean runs sti
 
 **Goal:** Every sector in a run feels genuinely different. The Nova Soma corporate-renaming flavor text gets to mean something — when a sector says "OPTIMISED COMPLIANCE ZONE, formerly THE WIDOW'S CROSSING," the gameplay there is recognizable. Crucial constraint: **the player must not feel overwhelmed.** Variety, not density. Each sector picks one or two signature elements and leans into them.
 
-### 3.1 Wire the five existing hazards — [~]
-`SectorLayout.hazards` is generated each sector and never read. Wire each into a real sector modifier (read by `RunManager` and `VectorRenderer`):
+### 3.1 Wire the five existing hazards — [x]
+`SectorLayout.hazards` is generated each sector and read by `RunManager` (per-frame) and `VectorRenderer`:
 
 - **`asteroid_field`** — `DEBRIS_COUNT × 1.6`, debris HP slightly higher (more shootable). Visual: denser dust haze, more drifting micro-particles in background.
 - **`solar_flare`** — every ~22 seconds, a screen-edge solar flare warning pulses for 2 seconds, then a 4-second sweep across the sector. While the sweep is active: HUD scramble pulse (one second of glitch), gun fizzles 3× more often, Bax: *"Solar flare incoming. Yeah, ROMANTIC. Shield your eyes, the ship has none."*
@@ -256,7 +256,7 @@ Result: runs that arrive at sector 5 fragile aren't curb-stomped; clean runs sti
 
 Lock: maximum **two hazards per sector**. The hazard count cap in `_pick_hazards` should be reduced from `1 + int(difficulty)` (currently scales up to 3) to **`min(2, 1 + (difficulty > 1.5))`** — i.e. one hazard at low difficulty, two at high. Difference-by-design, not chaos-by-default.
 
-**May 2026:** Obstacle logic is **theme-driven** in `run_manager`, not read from `SectorLayout.hazards`. Solar flare + toll — partial/full via themes. **`collapsing_gravity_well` and `debris_cloud` — not wired.** Asteroid density via Junk-Belt debris boost only.
+**May 2026:** Obstacle logic is theme-driven in `run_manager` for asteroid density / solar flare / toll, **plus** `_load_sector_obstacles` now also reads `sector.hazards` and instantiates `CollapsingGravityWell` and `DebrisCloud` when present. Both update each frame and the renderer pulls `run_mgr.debris_cloud` for the visibility overlay.
 
 ### 3.2 Six new obstacle classes — [~]
 
@@ -387,7 +387,7 @@ The Corridor must support every one of these as first-class concepts:
 - **Bax voice-over** — Bax narrates contextually throughout. Coach-mode commentary on jumps, panic on stealth-near-misses, glee on secrets. Lines drafted in `docs/BAX_VOICE.md` under "corridor" contexts.
 - **Boss room** — last 10–15 seconds of every corridor: small "act" before the cargo handover. The contact NPC is present (Gary for Ch.1, the lab tech for Ch.2, the dispatcher for Ch.3, the hotel concierge for Ch.4). Brief exchange, money changes hands, cargo drops.
 
-**May 2026:** Scrolling camera, checkpoints, branching, collectibles, secrets, NPC encounters, stealth zones, Bax lines — largely shipped. **Black wipe + "ENTERING: &lt;ROOM NAME&gt;" caption — not implemented.** Mini-terminal UX may need polish pass.
+**May 2026:** Scrolling camera, checkpoints, branching, collectibles, secrets, NPC encounters, stealth zones, Bax lines — largely shipped. Black wipe + `ENTERING: <ROOM NAME>` caption now drive the room transition (`_start_wipe_out` / `_do_room_transition` in `delivery/corridor/base.py`). Mini-terminal UX may still need a polish pass.
 
 ### 4.3 Visual style (hybrid) — [~]
 
@@ -442,7 +442,7 @@ At corridor completion, show a brief end-card:
 
 Roll these into the chapter's run summary and into Bax's Records (Epic 8).
 
-**May 2026:** Star rating (1–3) at corridor end — yes. Full end-card (time, collectibles/total, secrets, damage, bonus cr) — **not built.** Bax's Records hook — blocked on Epic 8.
+**May 2026:** Star rating (1–3) plus full end-card stats (time, damage taken, collectibles found / total, secrets, bonus credits) render at corridor end — see `_render_summary` in `delivery/corridor/base.py`. Lore scraps from `Secret` pickups now route through `EVT_LORE_FOUND` → `MetaProgression.add_lore_fragment` and surface in **Bax's Records → LORE FRAGMENTS** (Epic 8.3).
 
 ### 4.8 Corridor jump locomotion bug — [x]
 Player playtest note: in the corridor, jump currently reads like a vertical up/down hop from the same spot, which can leave the courier with no practical way to get off or across from that location. Jump should preserve normal horizontal movement and allow the player to leave the takeoff position, clear gaps, and exit platforms naturally.
@@ -591,13 +591,15 @@ Implementation direction:
 
 **See `docs/BAX_VOICE.md` for the full line bank, tone guide, and per-context drafts.**
 
-### 7.1 Cockpit portrait hull-damage glow — [ ]
+### 7.1 Cockpit portrait hull-damage glow — [x]
 
 Bax's portrait in the cockpit strip currently doesn't react visually to ship damage. Make it:
 
 - **Color gradient mapped to hull%:** at 100–60% hull, ambient amber glow around the portrait. At 60–30%, glow shifts to orange + light pulse on each hull-damage event. At < 30%, glow becomes red + persistent flicker.
 - **Diegetic deterioration on hits:** every `EVT_HULL_DAMAGE` event triggers a brief portrait reaction — eyes widen for 0.4 seconds, scanlines on the portrait glitch harder for 0.6 seconds, antenna sparks for 0.3 seconds. Repeated hits compound the glitch intensity (cooldown of 1.5 seconds before glitch resets).
 - **At < 10% hull:** portrait holds a "panic" expression statically — eyes wide, mouth open, antenna fully sparking. Bax's voice pitch shifts subtly higher in the audio system (see 7.4).
+
+**May 2026:** Shipped. `CockpitRenderer` subscribes to `EVT_HULL_DAMAGE`, drives an amber→orange→red ambient glow keyed on hull%, fires the eyes-widen / scanline-glitch / antenna-spark reaction with the 1.5s cooldown, and switches to a panic-glow flicker plus persistent antenna sparks under 10% hull. Voice pitch shift lives in 7.4 (`_play_voice_blip` reads hull% and selects from `BAX_PITCH_TIERS`).
 
 ### 7.2 New voice contexts (~100 lines drafted) — [x]
 
@@ -667,7 +669,7 @@ Replace the current "linear-list main menu" approach with a visual carousel:
 
 Cards for unfinished chapters render dimmed with a "??? — uncovered" stamp. Players see progress at a glance.
 
-### 8.3 Bax's Records screen — [ ]
+### 8.3 Bax's Records screen — [x]
 
 New main-menu entry: **"BAX'S RECORDS"**. Opens a multi-tab interface:
 
@@ -675,6 +677,19 @@ New main-menu entry: **"BAX'S RECORDS"**. Opens a multi-tab interface:
 - **Tab 2 — Run Highlights:** total slingshots executed, total tether snaps, total barges destroyed, biggest single-run credit recovery, lowest hull% run-clear (badge), fastest sector clear.
 - **Tab 3 — Vulnerability Database:** the NLP exploit dossier. Per-NPC entries showing which exploit keys the player has discovered (e.g. "GARY — BLEVINS ★ discovered Run 7"). Undiscovered exploits show as "???". Sourced from `VocabularyVault`.
 - **Tab 4 — Lore Fragments:** scraps collected from corridor secrets (Epic 4.2). Each is a short paragraph — Bax's notes, fragments of Nova Soma internal memos, etc.
+
+**May 2026:** Shipped. `renderer/records_screen.py` draws the manila-folder
+file-cabinet view; `core/game.py` adds the `BAX'S RECORDS` row, a
+`records` menu mode, and TAB / arrow / page-key handlers for navigation.
+Tab 1 surfaces clone count, runs started/completed, deaths (estimated),
+lifetime debt accrued / paid, and a chapter bar of deepest sector
+reached. Tab 2 reads career + current-run rows from `StatsTracker`. Tab
+3 lists every NPC from the `npc_logic` registry with their discovered
+backdoors from `VocabularyVault` (undiscovered → `???`). Tab 4 paints
+each lore scrap as a chapter-tagged card; pickup is wired through the
+new `EVT_LORE_FOUND` event from corridor `Secret.try_collect`, which
+`Game._on_lore_found` persists via `MetaProgression.add_lore_fragment`.
+Smoke + persistence tests in `tests/test_bax_records.py`.
 
 Aesthetically: file-cabinet metaphor. Each tab is a manila folder being pulled out. Diegetic, low-fi.
 
