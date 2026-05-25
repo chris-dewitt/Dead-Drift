@@ -404,6 +404,7 @@ def build() -> Corridor:
         bax_enter_line = "Biolab. Cabin smells funny. Don't breathe through your nose. Or your mouth. Just hold your breath the whole time, mate.",
         star3_t    = 22.0,
         star2_t    = 38.0,
+        name       = "DECONTAMINATION CHAMBER",
     )
 
     # ── Room 2: GROWTH GALLERY (spore room) ─────────────────────────────
@@ -441,6 +442,7 @@ def build() -> Corridor:
         bax_enter_line = "Right, controls just went sideways. Sit with it. We've done this before.",
         star3_t    = 24.0,
         star2_t    = 42.0,
+        name       = "GROWTH GALLERY",
     )
 
     # ── Room 3: RECEIVING LAB (boss) ─────────────────────────────────────
@@ -464,6 +466,7 @@ def build() -> Corridor:
         bax_enter_line = "Almost done. The lab's alive in here. Try not to touch anything.",
         star3_t    = 60.0,
         star2_t    = 90.0,
+        name       = "RECEIVING LAB",
     )
 
     return Corridor(

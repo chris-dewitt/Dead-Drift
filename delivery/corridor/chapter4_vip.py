@@ -335,6 +335,7 @@ def build() -> Corridor:
         bax_enter_line = "Hotel. Luxury one. Don't touch anything. They charge for breathing.",
         star3_t    = 25.0,
         star2_t    = 45.0,
+        name       = "STAFF ENTRANCE",
     )
 
     # ── Room 2: GUEST FLOOR 47 (quantum doors) ───────────────────────────
@@ -368,6 +369,7 @@ def build() -> Corridor:
         bax_enter_line = "Pick a door, mate. Or don't. They're not all real anyway. I don't know which are which. I don't think I'm supposed to know.",
         star3_t    = 22.0,
         star2_t    = 40.0,
+        name       = "GUEST FLOOR 47",
     )
 
     # ── Room 3: PENTHOUSE SUITE (boss) ───────────────────────────────────
@@ -391,6 +393,7 @@ def build() -> Corridor:
         bax_enter_line = "Penthouse. Fireplace. In space. Sure.",
         star3_t    = 60.0,
         star2_t    = 90.0,
+        name       = "PENTHOUSE SUITE",
     )
 
     return Corridor(

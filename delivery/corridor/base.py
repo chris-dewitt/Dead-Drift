@@ -183,7 +183,8 @@ class Room:
                  star3_t: float = STAR_3_TIME,
                  star2_t: float = STAR_2_TIME,
                  bax_enter_line: str = "",
-                 bax_boss_line: str = ""):
+                 bax_boss_line: str = "",
+                 name: str = ""):
         self.length        = length
         self.palette       = palette
         self.elements      = elements
@@ -194,6 +195,7 @@ class Room:
         self.star2_t       = star2_t
         self.bax_enter_line = bax_enter_line
         self.bax_boss_line  = bax_boss_line
+        self.name           = name
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +245,7 @@ class Corridor:
         self._wipe_t    = 0.0   # >0 = black wipe in progress
         self._wipe_dir  = 1     # 1=entering, -1=exiting
         self._transition_pending = False
+        self._transition_caption = ""  # "ENTERING: <room name>" shown over wipe
 
         # NPC dialog
         self._dialog: _CorridorDialog | None = None
@@ -255,6 +258,12 @@ class Corridor:
         # Result
         self._done      = False
         self._stars     = 0
+        self._collectibles_found = 0
+        self._secrets_found      = 0
+        self._collectibles_total = sum(
+            sum(1 for el in r.elements if isinstance(el, Collectible))
+            for r in rooms
+        )
 
         # Ambient run Bax commentary timer
         self._run_speak_t = 10.0   # fire first corridor-run line after 10s
@@ -292,8 +301,11 @@ class Corridor:
     def update(self, dt: float) -> None:
         if self._wipe_t > 0:
             self._wipe_t -= dt
-            if self._wipe_t <= 0 and self._transition_pending:
-                self._do_room_transition()
+            if self._wipe_t <= 0:
+                if self._transition_pending:
+                    self._do_room_transition()
+                else:
+                    self._transition_caption = ""
             return
 
         if self._dialog is not None:
@@ -522,10 +534,20 @@ class Corridor:
         if self._wipe_t > 0:
             alpha = int(255 * (1.0 - self._wipe_t / 0.5)) \
                     if self._wipe_dir == 1 else int(255 * (self._wipe_t / 0.5))
+            alpha = max(0, min(255, alpha))
             ov = pygame.Surface((CORRIDOR_W, CORRIDOR_H))
             ov.fill((0, 0, 0))
-            ov.set_alpha(max(0, min(255, alpha)))
+            ov.set_alpha(alpha)
             surf.blit(ov, (0, 0))
+            # Caption — visible as screen fades back in (dir=1); fades with overlay
+            if self._transition_caption and alpha > 0:
+                fc = pygame.font.SysFont("monospace", 14, bold=True)
+                cs = fc.render(self._transition_caption, True, (0, 220, 100))
+                cap = pygame.Surface(cs.get_size(), pygame.SRCALPHA)
+                cap.blit(cs, (0, 0))
+                cap.set_alpha(alpha)
+                surf.blit(cap, (CORRIDOR_W // 2 - cs.get_width() // 2,
+                                CORRIDOR_H // 2 - cs.get_height() // 2))
 
         if screen is not None:
             screen.blit(surf, (screen_x, screen_y))
@@ -606,10 +628,12 @@ class Corridor:
                 v = el.try_collect(self._px, self._py)
                 if v:
                     self._credits += v
+                    self._collectibles_found += 1
             elif isinstance(el, Secret):
                 v, lore = el.try_collect(self._px, self._py)
                 if v or lore:
                     self._credits += v
+                    self._secrets_found += 1
                     bus.emit(EVT_CORRIDOR_SECRET)
                     if lore:
                         bus.emit(EVT_BAX_SPEAK, line=lore[:60])
@@ -659,9 +683,15 @@ class Corridor:
         bus.emit(EVT_CORRIDOR_DEATH)
 
     def _start_wipe_out(self):
-        self._wipe_t               = 0.5
-        self._wipe_dir             = -1  # fade to black
-        self._transition_pending   = True
+        next_idx = self._room_idx + 1
+        if next_idx < len(self.rooms):
+            n = self.rooms[next_idx].name
+            self._transition_caption = f"ENTERING: {n}" if n else f"ENTERING: ROOM {next_idx + 1}"
+        else:
+            self._transition_caption = ""
+        self._wipe_t             = 0.5
+        self._wipe_dir           = -1   # fade to black
+        self._transition_pending = True
 
     def _do_room_transition(self):
         self._transition_pending = False
@@ -880,14 +910,50 @@ class Corridor:
 
     def _draw_result(self, surf):
         ov = pygame.Surface((CORRIDOR_W, CORRIDOR_H), pygame.SRCALPHA)
-        ov.fill((0, 0, 0, 160))
+        ov.fill((0, 0, 0, 170))
         surf.blit(ov, (0, 0))
-        fh = pygame.font.SysFont("monospace", 20, bold=True)
-        f  = pygame.font.SysFont("monospace", 13)
+
+        fh  = pygame.font.SysFont("monospace", 20, bold=True)
+        f   = pygame.font.SysFont("monospace", 12)
+        fsm = pygame.font.SysFont("monospace", 11)
+
         label_col = [(220, 60, 60), (255, 180, 0), (0, 240, 110)][self._stars - 1]
         label_txt = ["★☆☆  1 STAR", "★★☆  2 STARS", "★★★  3 STARS!"][self._stars - 1]
         ls = fh.render(label_txt, True, label_col)
-        surf.blit(ls, (CORRIDOR_W // 2 - ls.get_width() // 2, CORRIDOR_H // 2 - 28))
-        ts = f.render(f"{self._elapsed:.1f}s  ·  {self._hits} hit(s)  ·  +{self._credits} cr",
-                      True, (140, 140, 140))
-        surf.blit(ts, (CORRIDOR_W // 2 - ts.get_width() // 2, CORRIDOR_H // 2 + 4))
+        cy = CORRIDOR_H // 2 - 46
+        surf.blit(ls, (CORRIDOR_W // 2 - ls.get_width() // 2, cy))
+
+        # Separator
+        pygame.draw.line(surf, (60, 80, 60),
+                         (CORRIDOR_W // 2 - 100, cy + 28),
+                         (CORRIDOR_W // 2 + 100, cy + 28), 1)
+
+        def _stat(label, value, col, y):
+            lbl = fsm.render(label, True, (100, 120, 100))
+            val = f.render(value, True, col)
+            surf.blit(lbl, (CORRIDOR_W // 2 - 120, y))
+            surf.blit(val, (CORRIDOR_W // 2 + 10, y))
+
+        room = self.rooms[self._room_idx]
+        lh   = f.get_linesize() + 2
+        y0   = cy + 36
+
+        t_col = (0, 220, 100) if self._elapsed <= room.star3_t else \
+                (255, 180, 0) if self._elapsed <= room.star2_t else (200, 80, 80)
+        _stat("TIME",       f"{self._elapsed:.1f}s", t_col, y0)
+
+        h_col = (0, 200, 80) if self._hits == 0 else \
+                (255, 180, 0) if self._hits <= 1 else (200, 80, 80)
+        _stat("DAMAGE",     f"{self._hits} hit{'s' if self._hits != 1 else ''}", h_col, y0 + lh)
+
+        if self._collectibles_total > 0:
+            c_col = (0, 220, 100) if self._collectibles_found == self._collectibles_total \
+                    else (200, 160, 60)
+            _stat("COLLECT", f"{self._collectibles_found} / {self._collectibles_total}",
+                  c_col, y0 + lh * 2)
+
+        s_col = (0, 200, 200) if self._secrets_found > 0 else (100, 100, 100)
+        _stat("SECRETS",    str(self._secrets_found), s_col, y0 + lh * 3)
+
+        cr_col = (200, 160, 0) if self._credits > 0 else (100, 100, 100)
+        _stat("CREDITS",    f"+{self._credits} cr", cr_col, y0 + lh * 4)
