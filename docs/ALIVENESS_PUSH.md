@@ -19,7 +19,9 @@ The signature test for every item in this push: *does it make a returning player
 
 ## Sequence Strategy
 
-**Bugs first, then features.** Land a clean baseline before stacking new systems on top. The eight phases below are roughly sequential — earlier phases unblock later ones.
+**Bugs first, then features. Strict sequential, no jumping around.**
+
+Land a clean baseline before stacking new systems on top. The eight phases below run in strict order — A finishes before B starts, B finishes before C, all the way through H. Within a phase, items can be batched, but the phase itself doesn't open until the prior closes. This is a deliberate choice to put real heart into each area instead of context-switching across the board.
 
 | Phase | Theme | Order |
 |-------|-------|-------|
@@ -179,8 +181,13 @@ After a player successfully exploits Kress in a terminal, on a future run he tip
 The new idealist (B.6) and corrupt (B.6) reps clash with each other. Play them right (specific keyword paths) → they pull each other off your case. Internal politics with mechanical consequence.
 
 ### E.5 Persistent NPC death — [ ]
-First time you really screw an NPC (sell Marrow's broadcast location, leave Mira Voss for dead, etc.), they're gone from your runs forever. Replaced by a colder slot or silent gap. Persistence layer in `data/saves/npc_state.json`.
-**Risk:** Changes meta-contract. Needs clear in-game warning when an irreversible choice is about to fire.
+First time you really screw an NPC, they're gone from your runs forever. Replaced by a colder slot or silent gap. Persistence layer in `data/saves/npc_state.json`.
+
+**First irreversible choice to ship: Marrow betrayal.** If the player gives up Marrow's broadcast location (a specific Union dispatcher dialogue path or a paid Kress sell-out), Marrow is gone from all future runs. Her pirate station shows as "FREQUENCY LOST" on the comms list. Any future Marrow-tagged corridor lore is replaced with raid aftermath. No undo.
+
+Subsequent irreversible choices (Mira Voss left for dead, Dray sold out, etc.) get added in later passes — Marrow's the proof of concept for the persistence layer.
+
+**Risk:** Changes meta-contract. Needs clear in-game warning when an irreversible choice is about to fire — Bax has to flag it (*"You sure, mate? She won't be on the air after this."*).
 
 ---
 
@@ -236,8 +243,15 @@ One room per chapter has a side route cracked by a known NPC for a fee. 200cr sk
 Bax is a ship system; the corridor is wrong for him. Coaching lines carry unease: *"Right, the good news is I can still reach you. Bad news is I don't like how."* Different register from flight.
 
 ### G.9 Cargo-affects-corridor mutators — [ ]
-Hauling shrooms → walls visibly breathe/warp. Biohazard → periodic decon flashes blind player. Paperwork → misleading signs + dead-end doors. Cargo becomes corridor mutator.
-**Risk:** Each cargo needs corridor overlay design + impl. Substantial.
+Design all three up front, ship as one cohesive batch (not piecemeal proof-of-concept).
+
+- **Shrooms cargo:** walls visibly breathe/warp. Per-room shader pulse on the corridor backdrop. Tied to Ch.2 Mycorrhizal Payload theming but applies in any corridor when shrooms are the cargo.
+- **Biohazard cargo:** periodic decon flashes (every 12–18s) wash the screen white for ~0.4s. Sirens. Brief visibility loss. Bax: *"Brace — automated decon."*
+- **Paperwork cargo:** misleading signs (room exit arrows that point wrong) + dead-end doors that don't open. Forces real attention to layout, not signage. Most readable in Ch.3 Paperwork corridor but applies anywhere.
+
+Each mutator is a corridor overlay that activates based on `cargo.tag`. Build a shared `CorridorMutator` interface in `delivery/corridor/mutators.py` so subsequent cargo types can slot in.
+
+**Risk:** Three cargo overlays + the shared interface is a meaningful lift. Plan for an item-batch commit per cargo + an interface commit up front.
 
 ### G.10 Corridor time-pressure variant — [ ]
 Mutator or specific runs: visible threat (gas seeping in, station failing, dock closing). Trades explorer pacing for adrenaline. Forces secret-skip decisions.
@@ -296,12 +310,12 @@ New union reps from B.6 each need a voice profile in `audio/voices.py` distinct 
 
 ---
 
-## Open Questions (for Chris, anytime)
+## Resolved Decisions (May 25 2026)
 
-- E.5 — what's the *first* irreversible choice we want to ship? (Marrow betrayal feels obvious.)
-- G.9 — should we ship one cargo's corridor mutator first (proof of concept) before designing all three?
-- H.1 — does the soundtrack push warrant pausing other phases, or interleave?
-- Phase ordering — A → B → C confirmed; should D/E/F/G/H run strict-sequential or are some parallelizable?
+- **E.5 first irreversible choice:** Marrow betrayal (Union dispatcher path or Kress sell-out). Proof-of-concept for persistence layer.
+- **G.9 cargo mutators:** Design all three up front, ship as cohesive batch with shared `CorridorMutator` interface.
+- **H.1 soundtrack:** Strict sequential — Phase H runs after G, no interleave.
+- **Phase ordering:** Strict A → B → C → D → E → F → G → H. No parallel tracks. Heart over throughput.
 
 ---
 
