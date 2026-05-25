@@ -68,6 +68,12 @@ TYPEWRITER_SPEED  = 44.0          # chars/sec for NPC dialogue reveal
 SPORE_INTERVAL_MIN = 10.0          # seconds between inversion triggers
 SPORE_INTERVAL_MAX = 20.0
 SPORE_DURATION     = 6.0           # seconds controls are inverted
+# Aliveness A.2 (May 2026 playtest) — the *first* inversion of a fresh cargo
+# lands inside this tighter window so the player reliably experiences the
+# mechanic before the 20s sector-jump terminal can open. Subsequent triggers
+# fall back to SPORE_INTERVAL_MIN/MAX.
+SPORE_FIRST_TRIGGER_MIN = 6.0
+SPORE_FIRST_TRIGGER_MAX = 9.0
 
 # --- Roguelite ---
 SECTORS_PER_RUN   = 5             # the 5-sector sprint

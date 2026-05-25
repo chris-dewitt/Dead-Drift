@@ -31,9 +31,27 @@ CLASS_FREIGHTER = "freighter"
 CLASS_HAULER    = "hauler"
 CLASS_GUNBOAT   = "gunboat"
 CLASS_DERELICT  = "derelict"
+# Aliveness A.5 (May 2026 design lock): non-Union NPCs each get a
+# distinct in-flight silhouette so the player can see them by hull,
+# not just by terminal opening. Players had no visual cue that
+# Pirate / Marrow / Kress / Sandra existed in the void; these classes
+# fix that.
+CLASS_PIRATE_SKIFF       = "pirate_skiff"        # Krellborn's outer-belt skiff
+CLASS_BROADCAST_RELAY    = "broadcast_relay"     # Marrow's pirate-radio dish ship
+CLASS_BELT_HAULER        = "belt_hauler"         # Kress's beat-up Outer Belt hauler
+CLASS_COMPLIANCE_COURIER = "compliance_courier"  # Sandra's pristine union courier
 
 ALL_CLASSES = (CLASS_FIGHTER, CLASS_FREIGHTER, CLASS_HAULER,
-               CLASS_GUNBOAT, CLASS_DERELICT)
+               CLASS_GUNBOAT, CLASS_DERELICT,
+               CLASS_PIRATE_SKIFF, CLASS_BROADCAST_RELAY,
+               CLASS_BELT_HAULER, CLASS_COMPLIANCE_COURIER)
+
+# Aliveness A.5 — restrict random sampling for ambient traffic to the
+# generic-faction classes so we don't accidentally spawn a 'Sandra'-
+# class ship in random traffic. The character classes are spawned
+# explicitly when their NPCs are scripted in.
+_AMBIENT_CLASSES = (CLASS_FIGHTER, CLASS_FREIGHTER, CLASS_HAULER,
+                    CLASS_GUNBOAT, CLASS_DERELICT)
 
 # Behaviors
 BEHAVIOR_TRAFFIC = "traffic"
@@ -49,28 +67,42 @@ ST_DEPART   = "depart"
 
 # Hull thresholds — derelicts already wrecked; gunboats tough.
 _DEFAULT_HULL = {
-    CLASS_FIGHTER:   3,
-    CLASS_FREIGHTER: 4,
-    CLASS_HAULER:    5,
-    CLASS_GUNBOAT:   6,
-    CLASS_DERELICT:  1,
+    CLASS_FIGHTER:                3,
+    CLASS_FREIGHTER:              4,
+    CLASS_HAULER:                 5,
+    CLASS_GUNBOAT:                6,
+    CLASS_DERELICT:               1,
+    CLASS_PIRATE_SKIFF:           4,
+    CLASS_BROADCAST_RELAY:        3,
+    CLASS_BELT_HAULER:            5,
+    CLASS_COMPLIANCE_COURIER:     3,
 }
 
 _DEFAULT_RADIUS = {
-    CLASS_FIGHTER:   20,
-    CLASS_FREIGHTER: 30,
-    CLASS_HAULER:    34,
-    CLASS_GUNBOAT:   22,
-    CLASS_DERELICT:  26,
+    CLASS_FIGHTER:                20,
+    CLASS_FREIGHTER:              30,
+    CLASS_HAULER:                 34,
+    CLASS_GUNBOAT:                22,
+    CLASS_DERELICT:               26,
+    CLASS_PIRATE_SKIFF:           22,
+    CLASS_BROADCAST_RELAY:        32,  # dish array makes it visually wide
+    CLASS_BELT_HAULER:            38,
+    CLASS_COMPLIANCE_COURIER:     22,
 }
 
 # Behavior → NPC type for the terminal lookup
 _HAIL_NPC_BY_CLASS = {
-    CLASS_FIGHTER:   "dray",                   # other off-channel courier
-    CLASS_FREIGHTER: "nervous_fence",          # relay broker peer
-    CLASS_HAULER:    "mira_voss",              # back-alley hull medic
-    CLASS_GUNBOAT:   "pirate",                 # treat as pirate hail
-    CLASS_DERELICT:  None,                     # never hails
+    CLASS_FIGHTER:                "dray",            # other off-channel courier
+    CLASS_FREIGHTER:              "nervous_fence",   # relay broker peer
+    CLASS_HAULER:                 "mira_voss",       # back-alley hull medic
+    CLASS_GUNBOAT:                "pirate",          # generic outer-belt hail
+    CLASS_DERELICT:               None,              # never hails
+    # Aliveness A.5 — character-specific NPCs each get their own hull
+    # so the player can see who they're meeting before the comm opens.
+    CLASS_PIRATE_SKIFF:           "pirate",          # Krellborn specifically
+    CLASS_BROADCAST_RELAY:        "underground_dj",  # Marrow's pirate radio
+    CLASS_BELT_HAULER:            "kress",           # Kress's intel freighter
+    CLASS_COMPLIANCE_COURIER:     "sandra",          # Sandra Vega-Marsh
 }
 
 
@@ -82,7 +114,9 @@ class AIShip:
                  behavior: str | None = None,
                  pos: Vec2 | None = None,
                  vel: Vec2 | None = None):
-        self.ship_class = ship_class or random.choice(ALL_CLASSES)
+        # Aliveness A.5 — character-specific classes must be requested
+        # explicitly. Random ambient traffic only samples the generic pool.
+        self.ship_class = ship_class or random.choice(_AMBIENT_CLASSES)
         self.behavior   = behavior or self._default_behavior(self.ship_class)
 
         # Spawn from a random edge if no pos given
@@ -117,7 +151,7 @@ class AIShip:
     def _default_behavior(ship_class: str) -> str:
         if ship_class == CLASS_DERELICT:
             return BEHAVIOR_TRAFFIC
-        if ship_class == CLASS_GUNBOAT:
+        if ship_class in (CLASS_GUNBOAT, CLASS_PIRATE_SKIFF):
             return BEHAVIOR_PIRATE
         return BEHAVIOR_HAILER
 

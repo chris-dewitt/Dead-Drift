@@ -1341,6 +1341,8 @@ class VectorRenderer:
         from antagonists.ai_ship import (
             CLASS_FIGHTER, CLASS_FREIGHTER, CLASS_HAULER,
             CLASS_GUNBOAT, CLASS_DERELICT,
+            CLASS_PIRATE_SKIFF, CLASS_BROADCAST_RELAY,
+            CLASS_BELT_HAULER, CLASS_COMPLIANCE_COURIER,
         )
         cls = aiship.ship_class
         if cls == CLASS_FIGHTER:
@@ -1353,6 +1355,15 @@ class VectorRenderer:
             self._draw_aiship_gunboat(aiship, t)
         elif cls == CLASS_DERELICT:
             self._draw_aiship_derelict(aiship, t)
+        # Aliveness A.5 — character-specific silhouettes.
+        elif cls == CLASS_PIRATE_SKIFF:
+            self._draw_aiship_pirate_skiff(aiship, t)
+        elif cls == CLASS_BROADCAST_RELAY:
+            self._draw_aiship_broadcast_relay(aiship, t)
+        elif cls == CLASS_BELT_HAULER:
+            self._draw_aiship_belt_hauler(aiship, t)
+        elif cls == CLASS_COMPLIANCE_COURIER:
+            self._draw_aiship_compliance_courier(aiship, t)
 
     def _aiship_world_pts(self, aiship, raw_pts):
         rad = math.radians(aiship.heading)
@@ -1581,6 +1592,231 @@ class VectorRenderer:
             beacon = self._aiship_world_pts(aiship, [(-8, 0)])[0]
             pygame.draw.circle(self.surface, (220, 40, 40), beacon, 3)
             pygame.draw.circle(self.surface, (255, 120, 120), beacon, 1)
+
+    # ---- PIRATE SKIFF (Aliveness A.5 — Krellborn) ----------------------
+    def _draw_aiship_pirate_skiff(self, aiship, t: float):
+        """Outer-belt freelancer. Wedge hull, exposed thrust frame,
+        twin under-mounted gun barrels, jagged scrap plates. Reads as a
+        pirate from across the screen — not a Union barge, not a courier."""
+        # Sharp narrow wedge + jagged trailing edge
+        hull_pts = [(22, 0), (10, -8), (-6, -11), (-18, -7), (-22, 0),
+                    (-18, 7), (-6, 11), (10, 8)]
+        # Two stub gun barrels under the nose
+        gun_l = [(14, -5), (24, -7)]
+        gun_r = [(14,  5), (24,  7)]
+        # Exposed thrust frame ribs astern
+        rib_top = [(-14, -8), (-22, -10)]
+        rib_bot = [(-14,  8), (-22,  10)]
+
+        wpts  = self._aiship_world_pts(aiship, hull_pts)
+        glpts = self._aiship_world_pts(aiship, gun_l)
+        grpts = self._aiship_world_pts(aiship, gun_r)
+        rtop  = self._aiship_world_pts(aiship, rib_top)
+        rbot  = self._aiship_world_pts(aiship, rib_bot)
+
+        hull_col = self._aiship_hit_tint(aiship, (38, 28, 20))
+        edge_col = self._aiship_hit_tint(aiship, (200, 60, 40))
+        plate_col = (60, 30, 20)
+
+        pygame.draw.polygon(self.surface, hull_col, wpts)
+        pygame.draw.polygon(self.surface, edge_col, wpts, 2)
+        # Scrap-plate stripe across the dorsal
+        plate_pts = self._aiship_world_pts(aiship, [(-2, -6), (10, -4),
+                                                     (10, 4), (-2, 6)])
+        pygame.draw.polygon(self.surface, plate_col, plate_pts)
+        pygame.draw.polygon(self.surface, edge_col, plate_pts, 1)
+        # Gun barrels
+        for gp in (glpts, grpts):
+            pygame.draw.line(self.surface, (180, 180, 200), gp[0], gp[1], 3)
+            pygame.draw.circle(self.surface, (220, 80, 40), gp[1], 2)
+        # Thrust ribs
+        pygame.draw.line(self.surface, plate_col, rtop[0], rtop[1], 2)
+        pygame.draw.line(self.surface, plate_col, rbot[0], rbot[1], 2)
+        # Twin exhaust flares
+        self._aiship_exhaust(aiship, dist=-22, side_off=-4,
+                             flame_col=(255, 120, 30), scale=0.9)
+        self._aiship_exhaust(aiship, dist=-22, side_off=4,
+                             flame_col=(255, 120, 30), scale=0.9)
+        # Skull-tag forward — a single red dot in the cockpit window
+        cp = self._aiship_world_pts(aiship, [(16, 0)])[0]
+        pygame.draw.circle(self.surface, (220, 30, 30), cp, 2)
+
+        self._draw_aiship_wear(aiship, intensity=aiship.wear * 0.8)
+
+    # ---- BROADCAST RELAY (Aliveness A.5 — Marrow / Underground DJ) -----
+    def _draw_aiship_broadcast_relay(self, aiship, t: float):
+        """Marrow's pirate-radio ship. Long flat body with a huge upper
+        dish, a stubby second dish underneath, and trailing wire whip
+        antennas. Magenta accent — distinct from Union amber + pirate
+        red. The dish slowly rotates."""
+        # Long flat hull
+        hull_pts = [(24, 0), (16, -6), (-22, -8), (-28, -4),
+                    (-28, 4), (-22, 8), (16, 6)]
+        wpts = self._aiship_world_pts(aiship, hull_pts)
+
+        hull_col = self._aiship_hit_tint(aiship, (40, 20, 50))
+        edge_col = self._aiship_hit_tint(aiship, (220, 90, 220))
+        pygame.draw.polygon(self.surface, hull_col, wpts)
+        pygame.draw.polygon(self.surface, edge_col, wpts, 2)
+
+        # Upper main dish — rotating
+        dish_phase = t * 0.45 + aiship._art_seed * 0.0001
+        dish_anchor = self._aiship_world_pts(aiship, [(0, -10)])[0]
+        dish_r = 10
+        # Dish bowl: ellipse with rim
+        bowl_offset_x = int(math.cos(dish_phase) * 4)
+        bowl_offset_y = int(math.sin(dish_phase) * 2)
+        pygame.draw.circle(self.surface, (60, 30, 70),
+                           (dish_anchor[0] + bowl_offset_x,
+                            dish_anchor[1] + bowl_offset_y - 4),
+                           dish_r)
+        pygame.draw.circle(self.surface, (240, 130, 240),
+                           (dish_anchor[0] + bowl_offset_x,
+                            dish_anchor[1] + bowl_offset_y - 4),
+                           dish_r, 2)
+        # Dish dipole — pulses with broadcast
+        pulse = 0.5 + 0.5 * math.sin(t * 6.0)
+        pygame.draw.circle(self.surface, (255, 200, 255),
+                           (dish_anchor[0] + bowl_offset_x,
+                            dish_anchor[1] + bowl_offset_y - 4),
+                           int(2 + pulse * 2))
+        # Mast
+        pygame.draw.line(self.surface, edge_col,
+                         dish_anchor,
+                         (dish_anchor[0], dish_anchor[1] - 6), 2)
+
+        # Lower stubby dish
+        lower = self._aiship_world_pts(aiship, [(-4, 11)])[0]
+        pygame.draw.circle(self.surface, (60, 30, 70), lower, 5)
+        pygame.draw.circle(self.surface, edge_col, lower, 5, 1)
+
+        # Trailing wire whip antennas — wavy
+        for off in (-6, 6):
+            tail_root = self._aiship_world_pts(aiship, [(-26, off)])[0]
+            for i in range(3):
+                ang = math.radians(aiship.heading) + math.pi
+                wave = math.sin(t * 4.0 + i + off) * 3
+                end = (int(tail_root[0] + math.cos(ang) * (6 + i * 4) + wave),
+                       int(tail_root[1] + math.sin(ang) * (6 + i * 4)))
+                start = (int(tail_root[0] + math.cos(ang) * (i * 4)),
+                         int(tail_root[1] + math.sin(ang) * (i * 4)))
+                pygame.draw.line(self.surface, edge_col, start, end, 1)
+
+        # Cockpit window — small slot
+        cockpit_pts = self._aiship_world_pts(aiship, [(16, -2), (22, -1),
+                                                       (22, 1), (16, 2)])
+        pygame.draw.polygon(self.surface, (255, 180, 255), cockpit_pts)
+
+        # Single bright exhaust
+        self._aiship_exhaust(aiship, dist=-26, side_off=0,
+                             flame_col=(220, 100, 240), scale=0.9)
+
+        self._draw_aiship_wear(aiship, intensity=aiship.wear * 0.6)
+
+    # ---- BELT HAULER (Aliveness A.5 — Kress's intel freighter) ---------
+    def _draw_aiship_belt_hauler(self, aiship, t: float):
+        """Kress's Outer Belt hauler. Bulky three-pod freighter, cargo
+        netting tying random salvage to the dorsal, slow blinking
+        running lights. Reads as a heavy mover. Green-grey palette to
+        distinguish from the standard freighter's plain grey."""
+        hull_pts = [(36, 0), (28, -12), (-30, -14), (-36, -8),
+                    (-36, 8), (-30, 14), (28, 12)]
+        pod_l = [(-8, -10), (16, -10), (16, -2), (-8, -2)]
+        pod_r = [(-8,  2), (16,  2), (16, 10), (-8, 10)]
+        pod_c = [(-24, -4), (-12, -4), (-12, 4), (-24, 4)]
+        wpts  = self._aiship_world_pts(aiship, hull_pts)
+        plpts = self._aiship_world_pts(aiship, pod_l)
+        prpts = self._aiship_world_pts(aiship, pod_r)
+        pcpts = self._aiship_world_pts(aiship, pod_c)
+
+        hull_col = self._aiship_hit_tint(aiship, (40, 55, 40))
+        edge_col = self._aiship_hit_tint(aiship, (120, 200, 120))
+        pod_col  = (35, 60, 50)
+        pygame.draw.polygon(self.surface, hull_col, wpts)
+        pygame.draw.polygon(self.surface, edge_col, wpts, 2)
+        for p in (plpts, prpts, pcpts):
+            pygame.draw.polygon(self.surface, pod_col, p)
+            pygame.draw.polygon(self.surface, edge_col, p, 1)
+
+        # Dorsal cargo netting — random hatching across the spine
+        rng = random.Random(aiship._art_seed)
+        for _ in range(8):
+            x0 = rng.randint(-22, 22)
+            y0 = rng.choice([-12, 12])
+            x1 = x0 + rng.randint(-4, 4)
+            y1 = y0 + rng.choice([-3, 3])
+            a = self._aiship_world_pts(aiship, [(x0, y0)])[0]
+            b = self._aiship_world_pts(aiship, [(x1, y1)])[0]
+            pygame.draw.line(self.surface, (90, 140, 90), a, b, 1)
+
+        # Bridge — boxy
+        bridge = self._aiship_world_pts(aiship, [(20, -3), (30, -3),
+                                                  (30, 3), (20, 3)])
+        pygame.draw.polygon(self.surface, (60, 100, 60), bridge)
+        pygame.draw.polygon(self.surface, (180, 240, 180), bridge, 1)
+        # Cockpit window — amber slit
+        cpt = self._aiship_world_pts(aiship, [(26, -1), (29, -1),
+                                                (29, 1), (26, 1)])
+        pygame.draw.polygon(self.surface, (240, 200, 60), cpt)
+
+        # Running lights — blink every 1.4s
+        blink = int((t + aiship._art_seed * 0.001) * 0.7) % 2 == 0
+        for off in (-12, 12):
+            lp = self._aiship_world_pts(aiship, [(-30, off)])[0]
+            col = (220, 200, 80) if blink else (60, 60, 30)
+            pygame.draw.circle(self.surface, col, lp, 2)
+
+        # Twin exhausts
+        self._aiship_exhaust(aiship, dist=-36, side_off=-6,
+                             flame_col=(200, 240, 120), scale=1.0)
+        self._aiship_exhaust(aiship, dist=-36, side_off=6,
+                             flame_col=(200, 240, 120), scale=1.0)
+
+        self._draw_aiship_wear(aiship, intensity=aiship.wear)
+
+    # ---- COMPLIANCE COURIER (Aliveness A.5 — Sandra Vega-Marsh) --------
+    def _draw_aiship_compliance_courier(self, aiship, t: float):
+        """Sandra Vega-Marsh's pristine union courier. Same wedge silhouette
+        as the player frame, but spotless: bright silver hull, Local 404
+        roundel pinned at the centre, no wear marks, a single sapphire
+        cockpit window. The 'gold standard' courier the player can
+        never quite be."""
+        hull_pts = [(22, 0), (8, -8), (-8, -10), (-18, -8),
+                    (-22, -2), (-22, 2), (-18, 8), (-8, 10), (8, 8)]
+        wpts = self._aiship_world_pts(aiship, hull_pts)
+
+        hull_col = self._aiship_hit_tint(aiship, (210, 215, 230))
+        edge_col = self._aiship_hit_tint(aiship, (255, 255, 255))
+        accent   = (255, 200, 80)   # Union amber
+
+        # Body
+        pygame.draw.polygon(self.surface, hull_col, wpts)
+        pygame.draw.polygon(self.surface, edge_col, wpts, 2)
+        # Centre stripe — clean amber band
+        stripe = self._aiship_world_pts(aiship, [(0, -2), (16, -1),
+                                                  (16, 1), (0, 2)])
+        pygame.draw.polygon(self.surface, accent, stripe)
+
+        # Local 404 roundel — three concentric circles
+        roundel = self._aiship_world_pts(aiship, [(-4, 0)])[0]
+        pygame.draw.circle(self.surface, accent, roundel, 5)
+        pygame.draw.circle(self.surface, (40, 30, 10), roundel, 3)
+        pygame.draw.circle(self.surface, accent, roundel, 1)
+
+        # Cockpit window — sapphire
+        cockpit_pts = self._aiship_world_pts(aiship, [(10, -3), (16, -2),
+                                                       (16, 2), (10, 3)])
+        pygame.draw.polygon(self.surface, (60, 130, 220), cockpit_pts)
+        # Cockpit highlight
+        hl = self._aiship_world_pts(aiship, [(12, -1)])[0]
+        pygame.draw.circle(self.surface, (200, 230, 255), hl, 1)
+
+        # Twin clean exhausts — bright cyan-white (matches player but cleaner)
+        self._aiship_exhaust(aiship, dist=-22, side_off=-4,
+                             flame_col=(180, 230, 255), scale=0.9)
+        self._aiship_exhaust(aiship, dist=-22, side_off=4,
+                             flame_col=(180, 230, 255), scale=0.9)
+        # NO wear scorches — Sandra never lets her ship look damaged.
 
     # ---- Shared helpers ------------------------------------------------
     def _aiship_exhaust(self, aiship, dist: int, side_off: int,

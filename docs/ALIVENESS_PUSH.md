@@ -38,34 +38,34 @@ Land a clean baseline before stacking new systems on top. The eight phases below
 
 ## Phase A — Foundation (Bugs + Cursor Sync)
 
-### A.1 Merge cursor branches into main — [ ]
+### A.1 Merge cursor branches into main — [x]
 Bring `cursor/playtest-doc-updates-e5ad`, `cursor/improvement-plan-spec-52e5`, `cursor/soundtrack-master-plan-c565`, and `cursor/improvement-plan-doc-update-e5ad` into `main` so the cursor-only playtest findings + soundtrack plan are the new shared baseline. Resolve doc conflicts in favor of the most recent factual content; my Phase 1/2 status work and the cursor branch design locks should both survive.
 
-### A.2 Shroom control inversion (Phase 0.6) — [ ]
+### A.2 Shroom control inversion (Phase 0.6) — [x]
 Ch.2 cargo periodic control inversion not firing in play. Reproduce, trace `cargo.update` → `controls_inverted` → `_read_input`, confirm overlay + Bax line. See cursor branch 0.6 spec.
 
-### A.3 Barge intercept = Gary / Union only (Phase 0.7) — [ ]
+### A.3 Barge intercept = Gary / Union only (Phase 0.7) — [x]
 `run_manager.open_barge_terminal()` randomly assigns pirate/synthetic/insurance — wrong. Lock to Gary (or the new Union reps in B.6). Move pirate/DJ/fence to non-barge comm channels.
 
-### A.4 Dock visuals = Union Local 404 + Gary (Phase 0.8) — [ ]
+### A.4 Dock visuals = Union Local 404 + Gary (Phase 0.8) — [x]
 Landing Beat 2 dock master = Gary (or chapter-appropriate Union contact). Union amber palette, Local 404 signage, repo bay markers in background.
 
-### A.5 Non-Union NPCs get distinct ship hulls (Phase 0.9) — [ ]
+### A.5 Non-Union NPCs get distinct ship hulls (Phase 0.9) — [x]
 Pirates / Marrow / Kress / Sandra need their own in-flight silhouettes — not repo barges, not the courier wedge. Currently they're terminal-only.
 
-### A.6 Ch.3 Paperwork corridor broken (Phase 0.10) — [ ]
+### A.6 Ch.3 Paperwork corridor broken (Phase 0.10) — [x]
 Clerk dialog modal + no pause in DELIVERY locks input. Repro and fix per cursor branch spec.
 
-### A.7 Harpoon visibility audit — [ ]
+### A.7 Harpoon visibility audit — [x]
 Player has never seen a harpoon in play. Audit `physics/tether.py` render path; confirm projectile + tether line thickness/contrast; add muzzle flash on barge; verify AIM warning beam is visible.
 
-### A.8 Barge slowdown on bullet hit — [ ]
+### A.8 Barge slowdown on bullet hit — [x]
 `RepoBarge.take_hit()` — apply brief velocity damp or speed clamp on each non-disruption hit so player can land follow-up shots. Currently hits don't slow them.
 
-### A.9 Cockpit portrait glow verification (Epic 7.1) — [ ]
+### A.9 Cockpit portrait glow verification (Epic 7.1) — [x]
 Doc claims healthy/warning/critical/panic glow tiers shipped, but flagged suspect by audit. Play-verify all 4 tiers visible; fix if not.
 
-### A.10 NLTK lazy bootstrap (Epic 1.10) — [ ]
+### A.10 NLTK lazy bootstrap (Epic 1.10) — [x]
 Move startup NLTK download to first-terminal-open trigger. Splash overlay + Bax line during wait. Boot to main menu instantly.
 
 ---

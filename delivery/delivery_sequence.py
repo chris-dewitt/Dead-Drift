@@ -233,6 +233,109 @@ def _draw_chapter_bay_dressing(surface: pygame.Surface, W: int, H: int,
                        placard.centery - txt.get_height() // 2))
 
 
+def _draw_union_404_overlay(surface: pygame.Surface, W: int, H: int,
+                            t: float, chapter: int) -> None:
+    """Aliveness A.4 — Union Local 404 signage + repo bay markers laid
+    over the chapter-specific bay dressing.
+
+    The plan locks Beat 2's dock master = Gary (or a chapter-appropriate
+    Union contact) and the receiving bay = Union 404 visual identity:
+    amber palette, Local 404 roundel, repo lane markers in the
+    background. We *add* these elements on top of the existing chapter
+    dressing rather than replacing it — every chapter still reads as its
+    own station, just with a clear 'this is Union turf' overlay."""
+    amber       = (255, 180, 60)
+    amber_dim   = (140, 90, 30)
+    amber_dark  = (40, 22, 6)
+    blink_phase = 0.5 + 0.5 * math.sin(t * 3.2)
+    pulse_col   = (255, int(190 + 60 * blink_phase), int(60 * blink_phase))
+
+    # ── Left + right repo lane markers (vertical hazard stripes) ─────
+    for side_x in (24, W - 48):
+        # Lane border
+        pygame.draw.rect(surface, amber_dark,
+                         pygame.Rect(side_x, 78, 22, H - 220))
+        pygame.draw.rect(surface, amber_dim,
+                         pygame.Rect(side_x, 78, 22, H - 220), 1)
+        # Diagonal hazard stripes inside
+        for sy in range(80, H - 144, 14):
+            pygame.draw.line(surface, amber,
+                             (side_x + 2, sy),
+                             (side_x + 20, sy + 12), 2)
+        # Top label
+        font_sm = get_font(8, bold=True)
+        lbl = font_sm.render("LOCAL 404", True, amber)
+        # Rotate 90 so it reads down the bar — render to rotated surface
+        rot = pygame.transform.rotate(lbl, 90)
+        surface.blit(rot, (side_x + 4, 84))
+
+    # ── Local 404 roundel above the bay entrance ──────────────────────
+    cx = W // 2
+    cy = 76
+    pygame.draw.circle(surface, amber_dark, (cx, cy), 26)
+    pygame.draw.circle(surface, amber,      (cx, cy), 26, 2)
+    pygame.draw.circle(surface, amber_dim,  (cx, cy), 18, 1)
+    # '404' inside the roundel
+    font_b = get_font(11, bold=True)
+    rs = font_b.render("404", True, amber)
+    surface.blit(rs, (cx - rs.get_width() // 2,
+                      cy - rs.get_height() // 2))
+    # Outer banner — "UNION RECEIVING / BAY"
+    font_lbl = get_font(8, bold=True)
+    banner1 = font_lbl.render("UNION RECEIVING", True, amber)
+    surface.blit(banner1, (cx - banner1.get_width() // 2, cy + 30))
+    banner2 = font_lbl.render(f"BAY {chapter:02d}", True, amber_dim)
+    surface.blit(banner2, (cx - banner2.get_width() // 2, cy + 42))
+
+    # ── Beacon strip at top edge — pulsing amber row ──────────────────
+    for bx in range(64, W - 64, 64):
+        pygame.draw.circle(surface, pulse_col, (bx, 32), 3)
+        pygame.draw.circle(surface, amber_dim,  (bx, 32), 5, 1)
+
+    # ── Gary at the receiving window — small silhouette inside a lit
+    # window cut into the right wall. Sheepish, clipboard, sighing. ───
+    win_x = W - 184
+    win_y = H - 192
+    win_w = 64
+    win_h = 70
+    win_rect = pygame.Rect(win_x, win_y, win_w, win_h)
+    # Window glass
+    pygame.draw.rect(surface, (255, 220, 140), win_rect)
+    pygame.draw.rect(surface, amber, win_rect, 2)
+    pygame.draw.line(surface, amber_dim,
+                     (win_x + win_w // 2, win_y),
+                     (win_x + win_w // 2, win_y + win_h), 1)
+
+    # Gary bust silhouette — hi-vis sash + head + clipboard arm
+    gx = win_x + win_w // 2
+    gy = win_y + win_h - 8
+    # Hi-vis sash torso
+    pygame.draw.polygon(surface, (180, 130, 30),
+                        [(gx - 14, gy),
+                         (gx + 14, gy),
+                         (gx + 11, gy - 28),
+                         (gx - 11, gy - 28)])
+    # Head
+    pygame.draw.circle(surface, (180, 150, 110),
+                       (gx, gy - 36), 9)
+    # Eye dots — sheepish slightly down-cast
+    pygame.draw.line(surface, (40, 30, 10),
+                     (gx - 4, gy - 35), (gx - 1, gy - 34), 1)
+    pygame.draw.line(surface, (40, 30, 10),
+                     (gx + 1, gy - 34), (gx + 4, gy - 35), 1)
+    # Mouth — flat line (sighing)
+    pygame.draw.line(surface, (90, 60, 30),
+                     (gx - 3, gy - 30), (gx + 3, gy - 30), 1)
+    # Clipboard — small white square at his arm
+    pygame.draw.rect(surface, (240, 230, 200),
+                     pygame.Rect(gx + 6, gy - 18, 10, 12))
+    pygame.draw.rect(surface, (120, 90, 40),
+                     pygame.Rect(gx + 6, gy - 18, 10, 12), 1)
+    # Window header — "DOCK MASTER"
+    hdr = get_font(7, bold=True).render("DOCK MASTER", True, amber)
+    surface.blit(hdr, (win_x + (win_w - hdr.get_width()) // 2, win_y - 10))
+
+
 class DeliverySequence:
     PHASE_APPROACH = "approach"   # Beat 1: nose alignment
     PHASE_LAND     = "land"       # Beat 2: J-gauge + SPACE burn
@@ -799,6 +902,9 @@ class DeliverySequence:
         for gy in range(0, H, 60):
             pygame.draw.line(surface, (14, 26, 16), (80, gy), (W - 80, gy), 1)
         _draw_chapter_bay_dressing(surface, W, H, t, self.chapter)
+        # Aliveness A.4 — Union 404 dock overlay also lays under Beat 2
+        # so the receiving identity is established before clamping.
+        _draw_union_404_overlay(surface, W, H, t, self.chapter)
 
         # ── Overhead gantry crane ─────────────────────────────────────────
         gantry_y = 88
@@ -1084,6 +1190,10 @@ class DeliverySequence:
         t    = self._clamp_anim_t
         surface.fill((4, 12, 6))
         _draw_chapter_bay_dressing(surface, W, H, t, self.chapter)
+        # Aliveness A.4 — Union 404 dock overlay (signage, lane markers,
+        # Gary at the receiving window). Drawn over the chapter-specific
+        # bay dressing so every chapter still reads as its own station.
+        _draw_union_404_overlay(surface, W, H, t, self.chapter)
         f    = get_font(14)
         fsm2 = get_font(12)
         cx   = W // 2
