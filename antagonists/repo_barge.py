@@ -53,6 +53,11 @@ class RepoBarge:
             random.randint(100, S.SCREEN_W - 100),
             random.randint(100, S.SCREEN_H - 100),
         )
+        # Epic 18 — scale movement speeds by difficulty
+        spd = getattr(run_manager, "meta", None)
+        _mult = spd.barge_speed_mult() if spd is not None else 1.0
+        self._chase_speed   = self.CHASE_SPEED   * _mult
+        self._patrol_speed  = self.PATROL_SPEED  * _mult
         self.is_destroyed    = False
         self._hp             = 60.0
         self._retreat_t      = 0.0
@@ -82,12 +87,14 @@ class RepoBarge:
                 self.state = BargeState.CHASE
 
         elif self.state == BargeState.CHASE:
-            self._move_toward(ship.pos, self.CHASE_SPEED, dt)
-            if dist_sq < self.CLAMP_RANGE * self.CLAMP_RANGE:
-                if self._intercept_cd <= 0:
-                    self._open_comm()
-                else:
-                    self._enter_aim()
+          
+elif self.state == BargeState.CHASE:
+    self._move_toward(ship.pos, self._chase_speed, dt)
+    if dist_sq < self.CLAMP_RANGE * self.CLAMP_RANGE:
+        if self._intercept_cd <= 0:
+            self._open_comm()
+        else:
+            self._enter_aim()
 
         elif self.state == BargeState.AIM:
             self._move_toward(ship.pos, self.AIM_SPEED, dt)
@@ -136,7 +143,7 @@ class RepoBarge:
             self._retreat_t -= dt
             # Move directly away from ship
             away = (self.body.pos - ship.pos).normalized()
-            self.body.apply_force(away * self.CHASE_SPEED * self.body.mass)
+            self.body.apply_force(away * self._chase_speed * self.body.mass)
             if self._retreat_t <= 0:
                 self.state = BargeState.PATROL
 
@@ -173,7 +180,7 @@ class RepoBarge:
                 random.randint(100, S.SCREEN_W - 100),
                 random.randint(100, S.SCREEN_H - 100),
             )
-        self._move_toward(self._patrol_target, self.PATROL_SPEED, dt)
+        self._move_toward(self._patrol_target, self._patrol_speed, dt)
 
     def _move_toward(self, target: Vec2, speed: float, dt: float):
         direction = (target - self.body.pos).normalized()

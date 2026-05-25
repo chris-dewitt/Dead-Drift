@@ -95,6 +95,8 @@ class VectorRenderer:
         # Sector intro card state
         self._intro_card_t     = 0.0
         self._intro_card_data: dict | None = None
+        # Epic 11 — player identity: brief "YOU" label on sector load
+        self._you_label_t: float = 0.0
 
     def _on_slingshot(self, **_):
         self._flash_t   = 0.45
@@ -143,6 +145,7 @@ class VectorRenderer:
 
     def _on_sector_start(self, sector_num=0, cargo_type=None,
                          theme="", sector_name="", formerly="", **_):
+        self._you_label_t = 1.5   # Epic 11 — show "YOU" label at sector open
         self._intro_card_t    = 2.0
         self._intro_card_data = {
             "sector_num":  sector_num,
@@ -188,6 +191,7 @@ class VectorRenderer:
         self._draw_explosions()
         frame_name = getattr(run_mgr, '_frame_name', '')
         self._draw_ship(ship, t, frame_name)
+        self._draw_player_identity(ship, t, dt)   # Epic 11 — cyan ring + YOU label
         self._draw_exhaust(ship, t, frame_name)
         self._draw_proximity_alarm(run_mgr, ship, t)
         self._draw_flash(dt)
@@ -1723,6 +1727,29 @@ class VectorRenderer:
                 color = _hsv(hue, 0.95, val)
                 pygame.draw.circle(self.surface, color, (gx, gy),
                                    max(1, 4 - i // 3))
+
+    def _draw_player_identity(self, ship, t: float, dt: float):
+        """Epic 11 — constant cyan identity ring + brief 'YOU' label on sector load."""
+        if not ship.is_alive:
+            return
+        pos = ship.pos
+        px, py = int(pos.x), int(pos.y)
+
+        # Constant dim cyan ring at 24px — always on, very subtle
+        ring_surf = pygame.Surface((52, 52), pygame.SRCALPHA)
+        ring_col  = (60, 210, 220, 38)   # dim cyan, very low alpha
+        pygame.draw.circle(ring_surf, ring_col, (26, 26), 24, 1)
+        self.surface.blit(ring_surf, (px - 26, py - 26))
+
+        # "YOU" amber label — visible for 1.5s after sector load, then gone
+        self._you_label_t = max(0.0, self._you_label_t - dt)
+        if self._you_label_t > 0:
+            fade = min(1.0, self._you_label_t * 2.0)   # fast in, holds, fades last 0.5s
+            alpha = int(210 * fade)
+            lbl_font = pygame.font.SysFont("monospace", 11, bold=True)
+            lbl = lbl_font.render("YOU", True, (240, 190, 60))
+            lbl.set_alpha(alpha)
+            self.surface.blit(lbl, (px - lbl.get_width() // 2, py - 36))
 
     def _draw_velocity_indicator(self, ship):
         if not ship.is_alive:

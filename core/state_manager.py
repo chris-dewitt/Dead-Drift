@@ -2,17 +2,18 @@ from enum import Enum, auto
 
 
 class GameState(Enum):
-    MAIN_MENU      = auto()
-    LOADOUT_DRAFT  = auto()
-    FLIGHT         = auto()
-    TERMINAL       = auto()   # NLP interrogation
-    DECANTING      = auto()   # clone-vat death screen
-    SECTOR_JUMP    = auto()   # transition between sectors
-    GAME_OVER      = auto()   # debt cleared or permanent death
-    DELIVERY       = auto()   # end-of-run delivery sequence
-    SHOP           = auto()   # mid-run black market between sectors
-    INTERSTITIAL   = auto()   # between successful delivery and next chapter's loadout
-    PAUSED         = auto()   # gameplay frozen; overlay menu
+    MAIN_MENU         = auto()
+    LOADOUT_DRAFT     = auto()
+    DIFFICULTY_SELECT = auto()   # one-screen CASUAL/STANDARD/IRONS picker
+    FLIGHT            = auto()
+    TERMINAL          = auto()   # NLP interrogation
+    DECANTING         = auto()   # clone-vat death screen
+    SECTOR_JUMP       = auto()   # transition between sectors
+    GAME_OVER         = auto()   # debt cleared or permanent death
+    DELIVERY          = auto()   # end-of-run delivery sequence
+    SHOP              = auto()   # mid-run black market between sectors
+    INTERSTITIAL      = auto()   # between successful delivery and next chapter's loadout
+    PAUSED            = auto()   # gameplay frozen; overlay menu
 
 
 class StateManager:

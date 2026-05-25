@@ -24,6 +24,7 @@ class MetaProgression:
         "bax_hums_heard":     [],     # list[int] — hum indices the player has heard
         "unlocks":            [],     # list[str] — earned unlock keys (Epic 12.2)
         "milestone_counters": {},     # str -> int (e.g. "slingshots_total")
+        "difficulty":         "standard",  # "casual" / "standard" / "irons"
     }
 
     def __init__(self, save_path: Path | str | None = None):
@@ -166,3 +167,23 @@ class MetaProgression:
 
     def milestone(self, key: str) -> int:
         return self._data.get("milestone_counters", {}).get(key, 0)
+
+    # ── Difficulty (Epic 18) ───────────────────────────────────────────────
+    @property
+    def difficulty(self) -> str:
+        return self._data.get("difficulty", "standard")
+
+    def set_difficulty(self, value: str) -> None:
+        if value in ("casual", "standard", "irons"):
+            self._data["difficulty"] = value
+            self.save()
+
+    # Multipliers queried by game systems.
+    def hull_start_delta(self) -> int:
+        return {"casual": 30, "standard": 0, "irons": -20}.get(self.difficulty, 0)
+
+    def debt_rate_mult(self) -> float:
+        return {"casual": 0.7, "standard": 1.0, "irons": 1.5}.get(self.difficulty, 1.0)
+
+    def barge_speed_mult(self) -> float:
+        return {"casual": 0.75, "standard": 1.0, "irons": 1.30}.get(self.difficulty, 1.0)

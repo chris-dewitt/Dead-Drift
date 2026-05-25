@@ -23,7 +23,8 @@ from core.event_bus import (bus, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_DOCK_APPROACH, EVT_DOCK_PERFECT, EVT_DOCK_ROUGH,
                              EVT_CLOSE_CALL, EVT_SKILL_MANEUVER,
                              EVT_LONG_FIGHT_SURVIVED, EVT_FIRST_TETHER_SNAP,
-                             EVT_TERMINAL_OPEN, EVT_UNLOCK_EARNED)
+                             EVT_TERMINAL_OPEN, EVT_UNLOCK_EARNED,
+                             EVT_DEBT_UPDATE, EVT_RUN_END, EVT_DELIVERY_DONE)
 
 _IDLE = [
     # Bread-and-butter Cockney banter
@@ -466,6 +467,9 @@ class Bax:
         self._barge_kills_run  = 0   # for _FIRST_BARGE_KILL_OF_RUN
         self._sector_first_kill = False  # reset each sector
         self._thruster_overheat_spoken = False
+        # Epic 13.4 — theme: session debt counter for milestone lines
+        self._session_debt_accrued    = 0   # sum of all positive deltas
+        self._debt_milestones_spoken: set[int] = set()
 
         # No-immediate-repeat (Epic 7.5)
         self._last_lines: dict[str, deque] = {}
@@ -549,6 +553,10 @@ class Bax:
         bus.subscribe(EVT_FIRST_TETHER_SNAP,   self._on_first_tether_snap)
         bus.subscribe(EVT_TERMINAL_OPEN,       self._on_terminal_open)
         bus.subscribe(EVT_UNLOCK_EARNED,       self._on_unlock_earned)
+        # Epic 13.4 / #21 — theme deepening hooks
+        bus.subscribe(EVT_DEBT_UPDATE,         self._on_debt_update_theme)
+        bus.subscribe(EVT_RUN_END,             self._on_run_end_theme)
+        bus.subscribe(EVT_DELIVERY_DONE,       self._on_delivery_done_theme)
 
     def update(self, dt: float):
         self._t       += dt
@@ -1031,6 +1039,85 @@ class Bax:
     def _on_unlock_earned(self, key="", label="", **_):
         self.speak(f"...Oi. You just unlocked somethin'. '{label}'. "
                    "I'd cheer but I'm bolted in. Mental cheer.")
+
+    # ── Epic 13.4 / #21 — Theme deepening: debt, run-end, chapter-end ─────
+    # The galaxy is indifferent. Bax acknowledges. Nova Soma doesn't.
+    _DEBT_MILESTONES = [
+        (100_000,   "Session debt's past a hundred. You've paid for a small ship "
+                    "and you still don't own one. Capitalism."),
+        (250_000,   "Quarter mil this session. That's a HOUSE in the outer reach. "
+                    "Or two clones. Different math, same hole."),
+        (500_000,   "Half a million accrued this session. They've got a NUMBER on us "
+                    "now. They love a number."),
+        (1_000_000, "One million. ONE MILLION. We've paid for our own body — "
+                    "what — six, seven times? Don't answer. Don't count."),
+        (2_500_000, "Two and a half mil this session. Right. We're a feature in "
+                    "the quarterly report now. 'Outstanding Asset'. That's you."),
+    ]
+
+    def _on_debt_update_theme(self, delta=0, total=0, **_):
+        # Only milestones on accrual, not on payoffs.
+        if delta <= 0:
+            return
+        self._session_debt_accrued += int(delta)
+        for threshold, line in self._DEBT_MILESTONES:
+            if (self._session_debt_accrued >= threshold
+                    and threshold not in self._debt_milestones_spoken):
+                self._debt_milestones_spoken.add(threshold)
+                self.speak(line)
+                break   # one milestone per debt tick
+
+    _NOVA_SOMA_FRAMINGS = [
+        "Nova Soma copies your file. Compliments forwarded to /dev/null. "
+        "New assignment pending. They don't celebrate. They schedule.",
+        "Run logged. Reassignment posted. The system didn't notice you specifically. "
+        "Statistically you exceeded expectations. Statistically you'll be replaced.",
+        "Confirmation receipt: filed. Bonus: not awarded. "
+        "Your wellbeing: not assessed. Your debt: revised upward. Welcome back.",
+        "Nova Soma archives your performance under 'Adequate'. There is no folder "
+        "for 'Heroic'. There is no folder for 'You'.",
+    ]
+
+    def _on_run_end_theme(self, success=False, **_):
+        if not success:
+            return
+        self.speak(random.choice(self._NOVA_SOMA_FRAMINGS))
+
+    _CHAPTER_END_LINES = {
+        1: [
+            "Chapter one done. We made Gary slightly richer and ourselves slightly poorer. "
+            "Standard outcome. The galaxy turns. Have a sit-down.",
+            "First chapter, in the bag. The cargo's delivered. The debt's still here. "
+            "Funny how those two things never balance.",
+        ],
+        2: [
+            "Chapter two clear. Spores rinsed. Lungs probably fine. "
+            "Nova Soma will mark this 'on time'. The shrooms will mark it 'rude'.",
+            "Mycelium chapter, done. We're a paragraph in their delivery log. "
+            "They're a footnote in our nightmares. Even trade.",
+        ],
+        3: [
+            "Paperwork chapter done. The forms are filed. The forms have been forwarded. "
+            "The forms will outlive both of us. That's the win condition, apparently.",
+            "We got through compliance. Nobody dies in compliance. Everybody is slowly "
+            "killed by it. Subtle distinction.",
+        ],
+        4: [
+            "Final chapter. Box delivered, observed, sealed. Whatever's in there is "
+            "someone else's problem now. Probably it's us. Probably it always was.",
+            "Quantum drop complete. Schrödinger's invoice already paid. "
+            "The universe doesn't care. We're still here. That's enough for tonight.",
+        ],
+    }
+
+    def _on_delivery_done_theme(self, **_):
+        ctx = getattr(self, "_run_bax_context", None)
+        chapter = 1
+        if ctx is not None:
+            chapter = int(ctx.get("chapter_at_session_start", 1))
+        pool = self._CHAPTER_END_LINES.get(chapter, self._CHAPTER_END_LINES[1])
+        # Slight delay-then-speak so the delivery-celebration line lands first.
+        self.speak(random.choice(pool))
 
     # ── Epic 11.4 — Bax opinions on NPCs ─────────────────────────────────
     # Fires once per (npc_key, chapter) on terminal open. Pre-load lines
