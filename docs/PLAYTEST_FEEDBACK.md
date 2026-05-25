@@ -54,6 +54,9 @@ impossible to guess.** Need a full evaluation pass.
 - **Universal cheat code:** `fuck off` (or `FUCK OFF`) should work on
   every single NPC as a guaranteed escape / pass. Goofy panic button,
   in-character for the game's tone.
+  **EASTER EGG ONLY** — do NOT advertise this in any keyword hint,
+  tutorial, README, docs, or in-game text. Players must discover it
+  organically. Keep it out of all public-facing copy.
 
 ### Specific NPC issues
 
