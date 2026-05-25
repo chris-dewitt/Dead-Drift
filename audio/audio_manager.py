@@ -28,7 +28,8 @@ from audio.synth import (
     synth_bass_note,
 )
 from audio.blues_licks import prebuild_all, generate_lick
-from audio.voices import prebuild_voices, resolve_voice_key
+from audio.voices import (prebuild_voices, resolve_voice_key,
+                          prebuild_bax_pitch_tiers, BAX_PITCH_TIERS)
 from audio.new_wave_pad import build_new_wave_pad, build_long_form_menu_pad
 from audio.guitar_phrases import prebuild_phrases
 
@@ -229,6 +230,8 @@ class AudioManager:
         self._licks:    list[pygame.mixer.Sound] = []
         self._sfx:      dict[str, pygame.mixer.Sound] = {}
         self._voices:   dict[str, list[pygame.mixer.Sound]] = {}
+        # Epic 7.4 — Bax voice hull-tier variants (higher pitch under damage)
+        self._bax_voice_tiers: list[list[pygame.mixer.Sound]] = []
 
         self._master      = 0.70
         self._in_terminal = False
@@ -397,6 +400,8 @@ class AudioManager:
 
         print("[audio] generating character voices…", flush=True)
         self._voices = prebuild_voices()
+        # Bax hull-tier pitch variants (Epic 7.4)
+        self._bax_voice_tiers = prebuild_bax_pitch_tiers()
 
         print("[audio] generating Bax hums…", flush=True)
         from audio.bax_hum import prebuild_all_hums
@@ -1139,8 +1144,17 @@ class AudioManager:
             ch.play(snd)
 
     def _play_voice_blip(self, speaker: str, channel: pygame.mixer.Channel | None):
-        key   = resolve_voice_key(speaker or "")
-        blips = self._voices.get(key) or self._voices.get("default")
+        key = resolve_voice_key(speaker or "")
+        # Bax under damage: voice pitches up (Epic 7.4).
+        if key == "bax" and self._bax_voice_tiers:
+            if self._hull_pct < 0.10:
+                blips = self._bax_voice_tiers[2]   # +12%
+            elif self._hull_pct < 0.30:
+                blips = self._bax_voice_tiers[1]   # +5%
+            else:
+                blips = self._bax_voice_tiers[0]   # baseline
+        else:
+            blips = self._voices.get(key) or self._voices.get("default")
         if not blips or channel is None:
             return
         snd = random.choice(blips)

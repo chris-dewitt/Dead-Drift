@@ -78,6 +78,8 @@ def _draw_help(surface, font):
 
 def main():
     pygame.init()
+    from core.text import install_font_patch
+    install_font_patch()
     pygame.display.set_caption(f"{S.TITLE} - Flight Demo")
     screen = pygame.display.set_mode((S.SCREEN_W, S.SCREEN_H))
     clock  = pygame.time.Clock()
