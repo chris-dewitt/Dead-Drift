@@ -22,7 +22,8 @@ from delivery.corridor.elements import (
 )
 from core.event_bus import (bus, EVT_BAX_SPEAK, EVT_DELIVERY_DONE,
                             EVT_CORRIDOR_RUN, EVT_CORRIDOR_JUMP,
-                            EVT_CORRIDOR_SECRET, EVT_CORRIDOR_DEATH)
+                            EVT_CORRIDOR_SECRET, EVT_CORRIDOR_DEATH,
+                            EVT_LORE_FOUND)
 
 GRAVITY   = 980.0
 JUMP_VY   = -440.0
@@ -637,6 +638,8 @@ class Corridor:
                     bus.emit(EVT_CORRIDOR_SECRET)
                     if lore:
                         bus.emit(EVT_BAX_SPEAK, line=lore[:60])
+                        # Epic 8.3 — persist for Bax's Records, Tab 4.
+                        bus.emit(EVT_LORE_FOUND, text=lore, chapter=self.chapter)
 
     def _check_npc_encounters(self, room: Room):
         if self._dialog is not None:

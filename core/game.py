@@ -136,6 +136,10 @@ class Game:
         # Jukebox menu state — only enterable after a campaign clear
         self._jukebox_cursor: int = 0
 
+        # Bax's Records (Epic 8.3) — main-menu folder with 4 tabs.
+        self._records_tab:    int = 0
+        self._records_scroll: int = 0
+
         self._wire_events()
 
     def _bind_meta_from_active_slot(self) -> None:
@@ -159,9 +163,15 @@ class Game:
         bus.subscribe(EVT_SHIP_DESTROYED, self._on_ship_destroyed)
         bus.subscribe(EVT_RUN_END,        self._on_run_end)
         bus.subscribe(EVT_TORCH_ACTIVE,   self._on_torch_active)
-        from core.event_bus import EVT_DELIVERY_DONE, EVT_RUN_START
+        from core.event_bus import EVT_DELIVERY_DONE, EVT_RUN_START, EVT_LORE_FOUND
         bus.subscribe(EVT_DELIVERY_DONE,  self._on_delivery_done)
         bus.subscribe(EVT_RUN_START,      self._on_bax_hum_run_start)
+        bus.subscribe(EVT_LORE_FOUND,     self._on_lore_found)
+
+    def _on_lore_found(self, text: str = "", chapter: int = 0, **_) -> None:
+        """Persist corridor lore scraps into MetaProgression for Bax's Records."""
+        if self.meta is not None and text:
+            self.meta.add_lore_fragment(text, chapter=chapter)
 
     # ------------------------------------------------------------------
     # State → musical scene mapping. Drives AudioManager.set_scene().
@@ -384,6 +394,7 @@ class Game:
         rows.extend([
             ("NEW GAME", True, "new"),
             ("LOAD GAME", True, "load"),
+            ("BAX'S RECORDS", True, "records"),
         ])
         # Jukebox unlocks after the player has completed all 4 chapters at least once
         if self.meta.campaign_cleared_at_least_once:
@@ -446,6 +457,10 @@ class Game:
         elif action == "jukebox":
             self._menu_mode = "jukebox"
             self._jukebox_cursor = 0
+        elif action == "records":
+            self._menu_mode = "records"
+            self._records_tab = 0
+            self._records_scroll = 0
         elif action == "quit":
             self.running = False
 
@@ -523,6 +538,35 @@ class Game:
                 heard = set(self.meta.bax_hums_heard)
                 if self._jukebox_cursor in heard and self.audio:
                     self.audio.play_bax_hum(self._jukebox_cursor)
+            elif event.key == pygame.K_ESCAPE:
+                self._menu_mode = "main"
+            return
+
+        if self._menu_mode == "records":
+            from renderer.records_screen import tab_count, max_scroll
+            n_tabs = tab_count()
+            if event.key in (pygame.K_TAB, pygame.K_RIGHT, pygame.K_d):
+                self._records_tab = (self._records_tab + 1) % n_tabs
+                self._records_scroll = 0
+            elif event.key in (pygame.K_LEFT, pygame.K_a):
+                self._records_tab = (self._records_tab - 1) % n_tabs
+                self._records_scroll = 0
+            elif event.key in (pygame.K_UP, pygame.K_w):
+                self._records_scroll = max(0, self._records_scroll - 1)
+            elif event.key in (pygame.K_DOWN, pygame.K_s):
+                limit = max_scroll(self._records_tab,
+                                   meta=self.meta,
+                                   vault=getattr(self.bax, "vault", None),
+                                   stats=getattr(self.run_mgr, "stats", None))
+                self._records_scroll = min(limit, self._records_scroll + 1)
+            elif event.key == pygame.K_PAGEUP:
+                self._records_scroll = max(0, self._records_scroll - 5)
+            elif event.key == pygame.K_PAGEDOWN:
+                limit = max_scroll(self._records_tab,
+                                   meta=self.meta,
+                                   vault=getattr(self.bax, "vault", None),
+                                   stats=getattr(self.run_mgr, "stats", None))
+                self._records_scroll = min(limit, self._records_scroll + 5)
             elif event.key == pygame.K_ESCAPE:
                 self._menu_mode = "main"
             return
@@ -2060,6 +2104,17 @@ class Game:
 
         if self._menu_mode == "jukebox":
             self._render_jukebox_panel(t, py, font_h, font_row, font_sm)
+            return
+
+        if self._menu_mode == "records":
+            from renderer.records_screen import draw_records
+            draw_records(self.screen,
+                         meta=self.meta,
+                         vault=getattr(self.bax, "vault", None),
+                         stats=getattr(self.run_mgr, "stats", None),
+                         tab_idx=self._records_tab,
+                         scroll=self._records_scroll,
+                         t=t)
             return
 
         if self._menu_mode in ("pick_new", "pick_load"):

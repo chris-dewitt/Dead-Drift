@@ -25,6 +25,9 @@ class MetaProgression:
         "unlocks":            [],     # list[str] — earned unlock keys (Epic 12.2)
         "milestone_counters": {},     # str -> int (e.g. "slingshots_total")
         "difficulty":         "standard",  # "casual" / "standard" / "irons"
+        # Epic 8.3 — Bax's Records: lore fragments collected from corridor secrets.
+        # List of {"text": str, "chapter": int} so the Records tab can group them.
+        "lore_fragments":     [],
     }
 
     def __init__(self, save_path: Path | str | None = None):
@@ -101,6 +104,24 @@ class MetaProgression:
 
     def get_reputation(self, npc_id: str) -> int:
         return self._data["reputation"].get(npc_id, 0)
+
+    # ── Lore fragments (Epic 8.3 — Bax's Records, Tab 4) ─────────────────
+    def add_lore_fragment(self, text: str, chapter: int = 0) -> bool:
+        """Record a lore scrap from a corridor secret. Returns True if newly stored."""
+        text = (text or "").strip()
+        if not text:
+            return False
+        frags = self._data.setdefault("lore_fragments", [])
+        for entry in frags:
+            if entry.get("text") == text:
+                return False
+        frags.append({"text": text, "chapter": int(chapter)})
+        self.save()
+        return True
+
+    @property
+    def lore_fragments(self) -> list[dict]:
+        return [dict(e) for e in self._data.get("lore_fragments", [])]
 
     def mark_hum_heard(self, idx: int) -> bool:
         """Record that the player has heard hum `idx`.  Returns True if newly heard."""
