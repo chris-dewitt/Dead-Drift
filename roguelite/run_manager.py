@@ -291,6 +291,15 @@ class RunManager:
         # Epic 12.1 — NOVICE_PASS first-death-free flag
         self._novice_pass_consumed = False
 
+        # Aliveness hotfix (May 25 2026) — every field that `update()`
+        # touches after its `_sector is None` early-return must exist on
+        # the instance from construction. `start_run()` resets these to
+        # 0; checkpoint restore now also reads them. The bug below was
+        # that loading from a checkpoint goes straight to FLIGHT state
+        # without calling `start_run`, so `_run_total_time` was missing.
+        self._sector_index   = 0      # current sector  set by start_run/restore
+        self._run_total_time = 0.0    # Epic 8.4  hardcore best-time tracker
+
     # ------------------------------------------------------------------
     def start_run(self, ship):
         # Epic 12.1 — roll a mutator. First run of each chapter has none.

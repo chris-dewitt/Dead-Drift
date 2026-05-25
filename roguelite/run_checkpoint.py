@@ -431,6 +431,9 @@ def build_checkpoint(game) -> dict:
             "sector_index": rm._sector_index,
             "sector_timer": rm._sector_timer,
             "sector_dur": rm._sector_dur,
+            # Aliveness hotfix: persist hardcore total time so a resumed
+            # run keeps its accumulated flight seconds.
+            "run_total_time": getattr(rm, "_run_total_time", 0.0),
             "jump_ready_fired": rm._jump_ready_fired,
             "pending_advance": rm._pending_advance,
             "shop_pending": rm._shop_pending,
@@ -472,6 +475,9 @@ def restore_checkpoint(game, data: dict) -> bool:
     rm._sector_index = int(rmd.get("sector_index", 0))
     rm._sector_timer = float(rmd.get("sector_timer", 0.0))
     rm._sector_dur = float(rmd.get("sector_dur", 20.0))
+    # Aliveness hotfix  default to 0.0 for pre-fix checkpoints that
+    # don't have this field yet (old saves stay loadable).
+    rm._run_total_time = float(rmd.get("run_total_time", 0.0))
     rm._jump_ready_fired = bool(rmd.get("jump_ready_fired", False))
     rm._pending_advance = bool(rmd.get("pending_advance", False))
     rm._shop_pending = bool(rmd.get("shop_pending", False))
