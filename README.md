@@ -180,15 +180,17 @@ Spec + implementation status → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLA
 ## Known issues / open polish
 
 - Full string audit (Epic 9.4) still open
-- Several `NEXT_PUSH.md` items in progress (corridor visuals 10.4,
-  harmonica play-along 11.1, mutator effects 12.1, money/flight events 13.x,
-  difficulty selector 18, sector-5 capstones 19, death highlight reel 20)
-- Playtest backlog in `docs/PLAYTEST_FEEDBACK.md` not yet scheduled
-  (barge hit-slowdown, harpoon visibility, two new union reps, NPC keyword
-  normalization)
+- Harmonica `play along` (Epic 11.1b) deferred — high effort, low
+  immediate value
+- A few `NEXT_PUSH.md` items remain (sector-5 capstones 19, death
+  highlight reel 20, full Bax `theme` polish 21)
 
 (Market + docking graphics, Bax's Records (Epic 8.3), the lazy NLTK
 bootstrap (Epic 1.10), the font-cache adoption sweep (Epic 1.2),
 per-chapter corridor music (Epic 4.6), the cargo dossier carousel
-(Epic 8.2), and the HARDCORE chapter variant (Epic 8.4) all shipped
-May 2026 — see `docs/DOCUMENTATION_STATUS.md`.)
+(Epic 8.2), the HARDCORE chapter variant (Epic 8.4), the harmonica
+heal session (Epic 11.1c), money source labels (Epic 13.1), the
+corridor decay layer (Epic 10.4), boss-room set pieces (Epic 14.1),
+the new union reps + NPC keyword normalization, and the barge feel
++ harpoon visibility playtest fixes all shipped May 2026 — see
+`docs/DOCUMENTATION_STATUS.md`.)

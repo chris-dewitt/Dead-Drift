@@ -25,7 +25,14 @@
 | **8** — Meta replay | 4 | 0 | 0 | Stepped death + Bax's Records (8.3) + cargo carousel (8.2) + HARDCORE variant (8.4) all shipped |
 | **9** — Award push (see `NEXT_PUSH.md`) | 3 | 1 | 18 | 9.2 CRT visual overhaul + 9.3 popup gate + Nova Soma dossier parity shipped; 9.1 NPC cross-refs partial |
 
-**Rough overall:** ~71% complete · ~17% partial · ~12% not started (by checkbox count).
+**Plus from `NEXT_PUSH.md` (this push, May 25 2026):**
+- Playtest backlog closed: barge hit-stagger + harpoon flash visibility, two new union reps (Idealist Eddie + Corrupt Vinny), NPC keyword normalization (universal `fuck off` easter egg, Felix gossip path, Dray gripe + standardised BRIBE label, Krellborn extended threat keywords + harder filler).
+- Epic 11.1c — Bax harmonica heal session shipped (H-key in flight, +5 hull over 6s, rotation lock, barge-proximity gate).
+- Epic 13.1 — money source labels on every `EVT_DEBT_UPDATE` (HUD floater shows `+800 cr · SLINGSHOT`, etc.).
+- Epic 10.4 — corridor decay layer (deep parallax, numbered/cracked panels, scratched Nova Soma branding, floor wear, pipe drips, per-room directional lighting).
+- Epic 14.1 — boss-room set pieces (Gary's den / mycelium chamber / compliance tribunal / quantum observation deck).
+
+**Rough overall:** ~78% complete · ~13% partial · ~9% not started (by checkbox count).
 
 ---
 
