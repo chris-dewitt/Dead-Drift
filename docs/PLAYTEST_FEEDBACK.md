@@ -12,6 +12,15 @@ When the player hits a barge with a bullet, the barge should **slow down**
 briefly so the player has a window to land another shot. Currently they keep
 moving at full speed after the hit, making sustained fire frustrating.
 
+### Harpoons must be visible
+Player has never actually seen a harpoon during play. Either the visual is
+too subtle, gets culled, or fires too fast to register. Need to:
+- Audit the harpoon render path (`physics/tether.py` + renderer)
+- Make sure the projectile + tether line are drawn with enough thickness /
+  contrast / length to be obvious
+- Possibly add a brief tracer / muzzle flash from the barge when it fires
+- Verify the AIM warning beam is also visible (the precursor to the harpoon)
+
 ### Too many Garys — add 2 new union reps to barge rotation
 Every barge ride being Gary is getting repetitive by the late sectors.
 Add two new NPC riders to the pool:
@@ -36,11 +45,15 @@ impossible to guess.** Need a full evaluation pass.
 
 ### Goals
 - Every NPC should have a **firm baseline number** of accepted pickup
-  words (TBD — pick a number like 8–12 and audit everyone).
+  words, and that number should be **HIGH** (not 4–6, more like 15+).
+  Player should rarely feel stuck guessing.
 - All NPCs that accept bribes should use a **consistent format** showing
   the dollar amount they require, e.g. `BRIBE [200 cr]` not vague verbs.
 - All keyword/exploit difficulty should be **comparable** across NPCs —
   no NPC should be wildly harder than the others to navigate.
+- **Universal cheat code:** `fuck off` (or `FUCK OFF`) should work on
+  every single NPC as a guaranteed escape / pass. Goofy panic button,
+  in-character for the game's tone.
 
 ### Specific NPC issues
 
