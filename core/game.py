@@ -108,6 +108,18 @@ class Game:
         self._interstitial_next       = 2
         self._interstitial_campaign_end = False
 
+        # Epic 18 — difficulty selector state
+        self._diff_cursor: int = 1   # 0=casual  1=standard  2=irons
+        _diff_names = ("casual", "standard", "irons")
+        saved = getattr(self.meta, "difficulty", "standard")
+        self._diff_cursor = _diff_names.index(saved) if saved in _diff_names else 1
+
+        # Epic 16 — floating debt change label (shown 2s beside the debt counter)
+        self._debt_float_label: str = ""
+        self._debt_float_t:     float = 0.0
+        from core.event_bus import EVT_DEBT_UPDATE
+        bus.subscribe(EVT_DEBT_UPDATE, self._on_debt_update_hud)
+
         # Decanting — cached Bax wake-up line (picked once on death, not per frame)
         self._decant_bax_line: str = ""
 
@@ -154,16 +166,17 @@ class Game:
     # ------------------------------------------------------------------
     # State → musical scene mapping. Drives AudioManager.set_scene().
     _STATE_TO_SCENE = {
-        GameState.MAIN_MENU:     SCENE_MENU,
-        GameState.LOADOUT_DRAFT: SCENE_LOADOUT,
-        GameState.FLIGHT:        SCENE_FLIGHT,
-        GameState.TERMINAL:      SCENE_TERMINAL,
-        GameState.DELIVERY:      SCENE_DELIVERY,
-        GameState.SHOP:          SCENE_SHOP,
-        GameState.INTERSTITIAL:  SCENE_INTERSTITIAL,
-        GameState.DECANTING:     SCENE_DECANTING,
-        GameState.SECTOR_JUMP:   SCENE_FLIGHT,
-        GameState.GAME_OVER:     SCENE_MENU,
+        GameState.MAIN_MENU:          SCENE_MENU,
+        GameState.LOADOUT_DRAFT:      SCENE_LOADOUT,
+        GameState.DIFFICULTY_SELECT:  SCENE_LOADOUT,
+        GameState.FLIGHT:             SCENE_FLIGHT,
+        GameState.TERMINAL:           SCENE_TERMINAL,
+        GameState.DELIVERY:           SCENE_DELIVERY,
+        GameState.SHOP:               SCENE_SHOP,
+        GameState.INTERSTITIAL:       SCENE_INTERSTITIAL,
+        GameState.DECANTING:          SCENE_DECANTING,
+        GameState.SECTOR_JUMP:        SCENE_FLIGHT,
+        GameState.GAME_OVER:          SCENE_MENU,
     }
 
     def _goto(self, new_state: GameState):
@@ -574,6 +587,8 @@ class Game:
                 self.run_mgr.active_terminal.handle_key(event)
         elif state == GameState.LOADOUT_DRAFT:
             self.run_mgr.draft.handle_key(event)
+        elif state == GameState.DIFFICULTY_SELECT:
+            self._handle_difficulty_key(event)
         elif state == GameState.DELIVERY:
             if self._delivery is not None:
                 self._delivery.handle_key(event)
@@ -703,7 +718,11 @@ class Game:
                 self.run_mgr.apply_draft(self.ship)
                 self._checkpoint_cd = 25.0
                 self._save_run_checkpoint()
-                self._goto(GameState.FLIGHT)
+                # Epic 18 — show difficulty picker before launching into FLIGHT
+                self._goto(GameState.DIFFICULTY_SELECT)
+
+        elif state == GameState.DIFFICULTY_SELECT:
+            pass   # driven entirely by key events in handle_event()
 
         elif state == GameState.DELIVERY:
             if self._delivery is not None:
@@ -730,6 +749,85 @@ class Game:
                 ship_speed, dt,
                 hull_pct=self.ship.hull_pct if self.ship else 1.0,
             )
+
+    # ── Epic 16 — debt float label ─────────────────────────────────────────
+    def _on_debt_update_hud(self, delta=0, total=0, **_):
+        if delta == 0:
+            return
+        sign = "+" if delta > 0 else "−"
+        self._debt_float_label = f"{sign}{abs(int(delta)):,} cr"
+        self._debt_float_t = 2.0
+
+    # ── Epic 18 — difficulty selector ──────────────────────────────────────
+    _DIFF_OPTS = [
+        ("CASUAL",   "hull +30 · debt rate ×0.7 · barges: patient",  "casual"),
+        ("STANDARD", "baseline risk — no modifiers",                   "standard"),
+        ("IRONS",    "hull −20 · debt rate ×1.5 · barges: relentless", "irons"),
+    ]
+
+    def _handle_difficulty_key(self, event: "pygame.event.Event") -> None:
+        import pygame as _pg
+        if event.key in (_pg.K_UP, _pg.K_w):
+            self._diff_cursor = (self._diff_cursor - 1) % 3
+        elif event.key in (_pg.K_DOWN, _pg.K_s):
+            self._diff_cursor = (self._diff_cursor + 1) % 3
+        elif event.key in (_pg.K_RETURN, _pg.K_SPACE):
+            _, _, key = self._DIFF_OPTS[self._diff_cursor]
+            self.meta.set_difficulty(key)
+            # Apply hull delta immediately on the ship
+            delta = self.meta.hull_start_delta()
+            if delta != 0 and self.ship is not None:
+                import config.settings as _S
+                self.ship.hull = max(1.0, min(
+                    _S.HULL_MAX + delta,
+                    self.ship.hull + delta,
+                ))
+            self._goto(GameState.FLIGHT)
+
+    def _render_difficulty_select(self) -> None:
+        cx = S.SCREEN_W // 2
+        cy = S.SCREEN_H // 2
+        t  = pygame.time.get_ticks() / 1000.0
+
+        # Dim the loadout background that's still in the frame buffer
+        ov = pygame.Surface((S.SCREEN_W, S.SCREEN_H), pygame.SRCALPHA)
+        ov.fill((0, 0, 5, 210))
+        self.screen.blit(ov, (0, 0))
+
+        W, H = 560, 240
+        x, y = cx - W // 2, cy - H // 2 - 20
+        bg = pygame.Surface((W, H), pygame.SRCALPHA)
+        bg.fill((8, 8, 18, 240))
+        self.screen.blit(bg, (x, y))
+        pygame.draw.rect(self.screen, (160, 110, 30), (x, y, W, H), 2)
+
+        fhd  = pygame.font.SysFont("monospace", 17, bold=True)
+        frow = pygame.font.SysFont("monospace", 15, bold=True)
+        fsub = pygame.font.SysFont("monospace", 11)
+
+        title = fhd.render("NOVA SOMA COURIER RISK ASSESSMENT", True, (220, 185, 80))
+        self.screen.blit(title, (cx - title.get_width() // 2, y + 14))
+        pygame.draw.line(self.screen, (100, 72, 20),
+                         (x + 14, y + 36), (x + W - 14, y + 36), 1)
+
+        pulse = 0.5 + 0.5 * math.sin(t * 3.0)
+        for i, (label, desc, _key) in enumerate(self._DIFF_OPTS):
+            ry = y + 52 + i * 58
+            sel = i == self._diff_cursor
+            row_col = (int(200 + 55 * pulse), int(220 + 35 * pulse), 110) if sel \
+                      else (100, 100, 120)
+            prefix = ">  " if sel else "   "
+            ls = frow.render(f"{prefix}{label}", True, row_col)
+            self.screen.blit(ls, (x + 24, ry))
+            ds = fsub.render(f"      {desc}", True,
+                             (160, 145, 90) if sel else (70, 70, 85))
+            self.screen.blit(ds, (x + 24, ry + 20))
+            if sel:
+                pygame.draw.line(self.screen, (120, 85, 20),
+                                 (x + 14, ry + 40), (x + W - 14, ry + 40), 1)
+
+        hint = fsub.render("↑↓ / W·S  select      ENTER / SPACE  confirm", True, (80, 80, 100))
+        self.screen.blit(hint, (cx - hint.get_width() // 2, y + H - 22))
 
     def _start_terminal_outcome_hold(self, outcome: str) -> bool:
         """Start a visible terminal outcome beat. Returns False for instant closes."""
@@ -788,6 +886,9 @@ class Game:
 
         elif state == GameState.LOADOUT_DRAFT:
             self.run_mgr.draft.render(self.screen)
+
+        elif state == GameState.DIFFICULTY_SELECT:
+            self._render_difficulty_select()
 
         elif state == GameState.DELIVERY:
             if self._delivery is not None:
@@ -919,8 +1020,22 @@ class Game:
             bus.emit(EVT_DEBT_DING)
         blink = int(t * 1.6) % 2 == 0
         ticker_col = (110, 50, 50) if not blink else (160, 60, 60)
+        # Apply difficulty rate multiplier to the displayed interest figure.
+        diff_mult = self.meta.debt_rate_mult()
         debt_txt = font.render(
-            f"DEBT  {displayed_debt:,} cr  +{interest_per_sec:.2f}/s", True, ticker_col)
+            f"DEBT  {displayed_debt:,} cr  +{interest_per_sec * diff_mult:.2f}/s",
+            True, ticker_col)
+
+        # Epic 16 — float debt change label for 2s beside the counter
+        self._debt_float_t = max(0.0, self._debt_float_t - dt)
+        if self._debt_float_t > 0 and self._debt_float_label:
+            fade = min(1.0, self._debt_float_t)
+            alpha = int(220 * fade)
+            is_gain = self._debt_float_label.startswith("+")
+            fl_col = (60, 200, 90) if is_gain else (220, 90, 60)
+            fl_surf = font_sm.render(self._debt_float_label, True, fl_col)
+            fl_surf.set_alpha(alpha)
+            self.screen.blit(fl_surf, (10 + debt_txt.get_width() + 8, S.FLIGHT_H - 22))
 
         run_reduced = rm._run_debt_reduced
         if run_reduced > 0:
