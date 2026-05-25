@@ -150,6 +150,9 @@ class Game:
         self._records_tab:    int = 0
         self._records_scroll: int = 0
 
+        # Cargo Dossier carousel (Epic 8.2) — replay any cleared chapter.
+        self._dossier_cursor: int = 0
+
         # Epic 1.10 — NLP linguistic-processor splash. Set the first time a
         # terminal opens while the NLTK bootstrap is still in flight; cleared
         # once the bootstrap reports ready.
@@ -413,6 +416,10 @@ class Game:
             ("LOAD GAME", True, "load"),
             ("BAX'S RECORDS", True, "records"),
         ])
+        # Cargo dossiers unlock after the player has cleared at least one
+        # chapter — gives them somewhere to replay from. (Epic 8.2)
+        if self.meta.chapters_completed:
+            rows.append(("CARGO DOSSIERS", True, "dossiers"))
         # Jukebox unlocks after the player has completed all 4 chapters at least once
         if self.meta.campaign_cleared_at_least_once:
             rows.append(("BAX'S TAPES", True, "jukebox"))
@@ -478,6 +485,9 @@ class Game:
             self._menu_mode = "records"
             self._records_tab = 0
             self._records_scroll = 0
+        elif action == "dossiers":
+            self._menu_mode = "dossiers"
+            self._dossier_cursor = 0
         elif action == "quit":
             self.running = False
 
@@ -514,6 +524,19 @@ class Game:
     def _begin_run_from_menu(self) -> None:
         self._run_just_completed = False
         self.save_mgr.delete_run_checkpoint()
+        # Clear any previous carousel chapter override so the natural
+        # progression resumes from the menu's CONTINUE / NEW GAME paths.
+        self.run_mgr.set_chapter_override(None)
+        self.run_mgr.start_run(self.ship)
+        self._goto(GameState.LOADOUT_DRAFT)
+
+    def _begin_run_from_carousel(self, chapter: int) -> None:
+        """Epic 8.2 — start a fresh run targeting the carousel-selected chapter.
+        Clears any active mid-run checkpoint so we don't load into a
+        different chapter's saved sector."""
+        self._run_just_completed = False
+        self.save_mgr.delete_run_checkpoint()
+        self.run_mgr.set_chapter_override(int(chapter))
         self.run_mgr.start_run(self.ship)
         self._goto(GameState.LOADOUT_DRAFT)
 
@@ -555,6 +578,37 @@ class Game:
                 heard = set(self.meta.bax_hums_heard)
                 if self._jukebox_cursor in heard and self.audio:
                     self.audio.play_bax_hum(self._jukebox_cursor)
+            elif event.key == pygame.K_ESCAPE:
+                self._menu_mode = "main"
+            return
+
+        if self._menu_mode == "dossiers":
+            from renderer.cargo_carousel import card_count, card_chapter
+            n = card_count()
+            if event.key in (pygame.K_RIGHT, pygame.K_d):
+                self._dossier_cursor = (self._dossier_cursor + 1) % n
+            elif event.key in (pygame.K_LEFT, pygame.K_a):
+                self._dossier_cursor = (self._dossier_cursor - 1) % n
+            elif event.key == pygame.K_h:
+                # Toggle HARDCORE arming for the selected chapter (if unlocked).
+                ch = card_chapter(self._dossier_cursor)
+                if self.meta.is_hardcore_unlocked(ch):
+                    self.meta.set_hardcore_for_next_run(not self.meta.is_hardcore)
+            elif event.key == pygame.K_RETURN:
+                ch = card_chapter(self._dossier_cursor)
+                completed = ch in self.meta.chapters_completed
+                allow_jump = (
+                    completed
+                    or (ch - 1) in self.meta.chapters_completed
+                    or ch == 1
+                )
+                if allow_jump:
+                    # If hardcore is armed but the chapter isn't unlocked
+                    # for hardcore, drop the flag silently.
+                    if self.meta.is_hardcore and not self.meta.is_hardcore_unlocked(ch):
+                        self.meta.clear_hardcore_flag()
+                    self._menu_mode = "main"
+                    self._begin_run_from_carousel(ch)
             elif event.key == pygame.K_ESCAPE:
                 self._menu_mode = "main"
             return
@@ -695,6 +749,10 @@ class Game:
                 if self._delivery_delay_t <= 0:
                     self._delivery_pending = False
                     self._delivery = DeliverySequence(self.meta, chapter=self._delivery_chapter)
+                    # Epic 8.4 — pass total run time so HARDCORE best-time
+                    # recording uses real flight elapsed seconds, not delivery scene time.
+                    self._delivery._total_time_for_hardcore = float(
+                        getattr(self.run_mgr, "_run_total_time", 0.0))
                     self._goto(GameState.DELIVERY)
             else:
                 self._torch_warn_t = max(0.0, self._torch_warn_t - dt)
@@ -2135,6 +2193,15 @@ class Game:
                          tab_idx=self._records_tab,
                          scroll=self._records_scroll,
                          t=t)
+            return
+
+        if self._menu_mode == "dossiers":
+            from renderer.cargo_carousel import draw_carousel
+            draw_carousel(self.screen,
+                          meta=self.meta,
+                          stats=getattr(self.run_mgr, "stats", None),
+                          cursor=self._dossier_cursor,
+                          t=t)
             return
 
         if self._menu_mode in ("pick_new", "pick_load"):

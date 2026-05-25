@@ -777,7 +777,10 @@ class DeliverySequence:
             # Fire Bax landing line once
             bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_LAND_SMOOTH
                      if self._land_score == 2 else _BAX_LAND_ROUGH))
-            self._run = make_corridor(self.chapter)
+            self._run = make_corridor(
+                self.chapter,
+                hardcore=bool(getattr(self.meta, "is_hardcore", False)),
+            )
         if self._clamp_anim_t >= _BEAT3_DURATION:
             self._t     = 0.0
             self._phase = self.PHASE_RUN
@@ -1209,7 +1212,27 @@ class DeliverySequence:
             self.meta.pay_off(net_reduction)
         elif net_reduction < 0:
             self.meta.add_debt(-net_reduction)
+        # Epic 8.4 — record HARDCORE best time + unlock check before
+        # complete_chapter (it persists immediately).
+        was_hardcore = bool(getattr(self.meta, "is_hardcore", False))
+        if was_hardcore:
+            total_time = float(getattr(self, "_total_time_for_hardcore", 0.0))
+            if total_time > 0:
+                try:
+                    self.meta.record_hardcore_clear(self.chapter, total_time)
+                except Exception:
+                    pass
         self.meta.complete_chapter(self.chapter)
+        # First clear of a chapter (any difficulty) unlocks HARDCORE for it.
+        try:
+            self.meta.unlock_hardcore_for_chapter(self.chapter)
+        except Exception:
+            pass
+        # Reset the run-scoped hardcore flag now that the run is over.
+        try:
+            self.meta.clear_hardcore_flag()
+        except Exception:
+            pass
         self.meta.save()
 
     def _draw_result(self, surface: pygame.Surface, W: int, H: int):

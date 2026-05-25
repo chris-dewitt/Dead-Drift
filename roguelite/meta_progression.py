@@ -28,6 +28,14 @@ class MetaProgression:
         # Epic 8.3 — Bax's Records: lore fragments collected from corridor secrets.
         # List of {"text": str, "chapter": int} so the Records tab can group them.
         "lore_fragments":     [],
+        # Epic 8.4 — HARDCORE chapter variant.
+        # Chapters whose hardcore mode the player has unlocked (any normal clear).
+        "hardcore_unlocked":  [],
+        # Best HARDCORE clear time per chapter (seconds, int). 0 = no record yet.
+        "hardcore_best_s":    {},
+        # Whether the *next/current* run is being played in hardcore. Run-scoped;
+        # cleared on run start unless explicitly opted in via set_hardcore_for_next_run.
+        "hardcore_active":    False,
     }
 
     def __init__(self, save_path: Path | str | None = None):
@@ -122,6 +130,55 @@ class MetaProgression:
     @property
     def lore_fragments(self) -> list[dict]:
         return [dict(e) for e in self._data.get("lore_fragments", [])]
+
+    # ── Hardcore mode (Epic 8.4) ──────────────────────────────────────────
+    def unlock_hardcore_for_chapter(self, chapter: int) -> bool:
+        """Mark a chapter as having a hardcore variant available. Called on
+        first successful clear of that chapter. Returns True if newly unlocked."""
+        unlocked = self._data.setdefault("hardcore_unlocked", [])
+        if chapter in unlocked:
+            return False
+        unlocked.append(int(chapter))
+        self.save()
+        return True
+
+    def is_hardcore_unlocked(self, chapter: int) -> bool:
+        return int(chapter) in self._data.get("hardcore_unlocked", [])
+
+    @property
+    def is_hardcore(self) -> bool:
+        """Whether the current run is being played in hardcore mode."""
+        return bool(self._data.get("hardcore_active", False))
+
+    def set_hardcore_for_next_run(self, active: bool) -> None:
+        """Opt the next run into hardcore. Cleared by `clear_hardcore_flag()`
+        once the run starts so the flag doesn't sticky-stick across menus."""
+        self._data["hardcore_active"] = bool(active)
+        self.save()
+
+    def clear_hardcore_flag(self) -> None:
+        """Reset the run-scoped flag — called at the end of a hardcore run."""
+        self._data["hardcore_active"] = False
+        self.save()
+
+    def hardcore_best_time(self, chapter: int) -> int:
+        """Best HARDCORE clear time for a chapter, in whole seconds (0 = none)."""
+        book = self._data.get("hardcore_best_s", {}) or {}
+        return int(book.get(str(int(chapter)), 0))
+
+    def record_hardcore_clear(self, chapter: int, total_seconds: float) -> bool:
+        """Save a hardcore clear time. Returns True if a new record was set."""
+        if total_seconds <= 0:
+            return False
+        book = self._data.setdefault("hardcore_best_s", {})
+        key = str(int(chapter))
+        prev = int(book.get(key, 0))
+        new_t = int(round(total_seconds))
+        if prev == 0 or new_t < prev:
+            book[key] = new_t
+            self.save()
+            return True
+        return False
 
     def mark_hum_heard(self, idx: int) -> bool:
         """Record that the player has heard hum `idx`.  Returns True if newly heard."""

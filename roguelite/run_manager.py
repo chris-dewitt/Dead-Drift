@@ -251,6 +251,10 @@ class RunManager:
         # Epic 12.1 — Run mutators
         self.mutators = MutatorRegistry()
 
+        # Epic 8.2 — chapter override set by the cargo dossier carousel.
+        # When non-None, overrides the natural progression in `_current_chapter()`.
+        self._chapter_override: int | None = None
+
         # Epic 12.4 — Stats tracker (subscribes to bus internally)
         self.stats = StatsTracker()
 
@@ -315,6 +319,8 @@ class RunManager:
         self._run_seed = secrets.randbelow(2 ** 31)
         self._frame_name = ""
         self._sector_index = 0
+        # Epic 8.4 — hardcore total run time tracker.
+        self._run_total_time = 0.0
         self._barges.clear()
         self._debris.clear()
         self._canisters.clear()
@@ -397,6 +403,8 @@ class RunManager:
         # Epic 12.1 — SLINGSHOT_ONLY: timer only advances via slingshot bonus
         if not self.mutators.is_active("slingshot_only"):
             self._sector_timer += dt
+        # Epic 8.4 — total run time always advances (used for HARDCORE best time).
+        self._run_total_time += dt
         self._sling_cd      = max(0.0, self._sling_cd - dt)
         self._prox_cd       = max(0.0, self._prox_cd  - dt)
         self._flash_t       = max(0.0, self._flash_t  - dt)
@@ -1151,7 +1159,9 @@ class RunManager:
 
         # Shop stop — signal game.py to open the shop before next sector loads
         # Epic 12.1 — NO_SHOP mutator suppresses shop appearances entirely.
-        if completed_sector in S.SHOP_SECTORS and self.mutators.shops_enabled():
+        # Epic 8.4 — HARDCORE also suppresses shops (no breathing room).
+        shops_allowed = self.mutators.shops_enabled() and not self.is_hardcore_run()
+        if completed_sector in S.SHOP_SECTORS and shops_allowed:
             self._shop_pending = True
             self.bax_context["shops_visited_this_chapter"] = (
                 self.bax_context.get("shops_visited_this_chapter", 0) + 1)
@@ -1165,6 +1175,8 @@ class RunManager:
         self._sector       = generate_sector(self._sector_index, self._difficulty(),
                                              rng=rng, chapter=self._current_chapter(),
                                              force_theme=self._cold_sector_theme(rng))
+        # Epic 8.4 — HARDCORE compresses the per-sector timer to 70%.
+        self._sector_dur   = self.hardcore_sector_dur(20.0)
         self._sector_timer = 0.0
         self._jump_ready_fired = False
         self._barges.clear()
@@ -1173,6 +1185,11 @@ class RunManager:
         self._kress_called_this_sector = False
         self._shop_pending = False
         self._spawn_sector_objects()
+        # Epic 8.4 — HARDCORE bumps barge density: every sector from 2+ gets
+        # an extra patrolling barge. Stacks with the final-sector gauntlet
+        # bonus below.
+        if self.is_hardcore_run() and self._sector_index >= 1:
+            self._spawn_barge(immediate_chase=False)
 
         cargo_type = (type(self._ship.cargo).__name__
                       if self._ship and self._ship.cargo else None)
@@ -1481,14 +1498,40 @@ class RunManager:
 
     # ------------------------------------------------------------------
     def _difficulty(self) -> float:
-        return 1.0 + (self._sector_index / S.SECTORS_PER_RUN)
+        base = 1.0 + (self._sector_index / S.SECTORS_PER_RUN)
+        # Epic 8.4 — HARDCORE bumps the sector difficulty by +0.3 so theme
+        # scaling (extra hazards, harder spawns) reflects the variant.
+        if getattr(self.meta, "is_hardcore", False):
+            base += 0.3
+        return base
+
+    def is_hardcore_run(self) -> bool:
+        """Whether the active run is HARDCORE (Epic 8.4). Read from meta."""
+        return bool(getattr(self.meta, "is_hardcore", False))
+
+    def hardcore_sector_dur(self, base_dur: float) -> float:
+        """HARDCORE compresses sector timers to ~70% of normal."""
+        return base_dur * 0.7 if self.is_hardcore_run() else base_dur
 
     def _current_chapter(self) -> int:
+        # Epic 8.2 — chapter dossier carousel may set an explicit replay
+        # target; honour it before falling back to the natural progression.
+        override = getattr(self, "_chapter_override", None)
+        if override is not None and 1 <= override <= 4:
+            return override
         completed = self.meta.chapters_completed
         for ch in [1, 2, 3, 4]:
             if ch not in completed:
                 return ch
         return 4
+
+    def set_chapter_override(self, chapter: int | None) -> None:
+        """Force the next run to use a specific chapter (Epic 8.2).
+        Pass `None` to clear the override and resume natural progression."""
+        if chapter is None:
+            self._chapter_override = None
+        elif 1 <= chapter <= 4:
+            self._chapter_override = int(chapter)
 
     def _cold_sector_theme(self, rng: random.Random) -> str | None:
         """Epic 12.1 — COLD_SECTOR mutator forces every sector to FROZEN_TRAIL
