@@ -74,16 +74,16 @@ class RepoBarge:
         if ship is None:
             return
 
-        dist = (ship.pos - self.body.pos).length()
+        dist_sq = (ship.pos - self.body.pos).length_sq()
 
         if self.state == BargeState.PATROL:
             self._patrol(dt)
-            if dist < self.DETECT_RANGE:
+            if dist_sq < self.DETECT_RANGE * self.DETECT_RANGE:
                 self.state = BargeState.CHASE
 
         elif self.state == BargeState.CHASE:
             self._move_toward(ship.pos, self.CHASE_SPEED, dt)
-            if dist < self.CLAMP_RANGE:
+            if dist_sq < self.CLAMP_RANGE * self.CLAMP_RANGE:
                 if self._intercept_cd <= 0:
                     self._open_comm()
                 else:
@@ -92,7 +92,7 @@ class RepoBarge:
         elif self.state == BargeState.AIM:
             self._move_toward(ship.pos, self.AIM_SPEED, dt)
             self._aim_t -= dt
-            if dist > self.AIM_BREAK_RANGE:
+            if dist_sq > self.AIM_BREAK_RANGE * self.AIM_BREAK_RANGE:
                 # Player escaped the targeting cone — abort to chase
                 self.state = BargeState.CHASE
             elif self._aim_t <= 0:
@@ -167,8 +167,8 @@ class RepoBarge:
         self.run_mgr.open_barge_terminal(self)
 
     def _patrol(self, dt: float):
-        dist = (self._patrol_target - self.body.pos).length()
-        if dist < 20.0:
+        dist_sq = (self._patrol_target - self.body.pos).length_sq()
+        if dist_sq < 20.0 * 20.0:
             self._patrol_target = Vec2(
                 random.randint(100, S.SCREEN_W - 100),
                 random.randint(100, S.SCREEN_H - 100),
