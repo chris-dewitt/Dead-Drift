@@ -2353,11 +2353,14 @@ class VectorRenderer:
             gap      = 8
             cur      = 0.0
             beam_col = (beam_r, beam_g, beam_b)
+            # Playtest fix: thicker dashed beam, especially in the last
+            # 0.5s of the lock when fire is imminent.
+            beam_w = 4 if progress >= 0.7 else 3
             while cur < L:
                 seg_end = min(cur + dash_len, L)
                 p1 = (int(bx + ux * cur), int(by + uy * cur))
                 p2 = (int(bx + ux * seg_end), int(by + uy * seg_end))
-                pygame.draw.line(self.surface, beam_col, p1, p2, 2)
+                pygame.draw.line(self.surface, beam_col, p1, p2, beam_w)
                 cur += dash_len + gap
             # Reticle on ship — pulsing crosshair circle
             ret_r = int(20 + 8 * pulse + 14 * progress)
@@ -2368,6 +2371,31 @@ class VectorRenderer:
             pygame.draw.line(self.surface, beam_col, (sx + ret_r - 2, sy), (sx + ret_r + tick, sy), 2)
             pygame.draw.line(self.surface, beam_col, (sx, sy - ret_r - tick), (sx, sy - ret_r + 2), 2)
             pygame.draw.line(self.surface, beam_col, (sx, sy + ret_r - 2), (sx, sy + ret_r + tick), 2)
+
+        # Playtest fix: harpoon launch bolt — bright streak + impact flash
+        # for ~0.18 s when the tether first connects. Without this the
+        # harpoon transition was so fast the player never saw the projectile.
+        flash_t = getattr(barge, "harpoon_flash_t", 0.0)
+        if flash_t > 0:
+            origin = getattr(barge, "harpoon_flash_origin", (bx, by))
+            target = getattr(barge, "harpoon_flash_target", (bx, by))
+            ox, oy = int(origin[0]), int(origin[1])
+            tx, ty = int(target[0]), int(target[1])
+            fade = max(0.0, min(1.0, flash_t / 0.18))
+            # Bright thick bolt from barge to ship — yellow-white core.
+            bolt_outer = (255, int(180 * fade), 40)
+            bolt_inner = (255, 255, int(220 * fade))
+            pygame.draw.line(self.surface, bolt_outer,
+                             (ox, oy), (tx, ty), 5)
+            pygame.draw.line(self.surface, bolt_inner,
+                             (ox, oy), (tx, ty), 2)
+            # Muzzle flash at the barge turret + impact pulse on the ship.
+            flash_r = int(8 + 14 * fade)
+            pygame.draw.circle(self.surface, bolt_outer, (ox, oy - 22), flash_r, 0)
+            pygame.draw.circle(self.surface, bolt_inner, (ox, oy - 22),
+                               max(2, flash_r // 2), 0)
+            impact_r = int(6 + 12 * fade)
+            pygame.draw.circle(self.surface, bolt_outer, (tx, ty), impact_r, 1)
 
         # Tether — double-layered crackling EM beam with snap-charge color
         tether = getattr(barge, "_tether", None)

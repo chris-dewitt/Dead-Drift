@@ -856,15 +856,19 @@ class RunManager:
         self._last_voice_char_t = self._t
 
     def open_barge_terminal(self, barge) -> Terminal:
-        """Mid-flight intercept: repo comm — Gary is common but not guaranteed."""
+        """Mid-flight intercept: repo comm — Gary is common but not guaranteed.
+
+        Playtest fix (May 2026): added IDEALIST and CORRUPT reps to the
+        Local 404 rotation so late-sector pickups feel less repetitive."""
         self._intercepting_barge = barge
-        pool = ["union_dispatcher", "synthetic_droid"]
+        pool = ["union_dispatcher", "synthetic_droid",
+                "idealist_rep", "corrupt_rep"]
         if self._sector_index >= 2:
             pool.append("insurance_adjuster")
         if self._sector_index >= 4:
             pool.append("pirate")
-        # Gary ~30%; other pool members share the rest
-        if self._sector_index >= 1 and random.random() < 0.30:
+        # Gary share dropped 30% -> 22% so the two new reps land more often.
+        if self._sector_index >= 1 and random.random() < 0.22:
             npc_type = "gary"
         else:
             npc_type = random.choice(pool)
@@ -891,6 +895,16 @@ class RunManager:
             "pirate": [
                 "That's NOT Gary — pirate relay on the barge frequency. Talk weird.",
                 "Pirate cuttin' through the repo comm. No Article 7 here.",
+            ],
+            "idealist_rep": [
+                "Eddie Marlowe — TRUE BELIEVER on the comm. Quote the Charter back at 'im.",
+                "It's Eddie. Honest, earnest, *insufferable*. Charter clauses or break 'is ideology.",
+                "Idealist Local 404 rep. Bribes BACKFIRE here. Cite the Charter, comrade.",
+            ],
+            "corrupt_rep": [
+                "Vinny Brogan on the relay. Crooked as a hat-stand. Cash works. So does threats.",
+                "404's resident skim merchant. Small bribes, share-of-score, audit threats.",
+                "Vince Brogan, opportunist. He'll take a bribe — or rob you outright. Be careful.",
             ],
         }
         bus.emit(EVT_BAX_SPEAK, line=random.choice(

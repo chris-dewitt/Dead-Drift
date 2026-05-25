@@ -13,6 +13,8 @@ from terminal.npcs.cargo_inspector import CargoInspector
 from terminal.npcs.dray import Dray
 from terminal.npcs.nova_soma import NovaSomaCollections
 from terminal.npcs.mira_voss import MiraVoss
+from terminal.npcs.idealist_rep import IdealistRep
+from terminal.npcs.corrupt_rep import CorruptRep
 from terminal.npcs.base_npc import BaseNPC
 
 
@@ -33,6 +35,8 @@ def make_npc(npc_type: str, **kwargs) -> BaseNPC:
         "dray":                    Dray,
         "nova_soma_collections":   NovaSomaCollections,
         "mira_voss":               MiraVoss,
+        "idealist_rep":            IdealistRep,
+        "corrupt_rep":             CorruptRep,
     }
     cls = registry.get(npc_type)
     if cls is None:

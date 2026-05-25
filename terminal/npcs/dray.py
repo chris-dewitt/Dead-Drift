@@ -26,6 +26,10 @@ _COMMISERATE_KEYWORDS = [
     "same", "same boat", "feel you", "know what you mean",
     "underpaid", "no choice", "trapped", "stuck",
     "quota", "sector", "what are they even", "makes no sense",
+    # Playtest fix: "gripe" / "griping" / "complain" should land here.
+    "gripe", "griping", "gripes", "moan", "moaning", "whinge",
+    "whinging", "complain", "complaining", "complaint", "vent",
+    "venting", "bitching", "fed up", "had it",
 ]
 _TRADE_KEYWORDS = [
     "intel", "tip", "route", "patrol", "heard", "scanner",
@@ -148,7 +152,9 @@ class Dray(BaseNPC):
 
         if parsed.amount is not None and parsed.amount >= _BRIBE_AMOUNT:
             self._paid = True
-            self._current_path = "BRIBED"
+            # Playtest fix: dossier label uses the standardised
+            # `BRIBE [X cr]` format instead of past-tense "BRIBED".
+            self._current_path = f"BRIBE [{parsed.amount} cr]"
             bus.emit(EVT_NLP_EXPLOIT, npc="dray", exploit_key="bribe")
             if self._vault:
                 self._vault.record("dray", "BRIBE")
@@ -237,10 +243,12 @@ class Dray(BaseNPC):
         ])
 
     def get_path_progress(self) -> list[tuple[str, int, int]]:
+        # Playtest fix: bribe row uses the standardised dollar-amount
+        # label so it matches the rest of the NPC dossiers.
         return [
-            ("GRIPE",   min(self._gripe_count, 3), 3),
-            ("INTEL",   int(self._traded),          1),
-            ("BRIBED",  int(self._paid),             1),
+            ("GRIPE",            min(self._gripe_count, 3), 3),
+            ("INTEL TRADE",      int(self._traded),         1),
+            (f"BRIBE [{_BRIBE_AMOUNT}+ cr]", int(self._paid), 1),
         ]
 
     def exploits(self) -> dict[str, str]:

@@ -43,6 +43,8 @@ _NPC_LABEL: tuple[tuple[str, str], ...] = (
     ("dray",                  "DRAY"),
     ("nova_soma_collections", "NOVA SOMA AI"),
     ("mira_voss",             "MIRA VOSS"),
+    ("idealist_rep",          "EDMUND (IDEALIST)"),
+    ("corrupt_rep",           "VINCE (CORRUPT)"),
 )
 
 

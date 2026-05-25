@@ -47,6 +47,14 @@ class BaseNPC(ABC):
         ...
 
     # ------------------------------------------------------------------
+    # Universal panic-escape easter egg (playtest backlog).
+    # The phrase "fuck off" releases the player on every NPC. NOT
+    # advertised in any keyword hint, dossier line, README, or in-game
+    # text — players have to discover it organically. The carrier
+    # registers it as path "ESCAPE" so the per-NPC dossier doesn't
+    # show ★ ESCAPE on the chip strip.
+    _UNIVERSAL_ESCAPE = "fuck off"
+
     def respond(self, player_input: str) -> tuple[str, str]:
         """
         Parse input, evaluate against NPC logic, return (outcome, npc_line).
@@ -57,6 +65,14 @@ class BaseNPC(ABC):
         self._current_path = ""
         self._turn += 1
         self._log.append(("PLAYER", player_input))
+
+        # Universal easter egg — checked before evaluator so it works
+        # even when patience is at zero.
+        if self._UNIVERSAL_ESCAPE in player_input.lower():
+            self._current_path = "ESCAPE"
+            line = self._universal_escape_line()
+            self._log.append((self.name.upper(), line))
+            return NPCOutcome.RELEASE, line
 
         if self._patience <= 0:
             return NPCOutcome.IMPOUND, self._out_of_patience_line()
@@ -71,6 +87,15 @@ class BaseNPC(ABC):
 
         self._log.append((self.name.upper(), response))
         return outcome, response
+
+    def _universal_escape_line(self) -> str:
+        """Default flavour for the universal escape phrase. NPCs may
+        override if they want a more in-character close-out."""
+        return (
+            "*long pause* ...Right. That's the rudest thing I've heard "
+            "all shift. Channel closed. Don't come back through this "
+            "sector this week."
+        )
 
     def intro(self) -> str:
         line = self._with_cargo_dialogue(self._intro_line())

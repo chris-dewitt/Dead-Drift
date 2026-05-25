@@ -66,6 +66,16 @@ class RepoBarge:
         self._torch_warned   = False  # track if torch_active event was emitted
         self._aim_t          = 0.0    # countdown while in AIM state
         self.hit_flash_t     = 0.0   # > 0 when recently hit (for renderer)
+        # Playtest fix: barge slows briefly after each bullet hit so the
+        # player gets a window to land follow-up shots without the barge
+        # accelerating away mid-volley.
+        self._stagger_t      = 0.0   # > 0 = movement-speed multiplier reduced
+        # Playtest fix: visible harpoon "projectile" flash on fire — a
+        # bright bolt drawn by the renderer for ~0.18s before the tether
+        # engagement, so the player actually sees the harpoon connect.
+        self.harpoon_flash_t = 0.0   # > 0 = renderer should draw the bolt
+        self.harpoon_flash_origin = (0.0, 0.0)
+        self.harpoon_flash_target = (0.0, 0.0)
 
     # ------------------------------------------------------------------
     def update(self, dt: float):
@@ -74,6 +84,8 @@ class RepoBarge:
 
         self._intercept_cd = max(0.0, self._intercept_cd - dt)
         self.hit_flash_t   = max(0.0, self.hit_flash_t - dt)
+        self._stagger_t    = max(0.0, self._stagger_t - dt)
+        self.harpoon_flash_t = max(0.0, self.harpoon_flash_t - dt)
 
         ship = self._get_ship()
         if ship is None:
@@ -181,6 +193,12 @@ class RepoBarge:
         self._move_toward(self._patrol_target, self._patrol_speed, dt)
 
     def _move_toward(self, target: Vec2, speed: float, dt: float):
+        # Playtest: while staggered (just-hit), the barge halves its drive
+        # force AND its current velocity gets a damping nudge so the
+        # player sees and feels the recoil.
+        if self._stagger_t > 0:
+            speed *= 0.5
+            self.body.vel = self.body.vel * 0.92
         direction = (target - self.body.pos).normalized()
         self.body.apply_force(direction * speed * self.body.mass)
 
@@ -188,6 +206,12 @@ class RepoBarge:
         from core.event_bus import EVT_TETHER_HIT
         self._tether = Tether(ship.body, self.body.pos, barge_ref=self)
         self.state   = BargeState.CLAMP
+        # Playtest fix: arm a brief "harpoon bolt" flash so the renderer
+        # can draw a bright projectile streak from the barge to the ship.
+        self.harpoon_flash_t      = 0.18
+        self.harpoon_flash_origin = (float(self.body.pos.x),
+                                     float(self.body.pos.y))
+        self.harpoon_flash_target = (float(ship.pos.x), float(ship.pos.y))
         bus.emit(EVT_TETHER_HIT, barge=self)
 
     def _unbolt_module(self, ship):
@@ -199,6 +223,14 @@ class RepoBarge:
         if self.state == BargeState.RETREAT:
             return
         self.hit_flash_t = 0.25
+        # Playtest fix: brief stagger so the barge stops accelerating away
+        # mid-volley and the player actually sees the recoil. Matches the
+        # 'barge should slow down briefly so you can land another shot'
+        # feedback note in docs/PLAYTEST_FEEDBACK.md.
+        self._stagger_t = 0.5
+        # Damp current velocity right at the moment of impact so the
+        # response is felt this frame, not next.
+        self.body.vel = self.body.vel * 0.85
         self._disruption_hits += 1
         if self._disruption_hits >= self.DISRUPTION_HITS:
             self._disruption_hits = 0

@@ -317,6 +317,26 @@ class NervousFence(BaseNPC):
             ])
 
         # ------------ PARANOIA / GOSSIP (NEW) --------------------------
+        # Playtest fix: bare "gossip" / "rumor" used to fall through to
+        # filler. It now arms the path and prompts Felix to ask whose
+        # name we have. Patience still ticks, but the player gets clear
+        # signal that they're on a real path.
+        if (any(w in raw for w in ("gossip", "rumor", "rumors", "rumour",
+                                    "rumours", "intel", "talk about",
+                                    "word on", "chatter"))
+                and self._gossip_t == 0):
+            self._gossip_t += 1
+            self._current_path = "GOSSIP"
+            self.disposition += 1
+            return NPCOutcome.CONTINUE, random.choice([
+                "*sharp inhale* Gossip? About *whom*? Names, names. "
+                "I don't trade in vague feelings.",
+                "Rumour from where? Specifically. *paranoid* "
+                "Is it about me?",
+                "Word on the relay is great, but I need a NAME, courier. "
+                "Drop one.",
+            ])
+
         gossip_match = None
         for key, (display, _flavor) in _OTHER_NPCS.items():
             if key in raw:
