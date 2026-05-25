@@ -18,6 +18,7 @@
 | 5 | `MAX_VELOCITY` | **280 px/s** — overdrive cap **420 px/s** | Done |
 | 6 | `SOUNDTRACK_PLAN.md` | Implementation status section | Done |
 | 7 | `README.md` | Full feature list | Done |
+| 8 | Phase 1/2 sweep (May 25 2026) | Epics 1.2, 1.4, 1.8, 7.2, 7.3, 7.4 shipped on `rhubarb/phase-1-2-implementation`; checkboxes flipped in `IMPROVEMENT_PLAN.md` | Done |
 
 ---
 
@@ -43,13 +44,17 @@ Phase 0 trust fixes plus the full Epic 6 terminal polish set are tracked as ship
 
 | Doc | Role | Accuracy |
 |-----|------|----------|
-| `docs/IMPROVEMENT_PLAN.md` | Master implementation plan + checkboxes | Current (Phase 0 shipped May 2026) |
+| `docs/IMPROVEMENT_PLAN.md` | Master implementation plan + checkboxes | Current (Phase 0 + Phase 1/2 shipped May 2026) |
 | `docs/DECISION_BRIEFS.md` | Historical decision briefs §3–§4 | Current — resolved May 2026 |
 | `docs/CORRIDOR_DESIGN.md` | Corridor level design | Mostly current |
 | `docs/BAX_VOICE.md` | Bax line bank | Current as writing spec |
 | `docs/SOUNDTRACK_PLAN.md` | Audio spec + **implementation status** | Current |
 | `docs/BAX_HUMS_IMPL.md` | Bax-hums implementation handoff plan | Historical — feature shipped May 2026 (commit `42a66d3`) |
+| `docs/NEXT_PUSH.md` | Active push priority stack + design decisions | Current |
+| `docs/SESSION_STATUS_MAY2026.md` | Phase 1/2 implementation report | Current (May 25 2026) |
+| `docs/PLAYTEST_FEEDBACK.md` | Player feedback backlog (not yet scheduled) | Current (May 25 2026) |
 | `CLAUDE.md` | Agent pointer | Current (replaces stale monolith) |
+| `WORKING_ON.md` | Agent subsystem claim coordination | Current |
 | `docs/CLAUDE_ARCHIVED.md` | Old agent/GDD excerpt | Historical only |
 | `docs/DEAD_DRIFT_GDD_ARCHIVED.md` | Original pitch GDD | Historical only |
 | `README.md` | Player + dev overview | Full pass May 2026 |

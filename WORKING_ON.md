@@ -15,6 +15,7 @@ After committing your work, remove your row.
 
 ### Recent releases
 
+- 2026-05-25: `bax/bax.py` + `audio/audio_manager.py` + `audio/voices.py` + `core/event_bus.py` + `renderer/cockpit_renderer.py` + `antagonists/repo_barge.py` + `play.py` — Phase 1/2 sweep: Epics 1.2 (font cache), 1.4 (Subscriber mixin), 1.8 (length_sq), 7.2 (first-kill-of-sector pool), 7.3 (voice modes), 7.4 (Bax pitch tiers). Branch `rhubarb/phase-1-2-implementation`.
 - 2026-05-24: terminal + dray/mira_voss/nova_soma/toll_authority + run_manager (popup gate) — Epic 9.1-9.3 + partial 9.4 shipped. Branch `claude/improve-game-mechanics-RkgJV`.
 
 ---
