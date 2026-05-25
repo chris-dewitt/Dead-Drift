@@ -125,20 +125,23 @@ These are the directional answers backing this plan. Don't re-litigate — imple
 ### 1.1 Delete the stale `dead-drift/` directory — [x]
 The `/dead-drift/` subtree is a ~3,500-LOC near-duplicate of the live root, including an older `main.py` whose NLTK bootstrap uses the broken pre-`punkt_tab` paths. Nothing in the live game imports it. **Delete the entire directory.** Pre-flight: run a project-wide grep for any string referencing the path (build scripts, CI configs, README links) and clear them before the rm.
 
-### 1.2 Font caching helper — [~]
+### 1.2 Font caching helper — [x]
 At least 40 `pygame.font.SysFont(...)` calls live inside per-frame draw paths in `core/game.py` (with smaller pockets in `terminal/terminal.py`, `delivery/delivery_sequence.py`, `roguelite/shop.py`, `renderer/cockpit_renderer.py`, `roguelite/loadout_draft.py`, `delivery/platformer.py`, `delivery/obstacles.py`, `play.py`, `ship/hud.py`). Each call is a font lookup; at 60 FPS, this is hundreds of redundant constructions per second.
 
 Land a single `Game._font(size: int, bold: bool = False, italic: bool = False)` helper that memoizes by `(size, bold, italic)`. Route every existing `pygame.font.SysFont("monospace", …)` through it. Keep the API tight — one helper, used everywhere.
 
 **May 2026:** `core/text.py` `get_font()` + `install_font_patch()` exist; `roguelite/shop.py` has local cache. `core/game.py`, `delivery/delivery_sequence.py`, and others still call raw `SysFont` in draw paths.
+**Phase 1 (May 25 2026):** `install_font_patch()` now called from `play.py` `main()` ahead of any `SysFont` lookups, so the patch covers every draw path — shipped.
 
 ### 1.3 Event bus fixes — [x]
 `core/event_bus.py` has two latent issues:
 - `_listeners` is a `defaultdict(list)` — calling `bus.emit("never_subscribed")` creates a permanent empty-list entry. Use a plain `dict` with `.get(event, ())`.
 - The dispatch loop iterates `_listeners[event]` directly. A callback that unsubscribes itself (or another listener) during dispatch will skip an entry. Snapshot the list before iterating.
 
-### 1.4 Subscriber lifecycle helper — [ ]
+### 1.4 Subscriber lifecycle helper — [x]
 Every renderer / manager / Bax / audio system subscribes in `__init__` but never unsubscribes. Today that's latent because `Game` constructs once — but `RunManager.start_run` and `_dev_start_flight` both partially rebuild state and would cause double-fire if either ever spun up a fresh `RunManager` or `VectorRenderer`. Introduce a tiny `Subscriber` mixin (or context manager) that tracks owned subscriptions and exposes `unsubscribe_all()`. Adopt across all current `bus.subscribe(...)` callers.
+
+**Phase 2 (May 25 2026):** `Subscriber` mixin added to `core/event_bus.py`. `Bax` and `CockpitRenderer` adopt it; all `bus.subscribe()` calls in those classes routed through `self.subscribe()` (43 calls in `Bax._wire_events`). Other subscribers can adopt as they're touched.
 
 ### 1.5 Procedural RNG threading (seeded-runs ready) — [x]
 `roguelite/procedural.py:generate_sector` creates `rng = random.Random()` but then `_generate_gravity` uses module-level `random.randint`/`random.uniform`. The seeded `rng` is decorative. Thread it properly through every sub-helper so passing `generate_sector(index, difficulty, rng=...)` actually produces deterministic output. This unlocks daily/weekly seeded challenges later — no commitment to ship that feature now, just stop blocking it.
@@ -152,7 +155,7 @@ Every renderer / manager / Bax / audio system subscribes in `__init__` but never
 ### 1.7 `PlayerShip.reset()` chain rebuild — [x]
 `reset()` does not touch `self.chain` beyond what it does today, so shop upgrades and ad-hoc installs in slots 2–5 silently persist across deaths and runs. Change behavior: on reset, **clear slots 2–5**. Keep slot 0 (LifeSupport) and slot 1 (Thruster) installed — these are baseline issue and are re-set by `apply_draft` anyway.
 
-### 1.8 Squared-distance optimization — [~]
+### 1.8 Squared-distance optimization — [x]
 Replace `(a - b).length()` comparisons with `length_sq()` against `RANGE * RANGE` in:
 - `run_manager._check_slingshot` (per-well, per-frame)
 - `run_manager._check_proximity` (per-barge, per-frame)
@@ -162,6 +165,7 @@ Replace `(a - b).length()` comparisons with `length_sq()` against `RANGE * RANGE
 Don't bother below ~10 calls/frame paths; the rest aren't hot.
 
 **May 2026:** Done in `run_manager` (slingshot, proximity), `physics/tether.py`, several antagonists. `repo_barge.py` ship-distance checks may still use `.length()`.
+**Phase 1 (May 25 2026):** `repo_barge.py` `update()` + `_patrol()` ship-distance checks converted to `length_sq()` with squared constants — shipped.
 
 ### 1.9 Move `random` import to module top in `ship/loadout.py` — [x]
 
@@ -595,7 +599,7 @@ Bax's portrait in the cockpit strip currently doesn't react visually to ship dam
 - **Diegetic deterioration on hits:** every `EVT_HULL_DAMAGE` event triggers a brief portrait reaction — eyes widen for 0.4 seconds, scanlines on the portrait glitch harder for 0.6 seconds, antenna sparks for 0.3 seconds. Repeated hits compound the glitch intensity (cooldown of 1.5 seconds before glitch resets).
 - **At < 10% hull:** portrait holds a "panic" expression statically — eyes wide, mouth open, antenna fully sparking. Bax's voice pitch shifts subtly higher in the audio system (see 7.4).
 
-### 7.2 New voice contexts (~100 lines drafted) — [~]
+### 7.2 New voice contexts (~100 lines drafted) — [x]
 
 Twelve lines per context, drafted in `docs/BAX_VOICE.md`. Contexts:
 
@@ -613,8 +617,9 @@ Twelve lines per context, drafted in `docs/BAX_VOICE.md`. Contexts:
 - `dock_rough` — both landing inputs missed.
 
 **May 2026:** Most lists in `bax/bax.py` with event wiring. **`first_kill_of_sector`** — flag set on barge kill, no dedicated line pool from `BAX_VOICE.md`.
+**Phase 1 (May 25 2026):** `_FIRST_KILL_OF_SECTOR` 12-line pool added; `_on_barge_killed` now prioritizes run-first → sector-first → generic — shipped.
 
-### 7.3 New voice modes — [~]
+### 7.3 New voice modes — [x]
 
 Bax's voice gets three explicit modes that nuance line selection:
 
@@ -626,9 +631,12 @@ Bax's voice gets three explicit modes that nuance line selection:
 Implementation: each line in the bank is tagged with mode. The `Bax` system picks lines weighted by current context's preferred mode.
 
 **May 2026:** Modes described in `BAX_VOICE.md`; code uses context pools but not explicit per-line mode tags + pitch.
+**Phase 2 (May 25 2026):** `_LINE_MODE` pool→mode dict in `bax/bax.py`. `speak()` emits `EVT_BAX_SPEAK` with mode payload. `AudioManager._play_voice_blip` applies effects per mode: `manic_glee` bumps the pitch tier up one, `dark_vulnerable` ducks volume to 0.72× — shipped.
 
-### 7.4 Audio pitch shift — [ ]
+### 7.4 Audio pitch shift — [x]
 `audio_manager.py`'s Bax voice channel uses pre-built blips. Add a one-line pitch shift on the blip channel mapped to hull%: 100% hull = neutral pitch; < 30% = +5% pitch; < 10% = +12% pitch. Same effect Bax has when he's stressed in fiction — voice goes higher.
+
+**Phase 1 (May 25 2026):** `audio/voices.py` now exposes `BAX_PITCH_TIERS = (1.0, 1.05, 1.12)` and `prebuild_bax_pitch_tiers()`. `AudioManager` prebuilds all three tiers and `_play_voice_blip` selects the right one based on hull% — shipped.
 
 ### 7.5 Bax line cycling without immediate repeats — [x]
 Today `random.choice` can pick the same line twice in a row, which kills the illusion. Update `Bax._speak` to track the last 3 lines spoken per context and reject-sample to avoid repetition until those slots cycle out. Trivial change, large player-perceptible quality gain.

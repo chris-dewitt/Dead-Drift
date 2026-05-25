@@ -1027,7 +1027,7 @@ class Game:
             True, ticker_col)
 
         # Epic 16 — float debt change label for 2s beside the counter
-        self._debt_float_t = max(0.0, self._debt_float_t - dt)
+        self._debt_float_t = max(0.0, self._debt_float_t - self._dt)
         if self._debt_float_t > 0 and self._debt_float_label:
             fade = min(1.0, self._debt_float_t)
             alpha = int(220 * fade)
