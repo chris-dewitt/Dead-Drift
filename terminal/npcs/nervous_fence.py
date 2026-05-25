@@ -255,6 +255,24 @@ class NervousFence(BaseNPC):
             ])
 
         # ------------ CREDIT BRIBE ------------------------------------
+        # Aliveness B.8 — too-low bribe gets a specific counter-offer
+        # naming the floor, not vague filler.
+        if (parsed.amount is not None
+                and 0 < parsed.amount < _CREDIT_AMOUNT):
+            self._current_path = "BRIBE"
+            return NPCOutcome.CONTINUE, random.choice([
+                f"*nervous laugh* {parsed.amount}? Felix's floor is "
+                f"{_CREDIT_AMOUNT}. *exact* It's not negotiable. Well — it IS, "
+                "but it's not, and we'd both rather not have that conversation.",
+                f"You said {parsed.amount} credits. The number is {_CREDIT_AMOUNT}. "
+                "That's the broker rate. I have overheads. Power costs. "
+                "Trauma costs. Round up.",
+                f"{parsed.amount}? *pause* I'd love to. Genuinely. "
+                "But the floor's {_CREDIT_AMOUNT} and the floor is the floor. "
+                "*hopeful* Try {_CREDIT_AMOUNT}?".format(
+                    _CREDIT_AMOUNT=_CREDIT_AMOUNT),
+            ])
+
         if parsed.amount is not None and parsed.amount >= _CREDIT_AMOUNT:
             self._paid = True
             self._bribe_paid = parsed.amount

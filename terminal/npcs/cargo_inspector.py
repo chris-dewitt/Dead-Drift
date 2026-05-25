@@ -193,6 +193,22 @@ class CargoInspector(BaseNPC):
                 "Shall I list them? I can list them.",
             ])
 
+        # Aliveness B.8 — too-low offer gets a specific counter-offer
+        # naming Holt's floor instead of a generic refusal.
+        if (parsed.amount is not None
+                and 0 < parsed.amount < _BRIBE_AMOUNT):
+            self._current_path = "BRIBE"
+            return NPCOutcome.CONTINUE, random.choice([
+                f"*offended* {parsed.amount} credits? Sir, the "
+                f"documentation processing fee is {_BRIBE_AMOUNT}. "
+                "Not a credit less. I have *standards*.",
+                f"That's {parsed.amount}. The fee schedule lists "
+                f"{_BRIBE_AMOUNT}. Are you suggesting we ignore the fee schedule? "
+                "*pauses* I'm willing to discuss it. At the listed rate.",
+                f"{parsed.amount} would barely cover the carbon paper. "
+                f"{_BRIBE_AMOUNT}, sir. Round numbers make filings easier.",
+            ])
+
         if parsed.amount is not None and parsed.amount >= _BRIBE_AMOUNT:
             self._bribed = True
             self._bribe_paid = parsed.amount

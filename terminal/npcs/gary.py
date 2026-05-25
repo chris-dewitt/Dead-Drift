@@ -271,6 +271,24 @@ class Gary(BaseNPC):
                         "You at least 'ave the initiative. Go on. *waves hand* "
                         "Just don't tell Blevins."
                     )
+            # Aliveness B.8 — when the player names a too-low amount,
+            # Gary surfaces his actual floor (3000 cr) on the second
+            # attempt so the negotiation has a real counter-offer turn
+            # instead of vague 'more' filler.
+            low_amount = (parsed.amount is not None and
+                          0 < parsed.amount < 3000)
+            if low_amount and self._bribe_attempts == 2:
+                return NPCOutcome.CONTINUE, random.choice([
+                    f"{parsed.amount}? Mate, I see that on my lunch tab. "
+                    "*sighs* The floor's three thousand. Round number, "
+                    "easy to write down as 'administrative error'. Come on.",
+                    f"*laughs once* {parsed.amount} credits for makin' "
+                    "a stop GO AWAY? You're insultin' me a little, mate. "
+                    "Three thousand. That's my floor.",
+                    f"You offered {parsed.amount}. The number I'm hearin' "
+                    "is three thousand. The number I'll accept is three "
+                    "thousand. Closing the gap should be easy.",
+                ])
             return NPCOutcome.CONTINUE, [
                 "That's it? Me lunch costs more'n that. Come on.",
                 "Look, I'm not sayin' the right number is twenty thousand. "
