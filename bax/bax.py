@@ -287,6 +287,21 @@ _FIRST_BARGE_KILL_OF_RUN = [
     "First barge of the run goes BOOM. I'd buy you a drink if I had a stomach. Or money.",
 ]
 
+_FIRST_KILL_OF_SECTOR = [
+    "First kill of the sector. Knew you had it in you, mate.",
+    "Right — that's one. The rest of 'em saw what you did. They're worried.",
+    "Target down. I've updated our threat assessment to 'we're the threat now.'",
+    "Look at you, doing actual sector-clearance. Bit out of character. I love it.",
+    "First confirmed kill this sector. I'll mark it on the log. Briefly. I don't keep good logs.",
+    "Beautiful shot. Or lucky. I'm not gonna probe it.",
+    "There we go. Sector knows you're here now. Whether that's good is another question.",
+    "Kill confirmed. Bax's combat database updated. By database I mean I'm just keeping score in me 'ead.",
+    "One down. Honestly didn't think you'd get one before we jumped. Pleasant surprise.",
+    "Boom. That's a vibe shift, mate. Sector just got more interesting.",
+    "First scrap of the sector. The other obstacles are takin' notes.",
+    "Got one. Stay sharp — they tend to come back at you when you start fightin'.",
+]
+
 _BARGE_DESTROYED = [
     "Another barge gone. Local 404's gonna run out at this rate. Wouldn't that be a tragedy.",
     "Down she goes. That's two. Or three. I've lost count. I love losing count this way.",
@@ -945,14 +960,17 @@ class Bax:
 
     def _on_barge_killed(self, **_):
         self._barge_kills_run += 1
-        if self._barge_kills_run == 1:
+        is_first_run    = self._barge_kills_run == 1
+        is_first_sector = not self._sector_first_kill
+        self._sector_first_kill = True
+
+        if is_first_run:
+            # Manic-glee "first barge of the whole run" line wins the slot.
             self.speak(self._no_repeat_pick("first_barge_kill", _FIRST_BARGE_KILL_OF_RUN))
-        else:
-            if self._ctx_ok("barge_destroyed", 8.0):
-                self.speak(self._no_repeat_pick("barge_destroyed", _BARGE_DESTROYED))
-        # Also counts as first kill of sector
-        if not self._sector_first_kill:
-            self._sector_first_kill = True
+        elif is_first_sector:
+            self.speak(self._no_repeat_pick("first_kill_of_sector", _FIRST_KILL_OF_SECTOR))
+        elif self._ctx_ok("barge_destroyed", 8.0):
+            self.speak(self._no_repeat_pick("barge_destroyed", _BARGE_DESTROYED))
 
     def _on_corridor_run(self, **_):
         if self._ctx_ok("corridor_run", 8.0):

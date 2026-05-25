@@ -121,8 +121,9 @@ def _apply_comm_fx(wave: np.ndarray, static: bool, crush: bool) -> np.ndarray:
     return out
 
 
-def _make_one(profile: VoiceProfile, rng: np.random.Generator) -> np.ndarray:
-    pitch_mul = 1.0 + rng.uniform(-0.11, 0.11)
+def _make_one(profile: VoiceProfile, rng: np.random.Generator,
+              pitch_mult: float = 1.0) -> np.ndarray:
+    pitch_mul = (1.0 + rng.uniform(-0.11, 0.11)) * pitch_mult
     f0 = profile.fund_hz * pitch_mul
     dur = profile.dur_ms / 1000.0
     n = max(8, int(SAMPLE_RATE * dur))
@@ -245,13 +246,25 @@ _VOICES: dict[str, VoiceProfile] = {
 }
 
 
-def make_voice_blips(character: str, n_vars: int = 10) -> list[pygame.mixer.Sound]:
+def make_voice_blips(character: str, n_vars: int = 10,
+                     pitch_mult: float = 1.0) -> list[pygame.mixer.Sound]:
     key = resolve_voice_key(character)
     profile = _VOICES.get(key, _VOICES["default"])
     rng = np.random.default_rng(abs(hash(key)) % (2 ** 31))
-    return [_to_sound(_make_one(profile, rng)) for _ in range(n_vars)]
+    return [_to_sound(_make_one(profile, rng, pitch_mult)) for _ in range(n_vars)]
 
 
 def prebuild_voices() -> dict[str, list[pygame.mixer.Sound]]:
     """Pre-generate blip sets for every profile key."""
     return {key: make_voice_blips(key) for key in _VOICES}
+
+
+# Epic 7.4 — Bax hull-tier pitch variants (voice goes higher under damage).
+# Three tiers: 1.0 (healthy / ≥30% hull), 1.05 (<30%), 1.12 (<10%).
+BAX_PITCH_TIERS: tuple[float, ...] = (1.0, 1.05, 1.12)
+
+
+def prebuild_bax_pitch_tiers(n_vars: int = 10) -> list[list[pygame.mixer.Sound]]:
+    """Pre-generate the three Bax pitch tiers used by AudioManager."""
+    return [make_voice_blips("bax", n_vars=n_vars, pitch_mult=m)
+            for m in BAX_PITCH_TIERS]

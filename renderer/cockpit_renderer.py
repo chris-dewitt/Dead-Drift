@@ -294,8 +294,9 @@ class CockpitRenderer:
             glow_col = (200, 80, 0)
             glow_a   = base_a + extra_a
         else:
-            glow_col = (0, 0, 0)
-            glow_a   = 0
+            # Healthy: very dim amber ambient glow — warm status tinge
+            glow_col = (180, 80, 0)
+            glow_a   = 20
 
         if glow_a > 0:
             g = pygame.Surface((_PORT_W, _PORT_H), pygame.SRCALPHA)

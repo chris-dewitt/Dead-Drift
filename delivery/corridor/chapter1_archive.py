@@ -464,6 +464,7 @@ def build() -> Corridor:
         bax_enter_line = "Right. We're in the tunnels. Music industry's gone underground. Literally. Don't get crushed by anything.",
         star3_t     = 20.0,
         star2_t     = 35.0,
+        name        = "DOCK ACCESS — SUB-LEVEL 3",
     )
 
     # ── Room 2: EMPLOYEE CORRIDOR (branching) ──────────────────────────
@@ -516,6 +517,7 @@ def build() -> Corridor:
         bax_enter_line = "Two paths. High is the catwalk. Low is the crawlspace. Your call.",
         star3_t    = 22.0,
         star2_t    = 40.0,
+        name       = "EMPLOYEE CORRIDOR",
     )
 
     # ── Room 3: THE BACK ROOM (boss) ────────────────────────────────────
@@ -541,6 +543,7 @@ def build() -> Corridor:
         bax_enter_line = "Back room. It's warm in here. I can hear music through the walls.",
         star3_t    = 60.0,   # boss room — time doesn't matter
         star2_t    = 90.0,
+        name       = "THE BACK ROOM",
     )
 
     return Corridor(
