@@ -48,6 +48,11 @@ class Game:
         GameState.SHOP,
         GameState.LOADOUT_DRAFT,
         GameState.INTERSTITIAL,
+        # Aliveness A.6 — DELIVERY (corridor) was not pauseable, which left
+        # the player with no escape hatch if a corridor dialog overlay was
+        # ever missed. The dialog now also accepts ESC to abort (corridor/base.py),
+        # but allowing pause here is a second layer of safety.
+        GameState.DELIVERY,
     })
 
     def __init__(self):
@@ -683,7 +688,13 @@ class Game:
             if event.key == pygame.K_1:
                 self._pause_game()
                 return
-            if event.key == pygame.K_ESCAPE and state != GameState.TERMINAL:
+            # Aliveness A.6 — DELIVERY (corridor) is now pauseable via
+            # 1-key, but ESC must reach the corridor first so the dialog
+            # abort path works. TERMINAL has the same exemption for the
+            # same reason (terminal handles ESC itself).
+            if (event.key == pygame.K_ESCAPE
+                    and state != GameState.TERMINAL
+                    and state != GameState.DELIVERY):
                 self._pause_game()
                 return
 
@@ -710,8 +721,16 @@ class Game:
         elif state == GameState.DIFFICULTY_SELECT:
             self._handle_difficulty_key(event)
         elif state == GameState.DELIVERY:
+            # Aliveness A.6 — ESC during the corridor: first let any active
+            # dialog abort (corridor/base.py `_CorridorDialog.handle_key`);
+            # if there was no dialog the corridor swallows it silently and
+            # we fall back to opening the pause menu.
             if self._delivery is not None:
+                had_dialog = self._delivery_corridor_dialog_active()
                 self._delivery.handle_key(event)
+                if (event.key == pygame.K_ESCAPE
+                        and not had_dialog):
+                    self._pause_game()
         elif state == GameState.SHOP:
             if self._shop is not None:
                 self._shop.handle_key(event)
@@ -873,6 +892,20 @@ class Game:
                 ship_speed, dt,
                 hull_pct=self.ship.hull_pct if self.ship else 1.0,
             )
+
+    def _delivery_corridor_dialog_active(self) -> bool:
+        """True when the active corridor has a clerk dialog overlay open.
+
+        Aliveness A.6 helper — used by the FLIGHT/DELIVERY key handler so
+        ESC reaches the dialog's abort path first, then falls through to
+        pause when no dialog is active."""
+        delivery = self._delivery
+        if delivery is None:
+            return False
+        run = getattr(delivery, "_run", None)
+        if run is None:
+            return False
+        return getattr(run, "_dialog", None) is not None
 
     # ── Epic 16 / 13.1 — debt float label ─────────────────────────────────
     def _on_debt_update_hud(self, delta=0, total=0, source="", **_):

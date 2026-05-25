@@ -67,6 +67,13 @@ class _CorridorDialog:
     def handle_key(self, event: pygame.event.Event) -> None:
         if self._result is not None:
             return
+        # Aliveness A.6 — ESC bails the dialog with a 'penalty' outcome so
+        # the player is never modal-locked. Without this the Ch.3 Paperwork
+        # corridor's clerk encounter wedged input (no movement, no pause,
+        # no escape) when the dialog overlay was missed.
+        if event.key == pygame.K_ESCAPE:
+            self._abort()
+            return
         if event.key == pygame.K_RETURN:
             self._submit()
         elif event.key == pygame.K_BACKSPACE:
@@ -74,6 +81,27 @@ class _CorridorDialog:
         elif event.unicode and event.unicode.isprintable():
             if len(self._input) < 40:
                 self._input += event.unicode
+
+    def _abort(self):
+        """Player pressed ESC — bail with the dialog's `penalty` response
+        (or a synthesised one if the encounter doesn't define one)."""
+        penalty_match = next(
+            (r for r in self._enc.responses
+             if r.get("outcome") == "penalty"),
+            None,
+        )
+        if penalty_match is None:
+            penalty_match = {
+                "credits": 0,
+                "lore": "Skipped. Clerk files a complaint.",
+                "outcome": "penalty",
+            }
+        self.credits = int(penalty_match.get("credits", 0))
+        self.lore    = penalty_match.get("lore", "")
+        outcome      = penalty_match.get("outcome", "penalty")
+        self._result = (self.credits, self.lore, outcome)
+        self._show_t = 1.5
+        self._enc.complete()
 
     def _submit(self):
         text_lower = self._input.lower()
@@ -140,6 +168,12 @@ class _CorridorDialog:
             cursor = "█" if int(t * 3) % 2 == 0 else " "
             is2 = f_input.render(f"> {self._input}{cursor}", True, (0, 255, 140))
             surf.blit(is2, (dx + 8, dy + self.DIALOG_H - 24))
+            # Aliveness A.6 — visible escape hatch so the player never
+            # gets modal-locked in a corridor dialog again.
+            hint = get_font(8).render(
+                "ENTER submit · BACKSPACE delete · ESC skip (penalty)",
+                True, (90, 140, 100))
+            surf.blit(hint, (dx + 8, dy + self.DIALOG_H - 10))
         else:
             credits, lore, outcome = self._result
             out_col = {
@@ -401,11 +435,19 @@ class Corridor:
                     self._active_path = "low"
 
             if move_fwd:
-                self._px += RUN_SPEED * dt
+                proposed = self._px + RUN_SPEED * dt
+                # Aliveness A.6 — wire OneWayWall collision so the
+                # Ch.3 cubicle zigzag actually constrains movement
+                # instead of decorating it. Block forward motion if any
+                # OneWayWall says we're entering its blocked side.
+                if not self._blocked_by_oneway(proposed, +RUN_SPEED, room):
+                    self._px = proposed
             elif move_bck:
                 # Can retreat but only back to the camera left edge (can't go behind camera)
                 min_x = self._cam_x + _PLAYER_X_FIXED * 0.5
-                self._px = max(min_x, self._px - RUN_SPEED * 0.6 * dt)
+                proposed = self._px - RUN_SPEED * 0.6 * dt
+                if not self._blocked_by_oneway(proposed, -RUN_SPEED, room):
+                    self._px = max(min_x, proposed)
 
             # Gravity
             self._pvy += GRAVITY * dt
@@ -654,8 +696,27 @@ class Corridor:
                         # Epic 8.3 — persist for Bax's Records, Tab 4.
                         bus.emit(EVT_LORE_FOUND, text=lore, chapter=self.chapter)
 
+    def _blocked_by_oneway(self, proposed_px: float, vx: float, room: Room) -> bool:
+        """Aliveness A.6 — true if a `OneWayWall` element would block the
+        player at the proposed position with the given velocity sign.
+
+        Walls only block when the player would enter their disallowed side,
+        so re-tracing the same wall in the reverse direction stays free."""
+        for el in self._visible_elements(room):
+            if isinstance(el, OneWayWall):
+                if el.blocks(proposed_px, self._py, vx):
+                    return True
+        return False
+
     def _check_npc_encounters(self, room: Room):
         if self._dialog is not None:
+            return
+        # Aliveness A.6 — defer NPC dialog until courier is grounded.
+        # Ch.3 Paperwork repro: ladder + clerk trigger overlapped and the
+        # player got a modal dialog while still climbing, with no clean
+        # way to dismiss it. Wait for grounded so the player has a clear
+        # 'I just walked into this' moment.
+        if self._on_ladder or not self._grounded:
             return
         for el in self._visible_elements(room):
             if isinstance(el, NPCEncounter):
