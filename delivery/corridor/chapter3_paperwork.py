@@ -654,6 +654,7 @@ def build() -> Corridor:
         bax_enter_line = "Office. Real office. With fluorescents. They want forms. Just give 'em forms. Don't make it weird.",
         star3_t    = 30.0,
         star2_t    = 50.0,
+        name       = "INTAKE FLOOR",
     )
 
     # ── Room 2: FILE ROOM 4 ──────────────────────────────────────────────
@@ -696,6 +697,7 @@ def build() -> Corridor:
         bax_enter_line = "Up we go. There are receipts up there from before the Republic. The Republic. Climb.",
         star3_t    = 32.0,
         star2_t    = 55.0,
+        name       = "FILE ROOM 4",
     )
 
     # ── Room 3: EXECUTIVE PROCESSING (boss) ──────────────────────────────
@@ -719,6 +721,7 @@ def build() -> Corridor:
         bax_enter_line = "Corner office. He's not expecting us. He's going to pretend he is.",
         star3_t    = 60.0,
         star2_t    = 90.0,
+        name       = "EXECUTIVE PROCESSING",
     )
 
     return Corridor(

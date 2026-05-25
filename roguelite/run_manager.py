@@ -26,6 +26,8 @@ from antagonists.trash_field import TrashField
 from antagonists.mine_field import MineField
 from antagonists.ice_field import IceField
 from antagonists.comet_trail import CometTrail
+from antagonists.collapsing_gravity_well import CollapsingGravityWell
+from antagonists.debris_cloud import DebrisCloud
 from terminal.terminal import Terminal
 from terminal.npc_logic import make_npc
 from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
@@ -169,6 +171,9 @@ class RunManager:
         self._mine_field: MineField | None     = None
         self._ice_field: IceField | None       = None
         self._comet_trail: CometTrail | None   = None
+        # Hazard-pool obstacles (Epic 3.1 — wired via sector.hazards)
+        self._collapsing_well: CollapsingGravityWell | None = None
+        self._debris_cloud: DebrisCloud | None = None
         # Solar flare state
         self._flare_cd        = 22.0   # seconds until next flare event
         self._flare_active    = False
@@ -1231,11 +1236,13 @@ class RunManager:
 
         # --- Theme-based obstacle spawning (Epic 3) ---
         self._wrecks.clear()
-        self._dead_station = None
-        self._trash_field  = None
-        self._mine_field   = None
-        self._ice_field    = None
-        self._comet_trail  = None
+        self._dead_station    = None
+        self._trash_field     = None
+        self._mine_field      = None
+        self._ice_field       = None
+        self._comet_trail     = None
+        self._collapsing_well = None
+        self._debris_cloud    = None
         self._flare_cd     = 22.0
         self._flare_active = False
         self._flare_t      = 0.0
@@ -1279,6 +1286,13 @@ class RunManager:
         elif theme == THEME_TOLL_AUTHORITY:
             self._toll_pending = True
             self._toll_t       = 10.0
+
+        # Hazards from sector.hazards list (collapsing_gravity_well, debris_cloud)
+        for h in getattr(self._sector, "hazards", []):
+            if h == "collapsing_gravity_well" and self._collapsing_well is None:
+                self._collapsing_well = CollapsingGravityWell(self._sector.gravity)
+            elif h == "debris_cloud" and self._debris_cloud is None:
+                self._debris_cloud = DebrisCloud()
 
     def _update_theme_obstacles(self, dt: float):
         """Per-frame update for all theme-specific obstacles."""
@@ -1324,6 +1338,14 @@ class RunManager:
             for frag in self._comet_trail.all_fragments():
                 if frag.collides(ship.pos):
                     ship.take_damage(self._comet_trail.chip_damage, source="comet")
+
+        # Collapsing gravity well — mass ramp
+        if self._collapsing_well is not None:
+            self._collapsing_well.update(dt)
+
+        # Debris cloud — particle drift (no damage; renderer reads particles)
+        if self._debris_cloud is not None:
+            self._debris_cloud.update(dt)
 
         # Solar flare — periodic sweep
         if THEME_FLARE_CORRIDOR == getattr(self._sector, "theme", ""):
@@ -1486,6 +1508,10 @@ class RunManager:
     @property
     def ai_ships(self) -> list[AIShip]:
         return self._ai_ships
+
+    @property
+    def debris_cloud(self) -> DebrisCloud | None:
+        return self._debris_cloud
 
     def take_ai_hail(self) -> AIShip | None:
         """Consume and return the pending hail (if any). Caller opens terminal."""

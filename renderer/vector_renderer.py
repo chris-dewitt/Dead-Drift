@@ -171,6 +171,7 @@ class VectorRenderer:
         self._draw_shooting_stars(t)
         self._draw_scan_pings(t)
         self._draw_gravity_wells(run_mgr, t)
+        self._draw_debris_cloud(run_mgr, t)
         self._draw_debris(run_mgr, t)
         self._draw_satellites(run_mgr, t)
         self._draw_canisters(run_mgr, t)
@@ -1010,11 +1011,34 @@ class VectorRenderer:
         for well in run_mgr.sector.gravity.wells:
             self._draw_well(well, t)
 
+    def _draw_debris_cloud(self, run_mgr, t: float):
+        cloud = getattr(run_mgr, "debris_cloud", None)
+        if cloud is None:
+            return
+        # Dim visibility overlay
+        ov = pygame.Surface((S.SCREEN_W, S.FLIGHT_H), pygame.SRCALPHA)
+        ov.fill((20, 16, 10, cloud.alpha_overlay))
+        self.surface.blit(ov, (0, 0))
+        # Particles
+        for p in cloud.particles:
+            col = (int(160 + 40 * math.sin(t * 1.1 + p.radius)), 130, 90)
+            s = pygame.Surface((int(p.radius * 2 + 1), int(p.radius * 2 + 1)),
+                               pygame.SRCALPHA)
+            pygame.draw.circle(s, (*col, p.alpha), (int(p.radius), int(p.radius)),
+                               int(p.radius))
+            self.surface.blit(s, (int(p.pos.x - p.radius), int(p.pos.y - p.radius)))
+
     def _draw_well(self, well, t: float):
         cx, cy = int(well.pos.x), int(well.pos.y)
         r      = well.radius
-        drift  = (t * 0.07) % 1.0
-        pulse  = math.sin(t * 1.4) * 4.5
+        collapse = getattr(well, "collapsing_pct", 0.0)
+        # Hue shifts from normal cycling → red (0.0) as well collapses.
+        # At collapse_pct=1.0 the drift baseline locks at hue=0.05 (deep red).
+        drift_speed = max(0.01, 0.07 * (1.0 - collapse * 0.85))
+        drift  = (t * drift_speed + collapse * 0.5) % 1.0
+        # Rotation slows as it collapses
+        rot_speed = 9.0 * (1.0 - collapse * 0.7)
+        pulse  = math.sin(t * max(0.3, 1.4 - collapse)) * (4.5 + collapse * 8.0)
 
         # Soft core bloom
         bloom = pygame.Surface((r * 10, r * 10), pygame.SRCALPHA)
@@ -1049,7 +1073,7 @@ class VectorRenderer:
         line_hue = (drift + 0.12) % 1.0
         line_col = _hsv(line_hue, 0.80, 0.38)
         for i in range(8):
-            ang = math.radians(i * 45 + t * 9)
+            ang = math.radians(i * 45 + t * rot_speed)
             x1 = cx + int(math.cos(ang) * r * 1.7)
             y1 = cy + int(math.sin(ang) * r * 1.7)
             x2 = cx + int(math.cos(ang) * r * 0.90)
@@ -1059,7 +1083,7 @@ class VectorRenderer:
         # Counter-rotating secondary spokes (4-fold, width=2)
         sec_col = _hsv((drift + 0.22) % 1.0, 0.55, 0.28)
         for i in range(4):
-            ang = math.radians(i * 90 + 22.5 - t * 5)
+            ang = math.radians(i * 90 + 22.5 - t * (rot_speed * 0.55))
             x1 = cx + int(math.cos(ang) * r * 2.4)
             y1 = cy + int(math.sin(ang) * r * 2.4)
             x2 = cx + int(math.cos(ang) * r * 1.2)
