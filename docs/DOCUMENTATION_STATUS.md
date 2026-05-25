@@ -20,6 +20,7 @@
 | 7 | `README.md` | Full feature list | Done |
 | 8 | Phase 1/2 sweep (May 25 2026) | Epics 1.2, 1.4, 1.8, 7.2, 7.3, 7.4 shipped on `rhubarb/phase-1-2-implementation`; checkboxes flipped in `IMPROVEMENT_PLAN.md` | Done |
 | 9 | Post-review sweep (May 25 2026) | **Epic 8.3 Bax's Records** screen + lore-fragment persistence shipped. Doc drift cleared: 3.1 hazard wiring, 4.2 black wipe / `ENTERING:` caption, 4.7 corridor end-card stats, and 7.1 cockpit hull-glow flipped to `[x]` after verifying live code. | Done |
+| 10 | Replay/audio sweep (May 25 2026) | **Epic 4.6** per-chapter corridor music shipped (`EVT_CORRIDOR_ENTER/BOSS_ROOM/EXIT` + `_CORR_SIG_CH` + per-chapter intervals/volumes). **Epic 8.2** cargo dossier carousel shipped (`renderer/cargo_carousel.py`, `RunManager.set_chapter_override`). **Epic 8.4** HARDCORE chapter variant shipped (timer ×0.7, +0.3 difficulty, extra barge per sector ≥2, no shops, 1-checkpoint corridor, hardcore best-time per chapter). Epic 8 fully closed. | Done |
 
 ---
 

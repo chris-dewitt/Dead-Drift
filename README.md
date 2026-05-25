@@ -179,9 +179,16 @@ Spec + implementation status → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLA
 
 ## Known issues / open polish
 
-- Per-chapter corridor music tracks (Epic 4.6) and full string audit (Epic 9.4) still open
-- Cargo dossier carousel (Epic 8.2) and Hardcore variant (Epic 8.4 stretch) still open
+- Full string audit (Epic 9.4) still open
+- Several `NEXT_PUSH.md` items in progress (corridor visuals 10.4,
+  harmonica play-along 11.1, mutator effects 12.1, money/flight events 13.x,
+  difficulty selector 18, sector-5 capstones 19, death highlight reel 20)
+- Playtest backlog in `docs/PLAYTEST_FEEDBACK.md` not yet scheduled
+  (barge hit-slowdown, harpoon visibility, two new union reps, NPC keyword
+  normalization)
 
 (Market + docking graphics, Bax's Records (Epic 8.3), the lazy NLTK
-bootstrap (Epic 1.10), and the font-cache adoption sweep (Epic 1.2) all
-shipped May 2026 — see `docs/DOCUMENTATION_STATUS.md`.)
+bootstrap (Epic 1.10), the font-cache adoption sweep (Epic 1.2),
+per-chapter corridor music (Epic 4.6), the cargo dossier carousel
+(Epic 8.2), and the HARDCORE chapter variant (Epic 8.4) all shipped
+May 2026 — see `docs/DOCUMENTATION_STATUS.md`.)

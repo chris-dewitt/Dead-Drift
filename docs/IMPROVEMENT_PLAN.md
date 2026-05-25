@@ -18,14 +18,14 @@
 | **1** — Code hygiene | 8 | 2 | 0 | All Epic 1 items shipped — font cache + NLTK lazy bootstrap closed; minor `[~]` items remain inline |
 | **2** — Flight feel | 7 | 0 | 0 | Flight-feel pass complete |
 | **3** — Sector variety | 3 | 3 | 0 | Themes drive hazards; collapsing well + debris cloud now also wired from `SectorLayout.hazards` |
-| **4** — Corridor | 6 | 3 | 0 | Framework shipped; black wipe + `ENTERING:` caption + end-card stats live; music remains open |
+| **4** — Corridor | 7 | 2 | 0 | Framework shipped; black wipe + `ENTERING:` caption + end-card stats + per-chapter corridor music live |
 | **5** — Landing | 2 | 1 | 0 | Docking graphics shipped; end-card hook closed via Bax's Records |
 | **6** — Terminal polish | 8 | 0 | 0 | Complete: keystrokes, portraits, backdrops, outcome beats, chips, dossier, market, and cargo dialogue |
 | **7** — Bax | 2 | 1 | 1 | Hull-glow portrait + pitch tiers + reference past runs live; harmonica play-along open (see Epic 11) |
-| **8** — Meta replay | 2 | 0 | 2 | Stepped death + **Bax's Records (8.3)** shipped; cargo carousel + Hardcore stretch open |
+| **8** — Meta replay | 4 | 0 | 0 | Stepped death + Bax's Records (8.3) + cargo carousel (8.2) + HARDCORE variant (8.4) all shipped |
 | **9** — Award push (see `NEXT_PUSH.md`) | 3 | 1 | 18 | 9.2 CRT visual overhaul + 9.3 popup gate + Nova Soma dossier parity shipped; 9.1 NPC cross-refs partial |
 
-**Rough overall:** ~67% complete · ~19% partial · ~14% not started (by checkbox count).
+**Rough overall:** ~71% complete · ~17% partial · ~12% not started (by checkbox count).
 
 ---
 
@@ -446,7 +446,7 @@ When the courier is hit, the cargo silhouette flashes. When the cargo takes a "r
 
 **May 2026:** Per-chapter silhouettes in `corridor/base.py`. Hit flash — partial; crack-on-big-hit — verify per chapter.
 
-### 4.6 Corridor music — [ ]
+### 4.6 Corridor music — [x]
 Each chapter's corridor has a unique audio cue track that plays only during corridor execution. The track is a longer, melodic blues-jazz piece (procedurally generated using the existing `audio/synth.py` infrastructure) themed to that chapter:
 - **Ch.1:** distorted vinyl-warm bassline + dirty harmonica
 - **Ch.2:** sparse off-kilter percussion with reverb-drowned synths
@@ -455,7 +455,19 @@ Each chapter's corridor has a unique audio cue track that plays only during corr
 
 Music swells on entry, ducks during NPC dialogue, peaks in the boss room.
 
-**May 2026:** Delivery scene audio exists; dedicated per-chapter corridor tracks per spec — not verified as complete.
+**May 2026:** Shipped. New events `EVT_CORRIDOR_ENTER`,
+`EVT_CORRIDOR_BOSS_ROOM`, and `EVT_CORRIDOR_EXIT` fire from
+`delivery/corridor/base.py` (entry on `Corridor.__init__`, boss-room
+trigger on first BossRoomTrigger pass — idempotent — and exit on
+`_finish()`). `AudioManager` allocates `_CORR_SIG_CH` (channel 30) and
+schedules each chapter's `signature_instrument()` at a per-chapter
+cadence + base volume profile (Ch.1 vinyl-warm harmonica every ~3.4s @
+0.42, Ch.2 sparse bowed-saw every ~5.0s @ 0.30, Ch.3 typewriter march
+every ~1.6s @ 0.36, Ch.4 hotel-lobby jazz every ~4.0s @ 0.28). Corridor
+intensity drives volume + cadence: 0.5 on entry, 1.0 in the boss room
+(~1.6× louder, 0.65× cadence). Voice ducking handles the dialogue duck
+via the existing `_music_gain()` path. Tests in
+`tests/test_corridor_music.py`.
 
 ### 4.7 Corridor scoring — [~]
 At corridor completion, show a brief end-card:
@@ -684,7 +696,7 @@ In `roguelite/meta_progression.py:apply_death_penalty`, scale `WRECKAGE_TOW_FEE`
 
 `CLONE_FLUID_FEE` and `BASE_CLONE_DEBT` stay flat. Net effect: early deaths are recoverable; late deaths bite hard. Tracks the GDD's "the deeper you go, the more they own you" tone.
 
-### 8.2 Cargo dossier carousel (chapter replay) — [ ]
+### 8.2 Cargo dossier carousel (chapter replay) — [x]
 
 Replace the current "linear-list main menu" approach with a visual carousel:
 
@@ -693,6 +705,19 @@ Replace the current "linear-list main menu" approach with a visual carousel:
 - Selecting a card → loads directly into that chapter's loadout draft.
 
 Cards for unfinished chapters render dimmed with a "??? — uncovered" stamp. Players see progress at a glance.
+
+**May 2026:** Shipped. `renderer/cargo_carousel.py` paints a 5-card
+horizontal carousel (focused card centred + flanking siblings scaled
++ alpha-faded). Each card draws the chapter cargo silhouette
+(vinyl/biolab jar/forms/box-with-?), the `✓ DELIVERED` or
+`??? UNCOVERED` stamp, deepest-sector / best-run-credits stats
+pulled from `StatsTracker.career`, and the HARDCORE row when
+applicable (Epic 8.4). Main-menu adds a `CARGO DOSSIERS` row that
+unlocks after the first chapter clear. Key handler: `←/→` cycle,
+`H` arms HARDCORE for the next run when unlocked, `ENTER` calls
+new `RunManager.set_chapter_override()` and starts a fresh run on
+the selected chapter, `ESC` returns to the main menu. Tests in
+`tests/test_cargo_carousel.py`.
 
 ### 8.3 Bax's Records screen — [x]
 
@@ -718,10 +743,28 @@ Smoke + persistence tests in `tests/test_bax_records.py`.
 
 Aesthetically: file-cabinet metaphor. Each tab is a manila folder being pulled out. Diegetic, low-fi.
 
-### 8.4 Chapter retry — hardcore variant (stretch) — [ ]
+### 8.4 Chapter retry — hardcore variant (stretch) — [x]
 *If time allows pre-Next-Fest:* unlock a "HARDCORE" toggle per chapter after first clear. Modifiers: tighter sector timers, more barges, only 1 checkpoint in corridor, no shop stops. Pure-pride mode. Best HARDCORE clear time per chapter shown in the cargo dossier card.
 
 If time is short, defer to post-Next-Fest.
+
+**May 2026:** Shipped. `MetaProgression` gains
+`hardcore_unlocked: list[int]`, `hardcore_best_s: dict`,
+`hardcore_active: bool`, plus
+`unlock_hardcore_for_chapter() / is_hardcore_unlocked() /
+set_hardcore_for_next_run() / clear_hardcore_flag() /
+record_hardcore_clear() / hardcore_best_time()`. First clear of any
+chapter unlocks its hardcore variant; the cargo dossier card surfaces
+the unlock + best time and `H` arms the flag for the next run.
+RunManager applies the modifiers when `is_hardcore_run()` is True:
+`hardcore_sector_dur(20.0) → 14.0` (×0.7 timer), `_difficulty()`
+gets +0.3, an extra patrolling barge spawns in every sector ≥2, and
+the post-sector shop trigger is suppressed. `make_corridor(chapter,
+hardcore=True)` strips all `Checkpoint` elements at construction time
+so the player only respawns at room start. On `complete_chapter()`
+delivery records the run's total flight time as the hardcore best
+(if better) and clears the flag. Tests in
+`tests/test_hardcore_mode.py`.
 
 ---
 
