@@ -953,6 +953,59 @@ class Game:
             pygame.draw.rect(self.screen, (r_val, 30, 20), bg_r, 1)
             self.screen.blit(torch_surf, (cx_t, S.FLIGHT_H // 2 - 37))
 
+        # Epic 13.2 — flight event choice popup (amber panel, ~8s countdown)
+        fe = getattr(rm, "flight_events", None)
+        if fe is not None and fe.active is not None:
+            self._draw_flight_event_popup(fe, t)
+
+    def _draw_flight_event_popup(self, fe, t):
+        """Center-top amber bordered popup with title, choices, and countdown."""
+        ev = fe.active
+        if ev is None:
+            return
+        W, H = 360, 96
+        cx = S.SCREEN_W // 2
+        x  = cx - W // 2
+        y  = 142   # below sector name strip
+
+        # Backing — dark slate, subtle pulse on the border
+        pulse = 0.65 + 0.35 * (1.0 - (fe.t_remaining / 8.0))   # tightens as time runs out
+        border_col = (int(190 + 50 * pulse), int(120 + 30 * pulse), 30)
+        bg = pygame.Surface((W, H), pygame.SRCALPHA)
+        bg.fill((14, 12, 8, 215))
+        self.screen.blit(bg, (x, y))
+        pygame.draw.rect(self.screen, border_col, (x, y, W, H), 2)
+
+        # Header chip — left-justified title with thin underline
+        title_font = pygame.font.SysFont("monospace", 14, bold=True)
+        sub_font   = pygame.font.SysFont("monospace", 11)
+        title_surf = title_font.render(ev.title, True, (240, 200, 90))
+        self.screen.blit(title_surf, (x + 12, y + 8))
+        # COMMS tag right-justified
+        tag_surf = sub_font.render("INCOMING / COMMS", True, (130, 100, 60))
+        self.screen.blit(tag_surf, (x + W - tag_surf.get_width() - 12, y + 10))
+        pygame.draw.line(self.screen, (90, 60, 20),
+                         (x + 10, y + 26), (x + W - 10, y + 26), 1)
+
+        # Countdown bar — full width below header, drains red
+        bar_y = y + 32
+        bar_w = W - 24
+        bar_h = 4
+        pygame.draw.rect(self.screen, (40, 30, 20), (x + 12, bar_y, bar_w, bar_h))
+        frac = max(0.0, min(1.0, fe.t_remaining / 8.0))
+        fill_w = int(bar_w * frac)
+        fill_col = (220, 160, 40) if frac > 0.35 else (220, 70, 40)
+        pygame.draw.rect(self.screen, fill_col, (x + 12, bar_y, fill_w, bar_h))
+
+        # Choice prompts — bottom row
+        choice_font = pygame.font.SysFont("monospace", 13, bold=True)
+        accept = choice_font.render(f"[Y]  {ev.accept_label}", True, (110, 220, 130))
+        ignore = choice_font.render(f"  -  {ev.ignore_label}", True, (150, 150, 150))
+        sec_txt = choice_font.render(f"{fe.t_remaining:0.1f}s", True, (200, 160, 90))
+        self.screen.blit(accept, (x + 14, y + H - 26))
+        self.screen.blit(ignore, (x + 150, y + H - 26))
+        self.screen.blit(sec_txt, (x + W - sec_txt.get_width() - 14, y + H - 26))
+
     def _render_sector_flash(self, stats: dict, t_left: float):
         """Celebration card overlaid for ~2.8s after a sector clear."""
         cx = S.SCREEN_W // 2
