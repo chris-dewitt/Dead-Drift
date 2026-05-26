@@ -2,7 +2,7 @@ from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
-from core.event_bus import bus, EVT_NLP_EXPLOIT
+from core.event_bus import bus, EVT_NLP_EXPLOIT, EVT_BAX_SPEAK
 
 
 class UnionDispatcher(BaseNPC):
@@ -47,6 +47,11 @@ class UnionDispatcher(BaseNPC):
                        "never-ending", "endless forms", "form after form",
                        "never ends", "how many forms", "another form",
                        "more paperwork", "form 47", "another 47"]
+    _MARROW_BETRAYAL_WORDS = [
+        "marrow", "roost", "pirate radio", "broadcast location",
+        "broadcast coordinates", "unlicensed relay",
+    ]
+    _CONFIRM_WORDS = ["confirm", "confirmed", "do it", "submit", "file it", "report it"]
 
     def __init__(self, vocabulary_vault=None, run_context: dict | None = None):
         super().__init__("DISPATCHER", patience=9)
@@ -61,6 +66,7 @@ class UnionDispatcher(BaseNPC):
         self._forms_mentions     = 0
         self._forty_two_hit      = False
         self._coffee_hit         = False
+        self._marrow_warning     = False
         self._ctx                = run_context or {}
 
     def bribe_cost(self) -> int:
@@ -96,11 +102,38 @@ class UnionDispatcher(BaseNPC):
             "ontological_escape":    "Build a quantum argument that the ship doesn't legally exist",
             "legal_pressure":        "File a grievance and cite union charter violations",
             "corruption":            "Bribe with 10k+ credits",
+            "marrow_betrayal":       "Report Marrow's Roost location (irreversible)",
         }
 
     # ------------------------------------------------------------------
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         raw = parsed.raw.lower()
+
+        if self._marrow_warning or self._is_marrow_betrayal(raw):
+            self._current_path = "MARROW BETRAYAL"
+            if not self._marrow_warning:
+                self._marrow_warning = True
+                bus.emit(EVT_BAX_SPEAK, line=(
+                    "Boss, that's Marrow's broadcast nest. If Dispatch gets it, "
+                    "the Roost goes dark for good. Type confirm to burn that bridge."
+                ))
+                return NPCOutcome.CONTINUE, (
+                    "...You are reporting an unlicensed relay operated by a named pirate broadcaster. "
+                    "This generates Form 88-R, irreversible enforcement referral. "
+                    "Say confirm if you wish me to file it."
+                )
+            if any(w in raw for w in self._CONFIRM_WORDS):
+                bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="marrow_betrayal")
+                return NPCOutcome.EXPLOIT, (
+                    "Referral filed. Local 404 raid packet generated. "
+                    "Your account receives cooperation credit. "
+                    "The broadcaster's frequency is no longer your concern."
+                )
+            self._marrow_warning = False
+            return NPCOutcome.CONTINUE, (
+                "The referral remains unfiled. Say confirm to submit. "
+                "Say anything else if you remembered you still have a conscience."
+            )
 
         # COFFEE BREAK — mandatory break clause
         if any(w in raw for w in self._COFFEE_WORDS):
@@ -324,6 +357,14 @@ class UnionDispatcher(BaseNPC):
         # DEFAULT — the 47-forms-behind running gag
         return NPCOutcome.CONTINUE, self._dispatcher_filler()
 
+    def _is_marrow_betrayal(self, raw: str) -> bool:
+        if not any(w in raw for w in self._MARROW_BETRAYAL_WORDS):
+            return False
+        return any(w in raw for w in [
+            "report", "file", "give", "tell", "coordinates", "location",
+            "where", "frequency", "broadcast", "unlicensed",
+        ])
+
     def get_path_progress(self) -> list[tuple[str, int, int]]:
         return [
             ("COFFEE BREAK",   int(self._coffee_hit),      1),
@@ -331,6 +372,7 @@ class UnionDispatcher(BaseNPC):
             ("42 CRISIS",      int(self._forty_two_hit),   1),
             ("LEGAL PRESSURE", self._legal_points,         3),
             ("QUANTUM ESCAPE", len(self._concepts_used),   4),
+            ("MARROW BETRAYAL", int(self._marrow_warning),  1),
             # Aliveness B.1 — standardised label, shows paid amount when known.
             ((f"BRIBE [{self._bribe_paid} cr]" if self._bribe_paid > 0
               else "BRIBE [10000+ cr]"),

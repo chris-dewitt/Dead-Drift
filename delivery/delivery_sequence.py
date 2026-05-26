@@ -897,6 +897,7 @@ class DeliverySequence:
             self._run = make_corridor(
                 self.chapter,
                 hardcore=bool(getattr(self.meta, "is_hardcore", False)),
+                meta=self.meta,
             )
         if self._clamp_anim_t >= _BEAT3_DURATION:
             self._t     = 0.0

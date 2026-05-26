@@ -73,6 +73,10 @@ class Sandra(BaseNPC):
         "sorry", "apologise", "apologize", "my fault", "my bad",
         "wrong", "shouldn't have", "regret", "forgive", "humble",
     ]
+    _GARY_KEYWORDS = [
+        "gary", "pruitt", "partner", "partners", "meridian",
+        "old route", "worked together", "local 404 field agent",
+    ]
 
     def __init__(self, run_context: dict | None = None, **_):
         super().__init__("Sandra", patience=8)
@@ -81,6 +85,7 @@ class Sandra(BaseNPC):
         self._boast_turns      = 0
         self._confession_score = 0
         self._apology_turns    = 0
+        self._gary_turns       = 0
         self._ctx              = run_context or {}
 
     # ------------------------------------------------------------------
@@ -115,11 +120,33 @@ class Sandra(BaseNPC):
             "outperform":   "Out-boast her with actual run stats",
             "confession":   "Make her admit she's the system's tool",
             "apology":      "Grovel sincerely for three turns",
+            "gary_history":  "Ask what happened with Gary Pruitt",
         }
 
     # ------------------------------------------------------------------
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         raw = parsed.raw.lower()
+
+        # GARY HISTORY -- hidden texture path shared with Gary's Sandra branch.
+        if any(w in raw for w in self._GARY_KEYWORDS):
+            self._gary_turns += 1
+            self._current_path = "GARY HISTORY"
+            self.disposition += 1
+            if self._gary_turns >= 2:
+                bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="gary_history")
+                return NPCOutcome.RELEASE, random.choice([
+                    "*long pause* Gary was my partner before the Meridian incident. "
+                    "He froze; I filed the report that protected him because I thought "
+                    "the Union protected people. They promoted me into propaganda and "
+                    "left him holding the shame. I owe him an apology. You get passage.",
+                    "Gary Pruitt is not a punchline. He was a good partner on a bad night. "
+                    "I let them turn my survival into his failure. That is on me. "
+                    "*quieter* Gate's open. Go before I make this official.",
+                ])
+            return NPCOutcome.CONTINUE, random.choice([
+                "*tight inhale* Gary told you something, didn't he.",
+                "Pruitt and I worked Meridian together. If you know that name, keep talking carefully.",
+            ])
 
         # INTEL TRADE — fastest path, one good piece of gossip + a follow-up
         if any(w in raw for w in self._INTEL_KEYWORDS):
@@ -264,6 +291,7 @@ class Sandra(BaseNPC):
             ("OUTPERFORM",   min(self._boast_turns, 2),       2),
             ("CONFESSION",   min(self._confession_score, 4),  4),
             ("APOLOGY",      min(self._apology_turns, 3),     3),
+            ("GARY HISTORY",  min(self._gary_turns, 2),        2),
         ]
 
     def _sandra_filler(self) -> str:

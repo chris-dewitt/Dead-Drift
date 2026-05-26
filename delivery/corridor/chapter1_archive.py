@@ -424,6 +424,21 @@ _KENJI_RESPONSES = [
     },
 ]
 
+_KENJI_RAID_RESPONSES = [
+    {
+        "keywords": ["hello", "hi", "hey", "yo", "sup", "greet", "what", "marrow", "roost"],
+        "credits":  0,
+        "lore":     "Kenji lowers the volume. The Roost is gone. Local 404 raided it.",
+        "outcome":  "pass",
+    },
+    {
+        "keywords": [],
+        "credits":  0,
+        "lore":     "Only dead static answers where Marrow's station used to be.",
+        "outcome":  "pass",
+    },
+]
+
 _GARY_RESPONSES = [
     {
         "keywords": ["forget", "know", "happen", "delivery", "done", "here"],
@@ -440,7 +455,16 @@ _GARY_RESPONSES = [
 ]
 
 
-def build() -> Corridor:
+def build(meta=None) -> Corridor:
+    marrow_gone = bool(
+        getattr(meta, "is_npc_dead", lambda _npc_id: False)("marrow")
+    )
+    kenji_prompt = (
+        "Broadcast rig is cold. Local 404 warning loop still stuck in the speaker."
+        if marrow_gone else
+        "Broadcasting illegal music from here. You carrying something good?"
+    )
+    kenji_responses = _KENJI_RAID_RESPONSES if marrow_gone else _KENJI_RESPONSES
     # ── Room 1: DOCK ACCESS — SUB-LEVEL 3 ──────────────────────────────
     r1_len  = 1000
     r1_elms = [
@@ -513,8 +537,8 @@ def build() -> Corridor:
         NPCEncounter(
             550,
             "KENJI THE DJ",
-            "Broadcasting illegal music from here. You carrying something good?",
-            _KENJI_RESPONSES,
+            kenji_prompt,
+            kenji_responses,
             path_tag="low",
         ),
         # Ladder up to Room 3 convergence point

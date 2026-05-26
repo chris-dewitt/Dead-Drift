@@ -15,6 +15,7 @@ from terminal.npcs.nova_soma import NovaSomaCollections
 from terminal.npcs.mira_voss import MiraVoss
 from terminal.npcs.idealist_rep import IdealistRep
 from terminal.npcs.corrupt_rep import CorruptRep
+from terminal.npcs.lost_frequency import LostFrequency
 from terminal.npcs.base_npc import BaseNPC
 
 
@@ -37,6 +38,7 @@ def make_npc(npc_type: str, **kwargs) -> BaseNPC:
         "mira_voss":               MiraVoss,
         "idealist_rep":            IdealistRep,
         "corrupt_rep":             CorruptRep,
+        "lost_frequency":          LostFrequency,
     }
     cls = registry.get(npc_type)
     if cls is None:

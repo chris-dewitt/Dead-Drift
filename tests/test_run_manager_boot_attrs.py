@@ -15,7 +15,6 @@ import os
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
-import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -38,6 +37,7 @@ _REQUIRED_ATTRS = [
     "_close_call_cd",
     "_close_witness",
     "_barge_pursuit_t",
+    "_barge_suppression_t",
     "_long_fight_emitted",
     "_harm_session_t",
     "_pending_terminal",
@@ -46,14 +46,20 @@ _REQUIRED_ATTRS = [
 ]
 
 
+def _test_file(name: str) -> Path:
+    path = Path("data/saves") / f"test_run_manager_boot_attrs_{name}"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.unlink(missing_ok=True)
+    return path
+
+
 def _build_fresh_run_manager():
     pygame.init()
     pygame.font.init()
     from roguelite.meta_progression import MetaProgression
     from roguelite.run_manager import RunManager
-    with tempfile.TemporaryDirectory() as tmp:
-        meta = MetaProgression(save_path=Path(tmp) / "meta.json")
-        rm = RunManager(meta)
+    meta = MetaProgression(save_path=_test_file("meta.json"))
+    rm = RunManager(meta)
     return rm
 
 
@@ -105,33 +111,36 @@ def test_checkpoint_round_trip_preserves_run_total_time():
     pygame.init()
     pygame.font.init()
 
-    with tempfile.TemporaryDirectory() as tmp:
-        meta_path = Path(tmp) / "meta.json"
-        meta = MetaProgression(save_path=meta_path)
-        rm = RunManager(meta)
-        ship = PlayerShip()
-        rm.start_run(ship)
-        rm._run_total_time = 42.5
+    meta_path = _test_file("checkpoint_meta.json")
+    chk_path = _test_file("checkpoint.json")
+    meta = MetaProgression(save_path=meta_path)
+    rm = RunManager(meta)
+    ship = PlayerShip()
+    rm.start_run(ship)
+    rm._run_total_time = 42.5
+    rm._kress_tip_pending = True
+    rm._barge_suppression_t = 12.5
 
-        # Build a minimal Game-shaped object for the helper.
-        states = StateManager()
-        states._state = GameState.FLIGHT
-        game_stub = SimpleNamespace(
-            run_mgr=rm, ship=ship, states=states,
-            _state_before_pause=None,
-        )
+    # Build a minimal Game-shaped object for the helper.
+    states = StateManager()
+    states._state = GameState.FLIGHT
+    game_stub = SimpleNamespace(
+        run_mgr=rm, ship=ship, states=states,
+        _state_before_pause=None,
+    )
 
-        chk_path = Path(tmp) / "checkpoint.json"
-        save_checkpoint_file(chk_path, game_stub)
-        data = load_checkpoint_file(chk_path)
-        assert data is not None
-        # Round-trip into a fresh RunManager.
-        meta2 = MetaProgression(save_path=meta_path)
-        rm2 = RunManager(meta2)
-        ship2 = PlayerShip()
-        game_stub2 = SimpleNamespace(
-            run_mgr=rm2, ship=ship2, states=StateManager(),
-            _state_before_pause=None,
-        )
-        restore_checkpoint(game_stub2, data)
-        assert rm2._run_total_time == 42.5
+    save_checkpoint_file(chk_path, game_stub)
+    data = load_checkpoint_file(chk_path)
+    assert data is not None
+    # Round-trip into a fresh RunManager.
+    meta2 = MetaProgression(save_path=meta_path)
+    rm2 = RunManager(meta2)
+    ship2 = PlayerShip()
+    game_stub2 = SimpleNamespace(
+        run_mgr=rm2, ship=ship2, states=StateManager(),
+        _state_before_pause=None,
+    )
+    restore_checkpoint(game_stub2, data)
+    assert rm2._run_total_time == 42.5
+    assert rm2._kress_tip_pending is True
+    assert rm2._barge_suppression_t == 12.5

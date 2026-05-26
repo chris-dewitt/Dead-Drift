@@ -343,6 +343,67 @@ _NPC_VAULT_KEYS.update({
     "VINCE": ("corruptrep", "corrupt_rep", "vince", "vinny"),
 })
 
+_NPC_DOSSIER_TITLE.update({
+    "FREQUENCY LOST": "RAID AFTERMATH",
+})
+
+_NPC_HINTS.update({
+    "DISPATCHER": (
+        "coffee/break/tired / forms x3 / say '42' / grievance x3 / "
+        "quantum+legal / bribe >=10k / marrow report + confirm / [ESC] abort"
+    ),
+    "KRESS": (
+        "intel / contraband / volkov / connie / be friendly x3 / "
+        "marrow sell-out + confirm / [ESC] abort"
+    ),
+    "SANDRA": (
+        "trade intel / solidarity x3 / boast with real run stats / "
+        "confession / apology x3 / gary history x2 / [ESC] abort"
+    ),
+    "FREQUENCY LOST": "static / roost / marrow / seizure notice / [ESC] abort",
+})
+
+_SCAN_VOCAB["GARY"].update({
+    "partner": "SANDRA?", "partners": "SANDRA?", "meridian": "SANDRA?",
+})
+
+_SCAN_VOCAB["DISPATCHER"].update({
+    "marrow": "MARROW!", "roost": "MARROW!", "pirate radio": "MARROW!",
+    "broadcast location": "MARROW!", "coordinates": "MARROW!",
+})
+
+_SCAN_VOCAB["KRESS"].update({
+    "marrow": "MARROW!", "roost": "MARROW!", "pirate radio": "MARROW!",
+    "broadcast location": "MARROW!", "coordinates": "MARROW!",
+})
+
+_SCAN_VOCAB["SANDRA"].update({
+    "gary": "GARY?", "pruitt": "GARY?", "partner": "GARY?",
+    "meridian": "GARY?",
+})
+
+_SCAN_VOCAB.update({
+    "FREQUENCY LOST": {
+        "marrow": "MARROW", "roost": "ROOST", "static": "STATIC",
+        "seizure": "RAID", "local 404": "RAID", "broadcast": "RAID",
+    },
+})
+
+_SCAN_KNOWN_LABELS["GARY"]["SANDRA?"] = ("gary_sandra_history", "sympathy")
+_SCAN_KNOWN_LABELS["DISPATCHER"]["MARROW!"] = ("marrow_betrayal",)
+_SCAN_KNOWN_LABELS["KRESS"]["MARROW!"] = ("marrow_sellout",)
+_SCAN_KNOWN_LABELS["SANDRA"]["GARY?"] = ("gary_history",)
+_SCAN_KNOWN_LABELS["FREQUENCY LOST"] = {
+    "MARROW": ("aftermath",),
+    "ROOST": ("aftermath",),
+    "STATIC": ("aftermath",),
+    "RAID": ("aftermath",),
+}
+
+_NPC_VAULT_KEYS.update({
+    "FREQUENCY LOST": ("lostfrequency", "lost_frequency", "frequency_lost", "marrow"),
+})
+
 for _npc_name in ("NOVA SOMA COLLECTIONS", "MIRA VOSS"):
     _SCAN_VOCAB.get(_npc_name, {}).pop("fuck", None)
 
