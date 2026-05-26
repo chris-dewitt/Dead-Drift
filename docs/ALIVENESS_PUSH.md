@@ -2,7 +2,7 @@
 
 **Branch:** `rhubarb/aliveness-push`
 **Started:** May 25 2026
-**Status:** Phase D code/test complete — Phase E next
+**Status:** Phase E code/test complete - Phase F next
 **Scope:** Open-ended (no time cap)
 **North star for all agents:** this document supersedes `IMPROVEMENT_PLAN.md` and `NEXT_PUSH.md` for active work.
 
@@ -187,26 +187,31 @@ Ship passing through debris field displaces chunks; they bounce off each other f
 
 ## Phase E — Story & World
 
-### E.1 Gary and Sandra history — [ ]
+### E.1 Gary and Sandra history — [x]
 They were partners before Sandra became "gold standard." Gary resents her success. Sandra feels guilty. Fragments across Gary and Sandra terminal interactions + Bax gossip. Gives both characters texture beyond function.
+**Shipped:** Gary has a Sandra path that reveals the Meridian-route incident and his resentment; Sandra has a Gary History path that admits guilt over becoming the Union's model courier after protecting Gary. SCANNING chips and dossier hints surface the threads without making them mandatory.
 
-### E.2 The debt-trap reveal — [ ]
+### E.2 The debt-trap reveal — [x]
 Across runs, Bax progressively reveals that Nova Soma's interest rate is mathematically impossible to pay off. The system is built to perpetuate, not collect. Drip-feed via intercepted comms and Bax's darkening commentary. Cross-run state: tracked in `data/saves/lore_progress.json`.
+**Shipped:** Bax advances a four-stage debt-trap reveal on run start. Persistence lives in the save-slot `MetaProgression.lore_progress` map rather than a global sidecar file, so separate campaigns do not contaminate each other.
 
-### E.3 Kress owes you — [ ]
+### E.3 Kress owes you — [x]
 After a player successfully exploits Kress in a terminal, on a future run he tips you off (scrambled comms, deniable) about a barge patrol route. No fanfare. Payoff for players who've stuck around.
+**Shipped:** Winning Kress through Connie, Volkov, or regular-status paths sets a persistent "owes patrol tip" flag. A later run consumes it, sends a deniable Kress comm, and delays the next queued repo barge. The pending tip is checkpoint-safe.
 
-### E.4 Local 404 internal schism — [ ]
+### E.4 Local 404 internal schism — [x]
 The new idealist (B.6) and corrupt (B.6) reps clash with each other. Play them right (specific keyword paths) → they pull each other off your case. Internal politics with mechanical consequence.
+**Shipped:** Edmund and Vince now write persistent Local 404 schism state. Once both sides have been played, queued barges are removed, active barges retreat, and new barge spawns are suppressed briefly while the Union argues with itself.
 
-### E.5 Persistent NPC death — [ ]
+### E.5 Persistent NPC death — [x]
 First time you really screw an NPC, they're gone from your runs forever. Replaced by a colder slot or silent gap. Persistence layer in `data/saves/npc_state.json`.
+**Shipped:** Marrow is the first irreversible proof-of-concept. Kress and the Union Dispatcher each have a Marrow betrayal path with explicit Bax warnings and a required confirmation turn. Once confirmed, `MetaProgression.npc_state` marks Marrow dead; future Marrow terminals map to `FREQUENCY LOST`, and Chapter 1 corridor Marrow lore becomes raid aftermath.
 
 **First irreversible choice to ship: Marrow betrayal.** If the player gives up Marrow's broadcast location (a specific Union dispatcher dialogue path or a paid Kress sell-out), Marrow is gone from all future runs. Her pirate station shows as "FREQUENCY LOST" on the comms list. Any future Marrow-tagged corridor lore is replaced with raid aftermath. No undo.
 
 Subsequent irreversible choices (Mira Voss left for dead, Dray sold out, etc.) get added in later passes — Marrow's the proof of concept for the persistence layer.
 
-**Risk:** Changes meta-contract. Needs clear in-game warning when an irreversible choice is about to fire — Bax has to flag it (*"You sure, mate? She won't be on the air after this."*).
+**Risk resolved:** Bax now warns before the irreversible choice fires, and both betrayal paths require an explicit confirmation turn.
 
 ---
 
@@ -323,7 +328,6 @@ New union reps from B.6 each need a voice profile in `audio/voices.py` distinct 
 - Items that fail play-verify get a `[~]` and a follow-up note
 
 **Risk gates (revisit before starting):**
-- E.5 (Persistent NPC death) — confirm UX before building persistence layer
 - G.9 (Cargo corridor mutators) — confirm scope before building per-cargo overlays
 - H.1 (Soundtrack implementation) — may need sub-plan; flag before starting
 

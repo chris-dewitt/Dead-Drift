@@ -2,7 +2,7 @@ from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
-from core.event_bus import bus, EVT_NLP_EXPLOIT
+from core.event_bus import bus, EVT_NLP_EXPLOIT, EVT_BAX_SPEAK
 
 
 class Kress(BaseNPC):
@@ -46,6 +46,11 @@ class Kress(BaseNPC):
                            # B.3 additions:
                            "favor", "favour", "favor for a favor",
                            "marker", "ledger", "tab"]
+    _MARROW_SELL_WORDS = [
+        "marrow", "roost", "pirate radio", "broadcast location",
+        "broadcast coordinates", "sell out marrow", "give up marrow",
+    ]
+    _CONFIRM_WORDS = ["confirm", "confirmed", "do it", "sell", "trade", "give it"]
 
     def __init__(self, run_context: dict | None = None):
         super().__init__("KRESS", patience=8)
@@ -53,6 +58,7 @@ class Kress(BaseNPC):
         self._mentioned_volkov  = False
         self._mentioned_connie  = False
         self._intel_count       = 0
+        self._marrow_warning    = False
         self._ctx               = run_context or {}
 
     def _intro_line(self) -> str:
@@ -74,15 +80,42 @@ class Kress(BaseNPC):
             "old_debt":       "Mention Volkov — Kress owes him, softens up",
             "previous_pilot": "Mention Connie — Kress knew her, reveals lore",
             "regular":        "Become a regular through friendly conversation",
+            "marrow_sellout":  "Sell Marrow's Roost location (irreversible)",
         }
 
     # ------------------------------------------------------------------
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         raw = parsed.raw.lower()
 
+        if self._marrow_warning or self._is_marrow_sellout_offer(raw):
+            self._current_path = "MARROW SELL-OUT"
+            if not self._marrow_warning:
+                self._marrow_warning = True
+                bus.emit(EVT_BAX_SPEAK, line=(
+                    "Boss, you hand Kress the Roost and Marrow is gone. "
+                    "No undo. Type confirm if you really mean it."
+                ))
+                return NPCOutcome.CONTINUE, (
+                    "*static drops low* You have Roost location? Marrow's nest? "
+                    "That is expensive information. Also ugly information. "
+                    "Say confirm and Kress sells it. Say anything else and we forget."
+                )
+            if any(w in raw for w in self._CONFIRM_WORDS):
+                bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="marrow_sellout")
+                return NPCOutcome.EXPLOIT, (
+                    "*long silence* ...Coordinates received. Local 404 pays well "
+                    "for pirates who sing too loudly. I do not feel good. "
+                    "This is how I know price was correct. *click*"
+                )
+            self._marrow_warning = False
+            return NPCOutcome.CONTINUE, (
+                "Good. Hesitation is healthy. Say confirm if you want blood on invoice."
+            )
+
         # PREVIOUS PILOT — the lore drop, the mystery seed
         if "connie" in raw and not self._mentioned_connie:
             self._mentioned_connie = True
+            self._current_path = "CONNIE"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="previous_pilot")
             return NPCOutcome.RELEASE, (
                 "*very long silence* "
@@ -98,6 +131,7 @@ class Kress(BaseNPC):
         # OLD DEBT — Volkov is Kress's leverage, mention him for goodwill
         if any(w in raw for w in self._GREASE_KEYWORDS) and not self._mentioned_volkov:
             self._mentioned_volkov = True
+            self._current_path = "VOLKOV"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="old_debt")
             return NPCOutcome.RELEASE, (
                 "*laughs* Volkov. You drop that name like rock through window. "
@@ -165,6 +199,7 @@ class Kress(BaseNPC):
         if compound > 0.3:
             self._friendly_turns += 1
             if self._friendly_turns >= 3:
+                self._current_path = "REGULAR"
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="regular")
                 return NPCOutcome.RELEASE, (
                     "*laughs* Okay, okay. You are not Union spy. I can tell. "
@@ -198,6 +233,14 @@ class Kress(BaseNPC):
 
         # DEFAULT — Kress runs his mouth
         return NPCOutcome.CONTINUE, self._kress_filler()
+
+    def _is_marrow_sellout_offer(self, raw: str) -> bool:
+        if not any(w in raw for w in self._MARROW_SELL_WORDS):
+            return False
+        return any(w in raw for w in [
+            "sell", "give", "trade", "coordinates", "location",
+            "where", "frequency", "broadcast", "roost",
+        ])
 
     def _kress_filler(self) -> str:
         hull_pct = self._ctx.get("hull_pct", 1.0)

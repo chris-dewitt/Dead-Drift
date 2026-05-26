@@ -36,6 +36,10 @@ class MetaProgression:
         # Whether the *next/current* run is being played in hardcore. Run-scoped;
         # cleared on run start unless explicitly opted in via set_hardcore_for_next_run.
         "hardcore_active":    False,
+        # Aliveness Phase E -- cross-run story state. Kept inside the slot
+        # save so campaign choices do not bleed between save files.
+        "lore_progress":      {},
+        "npc_state":          {},
     }
 
     def __init__(self, save_path: Path | str | None = None):
@@ -138,6 +142,100 @@ class MetaProgression:
     @property
     def lore_fragments(self) -> list[dict]:
         return [dict(e) for e in self._data.get("lore_fragments", [])]
+
+    # -- Aliveness Phase E: persistent world/story state ----------------
+    def lore_stage(self, key: str) -> int:
+        progress = self._data.setdefault("lore_progress", {})
+        entry = progress.get(key, 0)
+        if isinstance(entry, dict):
+            return int(entry.get("stage", 0))
+        return int(entry or 0)
+
+    def advance_lore_stage(self, key: str, max_stage: int) -> tuple[int, bool]:
+        """Advance a progressive lore beat by one. Returns (stage, changed)."""
+        progress = self._data.setdefault("lore_progress", {})
+        old_stage = self.lore_stage(key)
+        new_stage = min(int(max_stage), old_stage + 1)
+        if new_stage == old_stage:
+            return old_stage, False
+        progress[key] = new_stage
+        self.save()
+        return new_stage, True
+
+    def mark_lore_flag(self, key: str) -> bool:
+        flags = self._data.setdefault("lore_progress", {}).setdefault("flags", {})
+        if flags.get(key):
+            return False
+        flags[key] = True
+        self.save()
+        return True
+
+    def has_lore_flag(self, key: str) -> bool:
+        flags = self._data.setdefault("lore_progress", {}).setdefault("flags", {})
+        return bool(flags.get(key, False))
+
+    def npc_state(self, npc_id: str) -> dict:
+        book = self._data.setdefault("npc_state", {})
+        return dict(book.get(npc_id, {}))
+
+    def mark_npc_dead(self, npc_id: str, reason: str = "") -> bool:
+        book = self._data.setdefault("npc_state", {})
+        state = book.setdefault(npc_id, {})
+        if state.get("dead"):
+            return False
+        state["dead"] = True
+        if reason:
+            state["death_reason"] = reason
+        self.save()
+        return True
+
+    def is_npc_dead(self, npc_id: str) -> bool:
+        return bool(self._data.setdefault("npc_state", {})
+                    .get(npc_id, {}).get("dead", False))
+
+    def set_npc_flag(self, npc_id: str, flag: str, value=True) -> bool:
+        book = self._data.setdefault("npc_state", {})
+        state = book.setdefault(npc_id, {})
+        old_value = state.get(flag)
+        if old_value == value:
+            return False
+        state[flag] = value
+        self.save()
+        return True
+
+    def get_npc_flag(self, npc_id: str, flag: str, default=False):
+        return self._data.setdefault("npc_state", {}).get(npc_id, {}).get(flag, default)
+
+    def consume_npc_flag(self, npc_id: str, flag: str) -> bool:
+        book = self._data.setdefault("npc_state", {})
+        state = book.setdefault(npc_id, {})
+        if not state.get(flag):
+            return False
+        state[flag] = False
+        self.save()
+        return True
+
+    def record_union_schism(self, side: str, path: str = "") -> bool:
+        """Record pressure on Local 404's internal split.
+
+        Returns True only when both the idealist and corrupt reps have now
+        been played against each other and the schism resolves.
+        """
+        book = self._data.setdefault("npc_state", {})
+        state = book.setdefault("local_404", {})
+        sides = set(state.get("schism_sides", []))
+        before_resolved = bool(state.get("schism_resolved", False))
+        sides.add(side)
+        state["schism_sides"] = sorted(sides)
+        if path:
+            paths = state.setdefault("schism_paths", [])
+            if path not in paths:
+                paths.append(path)
+        if {"idealist", "corrupt"}.issubset(sides):
+            state["schism_resolved"] = True
+        changed = bool(state.get("schism_resolved", False)) and not before_resolved
+        self.save()
+        return changed
 
     # ── Hardcore mode (Epic 8.4) ──────────────────────────────────────────
     def unlock_hardcore_for_chapter(self, chapter: int) -> bool:

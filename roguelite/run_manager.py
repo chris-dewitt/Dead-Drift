@@ -49,6 +49,13 @@ from config import settings as S
 
 SLINGSHOT_CREDIT_BONUS = 800
 
+_DEBT_TRAP_REVEAL_LINES = {
+    1: "Boss, ledger math's odd. Every payment clips principal, then three fresh fees bloom behind it.",
+    2: "I ran Nova Soma interest backwards. It doesn't converge. It's a treadmill with a receipt printer.",
+    3: "Debt trap isn't broken, mate. It's designed. They collect motion, not money.",
+    4: "Even if we paid it, contract terms let them re-age clone-fluid fees. They built a road with no exit.",
+}
+
 # Epic 3.7 / Aliveness A.5 — NPC type → distinct in-flight hull class.
 _FACTION_HULL_BY_NPC = {
     "kress":          CLASS_BELT_HAULER,
@@ -327,6 +334,8 @@ class RunManager:
         self._close_call_cd = 0.0
         # Epic 12.1 — NOVICE_PASS first-death-free flag
         self._novice_pass_consumed = False
+        self._kress_tip_pending = False
+        self._barge_suppression_t = 0.0
 
         # Aliveness hotfix (May 25 2026) — every field that `update()`
         # touches after its `_sector is None` early-return must exist on
@@ -372,7 +381,12 @@ class RunManager:
         self.bax_context["chapter_at_session_start"] = self._current_chapter()
         self.flight_events.reset()
         self._barge_pursuit_t   = 0.0
+        self._barge_suppression_t = 0.0
         self._long_fight_emitted = False
+        self._kress_tip_pending = bool(
+            self.meta.get_npc_flag("kress", "owes_patrol_tip", False)
+        )
+        self._maybe_emit_debt_trap_reveal()
         self._run_seed = secrets.randbelow(2 ** 31)
         self._frame_name = ""
         self._sector_index = 0
@@ -476,6 +490,7 @@ class RunManager:
         self._prox_cd       = max(0.0, self._prox_cd  - dt)
         self._flash_t       = max(0.0, self._flash_t  - dt)
         self._close_call_cd = max(0.0, self._close_call_cd - dt)
+        self._barge_suppression_t = max(0.0, self._barge_suppression_t - dt)
         # Epic 11.2 — close call detection: any barge/debris within 30px that
         # was further away last frame, without intervening collision = close call
         if self._ship is not None and self._close_call_cd <= 0:
@@ -890,6 +905,17 @@ class RunManager:
                     ctx["cargo_state"] = cargo.state_for_terminal()
         if hasattr(self, "meta"):
             ctx["debt"] = self.meta.debt
+            meta_data = getattr(self.meta, "_data", {})
+            ctx["lore_progress"] = dict(meta_data.get("lore_progress", {}))
+            ctx["npc_state"] = dict(meta_data.get("npc_state", {}))
+            ctx["marrow_gone"] = bool(
+                self.meta.is_npc_dead("marrow")
+                if hasattr(self.meta, "is_npc_dead") else False
+            )
+            ctx["local_404_schism_resolved"] = bool(
+                self.meta.get_npc_flag("local_404", "schism_resolved", False)
+                if hasattr(self.meta, "get_npc_flag") else False
+            )
         # Epic 11.3 — share Bax's run-memory dict so NPCs/Bax can react to it
         if hasattr(self, "bax_context"):
             ctx["bax_context"] = dict(self.bax_context)
@@ -902,6 +928,13 @@ class RunManager:
         # e.g. in unit tests using RunManager.__new__).
         if "run_context" not in npc_kwargs:
             npc_kwargs["run_context"] = self._build_run_context()
+        meta = getattr(self, "meta", None)
+        if (npc_type == "underground_dj" and
+                hasattr(meta, "is_npc_dead") and
+                meta.is_npc_dead("marrow")):
+            npc_type = "lost_frequency"
+            npc_kwargs.setdefault("run_context", {})
+            npc_kwargs["run_context"]["marrow_gone"] = True
         # Mira Voss needs a ship reference so she can call ship.repair() on success.
         if npc_type == "mira_voss" and self._ship is not None:
             npc_kwargs.setdefault("ship", self._ship)
@@ -1015,7 +1048,10 @@ class RunManager:
         else:
             pool = ["synthetic_droid", "union_dispatcher", "cargo_inspector"]
             if self._sector_index >= 1:
-                pool.extend(["underground_dj", "nervous_fence", "dray"])
+                if self.meta.is_npc_dead("marrow"):
+                    pool.extend(["lost_frequency", "nervous_fence", "dray"])
+                else:
+                    pool.extend(["underground_dj", "nervous_fence", "dray"])
             if self._sector_index >= 2:
                 pool.extend(["sandra", "pirate", "nova_soma_collections"])
             if self._sector_index >= 3:
@@ -1047,6 +1083,11 @@ class RunManager:
                     "It's an ally, mate. Marrow. Use him — intel, jamming, dedications.",
                     "Pirate radio signal punching through the gate comm. "
                     "Marrow. He's on our side. Don't blow it.",
+                ],
+                "lost_frequency": [
+                    "That's the Roost frequency. No DJ. Just seizure static. Keep it short.",
+                    "Marrow's old channel is dead air and Local 404 legal tape. Let it clear us.",
+                    "Roost signal pinged us. It's not Marrow anymore. Frequency lost, mate.",
                 ],
                 "toll_authority": [
                     "Gate checkpoint incomin'. Transit levy — fifteen 'undred credits. "
@@ -1191,6 +1232,11 @@ class RunManager:
         # Track winning path for cross-terminal cooldown
         if outcome in ("exploit", "release") and npc is not None:
             self._last_winning_path = getattr(npc, '_current_path', '')
+            self._apply_phase_e_terminal_consequence(
+                npc,
+                outcome,
+                self._last_winning_path,
+            )
         elif outcome == "impound":
             self._last_winning_path = ""  # reset on loss
 
@@ -1226,6 +1272,102 @@ class RunManager:
         if self._pending_advance:
             self._pending_advance = False
             self._advance_sector()
+
+    def _apply_phase_e_terminal_consequence(self, npc, outcome: str, path: str) -> None:
+        if npc is None or outcome not in ("release", "exploit"):
+            return
+        name = getattr(npc, "name", "").upper()
+        path_u = (path or "").upper()
+
+        if name == "KRESS":
+            if "MARROW SELL" in path_u:
+                self._mark_marrow_betrayed("kress")
+                return
+            if path_u not in ("CONNIE", "VOLKOV", "REGULAR"):
+                return
+            if hasattr(self.meta, "set_npc_flag"):
+                if self.meta.set_npc_flag("kress", "owes_patrol_tip", True):
+                    bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                        "Kress owes us now. Weird feeling. I logged it before he changes his mind.",
+                        "That's leverage on Kress. Next run, maybe it turns into a patrol tip.",
+                    ]))
+            return
+
+        if name == "DISPATCHER" and "MARROW BETRAYAL" in path_u:
+            self._mark_marrow_betrayed("dispatcher")
+            return
+
+        if name == "EDMUND" and path_u in ("CHARTER", "CONTRADICTION"):
+            if self.meta.record_union_schism("idealist", path):
+                self._start_union_schism_relief()
+            return
+
+        if name == "VINCE" and (
+                "THREATEN" in path_u or
+                "SHARE_SCORE" in path_u or
+                "BRIBE" in path_u):
+            if self.meta.record_union_schism("corrupt", path):
+                self._start_union_schism_relief()
+
+    def _mark_marrow_betrayed(self, source: str) -> None:
+        if not hasattr(self.meta, "mark_npc_dead"):
+            return
+        if self.meta.mark_npc_dead("marrow", reason=f"betrayed_to_{source}"):
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "Boss... that's the Roost sold out. Marrow's not coming back from this.",
+                "You just gave Local 404 the pirate radio nest. That channel's dead forever now.",
+            ]))
+
+    def _start_union_schism_relief(self) -> None:
+        from antagonists.repo_barge import BargeState
+
+        self._barge_suppression_t = max(
+            getattr(self, "_barge_suppression_t", 0.0),
+            45.0,
+        )
+        self._spawn_queue = [
+            item for item in getattr(self, "_spawn_queue", [])
+            if item[1] != "barge"
+        ]
+        for barge in getattr(self, "_barges", []):
+            if getattr(barge, "is_destroyed", False):
+                continue
+            barge.state = BargeState.RETREAT
+            barge._retreat_t = max(getattr(barge, "_retreat_t", 0.0), 24.0)
+            barge._intercept_cd = max(getattr(barge, "_intercept_cd", 0.0), 45.0)
+        bus.emit(EVT_BAX_SPEAK, line=random.choice([
+            "Eddie and Vince are filing grievances at each other. Patrol just got pulled to arbitrate.",
+            "Local 404's eating itself on comms. Enjoy the quiet while the union argues with the union.",
+        ]))
+
+    def _maybe_emit_debt_trap_reveal(self) -> None:
+        if not hasattr(self.meta, "advance_lore_stage"):
+            return
+        stage, changed = self.meta.advance_lore_stage(
+            "debt_trap",
+            max(_DEBT_TRAP_REVEAL_LINES),
+        )
+        if changed:
+            bus.emit(EVT_BAX_SPEAK, line=_DEBT_TRAP_REVEAL_LINES[stage])
+
+    def _apply_kress_patrol_tip_to_spawn_queue(self) -> None:
+        if not getattr(self, "_kress_tip_pending", False):
+            return
+        if not any(kind == "barge" for _, kind in self._spawn_queue):
+            return
+        self._spawn_queue = [
+            (trigger + 10.0, kind) if kind == "barge" else (trigger, kind)
+            for trigger, kind in self._spawn_queue
+        ]
+        self._kress_tip_pending = False
+        if hasattr(self.meta, "consume_npc_flag"):
+            self.meta.consume_npc_flag("kress", "owes_patrol_tip")
+        bus.emit(EVT_COMMS_SPEAK,
+                 speaker="KRESS",
+                 line=random.choice([
+                     "Patrol route just shifted. First Local 404 barge is late. I said nothing.",
+                     "Kress here. Window is open. Barge crew took wrong lane. You owe me nothing. Strange.",
+                 ]))
 
     def _advance_sector(self):
         bus.emit(EVT_WARP_JUMP)
@@ -1384,6 +1526,8 @@ class RunManager:
             if hull_pct > 0.7:
                 self._spawn_queue.append((barge_delay + 3.0, "barge"))
                 self._spawn_queue.append((3.0, "debris"))
+
+        self._apply_kress_patrol_tip_to_spawn_queue()
 
         # Demolition notice — 22% chance from sector 2 onward
         if idx >= 1 and random.random() < 0.22:
@@ -1617,6 +1761,8 @@ class RunManager:
         self._install_terminal(terminal)
 
     def _spawn_barge(self, immediate_chase: bool = False):
+        if getattr(self, "_barge_suppression_t", 0.0) > 0.0:
+            return
         # Epic 12.1 — QUIET_SECTOR: suppress sectors 0-2, double up sectors 3-4
         if self.mutators.is_active("quiet_sector"):
             if self._sector_index <= 2:

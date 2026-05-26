@@ -2,14 +2,14 @@
 delivery.corridor — chapter-based delivery corridor system.
 
 Public API:
-    make_corridor(chapter: int, hardcore: bool = False) -> Corridor
+    make_corridor(chapter: int, hardcore: bool = False, meta=None) -> Corridor
 """
 from __future__ import annotations
 from delivery.corridor.base import Corridor
 from delivery.corridor.elements import Checkpoint
 
 
-def make_corridor(chapter: int, hardcore: bool = False) -> Corridor:
+def make_corridor(chapter: int, hardcore: bool = False, meta=None) -> Corridor:
     """Factory: build a Corridor for the given chapter (1-4).
 
     `hardcore=True` (Epic 8.4) strips the optional mid-room
@@ -26,7 +26,10 @@ def make_corridor(chapter: int, hardcore: bool = False) -> Corridor:
         from delivery.corridor.chapter4_vip import build
     else:
         from delivery.corridor.chapter1_archive import build
-    corridor = build()
+    if chapter == 1:
+        corridor = build(meta=meta)
+    else:
+        corridor = build()
     if hardcore:
         for room in corridor.rooms:
             room.elements = [el for el in room.elements

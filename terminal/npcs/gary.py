@@ -140,6 +140,7 @@ class Gary(BaseNPC):
             "bribe":             "Offer enough credits",
             "deal_offer":        "Negotiate a reduction deal",
             "sympathy":          "Appeal to his humanity",
+            "gary_sandra_history": "Ask about Sandra Vega-Marsh",
         }
 
     # ------------------------------------------------------------------
@@ -402,21 +403,22 @@ class Gary(BaseNPC):
             self._current_path  = "SANDRA"
             self.disposition   += 2
             if self._sandra_turns >= 2:
-                bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="sympathy")
+                bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="gary_sandra_history")
                 return NPCOutcome.RELEASE, random.choice([
-                    "*long silence* ...She's got the Meridian route now. Perfect impound rate. "
-                    "Never missed a quota in fourteen years. "
-                    "*quieter* I don't know why you brought her up but... "
-                    "go on. Just. Go on. I'll mark it 'unverified vessel'.",
-                    "*very quiet* ...Yeah. I know Sandra. "
-                    "She's better at this than me. Always was. "
-                    "...You know what, I'm gonna pretend I didn't see you. "
-                    "Don't tell Blevins.",
+                    "*long silence* ...Sandra was my partner before she was the gold standard. "
+                    "Meridian route went bad. I froze on the tow; she carried the report, "
+                    "saved my badge, and got turned into the example. "
+                    "*quieter* Resenting her's easier than thanking her. Go on. "
+                    "I'll mark it 'unverified vessel'.",
+                    "*very quiet* ...Yeah. I know Sandra. She was my partner. Rode with her six years. "
+                    "She covered my mistake, then Dispatch polished her into a trophy "
+                    "and left me as the cautionary tale. She's better at this than me. "
+                    "Always was. Go. Don't tell Blevins.",
                 ])
             return NPCOutcome.CONTINUE, random.choice([
                 "*pause* ...Sandra. Where did you — 'ow do you know that name?",
                 "*quiet* ...Don't. Don't bring 'er into this. "
-                "She's got nothing to do with your fees.",
+                "She was my partner, once. She's got nothing to do with your fees.",
             ])
 
         # DEFAULT — changes tone based on progress

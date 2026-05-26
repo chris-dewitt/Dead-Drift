@@ -447,6 +447,8 @@ def build_checkpoint(game) -> dict:
             "kress_cd": rm._kress_cd,
             "collector_cd": rm._collector_cd,
             "kress_called": rm._kress_called_this_sector,
+            "kress_tip_pending": getattr(rm, "_kress_tip_pending", False),
+            "barge_suppression_t": getattr(rm, "_barge_suppression_t", 0.0),
             "run_debt_reduced": rm._run_debt_reduced,
             "run_snaps": rm._run_snaps,
             "run_slingshots": rm._run_slingshots,
@@ -491,6 +493,8 @@ def restore_checkpoint(game, data: dict) -> bool:
     rm._kress_cd = float(rmd.get("kress_cd", 80.0))
     rm._collector_cd = float(rmd.get("collector_cd", 110.0))
     rm._kress_called_this_sector = bool(rmd.get("kress_called", False))
+    rm._kress_tip_pending = bool(rmd.get("kress_tip_pending", False))
+    rm._barge_suppression_t = float(rmd.get("barge_suppression_t", 0.0))
     rm._run_debt_reduced = int(rmd.get("run_debt_reduced", 0))
     rm._run_snaps = int(rmd.get("run_snaps", 0))
     rm._run_slingshots = int(rmd.get("run_slingshots", 0))

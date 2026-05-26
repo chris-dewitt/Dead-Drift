@@ -13,7 +13,7 @@
 
 | Doc | Role | Status |
 |-----|------|--------|
-| **`docs/ALIVENESS_PUSH.md`** | **North star** — push/phase mode (A→H) | **Phase D code/test complete** — Phase E next |
+| **`docs/ALIVENESS_PUSH.md`** | **North star** — push/phase mode (A→H) | **Phase E code/test complete** — Phase F next |
 | `docs/IMPROVEMENT_PLAN.md` | Historical epic checklist | Complete May 2026 |
 | `docs/STRING_AUDIT_RESULTS.md` | Epic 9.4 audit report | Complete May 2026 |
 | `docs/NEXT_PUSH.md` | Award-quality stack (Epics 9–14) | Historical — superseded by ALIVENESS_PUSH |
@@ -32,6 +32,7 @@
 | 16 | Aliveness Phase C | Gameplay mechanics C.1–C.7 | **Done** May 25 2026 |
 | 17 | Post-C trust cleanup | Terminal activation, first-terminal NLTK, SCANNING parity, newer NPC cargo dialogue | **Patched** May 25 2026 |
 | 18 | Aliveness Phase D | Graphics and visual feedback D.1–D.9 | **Code/test complete** May 25 2026 |
+| 19 | Aliveness Phase E | Story/world persistence E.1–E.5 | **Code/test complete** May 25 2026 |
 
 ---
 
@@ -60,7 +61,7 @@ All May 2026 rows **resolved** — see Phase 0 closure in `IMPROVEMENT_PLAN.md` 
 
 | Doc | Role | Accuracy |
 |-----|------|----------|
-| **`docs/ALIVENESS_PUSH.md`** | Active push/phase roadmap | **Current** — Phase D code/test complete |
+| **`docs/ALIVENESS_PUSH.md`** | Active push/phase roadmap | **Current** — Phase E code/test complete |
 | `docs/IMPROVEMENT_PLAN.md` | Historical epic checklist | Complete — reference only |
 | `docs/STRING_AUDIT_RESULTS.md` | String audit (Epic 9.4) | Current |
 | `docs/CORRIDOR_DESIGN.md` | Corridor level design | Current |
