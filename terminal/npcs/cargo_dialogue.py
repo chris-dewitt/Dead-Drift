@@ -255,4 +255,94 @@ _NPC_CARGO_LINES: dict[str, dict[str, str]] = {
             "worse manners."
         ),
     },
+    "DRAY": {
+        "archive": (
+            "Acoustic Archive? Nice. Old music's good cargo. Doesn't leak, doesn't "
+            "scream, sometimes makes the debt feel briefly fictional."
+        ),
+        "shrooms": (
+            "Shrooms in the hold. Great. If reality starts doing that thing where "
+            "it has corners, ignore it and keep your hands off the throttle."
+        ),
+        "paperwork": (
+            "Sentient Paperwork is bleak even by courier standards. I once watched "
+            "a form ask for a union break. It got one before I ever did."
+        ),
+        "vip": (
+            "Schrodinger VIP. Either a passenger or a box of future litigation. "
+            "Honestly, very normal route planning these days."
+        ),
+    },
+    "NOVA SOMA COLLECTIONS": {
+        "archive": (
+            "Manifest note: Acoustic Archive value may be garnished as cultural "
+            "collateral under subsection joy-is-taxable."
+        ),
+        "shrooms": (
+            "Manifest note: Epistemological Shrooms detected. Perception instability "
+            "does not pause interest accrual. Thank you."
+        ),
+        "paperwork": (
+            "Manifest note: Sentient Paperwork may be repossessed if it has signed "
+            "or intends to sign an income-bearing contract."
+        ),
+        "vip": (
+            "Manifest note: Schrodinger VIP passenger state is irrelevant to balance "
+            "due. Billing continues in all observed universes."
+        ),
+    },
+    "MIRA VOSS": {
+        "archive": (
+            "Archive crate. Keep the dampers soft; old recordings hate vibration "
+            "almost as much as cheap couriers hate repair invoices."
+        ),
+        "shrooms": (
+            "Those shrooms vent spores into intake seams if the hold seal warps. "
+            "If the ship starts philosophizing, pay me extra."
+        ),
+        "paperwork": (
+            "Sentient Paperwork rides heavy. Strap the stack or it shifts during burn "
+            "and suddenly your center of mass has opinions."
+        ),
+        "vip": (
+            "VIP box means no hammer tests, no thermal probe, no asking if the cargo "
+            "answers back. Annoying, but billable."
+        ),
+    },
+    "EDMUND": {
+        "archive": (
+            "An Acoustic Archive is a public good, really. Troubling that Nova Soma "
+            "monetizes memory and then calls couriers independent contractors."
+        ),
+        "shrooms": (
+            "Epistemological Shrooms raise fascinating workplace-safety questions. "
+            "Reality should be collectively bargained, in my view."
+        ),
+        "paperwork": (
+            "Sentient Paperwork deserves representation if it can articulate grievance. "
+            "Also, please do not tell Central I said that."
+        ),
+        "vip": (
+            "A Schrodinger VIP reminds us that personhood is complex, especially when "
+            "corporate transport law gets its hands on it."
+        ),
+    },
+    "VINCE": {
+        "archive": (
+            "Acoustic Archive, eh? Collectors pay stupid money for old songs. Not that "
+            "I'm suggesting anything. I'm just observant."
+        ),
+        "shrooms": (
+            "Shrooms are messy resale. People pay, then forget they paid, then sue. "
+            "Still, there's a market if you know the right lunatic."
+        ),
+        "paperwork": (
+            "Sentient Paperwork? I can move forms. Forms are easy. The trick is making "
+            "sure they don't move you back."
+        ),
+        "vip": (
+            "Schrodinger VIP. That's either ransom, hospitality, or an empty box with "
+            "lawyers. I can work with two of those."
+        ),
+    },
 }

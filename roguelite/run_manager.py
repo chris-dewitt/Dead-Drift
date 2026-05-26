@@ -1,4 +1,5 @@
 from __future__ import annotations
+import math
 import random
 import secrets
 import pygame
@@ -43,7 +44,7 @@ from core.event_bus import (bus, EVT_SECTOR_CLEAR, EVT_RUN_END,
                              EVT_AISHIP_HAIL, EVT_AISHIP_DESTROYED, EVT_VOICE_CHAR,
                              EVT_MUTATOR_SET, EVT_FIRST_TETHER_SNAP,
                              EVT_LONG_FIGHT_SURVIVED, EVT_BARGE_KILLED,
-                             EVT_GUN_FIRE, EVT_CLOSE_CALL)
+                             EVT_GUN_FIRE, EVT_CLOSE_CALL, EVT_SOLAR_WIND)
 from config import settings as S
 
 SLINGSHOT_CREDIT_BONUS = 800
@@ -203,6 +204,8 @@ class RunManager:
         self._flare_cd        = 22.0   # seconds until next flare event
         self._flare_active    = False
         self._flare_t         = 0.0    # countdown during active flare
+        self._solar_wind_t    = 0.0
+        self._solar_wind_vec  = Vec2(0.0, 0.0)
         # Toll checkpoint state
         self._toll_pending    = False
         self._toll_t          = 10.0   # trigger at 10s into sector
@@ -446,7 +449,12 @@ class RunManager:
         cargo_bax  = _cargo_launch.get(cargo_type, "Cargo's aboard.")
         bus.emit(EVT_BAX_SPEAK, line=f"{frame_bax} {cargo_bax}")
 
-        bus.emit(EVT_SECTOR_START, sector_num=1, cargo_type=cargo_type)
+        bus.emit(EVT_SECTOR_START,
+                 sector_num=1,
+                 cargo_type=cargo_type,
+                 theme=getattr(self._sector, "theme", ""),
+                 sector_name=getattr(self._sector, "name", ""),
+                 formerly=getattr(self._sector, "formerly", ""))
 
     # ------------------------------------------------------------------
     def update(self, dt: float):
@@ -525,6 +533,7 @@ class RunManager:
 
         self._sector.gravity.apply_all(self._ship.body)
         self._sector.gravity.update(dt)   # three-body well drift
+        self._update_solar_wind(dt)
 
         # Aliveness Phase C — sector pressure + orbital hold + debt milestones
         self._sector_escalation_t += dt
@@ -610,6 +619,7 @@ class RunManager:
                     rock.hit()
             if self._shower_t <= 0:
                 self._shower_rocks.clear()
+        self._apply_debris_wake(dt)
 
         # Bullet-rock collision
         self._check_bullets()
@@ -757,7 +767,7 @@ class RunManager:
         self._event_cd = random.uniform(S.EVENT_INTERVAL_MIN, S.EVENT_INTERVAL_MAX)
         # Epic 13.2 — bias the pool toward player-choice flight events. Manager
         # gates per-event prereqs + cooldowns and silently no-ops if blocked.
-        kind = random.choice(["comms", "debris", "scan",
+        kind = random.choice(["comms", "debris", "scan", "solar_wind",
                               "flight_event", "flight_event"])
 
         if kind == "comms":
@@ -770,6 +780,8 @@ class RunManager:
             bus.emit(EVT_SCAN_PING,
                      pos_x=random.randint(120, S.SCREEN_W - 120),
                      pos_y=random.randint(100, S.FLIGHT_H - 60))
+        elif kind == "solar_wind":
+            self._trigger_solar_wind()
         elif kind == "flight_event":
             if not self.flight_events.try_start(self):
                 # Blocked (cooldown / no eligible event) — fall back to flavor
@@ -911,6 +923,7 @@ class RunManager:
         silent = (t_now - t_last) > 0.5
         if silent:
             self._active_terminal = terminal
+            self._active_terminal.activate()
             if hasattr(self, '_pending_terminal'):
                 self._pending_terminal = None
             if hasattr(self, '_terminal_arm_t'):
@@ -931,6 +944,7 @@ class RunManager:
             self._active_terminal = self._pending_terminal
             self._pending_terminal = None
             self._terminal_arm_t = -1.0
+            self._active_terminal.activate()
 
     def _on_voice_char(self, **_) -> None:
         self._last_voice_char_t = self._t
@@ -1501,16 +1515,88 @@ class RunManager:
             elif self._flare_cd <= 0:
                 self._flare_active = True
                 self._flare_t      = 4.0
+                self._trigger_solar_wind(
+                    direction=Vec2(random.choice((-1.0, 1.0)), random.uniform(-0.25, 0.25)),
+                    duration=4.0,
+                    strength=58.0,
+                )
                 bus.emit(EVT_BAX_SPEAK, line=random.choice([
-                    "Solar flare incoming. Yeah, ROMANTIC. Shield your eyes, the ship has none.",
-                    "Radiation spike! The gun's gonna fizzle. Hold tight.",
-                    "Flare sweep. HUD's gonna glitch. Keep flying straight.",
+                    "Brace -- flare's pushin'. Let it shove, then correct.",
+                    "Solar wind broadside. Tiny push, enormous invoice.",
+                    "Flare sweep. Ship'll drift with it. Hands light, mate.",
                 ]))
 
-        # Toll checkpoint — one-time terminal at t=10s
+        # Toll checkpoint -- one-time terminal at t=10s
         if self._toll_pending and self._sector_timer >= self._toll_t:
             self._toll_pending = False
             self._open_toll_terminal()
+
+    def _trigger_solar_wind(self, direction: Vec2 | None = None,
+                            duration: float = 5.0,
+                            strength: float = 42.0) -> None:
+        """Aliveness D.8 -- subtle sector-wide push with a visible renderer cue."""
+        if direction is None:
+            ang = random.uniform(0.0, 6.283185307179586)
+            direction = Vec2(math.cos(ang), math.sin(ang))
+        if direction.length_sq() <= 0.0001:
+            direction = Vec2(1.0, 0.0)
+        self._solar_wind_vec = direction.normalized() * strength
+        self._solar_wind_t = max(self._solar_wind_t, duration)
+        bus.emit(EVT_SOLAR_WIND,
+                 direction=(self._solar_wind_vec.x, self._solar_wind_vec.y),
+                 duration=duration,
+                 strength=strength)
+
+    def _update_solar_wind(self, dt: float) -> None:
+        if self._solar_wind_t <= 0.0 or self._ship is None or not self._ship.is_alive:
+            return
+        self._solar_wind_t = max(0.0, self._solar_wind_t - dt)
+        push = self._solar_wind_vec * dt
+        self._ship.body.apply_impulse(push)
+        for obj in [*self._debris, *self._shower_rocks, *self._canisters]:
+            if hasattr(obj, "vel"):
+                obj.vel.x += push.x * 0.18
+                obj.vel.y += push.y * 0.18
+
+    def _apply_debris_wake(self, dt: float) -> None:
+        """Aliveness D.9 -- fast ship passage nudges nearby debris aside."""
+        if self._ship is None or not self._ship.is_alive:
+            return
+        ship_vel = getattr(self._ship.body, "vel", Vec2())
+        speed = ship_vel.length()
+        if speed < 80.0:
+            return
+        wake_radius = 92.0
+        wake_r2 = wake_radius * wake_radius
+        rocks = [*self._debris, *self._shower_rocks]
+        woken_ids: set[int] = set()
+        for rock in rocks:
+            delta = rock.pos - self._ship.pos
+            dist_sq = delta.length_sq()
+            if dist_sq <= 1.0 or dist_sq > wake_r2:
+                continue
+            woken_ids.add(id(rock))
+            strength = (1.0 - dist_sq / wake_r2) * min(1.0, speed / S.MAX_VELOCITY)
+            away = delta.normalized()
+            rock.vel.x += away.x * 95.0 * strength * dt
+            rock.vel.y += away.y * 95.0 * strength * dt
+            rock.vel.x += ship_vel.x * 0.018 * strength
+            rock.vel.y += ship_vel.y * 0.018 * strength
+        for i, rock_a in enumerate(rocks):
+            for rock_b in rocks[i + 1:]:
+                if id(rock_a) not in woken_ids and id(rock_b) not in woken_ids:
+                    continue
+                delta = rock_b.pos - rock_a.pos
+                dist_sq = delta.length_sq()
+                if dist_sq <= 1.0 or dist_sq > 54.0 * 54.0:
+                    continue
+                dist = dist_sq ** 0.5
+                away = delta.normalized()
+                impulse = (1.0 - dist / 54.0) * 42.0 * dt
+                rock_a.vel.x -= away.x * impulse
+                rock_a.vel.y -= away.y * impulse
+                rock_b.vel.x += away.x * impulse
+                rock_b.vel.y += away.y * impulse
 
     def _open_toll_terminal(self):
         from terminal.npc_logic import make_npc

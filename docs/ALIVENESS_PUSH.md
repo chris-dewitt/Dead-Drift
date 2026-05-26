@@ -2,7 +2,7 @@
 
 **Branch:** `rhubarb/aliveness-push`
 **Started:** May 25 2026
-**Status:** Phase C complete — Phase D next
+**Status:** Phase D code/test complete — Phase E next
 **Scope:** Open-ended (no time cap)
 **North star for all agents:** this document supersedes `IMPROVEMENT_PLAN.md` and `NEXT_PUSH.md` for active work.
 
@@ -23,6 +23,8 @@ The signature test for every item in this push: *does it make a returning player
 **Bugs first, then features. Strict sequential, no jumping around.**
 
 Land a clean baseline before stacking new systems on top. The eight phases below run in strict order — A finishes before B starts, B finishes before C, all the way through H. Within a phase, items can be batched, but the phase itself doesn't open until the prior closes. This is a deliberate choice to put real heart into each area instead of context-switching across the board.
+
+**Post-C trust cleanup (May 25 2026):** Before opening Phase D, land the small current-main trust patch for terminal activation lifecycle, first-visible-terminal NLTK bootstrap, full SCANNING parity across the expanded NPC roster, and cargo-specific dialogue for the newer NPCs.
 
 | Phase | Theme | Order |
 |-------|-------|-------|
@@ -145,32 +147,41 @@ Every hit damages cargo by a percentage; on delivery, paid only for % surviving.
 
 ## Phase D — Graphics & Visual Feedback
 
-### D.1 Progressive hull damage on ship sprite — [ ]
+### D.1 Progressive hull damage on ship sprite — [x]
 60% → cracks. 30% → sparks venting from thruster nozzle. 10% → broken antenna, atmosphere leak particles. Hull state readable at a glance without HUD.
+**Shipped:** `vector_renderer._draw_ship_damage_overlays()` adds scorch marks, blown panels, sparks, broken antenna, and atmosphere leak particles on low hull.
 
-### D.2 Barge spotlight cone — [ ]
+### D.2 Barge spotlight cone — [x]
 Repo barge in PATROL casts swinging amber light cone. Atmospheric + functional (telegraphs C.5 detection range).
+**Shipped:** `vector_renderer._draw_barge_patrol_cone()` upgraded from faint fill to layered amber spotlight with rim, spokes, and range arcs.
 
-### D.3 Velocity chromatic aberration — [ ]
+### D.3 Velocity chromatic aberration — [x]
 Subtle RGB split on screen edges at high speed; obvious at overdrive. Reinforces physical sensation of going too fast.
+**Shipped:** `vector_renderer._draw_velocity_chromatic_aberration()` adds red/cyan edge splits, speed streaks, and ship-adjacent RGB ghosting above the high-speed threshold.
 
-### D.4 Cockpit viewport cracks — [ ]
+### D.4 Cockpit viewport cracks — [x]
 Heavy hits crack the cockpit window itself. Cracks expand with damage; repaired on next dock. Literal HP indicator framing player view.
+**Shipped:** `vector_renderer._draw_viewport_cracks()` adds edge cracks below 62% hull, branching damage below 32%, and critical flicker/leak particles below 12%.
 
-### D.5 Per-theme skyboxes — [ ]
+### D.5 Per-theme skyboxes — [x]
 Each procedural sector theme gets a distinct background. Wreckage Belt = hull debris parallax. Frozen Trail = ice crystals. Flare Corridor = solar flares. Currently all sectors visually blur together.
+**Shipped:** `EVT_SECTOR_START` now carries first-sector theme data; `vector_renderer._draw_theme_skybox()` renders theme-specific background accents for flare, frozen, mine, toll/compliance, junk, wreckage, and industrial sectors.
 
-### D.6 Scan pulse render — [ ]
+### D.6 Scan pulse render — [x]
 `EVT_SCAN_PING` already fires — wire renderer. Expanding ring from off-screen point; if it touches you, brief UI ack: `[UNION PASSIVE SCAN — IDENTITY LOGGED]`.
+**Shipped:** scan rings now detect ship contact and display `UNION PASSIVE SCAN // IDENTITY LOGGED` once the ring reaches the courier.
 
-### D.7 Alien sighting render — [ ]
+### D.7 Alien sighting render — [x]
 `EVT_ALIEN_SIGHTING` already fires — wire renderer. Strange silhouette crosses sector at far edge. Bax has zero context: silence, or a single confused line. Builds intrigue across runs.
+**Shipped:** renderer subscribes to `EVT_ALIEN_SIGHTING` and draws a brief screen-edge silhouette/glitch witness mark.
 
-### D.8 Solar wind events — [ ]
+### D.8 Solar wind events — [x]
 Random pulses visibly push everything in one direction for ~5s. Subtle handling effect. Bax: *"Brace — flare's pushin'."*
+**Shipped:** random event pool and flare corridors can trigger `EVT_SOLAR_WIND`; wind applies a subtle impulse to ship/debris/canisters and draws directional streaks.
 
-### D.9 Debris wake physics — [ ]
+### D.9 Debris wake physics — [x]
 Ship passing through debris field displaces chunks; they bounce off each other for a few seconds. Every run through a field looks different. Pure kinetic satisfaction.
+**Shipped:** fast ship motion nudges nearby debris outward, carries some ship velocity into the rocks, and applies pairwise separation impulses among wake-affected chunks.
 
 ---
 

@@ -12,7 +12,8 @@ from core.event_bus import (bus, EVT_SLINGSHOT, EVT_SCAN_PING,
                              EVT_TETHER_HIT, EVT_TETHER_SNAP,
                              EVT_MODULE_UNBOLTED, EVT_HULL_DAMAGE,
                              EVT_HULL_CRITICAL, EVT_WARP_JUMP, EVT_SECTOR_CLEAR,
-                             EVT_SECTOR_START)
+                             EVT_SECTOR_START, EVT_ALIEN_SIGHTING,
+                             EVT_SOLAR_WIND)
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +50,8 @@ class VectorRenderer:
         self._stations   = self._gen_stations()
         self._flash_t    = 0.0
         self._flash_col  = (180, 220, 255)
-        self._scan_pings: list[tuple[int, int, float]] = []
+        self._scan_pings: list[list[float | bool]] = []
+        self._scan_ack_t = 0.0
 
         # Shooting stars — (x, y, vx, vy, age, lifetime)
         self._shooting_stars: list[list[float]] = []
@@ -78,12 +80,20 @@ class VectorRenderer:
         # Per-sector background palette shift + intensity ramp
         self._sector_hue_shift = 0.0
         self._sector_intensity = 0.0   # 0.0 sector 1 → 1.0 sector SECTORS_PER_RUN
+        self._sector_theme = ""
 
         # Warp streak effect
         self._warp_t = 0.0
+        self._alien_sighting_t = 0.0
+        self._alien_sighting_seed = 0.0
+        self._solar_wind_t = 0.0
+        self._solar_wind_vec = pygame.Vector2(1.0, 0.0)
+        self._solar_wind_strength = 42.0
 
         bus.subscribe(EVT_SLINGSHOT,        self._on_slingshot)
         bus.subscribe(EVT_SCAN_PING,        self._on_scan_ping)
+        bus.subscribe(EVT_ALIEN_SIGHTING,   self._on_alien_sighting)
+        bus.subscribe(EVT_SOLAR_WIND,       self._on_solar_wind)
         bus.subscribe(EVT_TETHER_HIT,       self._on_tether_hit)
         bus.subscribe(EVT_TETHER_SNAP,      self._on_tether_snap)
         bus.subscribe(EVT_MODULE_UNBOLTED,  self._on_module_unbolted)
@@ -107,7 +117,23 @@ class VectorRenderer:
 
     def _on_scan_ping(self, pos_x, pos_y, **_):
         t = pygame.time.get_ticks() / 1000.0
-        self._scan_pings.append((int(pos_x), int(pos_y), t))
+        self._scan_pings.append([float(pos_x), float(pos_y), t, False])
+
+    def _on_alien_sighting(self, **_):
+        self._alien_sighting_t = max(self._alien_sighting_t, 2.8)
+        self._alien_sighting_seed = random.random()
+
+    def _on_solar_wind(self, direction=(1.0, 0.0), duration=5.0,
+                       strength=42.0, **_):
+        try:
+            vec = pygame.Vector2(float(direction[0]), float(direction[1]))
+        except (TypeError, ValueError, IndexError):
+            vec = pygame.Vector2(1.0, 0.0)
+        if vec.length_squared() <= 0.0001:
+            vec = pygame.Vector2(1.0, 0.0)
+        self._solar_wind_vec = vec.normalize()
+        self._solar_wind_t = max(self._solar_wind_t, float(duration))
+        self._solar_wind_strength = float(strength)
 
     def _on_tether_hit(self, **_):
         self._shake_trauma = min(1.0, self._shake_trauma + 0.75)
@@ -154,6 +180,7 @@ class VectorRenderer:
             "name":        sector_name,
             "formerly":    formerly,
         }
+        self._sector_theme = theme or ""
 
     # ------------------------------------------------------------------
     def draw(self, run_mgr, ship, dt: float = 0.016):
@@ -167,13 +194,14 @@ class VectorRenderer:
             self._flash_col = (255, 160, 40)
         self._was_alive = ship.is_alive
         self._draw_nebulae(t)
+        self._draw_theme_skybox(t)
         self._draw_dust(t)
         self._draw_planets(t)
         self._draw_stations(t)
         self._draw_stars(t, ship)
         self._update_shooting_stars(dt, t)
         self._draw_shooting_stars(t)
-        self._draw_scan_pings(t)
+        self._draw_scan_pings(t, ship)
         self._draw_gravity_wells(run_mgr, t)
         self._draw_debris_cloud(run_mgr, t)
         self._draw_debris(run_mgr, t)
@@ -221,6 +249,131 @@ class VectorRenderer:
             iframe_active=bool(getattr(ship, "iframe_active", False)),
             glitch_burst=burst,
         )
+        self._draw_alien_sighting_witness(dt, t)
+        self._draw_solar_wind(dt, t)
+        self._draw_velocity_chromatic_aberration(ship, t)
+        self._draw_scan_ack(dt)
+        self._draw_viewport_cracks(ship, t)
+
+    # ------------------------------------------------------------------  SCREEN-SPACE PHASE D FX
+    def _draw_solar_wind(self, dt: float, t: float):
+        if self._solar_wind_t <= 0.0:
+            return
+        self._solar_wind_t = max(0.0, self._solar_wind_t - dt)
+        W, H = S.SCREEN_W, S.FLIGHT_H
+        wind = pygame.Vector2(self._solar_wind_vec)
+        if wind.length_squared() <= 0.0001:
+            wind = pygame.Vector2(1.0, 0.0)
+        wind = wind.normalize()
+        perp = pygame.Vector2(-wind.y, wind.x)
+        strength = max(0.25, min(1.6, self._solar_wind_strength / 42.0))
+        fade = min(1.0, self._solar_wind_t / 1.2)
+        surf = pygame.Surface((W, H), pygame.SRCALPHA)
+        for i in range(38):
+            base = (i * 73 + t * 125.0 * strength) % (W + H) - H * 0.5
+            lane = -W * 0.25 + i * 58
+            start = pygame.Vector2(W * 0.5, H * 0.5) + wind * base + perp * lane
+            end = start + wind * (90 + 70 * ((i % 5) / 4.0))
+            alpha = int((18 + (i % 4) * 5) * fade)
+            col = (110, 220, 255, alpha) if i % 3 else (255, 170, 70, alpha)
+            pygame.draw.line(surf, col, (int(start.x), int(start.y)),
+                             (int(end.x), int(end.y)), 1)
+        for i in range(5):
+            mid = pygame.Vector2(W - 64 - i * 28, 80 + i * 42)
+            chevron = [
+                mid - wind * 18 + perp * 8,
+                mid + wind * 12,
+                mid - wind * 18 - perp * 8,
+            ]
+            pygame.draw.lines(surf, (255, 190, 85, int(60 * fade)),
+                              False, [(int(p.x), int(p.y)) for p in chevron], 2)
+        self.surface.blit(surf, (0, 0))
+
+    def _draw_velocity_chromatic_aberration(self, ship, t: float):
+        if ship is None or not getattr(ship, "is_alive", False):
+            return
+        vel = getattr(ship.body, "vel", None)
+        if vel is None:
+            return
+        speed = vel.length()
+        threshold = S.MAX_VELOCITY * 0.72
+        if speed < threshold:
+            return
+        intensity = min(1.0, (speed - threshold) / (S.MAX_VELOCITY * 0.45))
+        if intensity <= 0.0:
+            return
+        W, H = S.SCREEN_W, S.FLIGHT_H
+        nx, ny = vel.x / speed, vel.y / speed
+        px, py = -ny, nx
+        surf = pygame.Surface((W, H), pygame.SRCALPHA)
+        jitter = int(2 + intensity * 5)
+        sx, sy = int(ship.pos.x), int(ship.pos.y)
+        for offset, col in ((-jitter, (255, 40, 55, 52)),
+                            (jitter, (0, 210, 255, 52))):
+            pygame.draw.circle(surf, col,
+                               (sx + int(px * offset), sy + int(py * offset)),
+                               int(18 + intensity * 10), 1)
+        for i in range(18):
+            lane = (i - 9) * 46
+            base = (t * 190 + i * 83) % (W + H) - H * 0.5
+            start = pygame.Vector2(W * 0.5, H * 0.5) + pygame.Vector2(nx, ny) * base + pygame.Vector2(px, py) * lane
+            end = start - pygame.Vector2(nx, ny) * (40 + 60 * intensity)
+            col = (255, 42, 60, int(24 * intensity)) if i % 2 else (0, 190, 255, int(24 * intensity))
+            pygame.draw.line(surf, col, (int(start.x), int(start.y)),
+                             (int(end.x), int(end.y)), 1)
+        edge_a = int(40 * intensity)
+        pygame.draw.rect(surf, (255, 30, 45, edge_a), pygame.Rect(0, 0, 4, H))
+        pygame.draw.rect(surf, (0, 200, 255, edge_a), pygame.Rect(W - 4, 0, 4, H))
+        self.surface.blit(surf, (0, 0))
+
+    def _draw_viewport_cracks(self, ship, t: float):
+        if ship is None:
+            return
+        hp = getattr(ship, "hull_pct", 1.0)
+        if hp >= 0.62:
+            return
+        W, H = S.SCREEN_W, S.FLIGHT_H
+        severity = min(1.0, (0.62 - hp) / 0.62)
+        surf = pygame.Surface((W, H), pygame.SRCALPHA)
+        anchors = [
+            (int(W * 0.18), 0, 0.9),
+            (W - 1, int(H * 0.24), math.pi),
+            (0, int(H * 0.62), 0.0),
+            (int(W * 0.72), H - 1, -math.pi / 2),
+        ]
+        n = 1 + int(severity * len(anchors))
+        rng = random.Random(4410 + int(severity * 100))
+        for ax, ay, base_ang in anchors[:n]:
+            length = int(70 + severity * 150)
+            pts = [(ax, ay)]
+            ang = base_ang + rng.uniform(-0.45, 0.45)
+            x, y = float(ax), float(ay)
+            for _ in range(4):
+                x += math.cos(ang) * length * 0.24
+                y += math.sin(ang) * length * 0.24
+                pts.append((int(max(0, min(W - 1, x))),
+                            int(max(0, min(H - 1, y)))))
+                ang += rng.uniform(-0.55, 0.55)
+            pygame.draw.lines(surf, (175, 232, 255, int(95 + severity * 90)),
+                              False, pts, 1)
+            if hp < 0.32:
+                bx, by = pts[min(2, len(pts) - 1)]
+                for side in (-1, 1):
+                    branch = [(bx, by),
+                              (int(bx + math.cos(ang + side) * 34),
+                               int(by + math.sin(ang + side) * 34))]
+                    pygame.draw.lines(surf, (255, 125, 70, int(70 + severity * 80)),
+                                      False, branch, 1)
+        if hp < 0.12:
+            flicker = int(45 + 40 * abs(math.sin(t * 22.0)))
+            pygame.draw.rect(surf, (190, 235, 255, flicker),
+                             pygame.Rect(0, 0, W, H), 2)
+            for i in range(24):
+                x = int((i * 97 + t * 60) % W)
+                y = int((i * 43 + t * 18) % H)
+                pygame.draw.line(surf, (210, 245, 255, 65),
+                                 (x, y), (x + 8, y - 2), 1)
+        self.surface.blit(surf, (0, 0))
 
     # ------------------------------------------------------------------  WARP STREAK
     def _draw_warp_streak(self, dt: float):
@@ -640,6 +793,56 @@ class VectorRenderer:
                 pygame.draw.circle(surf, (*col, alpha), (x, y), int(r * scale))
         self.surface.blit(surf, (0, 0))
 
+    def _draw_theme_skybox(self, t: float):
+        """Aliveness D.5: subtle sector identity before hazards appear."""
+        theme = (self._sector_theme or "").upper()
+        if not theme:
+            return
+
+        W, H = S.SCREEN_W, S.FLIGHT_H
+        surf = pygame.Surface((W, H), pygame.SRCALPHA)
+        pulse = 0.5 + 0.5 * math.sin(t * 0.8)
+
+        if "FLARE" in theme:
+            surf.fill((42, 13, 0, 18))
+            for y in range(-40, H + 40, 46):
+                wobble = int(math.sin(t * 0.9 + y * 0.02) * 28)
+                col = (255, 112, 22, int(16 + 16 * pulse))
+                pygame.draw.line(surf, col, (0, y + wobble), (W, y + 26 + wobble), 3)
+        elif "FROZEN" in theme:
+            surf.fill((6, 20, 34, 24))
+            for i in range(12):
+                x = int((i * 151 + t * 12) % W)
+                pts = [(x, 0), (x + 18, H // 3), (x - 9, H)]
+                pygame.draw.lines(surf, (100, 210, 255, 30), False, pts, 1)
+        elif "MINE" in theme:
+            surf.fill((28, 3, 0, 18))
+            for i in range(9):
+                x = int((i * 179 + t * 9) % W)
+                y = int((i * 71) % H)
+                diamond = [(x, y - 14), (x + 14, y), (x, y + 14), (x - 14, y)]
+                pygame.draw.polygon(surf, (255, 58, 36, 28), diamond, 1)
+        elif "TOLL" in theme or "COMPLIANCE" in theme:
+            surf.fill((8, 16, 12, 22))
+            for x in range(0, W, 96):
+                pygame.draw.line(surf, (0, 210, 120, 18), (x, 0), (x, H), 1)
+            for y in range(30, H, 70):
+                pygame.draw.line(surf, (180, 160, 80, 18), (0, y), (W, y), 1)
+            stamp = pygame.Rect(W - 230, 54, 170, 48)
+            pygame.draw.rect(surf, (180, 150, 60, 28), stamp, 2)
+            pygame.draw.line(surf, (180, 150, 60, 26), stamp.topleft, stamp.bottomright, 1)
+        elif "INDUSTRIAL" in theme or "JUNK" in theme or "WRECKAGE" in theme:
+            surf.fill((24, 18, 10, 18))
+            for i in range(10):
+                x = int((i * 173 - t * 11) % (W + 160)) - 80
+                h = 42 + (i % 4) * 18
+                pygame.draw.rect(surf, (128, 88, 42, 26),
+                                 pygame.Rect(x, H - h - 30, 72, h), 1)
+                pygame.draw.line(surf, (90, 70, 45, 22),
+                                 (x, H - h - 30), (x + 72, H - 30), 1)
+
+        self.surface.blit(surf, (0, 0))
+
     # ------------------------------------------------------------------  PLANETS (decorative background)
     def _gen_planets(self) -> list:
         rng = random.Random(self._STAR_SEED + 311)
@@ -991,23 +1194,52 @@ class VectorRenderer:
                     surf.blit(glow, (sx - 6, sy - 6))
 
     # ------------------------------------------------------------------  SCAN PINGS
-    def _draw_scan_pings(self, t: float):
+    def _draw_scan_pings(self, t: float, ship=None):
         PING_DUR = 3.2
         alive = []
-        for cx, cy, start_t in self._scan_pings:
+        for ping in self._scan_pings:
+            cx, cy, start_t = float(ping[0]), float(ping[1]), float(ping[2])
+            acked = bool(ping[3]) if len(ping) > 3 else False
             age  = t - start_t
             if age > PING_DUR:
                 continue
-            alive.append((cx, cy, start_t))
             frac   = age / PING_DUR
             radius = int(frac * 560)
             col    = (0, int(200 * (1 - frac)), int(255 * (1 - frac)))
             if radius > 0:
-                pygame.draw.circle(self.surface, col, (cx, cy), radius, 2)
+                pygame.draw.circle(self.surface, col, (int(cx), int(cy)), radius, 2)
             if radius > 30:
                 pygame.draw.circle(self.surface, (0, int(130 * (1-frac)), int(175 * (1-frac))),
-                                   (cx, cy), radius // 2, 1)
+                                   (int(cx), int(cy)), radius // 2, 1)
+            if ship is not None and not acked and getattr(ship, "is_alive", False):
+                sx, sy = float(ship.pos.x), float(ship.pos.y)
+                dist = math.hypot(sx - cx, sy - cy)
+                if abs(radius - dist) <= 18 or radius >= dist:
+                    acked = True
+                    self._scan_ack_t = max(self._scan_ack_t, 1.45)
+                    pygame.draw.circle(self.surface, (255, 220, 80),
+                                       (int(sx), int(sy)), 24, 2)
+            alive.append([cx, cy, start_t, acked])
         self._scan_pings = alive
+
+    def _draw_scan_ack(self, dt: float):
+        if self._scan_ack_t <= 0.0:
+            return
+        self._scan_ack_t = max(0.0, self._scan_ack_t - dt)
+        alpha = min(220, int(self._scan_ack_t / 1.45 * 260))
+        font = get_font(13, bold=True)
+        label = font.render("UNION PASSIVE SCAN // IDENTITY LOGGED",
+                            True, (255, 220, 80))
+        pad_x, pad_y = 10, 5
+        w, h = label.get_width() + pad_x * 2, label.get_height() + pad_y * 2
+        box = pygame.Surface((w, h), pygame.SRCALPHA)
+        pygame.draw.rect(box, (10, 8, 0, int(alpha * 0.65)),
+                         pygame.Rect(0, 0, w, h))
+        pygame.draw.rect(box, (255, 190, 40, alpha),
+                         pygame.Rect(0, 0, w, h), 1)
+        label.set_alpha(alpha)
+        box.blit(label, (pad_x, pad_y))
+        self.surface.blit(box, (S.SCREEN_W // 2 - w // 2, 16))
 
     # ------------------------------------------------------------------  GRAVITY WELLS
     def _draw_gravity_wells(self, run_mgr, t: float):
@@ -1325,6 +1557,46 @@ class VectorRenderer:
         ga = int(35 + 20 * math.sin(t * 5.0))
         pygame.draw.circle(glow_surf, (0, 235, 200, ga), (80, 80), 58)
         surf.blit(glow_surf, (int(alien.pos.x) - 80, int(alien.pos.y) - 80))
+
+    def _draw_alien_sighting_witness(self, dt: float, t: float):
+        """Aliveness D.7: a brief, uncanny screen-edge witness mark."""
+        if self._alien_sighting_t <= 0.0:
+            return
+        self._alien_sighting_t = max(0.0, self._alien_sighting_t - dt)
+        frac = self._alien_sighting_t / 2.8
+        rng = random.Random(int(self._alien_sighting_seed * 100000))
+        side = rng.choice(("left", "right", "top"))
+        W, H = S.SCREEN_W, S.FLIGHT_H
+        surf = pygame.Surface((W, H), pygame.SRCALPHA)
+        alpha = int(120 * min(1.0, frac * 1.6) * (0.55 + 0.45 * math.sin(t * 18.0)))
+        if side == "left":
+            anchor = (18, rng.randint(80, H - 110))
+            pts = [(anchor[0] - 36, anchor[1] - 44),
+                   (anchor[0] + 12, anchor[1] - 18),
+                   (anchor[0] + 34, anchor[1] + 2),
+                   (anchor[0] + 10, anchor[1] + 24),
+                   (anchor[0] - 34, anchor[1] + 48)]
+        elif side == "right":
+            anchor = (W - 18, rng.randint(80, H - 110))
+            pts = [(anchor[0] + 36, anchor[1] - 44),
+                   (anchor[0] - 12, anchor[1] - 18),
+                   (anchor[0] - 34, anchor[1] + 2),
+                   (anchor[0] - 10, anchor[1] + 24),
+                   (anchor[0] + 34, anchor[1] + 48)]
+        else:
+            anchor = (rng.randint(120, W - 120), 16)
+            pts = [(anchor[0] - 42, anchor[1] - 34),
+                   (anchor[0] - 12, anchor[1] + 18),
+                   (anchor[0] + 5, anchor[1] + 44),
+                   (anchor[0] + 26, anchor[1] + 16),
+                   (anchor[0] + 48, anchor[1] - 30)]
+        pygame.draw.polygon(surf, (0, 24, 22, alpha), pts)
+        pygame.draw.lines(surf, (0, 255, 215, min(210, alpha + 40)), True, pts, 1)
+        for y in range(0, H, 9):
+            if rng.random() < 0.45:
+                pygame.draw.line(surf, (0, 220, 190, int(alpha * 0.38)),
+                                 (0, y), (W, y), 1)
+        self.surface.blit(surf, (0, 0))
 
     # ------------------------------------------------------------------  AI SHIPS
     def _draw_ai_ships(self, run_mgr, t: float):
@@ -2047,6 +2319,48 @@ class VectorRenderer:
                 spk = self._rotate_pt((rng2.uniform(-16, 10), rng2.uniform(-10, 10)), angle, pos)
                 pygame.draw.circle(self.surface, (255, 220, 80), spk, 2)
                 pygame.draw.circle(self.surface, (255, 80, 30), spk, 1)
+        self._draw_ship_damage_overlays(ship, pos, angle, hp, t)
+
+    def _draw_ship_damage_overlays(self, ship, pos, angle, hp, t: float):
+        """Aliveness D.1: readable damage escalation on the courier hull."""
+        if hp >= 0.75:
+            return
+        rng = random.Random((id(ship) & 0xFFFF) ^ 0xD1F7)
+        n_scorches = 1 + int((0.75 - hp) * 8)
+        for _ in range(n_scorches):
+            ox = rng.uniform(-15, 12)
+            oy = rng.uniform(-10, 10)
+            center = self._rotate_pt((ox, oy), angle, pos)
+            r = max(2, int(rng.uniform(2, 5) * (1.0 - hp)))
+            pygame.draw.circle(self.surface, (24, 18, 10), center, r)
+            pygame.draw.circle(self.surface, (120, 56, 20), center, r + 1, 1)
+
+        if hp < 0.42:
+            hole = self._rotate_pt((rng.uniform(-8, 8), rng.uniform(-8, 8)), angle, pos)
+            pygame.draw.circle(self.surface, (8, 0, 0), hole, 4)
+            pygame.draw.circle(self.surface, (255, 70, 30), hole, 5, 1)
+            if int(t * 10) % 2 == 0:
+                spark = self._rotate_pt((rng.uniform(-18, 10), rng.uniform(-12, 12)), angle, pos)
+                pygame.draw.line(self.surface, (255, 220, 80),
+                                 (spark[0] - 3, spark[1]), (spark[0] + 3, spark[1]), 1)
+                pygame.draw.line(self.surface, (255, 220, 80),
+                                 (spark[0], spark[1] - 3), (spark[0], spark[1] + 3), 1)
+
+        if hp < 0.18:
+            leak_origin = self._rotate_pt((-12, rng.uniform(-8, 8)), angle, pos)
+            rad = math.radians(angle + 180.0)
+            for i in range(7):
+                dist = 10 + i * 6 + (t * 40 % 6)
+                jitter = math.sin(t * 5 + i) * 4
+                px = int(leak_origin[0] + math.cos(rad) * dist + math.cos(rad + math.pi / 2) * jitter)
+                py = int(leak_origin[1] + math.sin(rad) * dist + math.sin(rad + math.pi / 2) * jitter)
+                a = max(35, 150 - i * 18)
+                pygame.draw.circle(self.surface, (190, 238, 255, a), (px, py), 1)
+
+        if hp < 0.10:
+            antenna_root = self._rotate_pt((-4, -11), angle, pos)
+            antenna_tip = self._rotate_pt((-12, -22 + math.sin(t * 12.0) * 3), angle, pos)
+            pygame.draw.line(self.surface, (255, 90, 45), antenna_root, antenna_tip, 1)
 
     # ---- RUSTBUCKET ALPHA -----------------------------------------------
     def _draw_ship_rustbucket(self, ship, pos, angle, hp, t):
@@ -2451,7 +2765,7 @@ class VectorRenderer:
 
     # ------------------------------------------------------------------  BARGES
     def _draw_barge_patrol_cone(self, barge, bx: int, by: int, t: float) -> None:
-        """Aliveness C.5 — amber sweep cone showing barge FOV while patrolling."""
+        """Aliveness D.2: amber sweep cone showing barge FOV while patrolling."""
         target = getattr(barge, "_patrol_target", None)
         if target is not None:
             dx = target.x - barge.pos.x
@@ -2465,14 +2779,33 @@ class VectorRenderer:
         angle = math.degrees(math.atan2(dy, dx))
         half = S.BARGE_PATROL_CONE_DEG / 2.0
         length = S.BARGE_PATROL_CONE_LEN
-        pulse = 0.35 + 0.15 * abs(math.sin(t * 2.4))
+        pulse = 0.55 + 0.45 * abs(math.sin(t * 2.4))
         cone = pygame.Surface((int(length * 2), int(length * 2)), pygame.SRCALPHA)
         cx, cy = length, length
-        pts = [(cx, cy)]
-        for deg in (-half, half):
+        for scale, alpha in ((1.0, 34), (0.72, 28), (0.42, 24)):
+            pts = [(cx, cy)]
+            for deg in (-half, half):
+                rad = math.radians(angle + deg)
+                pts.append((cx + math.cos(rad) * length * scale,
+                            cy + math.sin(rad) * length * scale))
+            pygame.draw.polygon(cone, (255, 180, 60, int(alpha * pulse)), pts)
+        rim_pts = []
+        for deg in range(int(-half), int(half) + 1, 4):
             rad = math.radians(angle + deg)
-            pts.append((cx + math.cos(rad) * length, cy + math.sin(rad) * length))
-        pygame.draw.polygon(cone, (255, 180, 60, int(28 * pulse)), pts)
+            rim_pts.append((cx + math.cos(rad) * length, cy + math.sin(rad) * length))
+        if len(rim_pts) > 1:
+            pygame.draw.lines(cone, (255, 210, 90, int(95 * pulse)),
+                              False, rim_pts, 2)
+        for deg in (-half, 0.0, half):
+            rad = math.radians(angle + deg)
+            end = (cx + math.cos(rad) * length, cy + math.sin(rad) * length)
+            pygame.draw.line(cone, (255, 210, 90, int(70 * pulse)),
+                             (cx, cy), end, 1)
+        for step in range(80, int(length), 58):
+            arc_rect = pygame.Rect(cx - step, cy - step, step * 2, step * 2)
+            pygame.draw.arc(cone, (255, 160, 45, int(42 * pulse)),
+                            arc_rect, math.radians(angle - half),
+                            math.radians(angle + half), 1)
         self.surface.blit(cone, (bx - length, by - length))
 
     def _draw_barges(self, run_mgr, ship, t: float = 0.0):

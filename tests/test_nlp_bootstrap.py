@@ -58,6 +58,11 @@ def test_main_module_no_longer_eagerly_bootstraps():
     game_src = Path("core/game.py").read_text(encoding="utf-8")
     assert "nlp_bootstrap" in game_src, \
         "Game must hand off NLTK download to the lazy bootstrap"
+    init_prefix = game_src.split("self.screen  = pygame.display.set_mode", 1)[0]
+    assert "start_in_background" not in init_prefix, \
+        "Game.__init__ should not start NLTK before the first visible terminal"
+    assert "EVT_TERMINAL_OPEN" in game_src
+    assert "_on_terminal_open_for_nlp" in game_src
 
 
 def test_game_renders_splash_helper_exists():

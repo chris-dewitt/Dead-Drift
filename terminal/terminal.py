@@ -240,6 +240,112 @@ _NPC_VAULT_KEYS = {
     "MARROW": ("undergrounddj", "underground_dj", "marrow"),
 }
 
+_NPC_DOSSIER_TITLE.update({
+    "SANDRA":   "PERFECT-COURIER FILE",
+    "KRELLBORN": "OUTER BELT THREAT",
+    "MARROW":   "PIRATE RADIO DOSSIER",
+    "EDMUND":   "UNION IDEOLOGY SCAN",
+    "VINCE":    "CORRUPTION PROFILE",
+})
+
+_NPC_HINTS.update({
+    "SANDRA":   "trade intel · solidarity x3 · boast with real run stats · confession · apology x3 · [ESC] abort",
+    "KRELLBORN": "offer cargo · physics/escape x3 · speak pirate · invoke Krell · credible weapons threat · [ESC] abort",
+    "MARROW":   "jam Local 404 · ask patrol intel · dedication · exchange handle · trade archive track · [ESC] abort",
+    "EDMUND":   "charter/article x2 · contradiction x3 · do not bribe · sympathy fails · [ESC] abort",
+    "VINCE":    "bribe >=1500 · share future score x2 · threaten audit/skim x2 · avoid huge bribe · [ESC] abort",
+})
+
+_SCAN_VOCAB.update({
+    "SANDRA": {
+        "blevins": "INTEL", "intel": "INTEL", "gossip": "INTEL", "off the record": "INTEL",
+        "solidarity": "SOLIDARITY", "worker": "SOLIDARITY", "same boat": "SOLIDARITY",
+        "union": "SOLIDARITY", "underpaid": "SOLIDARITY",
+        "slingshot": "OUTPERFORM", "snaps": "OUTPERFORM", "harpoon": "OUTPERFORM",
+        "perfect run": "OUTPERFORM", "record time": "OUTPERFORM",
+        "poster child": "CONFESSION", "tool": "CONFESSION", "propaganda": "CONFESSION",
+        "sorry": "APOLOGY", "apologize": "APOLOGY", "my fault": "APOLOGY",
+    },
+    "KRELLBORN": {
+        "take it": "CARGO", "the cargo": "CARGO", "payload": "CARGO", "the haul": "CARGO",
+        "slingshot": "ESCAPE", "gravity well": "ESCAPE", "trajectory": "ESCAPE",
+        "delta-v": "ESCAPE", "newtonian": "ESCAPE",
+        "no law": "MUTUAL", "outer belt": "KRELL", "krell": "KRELL", "tongueless krell": "KRELL",
+        "guns": "INTIMIDATE", "weapons": "INTIMIDATE", "open fire": "INTIMIDATE",
+        "hull breach": "INTIMIDATE",
+    },
+    "MARROW": {
+        "jam": "JAM", "jammer": "JAM", "static": "JAM", "kill the signal": "JAM",
+        "barge": "INTEL", "local 404": "INTEL", "patrol": "INTEL", "route": "INTEL",
+        "dedication": "DEDICATION", "request": "DEDICATION", "song": "DEDICATION",
+        "handle": "HANDLE", "callsign": "HANDLE", "shoutout": "HANDLE",
+        "archive": "TRACK TRADE", "vinyl": "TRACK TRADE", "recording": "TRACK TRADE",
+        "roost": "GREETING", "radio": "GREETING",
+    },
+    "EDMUND": {
+        "article 7": "CHARTER", "section 4.2": "CHARTER", "charter": "CHARTER",
+        "shared prosperity": "CHARTER", "solidarity": "CHARTER",
+        "contradiction": "CONTRADICTION", "hypocrisy": "CONTRADICTION",
+        "reconcile": "CONTRADICTION", "double standard": "CONTRADICTION",
+        "bribe": "INSULT", "credits": "INSULT", "kickback": "INSULT",
+        "desperate": "SYMPATHY", "please": "SYMPATHY", "family": "SYMPATHY",
+    },
+    "VINCE": {
+        "bribe": "BRIBE", "pay": "BRIBE", "credits": "BRIBE", "1500": "BRIBE",
+        "8000": "SHAKEDOWN", "share": "SHARE", "split": "SHARE",
+        "off the books": "SHARE", "outer belt": "SHARE", "krellborn": "SHARE",
+        "skim": "THREATEN", "kickback": "THREATEN", "audit": "THREATEN",
+        "internal affairs": "THREATEN", "blevins": "THREATEN",
+    },
+})
+
+_SCAN_KNOWN_LABELS.update({
+    "SANDRA": {
+        "INTEL": ("rival_intel",),
+        "SOLIDARITY": ("solidarity",),
+        "OUTPERFORM": ("outperform",),
+        "CONFESSION": ("confession",),
+        "APOLOGY": ("apology",),
+    },
+    "KRELLBORN": {
+        "CARGO": ("cargo_offer",),
+        "ESCAPE": ("escape_flex",),
+        "MUTUAL": ("mutual",),
+        "KRELL": ("krell_invoke",),
+        "INTIMIDATE": ("intimidate",),
+    },
+    "MARROW": {
+        "JAM": ("jam",),
+        "INTEL": ("intel",),
+        "DEDICATION": ("dedication",),
+        "HANDLE": ("handle",),
+        "TRACK TRADE": ("track_trade",),
+    },
+    "EDMUND": {
+        "CHARTER": ("charter",),
+        "CONTRADICTION": ("contradiction",),
+        "INSULT": ("bribe",),
+    },
+    "VINCE": {
+        "BRIBE": ("small_bribe", "bribe"),
+        "SHAKEDOWN": ("shakedown", "big_bribe"),
+        "SHARE": ("share_score",),
+        "THREATEN": ("threaten",),
+    },
+})
+
+_NPC_VAULT_KEYS.update({
+    "SANDRA": ("sandra",),
+    "DRAY": ("dray",),
+    "NOVA SOMA COLLECTIONS": ("novasomacollections", "nova_soma_collections", "nova_soma"),
+    "MIRA VOSS": ("miravoss", "mira_voss"),
+    "EDMUND": ("idealistrep", "idealist_rep", "edmund", "eddie"),
+    "VINCE": ("corruptrep", "corrupt_rep", "vince", "vinny"),
+})
+
+for _npc_name in ("NOVA SOMA COLLECTIONS", "MIRA VOSS"):
+    _SCAN_VOCAB.get(_npc_name, {}).pop("fuck", None)
+
 _COURIER_QUIPS_KW: dict[str, list[str]] = {
     "bribe":     ["this is going to bankrupt me twice over.",
                   "spending the rent money. Worth it. Probably.",
@@ -514,9 +620,15 @@ class Terminal:
         self._full_scan_surf:  pygame.Surface | None = None
         self._vignette_surf:   pygame.Surface | None = None
         self._signal_phase     = random.random() * math.tau   # signal-bar wobble seed
+        self._activated        = False
 
-        bus.emit(EVT_TERMINAL_OPEN, npc=npc)
-        self._push(npc.name.upper(), npc.intro())
+    def activate(self) -> None:
+        """Emit open side effects once the terminal is actually visible."""
+        if self._activated:
+            return
+        self._activated = True
+        bus.emit(EVT_TERMINAL_OPEN, npc=self.npc)
+        self._push(self.npc.name.upper(), self.npc.intro())
 
     # ------------------------------------------------------------------
     def _get_font(self) -> pygame.font.Font:
@@ -706,10 +818,11 @@ class Terminal:
                 hot = raw_label.endswith("â˜…") or raw_label.endswith("★")
                 label = raw_label.rstrip("â˜…★")
                 if label not in seen_labels:
+                    known = self._chip_is_known(label, kw)
                     hits.append(ScanChip(
                         label=label,
-                        hot=hot,
-                        known=self._chip_is_known(label, kw),
+                        hot=hot and not known,
+                        known=known,
                     ))
                     seen_labels.add(label)
         return hits[:4]

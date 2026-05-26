@@ -17,6 +17,11 @@ NPC_TYPES = [
     "toll_authority",
     "nervous_fence",
     "cargo_inspector",
+    "dray",
+    "nova_soma_collections",
+    "mira_voss",
+    "idealist_rep",
+    "corrupt_rep",
 ]
 
 CARGO_CONTEXTS = [

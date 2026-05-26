@@ -8,7 +8,15 @@ from core.state_manager import StateManager, GameState
 from renderer.visual_fx import VisualFX
 from core.transitions import TransitionManager
 from core.text import install_font_patch, get_font
-from core.event_bus import bus, EVT_SHIP_DESTROYED, EVT_RUN_END, EVT_TORCH_ACTIVE, EVT_DEBT_DING, EVT_BAX_SPEAK
+from core.event_bus import (
+    bus,
+    EVT_SHIP_DESTROYED,
+    EVT_RUN_END,
+    EVT_TORCH_ACTIVE,
+    EVT_DEBT_DING,
+    EVT_BAX_SPEAK,
+    EVT_TERMINAL_OPEN,
+)
 from roguelite.meta_progression import MetaProgression
 from roguelite.save_manager import SaveManager
 from roguelite.run_manager import RunManager
@@ -60,16 +68,6 @@ class Game:
         # Route every pygame.font.SysFont("monospace", ...) call through
         # the bundled DejaVu Sans Mono with a +2pt size bump.
         install_font_patch()
-        # Epic 1.10 — kick the NLTK download off the main thread the
-        # moment we boot. The menu opens immediately; the splash + Bax
-        # line only appear if the player tries to open a terminal before
-        # the download finishes.
-        try:
-            from terminal import nlp_bootstrap
-            if not nlp_bootstrap.already_present():
-                nlp_bootstrap.start_in_background()
-        except Exception:
-            pass
         self.screen  = pygame.display.set_mode((S.SCREEN_W, S.SCREEN_H))
         pygame.display.set_caption(S.TITLE)
         self.clock   = pygame.time.Clock()
@@ -161,6 +159,7 @@ class Game:
         # Epic 1.10 — NLP linguistic-processor splash. Set the first time a
         # terminal opens while the NLTK bootstrap is still in flight; cleared
         # once the bootstrap reports ready.
+        self._nlp_bootstrap_requested: bool = False
         self._nlp_splash_active:    bool  = False
         self._nlp_splash_t:         float = 0.0
         self._nlp_warmup_line_fired: bool = False
@@ -192,6 +191,19 @@ class Game:
         bus.subscribe(EVT_DELIVERY_DONE,  self._on_delivery_done)
         bus.subscribe(EVT_RUN_START,      self._on_bax_hum_run_start)
         bus.subscribe(EVT_LORE_FOUND,     self._on_lore_found)
+        bus.subscribe(EVT_TERMINAL_OPEN,  self._on_terminal_open_for_nlp)
+
+    def _on_terminal_open_for_nlp(self, **_) -> None:
+        """Start optional NLTK bootstrap only when a terminal is visible."""
+        if self._nlp_bootstrap_requested:
+            return
+        self._nlp_bootstrap_requested = True
+        try:
+            from terminal import nlp_bootstrap
+            if not nlp_bootstrap.already_present():
+                nlp_bootstrap.start_in_background()
+        except Exception:
+            pass
 
     def _on_lore_found(self, text: str = "", chapter: int = 0, **_) -> None:
         """Persist corridor lore scraps into MetaProgression for Bax's Records."""
@@ -2411,6 +2423,8 @@ class Game:
         cleared. The terminal stays usable throughout — the parser falls
         back to regex tokenisation while the bundle is still in flight.
         """
+        if not getattr(self, "_nlp_bootstrap_requested", False):
+            return
         try:
             from terminal import nlp_bootstrap
         except Exception:
