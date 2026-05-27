@@ -453,8 +453,8 @@ def build() -> Corridor:
         Ladder(900, CEIL_Y, CEIL_Y + 80, path_tag="high"),
         # G.6 — Lore wall in vent: lab safety memo gone wrong
         LoreRoom(
-            820, CEIL_Y + 35,
-            lore_text="Lab log 7-E: the mycelium is attempting communication via bioluminescent pulse. We stopped recording. Budget review pending.",
+            820,
+            "Lab log 7-E: the mycelium is attempting communication via bioluminescent pulse. We stopped recording. Budget review pending.",
             chapter=2, npc_voice="DR. VALERIA", path_tag="high",
         ),
     ]
