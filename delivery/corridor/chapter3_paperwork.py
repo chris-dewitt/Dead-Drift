@@ -702,8 +702,8 @@ def build() -> Corridor:
         Platform(760, CEIL_Y + 40, 80, path_tag="high"),
         # G.6 — Lore wall on high path: opt-out form NS-19B backstory
         LoreRoom(
-            550, CEIL_Y + 50,
-            lore_text="Internal note, Nova Soma compliance: opt-out Form NS-19B discontinued per order 447-R. Reason: 'The form was working.' Signed: BLEVINS.",
+            550,
+            "Internal note, Nova Soma compliance: opt-out Form NS-19B discontinued per order 447-R. Reason: 'The form was working.' Signed: BLEVINS.",
             chapter=3, npc_voice="UNION DISPATCHER", path_tag="high",
         ),
         # G.7 — Howard's shortcut: staff passage, skip file room climb

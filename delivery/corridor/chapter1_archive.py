@@ -523,8 +523,8 @@ def build(meta=None) -> Corridor:
                path_tag="high"),
         # G.6 — Lore wall on high path: Kenji's last broadcast
         LoreRoom(
-            850, CEIL_Y + 50,
-            lore_text="Pre-raid broadcast log, Kenji's last show — 'If you're hearing this, Local 404 found me. Long live the Archive. Tell Marrow thanks for the records.'",
+            850,
+            "Pre-raid broadcast log, Kenji's last show — 'If you're hearing this, Local 404 found me. Long live the Archive. Tell Marrow thanks for the records.'",
             chapter=1, npc_voice="KENJI", path_tag="high",
         ),
         # LOW PATH (crawlspace): ground level, 2 collapsing platforms

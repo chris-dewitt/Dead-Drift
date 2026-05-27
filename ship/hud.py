@@ -51,25 +51,27 @@ class HUD:
         # Hull bar
         self._draw_hull_bar(surface, ox, oy)
 
+        # Fuel bar — immediately under hull
+        self._draw_fuel_bar(surface, ox, oy)
+
         # Velocity readout
         speed = self.ship.body.speed()
         vel_text = font.render(f"VEL  {speed:>6.1f} m/s", True, self._tint(S.GREEN_TERM))
-        surface.blit(vel_text, (20 + ox, 60 + oy))
+        surface.blit(vel_text, (20 + ox, 92 + oy))
 
         # Angle readout
         angle_text = font.render(f"HDG  {self.ship.angle:>5.1f}°", True, self._tint(S.GREEN_TERM))
-        surface.blit(angle_text, (20 + ox, 80 + oy))
+        surface.blit(angle_text, (20 + ox, 112 + oy))
 
         # Cargo status
         cargo = self.ship.cargo
         cargo_label = cargo.name if cargo else "NO CARGO"
         cargo_color = S.AMBER_TERM if cargo and cargo.is_damaged else S.GREEN_TERM
         cargo_text = font.render(f"CARGO  {cargo_label}", True, self._tint(cargo_color))
-        surface.blit(cargo_text, (20 + ox, 100 + oy))
+        surface.blit(cargo_text, (20 + ox, 132 + oy))
 
         self._draw_thruster_heat(surface, ox, oy)
         self._draw_snap_charge(surface, ox, oy, snap_charge)
-        self._draw_fuel_bar(surface, ox, oy)
 
     def _draw_hull_bar(self, surface: pygame.Surface, ox: int, oy: int):
         font     = self._get_font()
@@ -104,11 +106,11 @@ class HUD:
             status = "OK "
 
         label = font.render(f"THRST {heat:>5.1f}C {status}", True, self._tint(color))
-        surface.blit(label, (20 + ox, 124 + oy))
+        surface.blit(label, (20 + ox, 156 + oy))
 
         bar_w, bar_h = 200, 8
-        bar_rect = pygame.Rect(20 + ox, 142 + oy, bar_w, bar_h)
-        fill_rect = pygame.Rect(20 + ox, 142 + oy, int(bar_w * heat / 100.0), bar_h)
+        bar_rect = pygame.Rect(20 + ox, 174 + oy, bar_w, bar_h)
+        fill_rect = pygame.Rect(20 + ox, 174 + oy, int(bar_w * heat / 100.0), bar_h)
         pygame.draw.rect(surface, S.GREY_DEAD, bar_rect, 1)
         pygame.draw.rect(surface, color, fill_rect)
 
@@ -129,11 +131,11 @@ class HUD:
         color = self._snap_color(pct)
 
         label = font.render(f"SNAP CHARGE {pct * 100:>3.0f}%", True, self._tint(color))
-        surface.blit(label, (20 + ox, 156 + oy))
+        surface.blit(label, (20 + ox, 188 + oy))
 
         bar_w, bar_h = 200, 8
-        bar_rect = pygame.Rect(20 + ox, 174 + oy, bar_w, bar_h)
-        fill_rect = pygame.Rect(20 + ox, 174 + oy, int(bar_w * pct), bar_h)
+        bar_rect = pygame.Rect(20 + ox, 206 + oy, bar_w, bar_h)
+        fill_rect = pygame.Rect(20 + ox, 206 + oy, int(bar_w * pct), bar_h)
         pygame.draw.rect(surface, S.GREY_DEAD, bar_rect, 1)
         pygame.draw.rect(surface, self._tint(color), fill_rect)
 
@@ -151,11 +153,11 @@ class HUD:
             color = S.RED_WARN
 
         label = font.render(f"FUEL  {fuel:>5.1f}%", True, self._tint(color))
-        surface.blit(label, (20 + ox, 188 + oy))
+        surface.blit(label, (20 + ox, 56 + oy))
 
         bar_w, bar_h = 200, 8
-        bar_rect  = pygame.Rect(20 + ox, 206 + oy, bar_w, bar_h)
-        fill_rect = pygame.Rect(20 + ox, 206 + oy, int(bar_w * pct), bar_h)
+        bar_rect  = pygame.Rect(20 + ox, 74 + oy, bar_w, bar_h)
+        fill_rect = pygame.Rect(20 + ox, 74 + oy, int(bar_w * pct), bar_h)
         pygame.draw.rect(surface, S.GREY_DEAD, bar_rect, 1)
         pygame.draw.rect(surface, self._tint(color), fill_rect)
 

@@ -365,8 +365,8 @@ def build() -> Corridor:
         MovingHazard(600, FLOOR_Y - 16, 20, 16, left=480, right=780, speed=72),
         # G.6 — Lore wall: guest complaint log, room 1408
         LoreRoom(
-            640, FLOOR_Y - 50,
-            lore_text="Guest complaint, room 1408: 'The corridor changes at night. Something is in the wall.' Management response: 'Thank you for your stay. Your deposit has been processed.'",
+            640,
+            "Guest complaint, room 1408: 'The corridor changes at night. Something is in the wall.' Management response: 'Thank you for your stay. Your deposit has been processed.'",
             chapter=4, npc_voice="MX. DELL", path_tag=None,
         ),
         # G.7 — Staff elevator: skip guest floor for 400cr
