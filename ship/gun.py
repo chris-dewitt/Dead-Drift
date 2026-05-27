@@ -7,14 +7,15 @@ from core.event_bus import bus, EVT_GUN_FIRE, EVT_GUN_MALFUNCTION
 
 
 class Bullet:
-    __slots__ = ("pos", "vel", "lifetime")
+    __slots__ = ("pos", "vel", "lifetime", "damage")
 
-    def __init__(self, pos: Vec2, angle_deg: float):
+    def __init__(self, pos: Vec2, angle_deg: float, damage: int = 1):
         rad = math.radians(angle_deg)
         self.pos      = Vec2(pos.x, pos.y)
         self.vel      = Vec2(math.cos(rad) * S.BULLET_SPEED,
                              math.sin(rad) * S.BULLET_SPEED)
         self.lifetime = S.BULLET_LIFETIME
+        self.damage   = damage
 
     def update(self, dt: float):
         self.pos.x   += self.vel.x * dt
@@ -35,6 +36,8 @@ class Gun:
         self.bullets: list[Bullet] = []
         self._cooldown = 0.0
         self._jam_t    = 0.0   # > 0 while jammed after malfunction
+        self.fire_rate_mult = 1.0   # shop upgrade: multiplies fire rate
+        self.damage_mult    = 1     # shop upgrade: bullets deal more damage
 
     def fire(self, pos: Vec2, angle_deg: float):
         if self._cooldown > 0 or self._jam_t > 0:
@@ -45,9 +48,9 @@ class Gun:
             self._jam_t    = S.GUN_JAM_DURATION
             self._cooldown = S.GUN_COOLDOWN
             return
-        self.bullets.append(Bullet(pos, angle_deg))
+        self.bullets.append(Bullet(pos, angle_deg, damage=self.damage_mult))
         bus.emit(EVT_GUN_FIRE)
-        self._cooldown = S.GUN_COOLDOWN
+        self._cooldown = S.GUN_COOLDOWN / max(0.5, self.fire_rate_mult)
 
     def update(self, dt: float):
         self._cooldown = max(0.0, self._cooldown - dt)

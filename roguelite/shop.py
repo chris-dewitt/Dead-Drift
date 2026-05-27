@@ -20,6 +20,8 @@ _TAG_COL: dict[str, tuple] = {
     "repair_drone":     (0,   255, 128),
     "cargo_stabilizer": (0,   200, 255),
     "scrap_bullets":    (255,  80,  50),
+    "rapid_loader":     (255, 140,  20),
+    "armor_pierce":     (200,  60, 255),
 }
 
 def _condition(cost: int) -> tuple[str, tuple]:
@@ -100,6 +102,12 @@ class _ShopItem:
             if hasattr(ship, "gun"):
                 ship.gun._cooldown = 0.0
                 ship.gun._jam_t    = 0.0
+        elif self.tag == "rapid_loader":
+            if hasattr(ship, "gun"):
+                ship.gun.fire_rate_mult = max(ship.gun.fire_rate_mult, 2.0)
+        elif self.tag == "armor_pierce":
+            if hasattr(ship, "gun"):
+                ship.gun.damage_mult = max(ship.gun.damage_mult, 2)
 
 
 _POOL_ALL: list[_ShopItem] = [
@@ -138,6 +146,16 @@ _POOL_ALL: list[_ShopItem] = [
         "Loose rounds from a Union sergeant's locker. Don't ask.",
         500, "scrap_bullets",
     ),
+    _ShopItem(
+        "Rapid Loader",       "2× fire rate for this run",
+        "Black-market feed mechanism. Illegal in six systems.",
+        1400, "rapid_loader",
+    ),
+    _ShopItem(
+        "Armor-Pierce Rounds", "2× damage per bullet",
+        "Depleted kasite tips. Punches through anything. Once.",
+        1800, "armor_pierce",
+    ),
 ]
 
 
@@ -165,12 +183,14 @@ def _pick_stock(run_mgr, ship) -> list[_ShopItem]:
 
     fillers = ["hull_patch", "thrust_boost", "intel"]
     if sector_idx >= 2:
-        fillers = ["thrust_boost", "hull_patch", "intel"]
+        fillers = ["thrust_boost", "hull_patch", "rapid_loader"]
+    if sector_idx >= 3:
+        fillers = ["armor_pierce", "hull_patch", "rapid_loader"]
     for tag in fillers:
         if by_tag[tag] not in picks:
             picks.append(by_tag[tag])
 
-    for tag in ("hull_patch", "intel", "jammer"):
+    for tag in ("hull_patch", "intel", "jammer", "rapid_loader", "armor_pierce"):
         if len(picks) >= 4:
             break
         if by_tag[tag] not in picks:
@@ -593,6 +613,21 @@ def _draw_item_icon(surf: pygame.Surface, rect: pygame.Rect, tag: str,
             pygame.draw.polygon(surf, glow, [(cx + ox - 3, cy - 9 + i * 2),
                                              (cx + ox + 3, cy - 9 + i * 2),
                                              (cx + ox, cy - 15 + i * 2)])
+    elif tag == "rapid_loader":
+        # Double-feed drum — two stacked circles with a speed streak
+        pygame.draw.circle(surf, col, (cx - 6, cy), 8, 2)
+        pygame.draw.circle(surf, col, (cx + 6, cy), 8, 2)
+        for i in range(3):
+            pygame.draw.line(surf, glow, (cx + 14, cy - 6 + i * 6),
+                             (cx + 18, cy - 6 + i * 6), 1)
+    elif tag == "armor_pierce":
+        # Pointed penetrator tip
+        pygame.draw.polygon(surf, col, [(cx, cy - 16), (cx - 5, cy + 4),
+                                        (cx + 5, cy + 4)])
+        pygame.draw.polygon(surf, glow, [(cx, cy - 16), (cx - 3, cy - 4),
+                                         (cx + 3, cy - 4)])
+        pygame.draw.rect(surf, col, (cx - 5, cy + 4, 10, 10))
+        pygame.draw.line(surf, glow, (cx - 7, cy + 9), (cx + 7, cy + 9), 1)
     else:
         pygame.draw.circle(surf, col, (cx, cy), 12, 2)
 

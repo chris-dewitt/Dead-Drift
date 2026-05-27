@@ -69,6 +69,7 @@ class HUD:
 
         self._draw_thruster_heat(surface, ox, oy)
         self._draw_snap_charge(surface, ox, oy, snap_charge)
+        self._draw_fuel_bar(surface, ox, oy)
 
     def _draw_hull_bar(self, surface: pygame.Surface, ox: int, oy: int):
         font     = self._get_font()
@@ -133,6 +134,28 @@ class HUD:
         bar_w, bar_h = 200, 8
         bar_rect = pygame.Rect(20 + ox, 174 + oy, bar_w, bar_h)
         fill_rect = pygame.Rect(20 + ox, 174 + oy, int(bar_w * pct), bar_h)
+        pygame.draw.rect(surface, S.GREY_DEAD, bar_rect, 1)
+        pygame.draw.rect(surface, self._tint(color), fill_rect)
+
+    def _draw_fuel_bar(self, surface: pygame.Surface, ox: int, oy: int):
+        fuel = getattr(self.ship, "fuel", None)
+        if fuel is None:
+            return
+        font = self._get_font()
+        pct = max(0.0, min(1.0, fuel / S.FUEL_MAX))
+        if pct > 0.5:
+            color = S.GREEN_TERM
+        elif pct > 0.25:
+            color = S.AMBER_TERM
+        else:
+            color = S.RED_WARN
+
+        label = font.render(f"FUEL  {fuel:>5.1f}%", True, self._tint(color))
+        surface.blit(label, (20 + ox, 188 + oy))
+
+        bar_w, bar_h = 200, 8
+        bar_rect  = pygame.Rect(20 + ox, 206 + oy, bar_w, bar_h)
+        fill_rect = pygame.Rect(20 + ox, 206 + oy, int(bar_w * pct), bar_h)
         pygame.draw.rect(surface, S.GREY_DEAD, bar_rect, 1)
         pygame.draw.rect(surface, self._tint(color), fill_rect)
 

@@ -129,6 +129,13 @@ DEBT_RECOVERED_MILESTONE = 500      # cr recovered this run before debt bites ba
 BARGE_PATROL_CONE_DEG   = 55.0
 BARGE_PATROL_CONE_LEN   = 280.0
 
+# --- Fuel ---
+FUEL_MAX          = 100.0         # full tank
+FUEL_DRAIN_FWD    = 5.0           # per second forward thrust
+FUEL_DRAIN_REV    = 3.0           # per second reverse thrust
+FUEL_PICKUP_AMT   = 50.0          # restored by picking up a canister
+FUEL_LOW_WARN     = 25.0          # below this: Bax warns once per sector
+
 # --- Paths ---
 DATA_DIR          = "data"
 ASSETS_DIR        = "assets"

@@ -23,7 +23,8 @@ from antagonists.alien_ship import AlienShip
 from antagonists.ai_ship import (AIShip, ALL_CLASSES, CLASS_DERELICT, CLASS_GUNBOAT,
                                   CLASS_PIRATE_SKIFF, CLASS_BROADCAST_RELAY,
                                   CLASS_BELT_HAULER, CLASS_COMPLIANCE_COURIER,
-                                  BEHAVIOR_HAILER, BEHAVIOR_PIRATE, BEHAVIOR_TRAFFIC)
+                                  BEHAVIOR_HAILER, BEHAVIOR_PIRATE, BEHAVIOR_TRAFFIC,
+                                  ST_DEPART)
 from antagonists.wreck import SpaceWreck
 from antagonists.dead_station import DeadStation
 from antagonists.trash_field import TrashField
@@ -282,6 +283,7 @@ class RunManager:
         self._sector_snaps      = 0
         self._sector_credits    = 0
         self._sector_start_hull = S.HULL_MAX
+        self._fuel_warned       = False   # once-per-sector low-fuel Bax warning
         self._flash_t           = 0.0
         self._last_stats: dict | None = None
         self._run_seed          = 0
@@ -596,6 +598,17 @@ class RunManager:
         for can in self._canisters:
             can.update(dt, self._ship.pos)
 
+        # Low-fuel Bax warning (once per sector)
+        if (not self._fuel_warned
+                and hasattr(self._ship, "fuel")
+                and self._ship.fuel <= S.FUEL_LOW_WARN):
+            self._fuel_warned = True
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "Fuel gauge is screamin', mate. Find a canister!",
+                "We're runnin' on fumes. Grab that canister before the thrusters go dark.",
+                "Low fuel — thrusters'll cut to emergency power real soon.",
+            ]))
+
         # Satellites — update + collision
         for sat in self._satellites[:]:
             sat.update(dt)
@@ -735,7 +748,7 @@ class RunManager:
                     barge.take_hit()
                     break
 
-        # Bullet hits on AI ships — hostiles take 6 hits, freighters 4, etc.
+        # Bullet hits on AI ships — pirates take damage, all others scatter
         for bullet in list(bullets):
             if not bullet.alive:
                 continue
@@ -744,8 +757,41 @@ class RunManager:
                     continue
                 if (ai.pos - bullet.pos).length() < ai.radius + 4:
                     bullet.lifetime = -1
-                    ai.take_hit(1)
+                    if ai.is_pirate:
+                        ai.take_hit(bullet.damage)
+                    else:
+                        # Non-pirate ships are invincible — they just bolt
+                        ai.state = ST_DEPART
+                        ai._state_t = 0.0
                     break
+
+        # Bullet hits on interactive wrecks — shoot the weak point 3x for a reward
+        for bullet in list(bullets):
+            if not bullet.alive:
+                continue
+            for wreck in self._wrecks:
+                if wreck.subtype != wreck.SUBTYPE_INTERACTIVE or wreck.is_triggered:
+                    continue
+                if (wreck.pos - bullet.pos).length() < wreck.length / 2 + 6:
+                    hp_before = wreck.weak_hp
+                    triggered = wreck.hit_weak_point(bullet.pos)
+                    if triggered:
+                        bullet.lifetime = -1
+                        self._run_debt_reduced += 1200
+                        bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                            "Weak point cracked! Emergency cache is ours!",
+                            "She gave up her secrets. Scrap manifest unlocked!",
+                            "Jackpot — that old hull was sittin' on a payload!",
+                        ]))
+                        break
+                    elif wreck.weak_hp < hp_before:
+                        # Landed on the weak point but not done yet
+                        bullet.lifetime = -1
+                        if wreck.weak_hp == 2:
+                            bus.emit(EVT_BAX_SPEAK, line="Hit somethin' inside. Two more!")
+                        else:
+                            bus.emit(EVT_BAX_SPEAK, line="One more — that panel's givin' way!")
+                        break
 
     def _check_slingshot(self):
         if self._sling_cd > 0 or self._sector is None:
@@ -884,7 +930,8 @@ class RunManager:
         for mod in self._ship.chain.get_active("propulsion"):
             if isinstance(mod, Thruster):
                 mod.inject_fuel_mix(1.5, 8.0)
-        # Small hull patch — emergency sealant in the canister
+        # Refill fuel gauge and patch hull
+        self._ship.fuel = min(S.FUEL_MAX, self._ship.fuel + S.FUEL_PICKUP_AMT)
         self._ship.repair(12.0)
 
     # ------------------------------------------------------------------
@@ -1448,6 +1495,7 @@ class RunManager:
         self._spawn_queue.clear()
         self._sling_well_t.clear()
         self._kress_called_this_sector = False
+        self._fuel_warned  = False
         self._shop_pending = False
         self._spawn_sector_objects()
         # Epic 8.4 — HARDCORE bumps barge density: every sector from 2+ gets
@@ -2184,6 +2232,7 @@ class RunManager:
         self._sector_timer = 0.0
         self._jump_ready_fired = False
         self._kress_called_this_sector = False
+        self._fuel_warned  = False
         self._barges.clear()
         self._spawn_queue.clear()
         self._sling_well_t.clear()

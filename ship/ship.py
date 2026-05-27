@@ -19,6 +19,7 @@ class PlayerShip:
     def __init__(self):
         self.body       = RigidBody2D(S.SCREEN_W / 2, S.SCREEN_H / 2, mass=S.SHIP_MASS)
         self.hull       = S.HULL_MAX
+        self.fuel       = S.FUEL_MAX
         self.chain      = SignalChain()
         self.gun        = Gun()
         self.cargo      = None
@@ -86,16 +87,20 @@ class PlayerShip:
         thrusters = self.chain.get_active("propulsion")
         if fwd:
             self._thrusting = True
+            fuel_scale = max(0.3, self.fuel / S.FUEL_MAX)
+            self.fuel = max(0.0, self.fuel - S.FUEL_DRAIN_FWD * dt)
             for t in thrusters:
                 if hasattr(t, "mark_firing"):
                     t.mark_firing()
-                self.body.apply_thrust(t.force * thrust_scale)
+                self.body.apply_thrust(t.force * thrust_scale * fuel_scale)
 
         if rev:
+            fuel_scale = max(0.3, self.fuel / S.FUEL_MAX)
+            self.fuel = max(0.0, self.fuel - S.FUEL_DRAIN_REV * dt)
             for t in thrusters:
                 if hasattr(t, "mark_firing"):
                     t.mark_firing()
-                self.body.apply_thrust(-t.force * 0.6 * thrust_scale)
+                self.body.apply_thrust(-t.force * 0.6 * thrust_scale * fuel_scale)
 
         if keys[pygame.K_SPACE]:
             rad = math.radians(self.body.angle)
@@ -182,6 +187,7 @@ class PlayerShip:
     def reset(self):
         self.body              = RigidBody2D(S.SCREEN_W / 2, S.SCREEN_H / 2, mass=S.SHIP_MASS)
         self.hull              = S.HULL_MAX
+        self.fuel              = S.FUEL_MAX
         self._destroyed        = False
         self._thrusting        = False
         self.controls_inverted = False

@@ -72,7 +72,7 @@ _DEFAULT_HULL = {
     CLASS_HAULER:                 5,
     CLASS_GUNBOAT:                6,
     CLASS_DERELICT:               1,
-    CLASS_PIRATE_SKIFF:           4,
+    CLASS_PIRATE_SKIFF:           2,
     CLASS_BROADCAST_RELAY:        3,
     CLASS_BELT_HAULER:            5,
     CLASS_COMPLIANCE_COURIER:     3,
@@ -363,7 +363,7 @@ class AIShip:
             bus.emit(EVT_AISHIP_DESTROYED, ship=self)
             return True
         # Turn pirates into deserters when hurt
-        if self.behavior == BEHAVIOR_PIRATE and self.hull <= 2:
+        if self.behavior == BEHAVIOR_PIRATE and self.hull <= 1:
             self.state = ST_DEPART
             self._state_t = 0.0
         return False
