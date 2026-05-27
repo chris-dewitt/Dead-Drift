@@ -16,6 +16,8 @@ from terminal.npcs.mira_voss import MiraVoss
 from terminal.npcs.idealist_rep import IdealistRep
 from terminal.npcs.corrupt_rep import CorruptRep
 from terminal.npcs.lost_frequency import LostFrequency
+from terminal.npcs.chen import Chen
+from terminal.npcs.bowen import Bowen
 from terminal.npcs.base_npc import BaseNPC
 
 
@@ -39,6 +41,8 @@ def make_npc(npc_type: str, **kwargs) -> BaseNPC:
         "idealist_rep":            IdealistRep,
         "corrupt_rep":             CorruptRep,
         "lost_frequency":          LostFrequency,
+        "chen":                    Chen,
+        "bowen":                   Bowen,
     }
     cls = registry.get(npc_type)
     if cls is None:

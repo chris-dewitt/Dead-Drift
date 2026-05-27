@@ -13,7 +13,7 @@ from delivery.corridor.elements import Checkpoint
 def make_corridor(chapter: int, hardcore: bool = False,
                   meta=None, cargo=None,
                   force_time_pressure: bool = False) -> Corridor:
-    """Factory: build a Corridor for the given chapter (1-4).
+    """Factory: build a Corridor for the given chapter (1-6).
 
     ``cargo`` is forwarded so Aliveness G.9 mutators can activate.
     ``force_time_pressure`` (G.10) overrides the cargo mutator with a timer.
@@ -26,6 +26,10 @@ def make_corridor(chapter: int, hardcore: bool = False,
         from delivery.corridor.chapter3_paperwork import build
     elif chapter == 4:
         from delivery.corridor.chapter4_vip import build
+    elif chapter == 5:
+        from delivery.corridor.chapter5_edge import build
+    elif chapter == 6:
+        from delivery.corridor.chapter6_compliance import build
     else:
         from delivery.corridor.chapter1_archive import build
     if chapter == 1:

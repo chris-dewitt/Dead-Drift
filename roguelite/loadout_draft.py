@@ -8,6 +8,7 @@ from cargo.acoustic_archive import AcousticArchive
 from cargo.epi_shrooms import EpistemologicalShrooms
 from cargo.paperwork import SentientPaperwork
 from cargo.schrodinger_vip import SchrodingerVIP
+from cargo.encrypted_drive import EncryptedDrive
 from config import settings as S
 from renderer.bax_doodle import draw_bax_droid
 
@@ -83,6 +84,8 @@ _CARGO_FACTORY = [
     lambda: EpistemologicalShrooms(),
     lambda: SentientPaperwork(),
     lambda: SchrodingerVIP(),
+    lambda: EncryptedDrive(),     # ch5 — picked up from Chen
+    lambda: EncryptedDrive(),     # ch6 — delivered to Nova Soma
 ]
 
 _CARGO_META = [
@@ -121,6 +124,24 @@ _CARGO_META = [
         "bax":      "Don't open the box. I MEAN it. Actually... maybe open the box.",
         "mechanic": "Observation randomizes inventory. Climax: erase the ship.",
         "stats":    [("RISK", "UNKNOWN"), ("WEIGHT", "?"), ("BUYER", "?")],
+    },
+    {
+        "key":      "DRIVE-PICKUP",
+        "name":     "(EMPTY HOLD)",
+        "subtitle": "rendezvous run — pick up at The Edge",
+        "tagline":  "you're not the cargo. you're the courier. for now.",
+        "bax":      "Empty hold. We're the cargo this time. Marrow vouched.",
+        "mechanic": "Acquire the drive in-corridor. Compliance vessels track you after.",
+        "stats":    [("RISK", "HIGH"), ("WEIGHT", "—"), ("BUYER", "REMNANTS")],
+    },
+    {
+        "key":      "DRIVE",
+        "name":     "ENCRYPTED DRIVE",
+        "subtitle": "Chen's payload. galaxy-wide zero-write.",
+        "tagline":  "plug it in. hold the line. ninety seconds.",
+        "bax":      "Bowen's gonna smile at you while you do it. Smile back. Plug it in.",
+        "mechanic": "Inert in the void. Pings Nova Soma — Compliance Vessels swarm.",
+        "stats":    [("RISK", "TERMINAL"), ("WEIGHT", "GRAMS"), ("BUYER", "NOVA SOMA")],
     },
 ]
 

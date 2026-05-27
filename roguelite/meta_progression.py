@@ -95,7 +95,19 @@ class MetaProgression:
 
         Epic 13.1 — `source` is a short human-readable tag that floats
         beside the HUD debt counter so the player can see where each
-        change came from."""
+        change came from.
+
+        Post-campaign (ledger_wiped): debt is gone forever — payments
+        become credits banked toward Bax's Bar instead of subtracting
+        from a zeroed ledger.
+        """
+        if self.ledger_wiped:
+            # Bank earnings as income. Stored alongside the meta save.
+            bank = self._data.setdefault("bar_credits", 0)
+            self._data["bar_credits"] = bank + max(0, amount)
+            bus.emit(EVT_DEBT_UPDATE, delta=-amount, total=self.debt,
+                     source=source or "INCOME")
+            return
         actual = min(amount, self._data["debt"])
         self._data["debt"] = max(0, self._data["debt"] - amount)
         if actual > 0:
@@ -324,8 +336,27 @@ class MetaProgression:
 
     @property
     def campaign_cleared_at_least_once(self) -> bool:
-        """True if the player has completed all 4 chapters at any point."""
-        return len(self._data.get("chapters_completed", [])) >= 4
+        """True if the player has completed all 6 chapters at any point."""
+        return len(self._data.get("chapters_completed", [])) >= 6
+
+    @property
+    def ledger_wiped(self) -> bool:
+        """True after chapter 6 is cleared — debt flips to income."""
+        return 6 in self._data.get("chapters_completed", [])
+
+    @property
+    def bar_credits(self) -> int:
+        """Post-campaign income, banked toward Bax's Bar."""
+        return int(self._data.get("bar_credits", 0))
+
+    def spend_bar_credits(self, amount: int) -> bool:
+        """Returns True if the spend succeeded (sufficient funds)."""
+        have = self.bar_credits
+        if amount > have:
+            return False
+        self._data["bar_credits"] = have - amount
+        self.save()
+        return True
 
     # ── Unlocks (Epic 12.2) ────────────────────────────────────────────────
     @property

@@ -28,7 +28,7 @@ def test_create_fresh_save_empty_chapters(save_env):
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     assert data["chapters_completed"] == []
-    assert data["debt"] == 150000
+    assert data["debt"] == 350000
     info = mgr.slot_info(2)
     assert info.exists
     assert info.chapters_completed == []

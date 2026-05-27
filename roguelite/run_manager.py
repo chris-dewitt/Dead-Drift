@@ -198,6 +198,15 @@ class RunManager:
         self._aiship_hail_pending: AIShip | None = None
         bus.subscribe(EVT_AISHIP_HAIL, self._on_aiship_hail)
         bus.subscribe(EVT_AISHIP_DESTROYED, self._on_aiship_destroyed)
+        # Chapter 5-6 — Nova Soma Compliance Vessels (drive pursuers).
+        # Populated when player picks up an EncryptedDrive cargo.
+        from antagonists.compliance_vessel import ComplianceVessel
+        self._compliance_vessels: list[ComplianceVessel] = []
+        self._compliance_spawn_cd = 12.0
+        # Chapter 6 unlock: single-shot EMP burst available once per run.
+        self._emp_burst_available = False
+        self._emp_burst_active_t  = 0.0  # >0 = visual flash window
+
         # Theme-based obstacles (Epic 3)
         self._wrecks: list[SpaceWreck]       = []
         self._dead_station: DeadStation | None = None
@@ -459,6 +468,7 @@ class RunManager:
             "EpistemologicalShrooms": "Mind the spores. Both of us.",
             "SentientPaperwork":      "The paperwork's already filing itself. Ignore it.",
             "SchrodingerVIP":         "Don't look in the back. Either state is fine until delivery.",
+            "EncryptedDrive":         "Drive's hot. Compliance vessels'll be on us soon as we hit the belt. Move.",
         }
         cargo_type = type(cargo).__name__ if cargo is not None else None
         frame_bax  = frame.get("bax", "She'll fly.")
@@ -636,6 +646,11 @@ class RunManager:
             if not ai.alive:
                 self._ai_ships.remove(ai)
 
+        # Compliance vessels (ch5–6 drive pursuers)
+        self._update_compliance_vessels(dt)
+        if self._emp_burst_active_t > 0:
+            self._emp_burst_active_t = max(0.0, self._emp_burst_active_t - dt)
+
         # Debris shower tick
         if self._shower_t > 0:
             self._shower_t -= dt
@@ -676,6 +691,9 @@ class RunManager:
         elif event.key == pygame.K_y and self.flight_events.active is not None:
             # Epic 13.2 — accept the pending flight event choice
             self.flight_events.accept(self)
+        elif event.key == pygame.K_q and self._emp_burst_available:
+            # Chapter 6 — one-shot EMP from Chen's gift
+            self.trigger_emp_burst()
 
     def _open_kress_terminal(self):
         from core.event_bus import EVT_KRESS_DIALLED
@@ -763,6 +781,20 @@ class RunManager:
                         # Non-pirate ships are invincible — they just bolt
                         ai.state = ST_DEPART
                         ai._state_t = 0.0
+                    break
+
+        # Bullet hits on Compliance Vessels — 2 hits and they're scrap
+        for bullet in list(bullets):
+            if not bullet.alive:
+                continue
+            for cv in list(self._compliance_vessels):
+                if not cv.alive:
+                    continue
+                if (cv.pos - bullet.pos).length() < cv.radius + 4:
+                    bullet.lifetime = -1
+                    cv.take_hit(bullet.damage)
+                    if not cv.alive:
+                        self._compliance_vessels.remove(cv)
                     break
 
         # Bullet hits on interactive wrecks — shoot the weak point 3x for a reward
@@ -1841,6 +1873,68 @@ class RunManager:
             barge.state = BargeState.CHASE
         self._barges.append(barge)
 
+    def _update_compliance_vessels(self, dt: float):
+        """Drive cargo present → Nova Soma dispatches pursuit drones."""
+        if self._ship is None or not self._ship.is_alive:
+            return
+        cargo = getattr(self._ship, "cargo", None)
+        carrying_drive = (cargo is not None
+                          and type(cargo).__name__ == "EncryptedDrive")
+        # Always tick alive vessels so an EMP'd one finishes its stun cleanly
+        for cv in list(self._compliance_vessels):
+            cv.update(dt)
+            if not cv.alive:
+                self._compliance_vessels.remove(cv)
+            # Despawn if we cleared sector / dropped cargo
+            elif not carrying_drive:
+                cv.alive = False
+                self._compliance_vessels.remove(cv)
+
+        if not carrying_drive:
+            self._compliance_spawn_cd = 12.0
+            return
+        self._compliance_spawn_cd -= dt
+        # Ch5 = lighter pressure, Ch6 = relentless
+        chapter = self._current_chapter()
+        cap = 1 if chapter <= 5 else 2
+        if (self._compliance_spawn_cd <= 0
+                and len(self._compliance_vessels) < cap):
+            self._compliance_spawn_cd = 22.0 if chapter <= 5 else 14.0
+            from antagonists.compliance_vessel import ComplianceVessel
+            # Spawn from an off-screen edge, biased away from the ship
+            side = random.choice(("left", "right", "top", "bottom"))
+            if side == "left":
+                x, y = -60.0, random.uniform(80, S.FLIGHT_H - 80)
+            elif side == "right":
+                x, y = S.SCREEN_W + 60.0, random.uniform(80, S.FLIGHT_H - 80)
+            elif side == "top":
+                x, y = random.uniform(80, S.SCREEN_W - 80), -60.0
+            else:
+                x, y = random.uniform(80, S.SCREEN_W - 80), S.FLIGHT_H + 60.0
+            self._compliance_vessels.append(ComplianceVessel(x, y, self))
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "Compliance vessel inbound. Nova Soma's woke up.",
+                "Corporate drone on us. No harpoon — they just ram.",
+                "Black hull on the scope. That's the company. Stay sharp.",
+            ]))
+
+    def trigger_emp_burst(self):
+        """One-shot EMP — disables all compliance vessels and barges for 5s."""
+        if not self._emp_burst_available:
+            return False
+        self._emp_burst_available = False
+        self._emp_burst_active_t  = 0.35
+        for cv in self._compliance_vessels:
+            cv.emp_stun()
+        for barge in self._barges:
+            barge._intercept_cd = max(barge._intercept_cd, 6.0)
+        bus.emit(EVT_BAX_SPEAK, line="THAT'S what Chen gave us. Oh I love her.")
+        return True
+
+    def grant_emp_burst(self):
+        """Called after ch5 corridor completes — arms the EMP for ch6."""
+        self._emp_burst_available = True
+
     def _spawn_ai_ship(self):
         """Spawn a contextual AI ship — pirates rarer early, derelicts capped."""
         idx = self._sector_index
@@ -1975,20 +2069,20 @@ class RunManager:
         # Epic 8.2 — chapter dossier carousel may set an explicit replay
         # target; honour it before falling back to the natural progression.
         override = getattr(self, "_chapter_override", None)
-        if override is not None and 1 <= override <= 4:
+        if override is not None and 1 <= override <= 6:
             return override
         completed = self.meta.chapters_completed
-        for ch in [1, 2, 3, 4]:
+        for ch in [1, 2, 3, 4, 5, 6]:
             if ch not in completed:
                 return ch
-        return 4
+        return 6
 
     def set_chapter_override(self, chapter: int | None) -> None:
         """Force the next run to use a specific chapter (Epic 8.2).
         Pass `None` to clear the override and resume natural progression."""
         if chapter is None:
             self._chapter_override = None
-        elif 1 <= chapter <= 4:
+        elif 1 <= chapter <= 6:
             self._chapter_override = int(chapter)
 
     # ------------------------------------------------------------------
