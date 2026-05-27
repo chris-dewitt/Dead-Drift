@@ -49,6 +49,23 @@ _SNITCH_KEYWORDS = [
     "arrest", "warrant", "illegal", "infraction", "violation",
     "documentation", "supervisor", "who are you really", "prove",
 ]
+_MARROW_KEYWORDS = [
+    "marrow", "the fence", "relay fence", "felix", "relay-7", "off-book",
+    "off book", "fence", "fencing", "black market", "back channel", "back-channel",
+    "calla", "your partner", "old crew", "who do you know",
+]
+_GHOST_KEYWORDS = [
+    "ghost", "ghost lane", "shadow run", "shadow lane", "blind spot",
+    "dead zone", "dead scanner", "unmarked", "hidden route", "quiet lane",
+    "off the map", "no transponder", "off-grid", "invisible", "dark run",
+    "quiet route", "secret route", "back route",
+]
+_SOLIDARITY_KEYWORDS = [
+    "together", "solidarity", "comrades", "all of us", "we should",
+    "workers", "organize", "organise", "real union", "collective",
+    "against nova soma", "against the union", "fight back",
+    "same side", "on your side", "we're the same", "one of us",
+]
 
 
 class Dray(BaseNPC):
@@ -62,6 +79,9 @@ class Dray(BaseNPC):
         self._traded            = False
         self._paid              = False
         self._corpo_flags       = 0
+        self._marrow_dropped    = False
+        self._ghost_given       = False
+        self._solidarity_shown  = False
 
     def _intro_line(self) -> str:
         return random.choice([
@@ -173,6 +193,79 @@ class Dray(BaseNPC):
                 "Now we're both slightly richer and the day is better.",
             ])
 
+        if any(w in raw for w in _MARROW_KEYWORDS):
+            self._marrow_dropped = True
+            self._current_path = "MARROW CONTACT"
+            bus.emit(EVT_NLP_EXPLOIT, npc="dray", exploit_key="marrow_contact")
+            if self._vault:
+                self._vault.record("dray", "MARROW_CONTACT")
+            return NPCOutcome.RELEASE, random.choice([
+                "Marrow. *pause* You know Marrow. Okay, that changes things. "
+                "He's on Relay-7 most Tuesdays. Tell him Dray says the Sigma's still flying. "
+                "He'll know what that means. And here — short window in Gate Four. "
+                "No questions.",
+
+                "*long exhale* You've done your homework. "
+                "Marrow's been quiet since the Archive thing. But he's not gone. "
+                "Channel 118 on the off-band. Don't use it from your registered transponder. "
+                "That's from me to you. We're square.",
+
+                "Calla introduced us. "
+                "*quiet* Yeah, I still think about her. "
+                "Listen — if you know Marrow, you know the rules. "
+                "Barge Three is taking a long arc east. You've got four minutes. Go.",
+            ])
+
+        if any(w in raw for w in _GHOST_KEYWORDS):
+            self._ghost_given = True
+            self._current_path = "GHOST ROUTE"
+            bus.emit(EVT_NLP_EXPLOIT, npc="dray", exploit_key="ghost_route")
+            if self._vault:
+                self._vault.record("dray", "GHOST_ROUTE")
+            return NPCOutcome.RELEASE, random.choice([
+                "Ghost lane. You're *that* kind of courier. "
+                "Zone Four, dead scanner at coordinate-band seven. "
+                "Run it slow, transponder off, you don't exist. "
+                "I've used it fourteen times. Don't tell anyone that.",
+
+                "*silence* ...How do you know about ghost runs? "
+                "*long pause* Whatever. Fine. Sector Five's got a dead zone "
+                "between the relay towers — passive sensors only. "
+                "Standard active scanners won't touch you. Eight-minute window. GO.",
+
+                "Dark run. Right. "
+                "Zone Six, the sector between the dead station and the belt. "
+                "No scanner coverage. Barge protocol doesn't apply in blind zones — "
+                "they know it, we know it, nobody says it. "
+                "Two minutes from now, that window opens. Move.",
+            ])
+
+        if any(w in raw for w in _SOLIDARITY_KEYWORDS):
+            self._solidarity_shown = True
+            self._current_path = "SOLIDARITY"
+            bus.emit(EVT_NLP_EXPLOIT, npc="dray", exploit_key="solidarity")
+            if self._vault:
+                self._vault.record("dray", "SOLIDARITY")
+            return NPCOutcome.RELEASE, random.choice([
+                "...huh. You actually mean that. "
+                "*quiet* I don't usually talk politics on the band. "
+                "But yeah. Yeah, we're the same side. "
+                "Barge Six is stalled — mechanical. You've got a clean run for six minutes. "
+                "Don't waste it.",
+
+                "*pause* That's... not what I expected. "
+                "Most couriers keep their head down. "
+                "I keep mine down too, but it's good to know someone's looking up. "
+                "Gate Eight's scanner has been glitching since the maintenance backlog. "
+                "Go through it. Nobody'll know.",
+
+                "Same side. Yeah. "
+                "*exhales* The real union isn't the one with the barges. "
+                "It's this — couriers talking. "
+                "Sector Four patrol window is open for three minutes. "
+                "I'll stay on channel so they think this frequency's occupied. Go.",
+            ])
+
         if any(w in raw for w in _COMMISERATE_KEYWORDS):
             self._gripe_count += 1
             self._current_path = "COMMISERATE"
@@ -263,17 +356,21 @@ class Dray(BaseNPC):
         ])
 
     def get_path_progress(self) -> list[tuple[str, int, int]]:
-        # Playtest fix: bribe row uses the standardised dollar-amount
-        # label so it matches the rest of the NPC dossiers.
         return [
-            ("GRIPE",            min(self._gripe_count, 3), 3),
-            ("INTEL TRADE",      int(self._traded),         1),
-            (f"BRIBE [{_BRIBE_AMOUNT}+ cr]", int(self._paid), 1),
+            ("GRIPE",                   min(self._gripe_count, 3), 3),
+            ("INTEL TRADE",             int(self._traded),         1),
+            (f"BRIBE [{_BRIBE_AMOUNT}+ cr]", int(self._paid),      1),
+            ("MARROW CONTACT",          int(self._marrow_dropped), 1),
+            ("GHOST ROUTE",             int(self._ghost_given),    1),
+            ("SOLIDARITY",              int(self._solidarity_shown), 1),
         ]
 
     def exploits(self) -> dict[str, str]:
         return {
-            "commiserate": "Gripe about the job / debt / barges 3 times",
-            "intel_trade": "Offer intel or a weird tip — he trades back",
-            "bribe":       "Offer 500+ credits — he laughs, then takes it",
+            "commiserate":   "Gripe about the job / debt / barges 3 times",
+            "intel_trade":   "Offer intel or a weird tip — he trades back",
+            "bribe":         "Offer 500+ credits — he laughs, then takes it",
+            "marrow_contact": "Drop Marrow's name (or Calla, Felix, the fence) — he opens up",
+            "ghost_route":   "Ask about ghost lanes, shadow runs, or blind spots",
+            "solidarity":    "Express genuine solidarity — real union, same side, together",
         }

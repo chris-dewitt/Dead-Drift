@@ -16,7 +16,7 @@ class MetaProgression:
     """
 
     _DEFAULTS = {
-        "debt":               150000,
+        "debt":               350000,
         "clone_count":        1,
         "chapters_completed": [],
         "bax_level":          1,
