@@ -20,7 +20,9 @@ from delivery.corridor.elements import (
     NPCEncounter, Collectible, Secret, Checkpoint, StealthZone,
     BossRoomTrigger, SporeZone, QuantumDoor,
     SteamVent, Tripwire, SecurityBeam,
+    LoreRoom, NPCShortcut,
 )
+from delivery.corridor.mutators import get_corridor_mutator, CorridorMutator
 from core.event_bus import (bus, EVT_BAX_SPEAK, EVT_DELIVERY_DONE,
                             EVT_CORRIDOR_RUN, EVT_CORRIDOR_JUMP,
                             EVT_CORRIDOR_SECRET, EVT_CORRIDOR_DEATH,
@@ -246,10 +248,16 @@ class Corridor:
     """
 
     def __init__(self, chapter: int, rooms: list[Room],
-                 cargo_silhouette: str = "box"):
-        self.chapter         = chapter
-        self.rooms           = rooms
+                 cargo_silhouette: str = "box",
+                 cargo=None,
+                 force_time_pressure: bool = False):
+        self.chapter          = chapter
+        self.rooms            = rooms
         self.cargo_silhouette = cargo_silhouette  # "box"|"archive"|"shroom"|"forms"|"vip"
+        # Aliveness G.9 / G.10 — cargo mutator
+        self._mutator: CorridorMutator = get_corridor_mutator(
+            cargo, force_time_pressure=force_time_pressure
+        )
 
         # Player state
         self._px        = 120.0
@@ -340,6 +348,12 @@ class Corridor:
                 bus.emit(EVT_CORRIDOR_JUMP)
         elif event.key in (pygame.K_s, pygame.K_DOWN):
             pass  # descend on ladder handled by held-key
+        elif event.key in (pygame.K_e, pygame.K_RETURN):
+            # Aliveness G.7 — try to activate any nearby NPCShortcut
+            room = self.rooms[self._room_idx]
+            for el in room.elements:
+                if isinstance(el, NPCShortcut):
+                    el.try_activate(self._px, self._credits)
 
     def update(self, dt: float) -> None:
         if self._wipe_t > 0:
@@ -372,6 +386,14 @@ class Corridor:
         if self._run_speak_t <= 0:
             self._run_speak_t = 12.0
             bus.emit(EVT_CORRIDOR_RUN)
+
+        # Aliveness G.9 / G.10 — mutator update
+        self._mutator.update(dt, self._elapsed)
+
+        # Aliveness G.10 — time pressure expiry = forced death
+        from delivery.corridor.mutators import TimePressureMutator
+        if isinstance(self._mutator, TimePressureMutator) and self._mutator.is_expired():
+            self._take_hit()
 
         keys = pygame.key.get_pressed()
         room = self.rooms[self._room_idx]
@@ -484,6 +506,11 @@ class Corridor:
         # Update elements
         for el in room.elements:
             el.update(dt, self._px, self._py)
+            # Aliveness G.7 — NPCShortcut teleport request
+            if isinstance(el, NPCShortcut) and el.teleport_request is not None:
+                self._px = el.teleport_request
+                el.teleport_request = None
+                self._cam_x = self._px - _PLAYER_X_FIXED
 
         # Collisions (only if not stunned)
         if self._stun_t <= 0:
@@ -604,6 +631,9 @@ class Corridor:
                 cap.set_alpha(alpha)
                 surf.blit(cap, (CORRIDOR_W // 2 - cs.get_width() // 2,
                                 CORRIDOR_H // 2 - cs.get_height() // 2))
+
+        # Aliveness G.9 / G.10 — mutator overlay (drawn last, on top of everything)
+        self._mutator.draw_overlay(surf, t, self._cam_x, self._px, self._py)
 
         if screen is not None:
             screen.blit(surf, (screen_x, screen_y))

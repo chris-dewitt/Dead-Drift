@@ -13,6 +13,7 @@ from delivery.corridor.elements import (
     NPCEncounter, Collectible, Secret, Checkpoint, StealthZone,
     BossRoomTrigger, QuantumDoor,
     BossRoomActor, boss_actor_quantum_observation,
+    LoreRoom, NPCShortcut,
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H,
 )
 from delivery.corridor.base import Room, Corridor
@@ -362,6 +363,18 @@ def build() -> Corridor:
         # Hazard strip — vacuum-cleaner robots
         MovingHazard(350, FLOOR_Y - 16, 20, 16, left=180, right=540, speed=88),
         MovingHazard(600, FLOOR_Y - 16, 20, 16, left=480, right=780, speed=72),
+        # G.6 — Lore wall: guest complaint log, room 1408
+        LoreRoom(
+            640, FLOOR_Y - 50,
+            lore_text="Guest complaint, room 1408: 'The corridor changes at night. Something is in the wall.' Management response: 'Thank you for your stay. Your deposit has been processed.'",
+            chapter=4, npc_voice="MX. DELL", path_tag=None,
+        ),
+        # G.7 — Staff elevator: skip guest floor for 400cr
+        NPCShortcut(
+            160, "MX. DELL",
+            flavor="Staff elevator. Dell's pass. Don't ask how I got it.",
+            skip_x=900, cost=400, path_tag=None,
+        ),
         # NPC Mx. Dell
         NPCEncounter(
             560,

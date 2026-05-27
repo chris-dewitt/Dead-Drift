@@ -13,6 +13,7 @@ from delivery.corridor.elements import (
     NPCEncounter, Collectible, Secret, Checkpoint, BossRoomTrigger,
     SteamVent, Tripwire, SecurityBeam,
     BossRoomActor, boss_actor_gary_den,
+    LoreRoom, NPCShortcut,
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H,
 )
 from delivery.corridor.base import Room, Corridor, STAR_3_TIME, STAR_2_TIME
@@ -520,10 +521,22 @@ def build(meta=None) -> Corridor:
         Secret(930, CEIL_Y + 45, value=0,
                lore="Notes on Gary — he played sax at the depot. Stopped after his wife died. Doesn't talk about it.",
                path_tag="high"),
+        # G.6 — Lore wall on high path: Kenji's last broadcast
+        LoreRoom(
+            850, CEIL_Y + 50,
+            lore_text="Pre-raid broadcast log, Kenji's last show — 'If you're hearing this, Local 404 found me. Long live the Archive. Tell Marrow thanks for the records.'",
+            chapter=1, npc_voice="KENJI", path_tag="high",
+        ),
         # LOW PATH (crawlspace): ground level, 2 collapsing platforms
         Hazard(200, FLOOR_Y - 8, 40, 8, path_tag="low"),  # small gap indicator
         Platform(240, FLOOR_Y - 50, 70, path_tag="low"),
         Platform(380, FLOOR_Y - 55, 70, path_tag="low"),  # collapsing equivalents
+        # G.7 — Marrow's side door: skip the low crawlspace for 300cr
+        NPCShortcut(
+            190, "MARROW",
+            flavor="Side door. Marrow's key still works.",
+            skip_x=1050, cost=300, path_tag=None,
+        ),
         # Epic 14.1 — Security beam sweeping the low corridor (shadow zones safe)
         SecurityBeam(700, CEIL_Y + 12, length=260, phase=0.0, path_tag="low"),
         SecurityBeam(900, CEIL_Y + 12, length=260, phase=math.pi, path_tag="low"),

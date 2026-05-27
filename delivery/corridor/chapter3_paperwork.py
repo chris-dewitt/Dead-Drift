@@ -14,6 +14,7 @@ from delivery.corridor.elements import (
     BossRoomTrigger,
     SteamVent, Tripwire, SecurityBeam,
     BossRoomActor, boss_actor_compliance_tribunal,
+    LoreRoom, NPCShortcut,
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H,
 )
 from delivery.corridor.base import Room, Corridor
@@ -699,6 +700,18 @@ def build() -> Corridor:
         Platform(480, CEIL_Y + 40, 80, path_tag="high"),
         Platform(620, CEIL_Y + 40, 80, path_tag="high"),
         Platform(760, CEIL_Y + 40, 80, path_tag="high"),
+        # G.6 — Lore wall on high path: opt-out form NS-19B backstory
+        LoreRoom(
+            550, CEIL_Y + 50,
+            lore_text="Internal note, Nova Soma compliance: opt-out Form NS-19B discontinued per order 447-R. Reason: 'The form was working.' Signed: BLEVINS.",
+            chapter=3, npc_voice="UNION DISPATCHER", path_tag="high",
+        ),
+        # G.7 — Howard's shortcut: staff passage, skip file room climb
+        NPCShortcut(
+            165, "HOWARD",
+            flavor="Staff passage. Howard's badge. He said I could use it.",
+            skip_x=860, cost=350, path_tag=None,
+        ),
         # Mid-room checkpoint — File Room 4 ladder / clerk zone (Phase 0.10)
         Checkpoint(520),
     ]

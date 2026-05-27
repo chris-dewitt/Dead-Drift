@@ -11,6 +11,7 @@ from core.event_bus import (
     EVT_VOICE_CHAR, EVT_JUMP_READY, EVT_DEBT_DING,
     EVT_DELIVERY_STEP, EVT_DELIVERY_HIT, EVT_DELIVERY_DONE,
     EVT_SECTOR_CLEAR, EVT_RUN_START,
+    EVT_BAX_HARMONICA,
 )
 from audio.synth import (
     SAMPLE_RATE,
@@ -590,6 +591,8 @@ class AudioManager:
         bus.subscribe(EVT_CORRIDOR_ENTER,     self._on_corridor_enter)
         bus.subscribe(EVT_CORRIDOR_BOSS_ROOM, self._on_corridor_boss_room)
         bus.subscribe(EVT_CORRIDOR_EXIT,      self._on_corridor_exit)
+        # Aliveness F.4 — harmonica lick when Bax hums at critical hull
+        bus.subscribe(EVT_BAX_HARMONICA,      self._on_bax_harmonica)
 
     # ------------------------------------------------------------------
     def update(self, speed: float, dt: float = 0.016,
@@ -1373,6 +1376,11 @@ class AudioManager:
         if self._hull_crit_mood_cd <= 0.0:
             self._next_lick_mood = "panic"
             self._hull_crit_mood_cd = 10.0
+
+    def _on_bax_harmonica(self, **_):
+        lick = generate_lick(mood="weary")
+        self._lick_ch.set_volume(0.72)
+        self._lick_ch.play(lick)
 
     def _on_module_unbolted(self, **_):
         self._next_lick_mood = "weary"

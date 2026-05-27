@@ -140,3 +140,12 @@ EVT_LORE_FOUND      = "lore_found"      # payload: text, chapter (corridor secre
 EVT_CORRIDOR_ENTER     = "corridor_enter"      # payload: chapter
 EVT_CORRIDOR_BOSS_ROOM = "corridor_boss_room"  # payload: chapter (boss-room trigger)
 EVT_CORRIDOR_EXIT      = "corridor_exit"       # payload: chapter
+
+# Aliveness Phase F
+EVT_BAX_HARMONICA      = "bax_harmonica"       # harmonica trigger at <10% hull
+EVT_CARGO_FIRST_SEEN   = "cargo_first_seen"    # first time a cargo type is aboard this run; payload: cargo_type
+
+# Aliveness Phase G
+EVT_DOCK_GARY_LINE     = "dock_gary_line"      # payload: line — Gary speaks during Beat 3
+EVT_DOCK_RADIO         = "dock_radio"          # payload: line, clear (bool) — Dock Control during approach
+EVT_CORRIDOR_UNEASE    = "corridor_unease"     # Bax awkward in corridor; no payload

@@ -24,7 +24,9 @@ from core.event_bus import (bus, Subscriber, EVT_HULL_DAMAGE, EVT_HULL_CRITICAL,
                              EVT_CLOSE_CALL, EVT_SKILL_MANEUVER,
                              EVT_LONG_FIGHT_SURVIVED, EVT_FIRST_TETHER_SNAP,
                              EVT_TERMINAL_OPEN, EVT_UNLOCK_EARNED,
-                             EVT_DEBT_UPDATE, EVT_RUN_END, EVT_DELIVERY_DONE)
+                             EVT_DEBT_UPDATE, EVT_RUN_END, EVT_DELIVERY_DONE,
+                             EVT_BAX_HARMONICA, EVT_CARGO_FIRST_SEEN,
+                             EVT_CORRIDOR_ENTER, EVT_CORRIDOR_UNEASE)
 
 _IDLE = [
     # Bread-and-butter Cockney banter
@@ -459,6 +461,261 @@ _DOCK_ROUGH = [
 ]
 
 
+# ── F.1 Silence breaker — fires after 20s of no Bax speech ──────────────────
+_SILENCE_BREAKER = [
+    "*hums a few bars of something tuneless*",
+    "...you ever wonder if the stars judge us? No reason. Never mind.",
+    "*distant metallic clank from somewhere in the ship* That's normal.",
+    "Just thinkin' about sandwiches. For no reason. We don't eat. "
+    "But still. The concept.",
+    "*quiet humming, slightly off-key*",
+    "Right. So. No emergencies. For a bit. That's... nice. I've forgotten what 'nice' feels like.",
+    "...I've been counting debris pieces. For something to do. "
+    "I'm at forty-seven. I've lost count twice.",
+    "You know what I miss? Birdsong. I know. I know. Just sayin'.",
+    "The silence out 'ere isn't peaceful. It's got weight to it. "
+    "Heavy kind. ...Anyway. Eyes open.",
+    "*taps something rhythmically on the dashboard* That's a blues riff, that is. "
+    "B-flat. It's B-flat.",
+    "I had a thought earlier. It wasn't urgent. I let it pass. "
+    "...it's coming back. Still not urgent. Interesting.",
+    "No alerts. No barges. No events. I'm going to file this under 'suspicious'.",
+]
+
+# ── F.2 Cargo first-impression opinions — once per run on first pickup ────────
+_CARGO_FIRST_OPINION: dict[str, list[str]] = {
+    "AcousticArchive": [
+        "An acoustic archive. Illegal music library — Nova Soma's been burying it for years. "
+        "We might be the last copy of something that mattered. No pressure.",
+        "Right, so — a decade of suppressed sound in the hold. Whoever made this "
+        "wanted people to hear it. We're the ones who decided they should. "
+        "That sits different from the usual cargo.",
+        "Acoustic archive. I didn't know I missed music until I felt this thing hum "
+        "through the hull. Whatever's on it, it's worth protecting. Let's not drop it.",
+    ],
+    "EpistemologicalShrooms": [
+        "Right. Psychoactive spores. I want you to know I filed a pre-emptive "
+        "incident report with meself BEFORE we took this job. "
+        "If the walls start breathin', that's the cargo, not the ship.",
+        "Mycorrhizal payload confirmed. I've done the research. These things rewrite "
+        "your epistemological framework. Which sounds academic until they're in "
+        "YOUR ventilation. Eyes forward. Sealed vents.",
+        "Spores in the hold. I've instructed the ship's systems to report any "
+        "anomalous reality events. They've already filed one. "
+        "I'm choosing to believe the sensors are lying.",
+    ],
+    "SentientPaperwork": [
+        "Sentient paperwork. Obviously. Because courier work wasn't stressful enough. "
+        "Now the cargo has feelings about filing deadlines. Don't engage with it. "
+        "I mean that literally — don't read the forms.",
+        "Right, so the documents are self-organizing in the hold. I checked: this is "
+        "technically legal under Section 14-B of the Bureaucratic Cargo Act. "
+        "Which I believe the forms themselves drafted.",
+        "The paperwork knows it's being transported. I've confirmed this because "
+        "Form 27-A filed a formal query about our delivery window. IN TRIPLICATE. "
+        "I'm not answering it. Don't answer it.",
+    ],
+    "SchrodingerVIP": [
+        "A Schrödinger's VIP. A PERSON who is simultaneously alive and deceased "
+        "until observation collapses the waveform. I want to be clear: this is "
+        "BOTH our problem until we dock. Don't look in the back.",
+        "Passenger confirmed: one (1), state indeterminate. Insurance documents "
+        "say 'assumed viable'. The VIP's lawyer says 'no comment'. "
+        "The physics say 'it depends'. We fly fast and we don't ask questions.",
+        "Right, so our cargo is a living person who may or may not currently be "
+        "alive. The contract pays on delivery regardless. I have thoughts about "
+        "the ethics. I'm keeping them internal. Let's move.",
+    ],
+}
+
+# ── F.3 Near-miss scaling commentary ─────────────────────────────────────────
+_CLOSE_CALL_MILD = [
+    "That went past. Good. That's a pass. Noted.",
+    "Bit close, innit. But fine. We're fine.",
+    f"Near miss. I've logged it under 'close but not catastrophic'.",
+    "I saw that. You saw that. We both know what that was. Moving on.",
+    "That was about as comfortable as a Union audit. Which is to say: not very.",
+]
+_CLOSE_CALL_ALARMED = [
+    "OI. OI OI OI. That was FORTY METRES OF HULL AWAY. Do NOT.",
+    "BLIMEY. Right. Close. Very. Don't do that again and also DON'T do that again.",
+    "I need you to understand how not-fine that was. My circuits are TALKING to me.",
+    "THAT WAS TOO CLOSE. Too CLOSE. I have a spreadsheet of acceptable margins "
+    "and that was NOT IN IT.",
+    "You know what? I'm putting a formal note in the flight log. "
+    "'Pilot is absolutely terrifying. Ongoing concern.'",
+]
+_CLOSE_CALL_TERRIFYING = [
+    "...",
+    "...I need a moment.",
+    "...alright. Fine. Fine. We're not dead. ...fine.",
+]
+_CLOSE_CALL_AFTERMATH = [
+    "…don't do that again.",
+    "…you are going to give me a cardiac event. I don't have a heart. "
+    "I'd grow one just to have it fail.",
+    "…I've taken seventeen seconds off my life expectancy. I don't have a life expectancy. "
+    "That's how bad that was.",
+]
+
+# ── F.5 Player-style feedback — fires when consistent patterns emerge ─────────
+_PLAYER_STYLE_BRIBE = [
+    "You always go for the bribe. Every time. I'm not judging — it works. "
+    "But I wonder if you'll ever try something different.",
+    "Three bribes in a row. They see you coming, mate. Not literally. "
+    "But they're starting to factor you into their budget.",
+    "You know, other pilots try the sympathy angle. Or the exploit. "
+    "You just... pay them to leave. It's efficient. It's not WRONG. Just... efficient.",
+]
+_PLAYER_STYLE_BRUTE = [
+    "You know, some pilots talk their way out. You prefer to shoot. "
+    "Not criticizing. Just filing it in the 'different approaches' drawer.",
+    "Barge is down. Again. For a courier, you're surprisingly good at this. "
+    "Is 'courier' even the right word at this point?",
+    "Interesting that your first instinct is always the gun. "
+    "Works out more than it should. The math on that is suspicious.",
+]
+_PLAYER_STYLE_EXPLOIT = [
+    "You always find the exploit. Every NPC, you find the one thing they don't "
+    "want mentioned. I'm not sure if that's clever or concerning. Bit of both.",
+    "Three exploits in a row. You've got a gift for finding the crack in people. "
+    "I won't pretend that doesn't make me slightly nervous.",
+    "They say information is power. You say information is a lever. "
+    "For the record: you're right. Just making an observation.",
+]
+
+# ── F.7 Sector theme entry commentary — once per theme per run ────────────────
+_SECTOR_THEME_LINES: dict[str, list[str]] = {
+    "frozen_trail": [
+        "Instruments go funny out 'ere. It's the ice crystals refractin' the signals. "
+        "...or ghosts. I said 'or ghosts'. Eyes open.",
+        "Frozen Trail. Everything goes quiet here. Not peaceful quiet. "
+        "Listening quiet. Like the sector's waiting for something. ...Let's move.",
+        "Temperature's dropped in the hull somehow. I know that's not how space works. "
+        "Tell the temperature that.",
+    ],
+    "junk_belt": [
+        "I've got sentimental attachment to this trash. Don't ask. "
+        "Previous pilot. Good one. Lost them in a field like this. ...Move.",
+        "Junk Belt. Everything that didn't make it ended up here. Ships, careers, "
+        "retirement plans. We're not joining them. Eyes forward.",
+        "The scrap in this sector's from before the Union consolidated. "
+        "Twenty years of courier history, floating. Somebody worked hard to end up here.",
+    ],
+    "wreckage_belt": [
+        "Wreckage Belt. I've been through a lot of these. Each one's somebody's "
+        "last sector. We're not making a contribution to the collection today.",
+        "That hull debris's got Local 404 paint on it. One of their old barges. "
+        "Even the repo men get repo'd eventually. Funny. Not 'ha ha' funny.",
+        "Big scatter field ahead. Something went wrong here. Recently wrong. "
+        "Don't ask what it was. Keep moving.",
+    ],
+    "flare_corridor": [
+        "Brace — flare corridor. She pushes everything sideways and she doesn't "
+        "care about your heading. Work WITH the wind, not against it.",
+        "Solar flare activity in this sector. Every instrument's running a bit hot. "
+        "Navigation's lying. I'm correcting for it. Mostly.",
+        "Flare Corridor. The Union scans harder here — solar noise masks their ping. "
+        "They'll be closer than the alert suggests. Stay sharp.",
+    ],
+    "mine_strip": [
+        "Mine field. Someone paid a lot to keep people out of this sector. "
+        "Which means there's something worth keeping people out of. Noted.",
+        "Mines. Lovely. "
+        "Go slow, go careful, don't let pride turn this into a story.",
+        "Mining sector. Old ones or new ones — doesn't matter. "
+        "The radius is the same either way. Patient hands.",
+    ],
+    "toll_authority": [
+        "Toll sector. They're not shooting — they're taxing. "
+        "Which is somehow worse. Everything you earn gets a percentage taken.",
+        "Union levy zone. Every jump, every slingshot, they're counting it. "
+        "Work fast. The longer we're here the more they skim.",
+        "Compliance sector. The Union's got a scanner constellation here. "
+        "We're on their books the moment we entered. Move.",
+    ],
+    "industrial_graveyard": [
+        "Industrial Graveyard. Stations that outlived their contracts. "
+        "Nova Soma decided they weren't profitable and left. "
+        "People were in those stations. Some of them still are.",
+        "Old refineries. The equipment's still running — automated. "
+        "No one to read the outputs. That's the part that gets me.",
+        "This sector's been decommissioned twice. "
+        "It keeps getting recommissioned because the minerals don't know to stop.",
+    ],
+}
+
+# ── G.5 Per-chapter dock wind-down Bax lines ─────────────────────────────────
+_BAX_DOCK_WINDUP: dict[int, list[str]] = {
+    1: [
+        "Chapter one. Acoustic archive delivered. You got it here. "
+        "...Gary's going to file the receipt and go home and pretend this was routine. "
+        "It wasn't. But that's how they keep it going, innit.",
+        "First chapter done. The music made it. "
+        "Someone's going to hear it who wasn't supposed to. "
+        "That's the whole point. ...Good run.",
+        "First sector clear, archive delivered, debt down. "
+        "Funny how 'down' and 'zero' are different things. "
+        "...We'll do it again. Next chapter. Different cargo. Same us.",
+    ],
+    2: [
+        "Chapter two. Spores delivered. You're still experiencing conventional physics, "
+        "which I'm counting as a win. ...Next chapter's paperwork. "
+        "Different kind of nightmare.",
+        "Mycorrhizal payload delivered. The biolab's going to do something very strange "
+        "with it. We don't know what. That's probably for the best. "
+        "...Get some rest. Metaphorically.",
+        "Chapter two, done. We're halfway through the debt clock. "
+        "...or we would be, if the interest didn't compound. "
+        "Right. We're doing fine. Don't look at the numbers.",
+    ],
+    3: [
+        "Compliance chapter done. The forms are filed. The forms will outlive both of us. "
+        "Nova Soma will stamp them PROCESSED and forget we existed. "
+        "...We don't forget. That's the difference.",
+        "Chapter three clear. Paperwork delivered to the people it was designed to protect. "
+        "Irony's doing a lot of work today. "
+        "...Three left on the debt. Could be worse.",
+        "Compliance chapter, done. Nobody dies in compliance. "
+        "Everybody gets slowly killed by it. Subtle distinction. ...Let's keep going.",
+    ],
+    4: [
+        "Chapter four. Quantum delivery complete. "
+        "Whatever was in that box is somebody else's uncertainty now. "
+        "...We did what we came to do. "
+        "The debt's down. Not to zero. But down.",
+        "VIP delivered. Waveform collapsed. Outcome: viable. "
+        "The Meridian Hotel's going to write it up as 'uneventful'. "
+        "...That's fine. We know what it took.",
+        "Final chapter done. Four chapters, four deliveries, four times the Union "
+        "tried to stop us. ...Right. "
+        "The debt's still there. But WE'RE still here. That counts.",
+    ],
+}
+
+# ── G.8 Bax corridor unease — fires at corridor entry ─────────────────────────
+_CORRIDOR_UNEASE = [
+    "Right. I can still reach you in here. My comms range extends this far. "
+    "That's technically fine. I'm technically fine. ...Ask me again in five minutes.",
+    "I'm a ship system in a corridor. This is anatomically wrong for me. "
+    "I'll be professional about it. Quietly professional.",
+    "Good news: I can still track your biometrics through the station sensors. "
+    "Bad news: this requires me to be connected to a Union station. "
+    "This is a complicated feeling.",
+    "I've got eyes on you through the corridor's own cameras. "
+    "Which means the Union has eyes on you too. "
+    "Same cameras. Different agendas. Keep moving.",
+    "The ship feels very far away from here. I know it's parked twelve metres up. "
+    "Still. I don't like corridors. Ship systems weren't designed for corridors.",
+    "Right. This is the part where I coach you through a building I've never been in, "
+    "using schematics that are probably out of date. "
+    "I've done it before. It goes fine. Mostly.",
+    "I'm monitoring your position through the station mesh. Very novel. "
+    "Very uncomfortable. Very Union infrastructure keeping tabs on us. "
+    "Normal Tuesday.",
+]
+
+
 class Bax(Subscriber):
     """
     Rusted Cockney droid bolted to the dash.
@@ -509,6 +766,29 @@ class Bax(Subscriber):
 
         # Epic 11.4 — Bax NPC opinions: fired-once per (npc_key, chapter)
         self._opinion_fired: set[tuple[str, int]] = set()
+
+        # Aliveness F.1 — silence breaker
+        self._silence_t       = 0.0   # time since last speech
+        self._silence_cd      = 0.0   # cooldown after a silence-breaker fires
+
+        # Aliveness F.2 — cargo first opinion: set of cargo type names seen this run
+        self._cargo_first_seen: set[str] = set()
+
+        # Aliveness F.3 — near-miss follow-up (the "don't do that again" delay)
+        self._near_miss_follow_t    = -1.0
+        self._near_miss_follow_line = ""
+
+        # Aliveness F.4 — harmonica fired flag per hull-critical event
+        self._harmonica_fired = False
+
+        # Aliveness F.5 — player style tracking per run
+        self._run_style_bribe   = 0
+        self._run_style_brute   = 0
+        self._run_style_exploit = 0
+        self._style_spoken: set[str] = set()   # which styles have been commented on
+
+        # Aliveness F.7 — sector theme first-seen per run
+        self._theme_first_seen: set[str] = set()
 
         self._wire_events()
 
@@ -582,6 +862,9 @@ class Bax(Subscriber):
         bus.subscribe(EVT_DEBT_UPDATE,         self._on_debt_update_theme)
         bus.subscribe(EVT_RUN_END,             self._on_run_end_theme)
         bus.subscribe(EVT_DELIVERY_DONE,       self._on_delivery_done_theme)
+        # Aliveness F/G
+        bus.subscribe(EVT_CARGO_FIRST_SEEN,    self._on_cargo_first_seen)
+        bus.subscribe(EVT_CORRIDOR_ENTER,      self._on_corridor_enter)
 
     def update(self, dt: float):
         self._t       += dt
@@ -591,6 +874,25 @@ class Bax(Subscriber):
         self._ctx_cd   = max(0.0, self._ctx_cd   - dt)
         self._grace_t  = max(0.0, self._grace_t  - dt)
         self._sustained_cd = max(0.0, self._sustained_cd - dt)
+
+        # Aliveness F.1 — silence breaker: track time since last speech
+        if self._speak_cd <= 0:
+            self._silence_t += dt
+        else:
+            self._silence_t = 0.0
+        self._silence_cd = max(0.0, self._silence_cd - dt)
+        if self._silence_t >= 20.0 and self._silence_cd <= 0 and self._grace_t <= 0:
+            self.speak(self._no_repeat_pick("silence_breaker", _SILENCE_BREAKER))
+            self._silence_t  = 0.0
+            self._silence_cd = random.uniform(25.0, 40.0)
+            self._idle_cd    = random.uniform(self._IDLE_MIN, self._IDLE_MAX)
+
+        # Aliveness F.3 — near-miss follow-up ("…don't do that again")
+        if self._near_miss_follow_t > 0:
+            self._near_miss_follow_t -= dt
+            if self._near_miss_follow_t <= 0 and self._near_miss_follow_line:
+                self.speak(self._near_miss_follow_line)
+                self._near_miss_follow_line = ""
 
         # Ambient idle chatter
         if self._idle_cd <= 0:
@@ -606,6 +908,12 @@ class Bax(Subscriber):
         if hull_pct < 0.10 and self._last_hull_pct >= 0.10:
             if self._ctx_ok("panic_hull", 30.0):
                 self.speak(self._no_repeat_pick("panic_hull", _PANIC_UNDER_10_HULL))
+            # Aliveness F.4 — trigger harmonica once per critical event
+            if not self._harmonica_fired:
+                self._harmonica_fired = True
+                bus.emit(EVT_BAX_HARMONICA)
+        if hull_pct >= 0.10:
+            self._harmonica_fired = False
         self._last_hull_pct = hull_pct
 
     def _contextual(self):
@@ -646,7 +954,8 @@ class Bax(Subscriber):
         mode = getattr(self, "_next_mode", "standard")
         self._next_mode = "standard"
         bus.emit(EVT_BAX_SPEAK, line=line, mode=mode)
-        self._speak_cd = 3.2
+        self._speak_cd  = 3.2
+        self._silence_t = 0.0
 
     # ------------------------------------------------------------------
     def _on_hull_damage(self, amount, **_):
@@ -705,6 +1014,11 @@ class Bax(Subscriber):
         ctx = getattr(self, "_run_bax_context", None)
         if ctx is not None:
             ctx["exploits_used_run"] = ctx.get("exploits_used_run", 0) + 1
+        # Aliveness F.5 — track style
+        if "bribe" in exploit_key.lower():
+            self._run_style_bribe += 1
+        else:
+            self._run_style_exploit += 1
         self.speak(f"FILED THAT. {exploit_key.upper()} works on their lot.")
 
     # ------------------------------------------------------------------
@@ -863,6 +1177,16 @@ class Bax(Subscriber):
         self._run_slingshots   = 0
         self._barge_kills_run  = 0
         self._thruster_overheat_spoken = False
+        self._harmonica_fired  = False
+        # Aliveness F.2 — reset cargo first-seen for new run
+        self._cargo_first_seen.clear()
+        # Aliveness F.5 — check for dominant style from previous run before resetting
+        self._maybe_speak_style_comment()
+        self._run_style_bribe   = 0
+        self._run_style_brute   = 0
+        self._run_style_exploit = 0
+        # Aliveness F.7 — reset theme-first-seen for new run
+        self._theme_first_seen.clear()
         n = getattr(self._meta, "clone_count", 0)
         if n > 1:
             line = self._no_repeat_pick("run_start", [
@@ -946,11 +1270,9 @@ class Bax(Subscriber):
             "Our odds are 'possible'. That's the best I've got. GO.",
         ]))
 
-    def _on_sector_start(self, sector_num=1, cargo_type=None, **_):
+    def _on_sector_start(self, sector_num=1, cargo_type=None, theme="", **_):
         self._sector_first_kill = False
-        # Epic 11.3 — past-run reference: if player has died on this sector before,
-        # comment on the pattern. The bax_context is plumbed via run_context to
-        # NPCs, but we also read it directly from a parent reference if set.
+        # Epic 11.3 — past-run reference: if player has died on this sector before
         bax_ctx = getattr(self, "_run_bax_context", None)
         died_here = 0
         if bax_ctx is not None:
@@ -964,6 +1286,24 @@ class Bax(Subscriber):
             ]))
             self._speak_cd = 3.2
             return
+        # Aliveness F.7 — sector theme first-entry commentary
+        if theme and theme not in self._theme_first_seen:
+            theme_pool = _SECTOR_THEME_LINES.get(theme)
+            if theme_pool:
+                self._theme_first_seen.add(theme)
+                bus.emit(EVT_BAX_SPEAK,
+                         line=self._no_repeat_pick(f"theme_{theme}", theme_pool))
+                self._speak_cd = 3.2
+                return
+        # Aliveness F.2 — fire cargo first-opinion on sector 1 (cargo just loaded)
+        if sector_num == 1 and cargo_type and cargo_type not in self._cargo_first_seen:
+            self._cargo_first_seen.add(cargo_type)
+            opinion_pool = _CARGO_FIRST_OPINION.get(cargo_type)
+            if opinion_pool:
+                bus.emit(EVT_BAX_SPEAK,
+                         line=self._no_repeat_pick(f"cargo_first_{cargo_type}", opinion_pool))
+                self._speak_cd = 3.2
+                return
         pool = _SECTOR_START_CARGO.get(cargo_type) if cargo_type else None
         if pool:
             line = self._no_repeat_pick(f"sector_start_{cargo_type}", pool).format(n=sector_num)
@@ -987,6 +1327,7 @@ class Bax(Subscriber):
 
     def _on_barge_killed(self, **_):
         self._barge_kills_run += 1
+        self._run_style_brute += 1   # Aliveness F.5
         is_first_run    = self._barge_kills_run == 1
         is_first_sector = not self._sector_first_kill
         self._sector_first_kill = True
@@ -1026,12 +1367,16 @@ class Bax(Subscriber):
     def _on_close_call(self, distance=0.0, **_):
         if not self._ctx_ok("close_call", 18.0):
             return
-        self.speak(self._no_repeat_pick("close_call", [
-            "That one went right past your ear. Good LORD.",
-            f"Felt the wind off that — {distance:.0f} metres if I'm generous.",
-            "Bit close, mate. Bit close. Did NOT enjoy that.",
-            "I am updating my will. We're fine. But I'm updating it.",
-        ]))
+        # Aliveness F.3 — scale reaction to how close the miss actually was
+        if distance < 5.0:
+            # Silence, then delayed follow-up
+            self.speak(self._no_repeat_pick("close_call_terrifying", _CLOSE_CALL_TERRIFYING))
+            self._near_miss_follow_t    = random.uniform(2.0, 3.5)
+            self._near_miss_follow_line = self._no_repeat_pick("close_call_aftermath", _CLOSE_CALL_AFTERMATH)
+        elif distance < 15.0:
+            self.speak(self._no_repeat_pick("close_call_alarmed", _CLOSE_CALL_ALARMED))
+        else:
+            self.speak(self._no_repeat_pick("close_call_mild", _CLOSE_CALL_MILD))
 
     def _on_skill_maneuver(self, **_):
         if not self._ctx_ok("skill_maneuver", 22.0):
@@ -1243,6 +1588,44 @@ class Bax(Subscriber):
         self._speak_cd = 3.2
 
     # ------------------------------------------------------------------
+    # ── Aliveness F.2 — cargo first-seen event handler ──────────────────────
+    def _on_cargo_first_seen(self, cargo_type="", **_):
+        if not cargo_type or cargo_type in self._cargo_first_seen:
+            return
+        self._cargo_first_seen.add(cargo_type)
+        opinion_pool = _CARGO_FIRST_OPINION.get(cargo_type)
+        if opinion_pool:
+            self.speak(self._no_repeat_pick(f"cargo_first_{cargo_type}", opinion_pool))
+
+    # ── Aliveness F.5 — player style comment ────────────────────────────────
+    def _maybe_speak_style_comment(self):
+        total = self._run_style_bribe + self._run_style_brute + self._run_style_exploit
+        if total < 2:
+            return
+        # Fire at most once per style per lifetime
+        if self._run_style_bribe > max(self._run_style_brute, self._run_style_exploit):
+            if "bribe" not in self._style_spoken and self._run_style_bribe >= 2:
+                self._style_spoken.add("bribe")
+                self.speak(self._no_repeat_pick("style_bribe", _PLAYER_STYLE_BRIBE))
+        elif self._run_style_brute > max(self._run_style_bribe, self._run_style_exploit):
+            if "brute" not in self._style_spoken and self._run_style_brute >= 3:
+                self._style_spoken.add("brute")
+                self.speak(self._no_repeat_pick("style_brute", _PLAYER_STYLE_BRUTE))
+        elif self._run_style_exploit > max(self._run_style_bribe, self._run_style_brute):
+            if "exploit" not in self._style_spoken and self._run_style_exploit >= 2:
+                self._style_spoken.add("exploit")
+                self.speak(self._no_repeat_pick("style_exploit", _PLAYER_STYLE_EXPLOIT))
+
+    # ── Aliveness G.5 — per-chapter dock wind-down ───────────────────────────
+    def speak_dock_windup(self, chapter: int):
+        pool = _BAX_DOCK_WINDUP.get(chapter, _BAX_DOCK_WINDUP[1])
+        self.speak(self._no_repeat_pick(f"dock_windup_{chapter}", pool))
+
+    # ── Aliveness G.8 — corridor entry unease ───────────────────────────────
+    def _on_corridor_enter(self, chapter=0, **_):
+        if self._ctx_ok("corridor_enter", 120.0):
+            self.speak(self._no_repeat_pick("corridor_unease", _CORRIDOR_UNEASE))
+
     def radio_blip(self):
         if self._radio_cd <= 0:
             self.speak("Pickin' up somethin' on the radio... quiet-like. Eyes open.")

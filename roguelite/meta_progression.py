@@ -40,6 +40,8 @@ class MetaProgression:
         # save so campaign choices do not bleed between save files.
         "lore_progress":      {},
         "npc_state":          {},
+        # Aliveness F.5 — Bax player-style observations (cumulative across runs)
+        "bax_style":          {"bribe": 0, "brute": 0, "exploit": 0},
     }
 
     def __init__(self, save_path: Path | str | None = None):
