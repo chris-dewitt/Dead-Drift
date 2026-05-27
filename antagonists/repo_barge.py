@@ -61,7 +61,7 @@ class RepoBarge:
         self.is_destroyed    = False
         self._hp             = 60.0
         self._retreat_t      = 0.0
-        self._intercept_cd   = 0.0   # cooldown before next intercept attempt
+        self._intercept_cd   = self.INTERCEPT_COOLDOWN  # start hot — harpoon first, comm only after 45s pursuit
         self._disruption_hits = 0    # bullet hits since last disruption reset
         self._torch_warned   = False  # track if torch_active event was emitted
         self._aim_t          = 0.0    # countdown while in AIM state
