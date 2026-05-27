@@ -217,56 +217,56 @@ Subsequent irreversible choices (Mira Voss left for dead, Dray sold out, etc.) g
 
 ## Phase F — Bax Depth
 
-### F.1 Silence breaker — [ ]
+### F.1 Silence breaker — [x]
 No notable event for 20+ seconds → Bax hums a fragment, makes an unprompted observation, or asks a rhetorical question. Stops quiet from feeling like dead air.
 
-### F.2 Cargo opinions — [ ]
+### F.2 Cargo opinions — [x]
 Bax has a take on every cargo type, said once per run on first mention. Biohazard: *"If that canister pops, I'm disconnecting."* Shrooms: delighted. Pharmaceutical: suspicious. One line per cargo, max cost to ship.
 
-### F.3 Near-miss scaling commentary — [ ]
+### F.3 Near-miss scaling commentary — [x]
 Bax reaction scales with how close the miss was. 40px: mild. 10px: alarmed. <5px: silence, then *"…don't do that again."* Proportional reactions make moments feel witnessed.
 
-### F.4 Bax's harmonica — [ ]
+### F.4 Bax's harmonica — [x]
 At <10% hull, Bax plays a few notes on a procedural harmonica. Becomes the signature "you're about to die" sound. Delivers on the literal README pitch.
 
-### F.5 Bax learns the player — [ ]
+### F.5 Bax learns the player — [x]
 Tracks consistent behavior across runs (always bribe, always brute, always exploit). Develops opinions: *"You always go for the bribe. Wonder if you'll ever try somethin' different."* Stored in `data/saves/bax_observations.json`.
 
-### F.6 Run-count NPC recognition — [ ]
+### F.6 Run-count NPC recognition — [x]
 After 3+ runs Gary recognizes the player. *"Oh. You again."* After 10: *"Look, you're just part of my quarterly projections now."* Quiet escalation per NPC.
 
-### F.7 Sector theme entry commentary — [ ]
+### F.7 Sector theme entry commentary — [x]
 On first entry to each procedural theme, Bax has one observation. Frozen Trail: *"Instruments go funny out 'ere. It's the ice crystals. Or ghosts."* Junk Belt: *"I've got sentimental attachment to this trash. Don't ask."*
 
 ---
 
 ## Phase G — Landing & Corridor
 
-### G.1 Gary at the dock — [ ]
+### G.1 Gary at the dock — [x]
 Landing Beat 2 receiving officer = Gary (per Phase A.4). Sheepish, sighing, clipboard. *"Right. You made it. Again."* Ties the loop closed.
 
-### G.2 Dock Control radio clearance — [ ]
+### G.2 Dock Control radio clearance — [x]
 Audio during approach: distorted Dock Control voice. Either clears you or flags an "account irregularity" that tightens the landing window. The Union watches even at the dock.
 
-### G.3 Cargo offload glimpse — [ ]
+### G.3 Cargo offload glimpse — [x]
 2-second animation after touchdown: dock workers moving cargo. Cargo type visibly legible (hazmat for biohazard, careful handling for fragile). Delivery becomes tangible.
 
-### G.4 Landing damage echo — [ ]
+### G.4 Landing damage echo — [x]
 Dock with critical hull → sequence shows it: sparks, smoke, leaking atmosphere, dock crew physically backing away. Cinematic moment of "you barely made it."
 
-### G.5 Per-chapter dock wind-down Bax — [ ]
+### G.5 Per-chapter dock wind-down Bax — [x]
 Bax shifts tone in landing. Reflective. *"Sector four. Three left. You're gettin' good at this. ...Or unlucky."* Pacing change between flight and corridor.
 
-### G.6 Corridor lore rooms — [ ]
+### G.6 Corridor lore rooms — [x]
 One dead-zone room per chapter. No enemies. Wall notes, slumped body at a terminal, Nova Soma memo. Optional context for players who slow down.
 
-### G.7 NPC corridor shortcuts — [ ]
+### G.7 NPC corridor shortcuts — [x]
 One room per chapter has a side route cracked by a known NPC for a fee. 200cr skips a hard section. Kress's smells like engine oil. Marrow's leaves a flyer.
 
-### G.8 Bax's corridor unease — [ ]
+### G.8 Bax's corridor unease — [x]
 Bax is a ship system; the corridor is wrong for him. Coaching lines carry unease: *"Right, the good news is I can still reach you. Bad news is I don't like how."* Different register from flight.
 
-### G.9 Cargo-affects-corridor mutators — [ ]
+### G.9 Cargo-affects-corridor mutators — [x]
 Design all three up front, ship as one cohesive batch (not piecemeal proof-of-concept).
 
 - **Shrooms cargo:** walls visibly breathe/warp. Per-room shader pulse on the corridor backdrop. Tied to Ch.2 Mycorrhizal Payload theming but applies in any corridor when shrooms are the cargo.
@@ -275,9 +275,7 @@ Design all three up front, ship as one cohesive batch (not piecemeal proof-of-co
 
 Each mutator is a corridor overlay that activates based on `cargo.tag`. Build a shared `CorridorMutator` interface in `delivery/corridor/mutators.py` so subsequent cargo types can slot in.
 
-**Risk:** Three cargo overlays + the shared interface is a meaningful lift. Plan for an item-batch commit per cargo + an interface commit up front.
-
-### G.10 Corridor time-pressure variant — [ ]
+### G.10 Corridor time-pressure variant — [x]
 Mutator or specific runs: visible threat (gas seeping in, station failing, dock closing). Trades explorer pacing for adrenaline. Forces secret-skip decisions.
 
 ---

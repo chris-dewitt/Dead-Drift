@@ -1138,3 +1138,179 @@ class SecurityBeam(Element):
         # Pulsing red "ARMED" lamp
         if abs(math.sin(t * 3.5)) > 0.5:
             pygame.draw.circle(surf, (220, 30, 30), (sx, int(self.y) - 8), 2)
+
+
+# ── Aliveness G.6 — Lore Room ─────────────────────────────────────────────────
+
+class LoreRoom(Element):
+    """Dead-zone lore area: no enemies, wall notes, fires EVT_LORE_FOUND on entry.
+
+    Place it as the first element in a designated quiet room section.
+    Designed to be non-blocking — player just walks through and reads.
+    """
+    from core.event_bus import bus, EVT_LORE_FOUND, EVT_CORRIDOR_SECRET
+
+    TRIGGER_RANGE = 180.0
+    DISPLAY_DUR   = 9.0   # seconds text stays visible after trigger
+
+    def __init__(self, x: float, lore_text: str, chapter: int = 0,
+                 npc_voice: str = "", path_tag: str | None = None):
+        super().__init__(x, path_tag)
+        self.lore_text  = lore_text
+        self.chapter    = chapter
+        self.npc_voice  = npc_voice   # e.g. "MARROW" — shown as attribution
+        self._triggered = False
+        self._display_t = 0.0
+
+    def update(self, dt: float, player_x: float, player_y: float) -> None:
+        if self._display_t > 0:
+            self._display_t -= dt
+        if not self._triggered and abs(player_x - self.x) < self.TRIGGER_RANGE:
+            self._triggered = True
+            self._display_t = self.DISPLAY_DUR
+            from core.event_bus import bus, EVT_LORE_FOUND, EVT_CORRIDOR_SECRET
+            bus.emit(EVT_LORE_FOUND, text=self.lore_text, chapter=self.chapter)
+            bus.emit(EVT_CORRIDOR_SECRET)
+
+    def draw(self, surf: pygame.Surface, camera_x: float, t: float, palette: dict):
+        if not self._triggered and abs(camera_x - self.x) > CORRIDOR_W + 120:
+            return
+        sx = int(self.x - camera_x)
+        # Wall text panel — appears when player is near, fades after display
+        alpha = 255
+        if self._display_t > 0:
+            alpha = min(255, int(255 * min(1.0, self._display_t / 1.5)))
+        elif self._triggered:
+            return
+        else:
+            # Pre-trigger: show dim outline to hint at interactivity
+            alpha = 60
+
+        panel_w, panel_h = 280, 70
+        px = sx - panel_w // 2
+        py = CEIL_Y + 18
+        surf_panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        surf_panel.fill((4, 10, 6, min(200, alpha)))
+        pygame.draw.rect(surf_panel, (0, 120, 60, alpha), (0, 0, panel_w, panel_h), 1)
+
+        f_sm  = get_font(8, bold=True)
+        f_txt = get_font(9)
+        if self.npc_voice:
+            attr = f_sm.render(f"— {self.npc_voice} —", True,
+                               (0, min(255, alpha), min(80, alpha)))
+            surf_panel.blit(attr, (panel_w // 2 - attr.get_width() // 2, 6))
+        # Word-wrap lore text
+        words = self.lore_text.split()
+        lines, line = [], []
+        for w in words:
+            test = " ".join(line + [w])
+            if f_txt.size(test)[0] > panel_w - 16:
+                if line:
+                    lines.append(" ".join(line))
+                line = [w]
+            else:
+                line.append(w)
+        if line:
+            lines.append(" ".join(line))
+        y_off = 18 if self.npc_voice else 8
+        for ln in lines[:4]:
+            rendered = f_txt.render(ln, True, (min(200, alpha), min(255, alpha), min(160, alpha)))
+            surf_panel.blit(rendered, (8, y_off))
+            y_off += 13
+        surf.blit(surf_panel, (px, py))
+
+        # Slumped-figure silhouette on the floor near the terminal
+        fig_x = sx + 40
+        fig_y = FLOOR_Y - 2
+        fig_col = (0, min(60, alpha // 3), 0)
+        fig_col2 = (0, min(100, alpha // 2), min(40, alpha // 4))
+        pygame.draw.ellipse(surf, fig_col,
+                            (fig_x - 18, fig_y - 16, 36, 16))
+        pygame.draw.circle(surf, fig_col2, (fig_x + 14, fig_y - 24), 7)
+        pygame.draw.line(surf, fig_col,
+                         (fig_x - 18, fig_y - 8), (fig_x - 30, fig_y - 2), 2)
+
+
+# ── Aliveness G.7 — NPC Corridor Shortcut ────────────────────────────────────
+
+class NPCShortcut(Element):
+    """Unlockable shortcut door associated with an NPC.
+
+    When player is within range and presses interact (Enter/Space), costs
+    ``cost`` credits and teleports player to ``skip_x``.  The corridor
+    base reads ``self.teleport_request`` after each update frame.
+    """
+    INTERACT_RANGE = 60.0
+
+    def __init__(self, x: float, npc_name: str, flavor: str,
+                 skip_x: float, cost: int = 200,
+                 path_tag: str | None = None):
+        super().__init__(x, path_tag)
+        self.npc_name   = npc_name
+        self.flavor     = flavor
+        self.skip_x     = skip_x
+        self.cost       = cost
+        self._unlocked  = False
+        self._credits_deduct_cb = None   # set by Corridor after construction
+        self.teleport_request: float | None = None   # corridor reads this
+
+    def update(self, dt: float, player_x: float, player_y: float) -> None:
+        self.teleport_request = None
+
+    def try_activate(self, player_x: float, credits_available: int) -> bool:
+        """Called by Corridor when player presses interact near this element."""
+        if self._unlocked:
+            return False
+        if abs(player_x - self.x) > self.INTERACT_RANGE:
+            return False
+        if credits_available < self.cost:
+            from core.event_bus import bus, EVT_BAX_SPEAK
+            bus.emit(EVT_BAX_SPEAK,
+                     line=f"Need {self.cost} credits for that route. We're short.")
+            return False
+        self._unlocked = True
+        self.teleport_request = self.skip_x
+        from core.event_bus import bus, EVT_BAX_SPEAK
+        bus.emit(EVT_BAX_SPEAK,
+                 line=f"{self.npc_name.upper()} shortcut — {self.cost} cr. That's us through.")
+        return True
+
+    def draw(self, surf: pygame.Surface, camera_x: float, t: float, palette: dict):
+        sx = int(self.x - camera_x)
+        if abs(sx) > CORRIDOR_W + 80:
+            return
+        if self._unlocked:
+            return
+
+        door_h = FLOOR_Y - CEIL_Y
+        door_w = 28
+        pulse  = 0.4 + 0.6 * abs(math.sin(t * 1.8))
+        col    = (0, int(180 * pulse), int(80 * pulse))
+        dim    = (0, 40, 20)
+
+        # Door frame
+        pygame.draw.rect(surf, dim,
+                         (sx - door_w // 2, CEIL_Y, door_w, door_h))
+        pygame.draw.rect(surf, col,
+                         (sx - door_w // 2, CEIL_Y, door_w, door_h), 2)
+
+        # Lock icon
+        pygame.draw.rect(surf, col,
+                         (sx - 6, FLOOR_Y - 52, 12, 10))
+        pygame.draw.arc(surf, col,
+                        (sx - 6, FLOOR_Y - 64, 12, 16), 0, math.pi, 2)
+
+        # Price label
+        f_sm  = get_font(8, bold=True)
+        f_npc = get_font(7)
+        price = f_sm.render(f"{self.cost} cr", True, col)
+        npc_l = f_npc.render(self.npc_name.upper(), True,
+                             (0, int(120 * pulse), int(50 * pulse)))
+        surf.blit(price, (sx - price.get_width() // 2, FLOOR_Y - 76))
+        surf.blit(npc_l, (sx - npc_l.get_width() // 2, FLOOR_Y - 86))
+
+        # Flavor hint — tiny below door
+        if abs(sx - CORRIDOR_W // 2) < 200:
+            f_fl  = get_font(7)
+            fl    = f_fl.render(self.flavor[:32], True, (0, 80, 40))
+            surf.blit(fl, (sx - fl.get_width() // 2, FLOOR_Y + 4))

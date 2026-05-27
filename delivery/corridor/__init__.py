@@ -2,19 +2,21 @@
 delivery.corridor — chapter-based delivery corridor system.
 
 Public API:
-    make_corridor(chapter: int, hardcore: bool = False, meta=None) -> Corridor
+    make_corridor(chapter: int, hardcore: bool = False, meta=None,
+                  cargo=None, force_time_pressure: bool = False) -> Corridor
 """
 from __future__ import annotations
 from delivery.corridor.base import Corridor
 from delivery.corridor.elements import Checkpoint
 
 
-def make_corridor(chapter: int, hardcore: bool = False, meta=None) -> Corridor:
+def make_corridor(chapter: int, hardcore: bool = False,
+                  meta=None, cargo=None,
+                  force_time_pressure: bool = False) -> Corridor:
     """Factory: build a Corridor for the given chapter (1-4).
 
-    `hardcore=True` (Epic 8.4) strips the optional mid-room
-    `Checkpoint` elements so the player only respawns at the start
-    of each room.
+    ``cargo`` is forwarded so Aliveness G.9 mutators can activate.
+    ``force_time_pressure`` (G.10) overrides the cargo mutator with a timer.
     """
     if chapter == 1:
         from delivery.corridor.chapter1_archive import build
@@ -30,6 +32,9 @@ def make_corridor(chapter: int, hardcore: bool = False, meta=None) -> Corridor:
         corridor = build(meta=meta)
     else:
         corridor = build()
+    # Aliveness G.9 / G.10 — wire cargo mutator after build
+    from delivery.corridor.mutators import get_corridor_mutator
+    corridor._mutator = get_corridor_mutator(cargo, force_time_pressure=force_time_pressure)
     if hardcore:
         for room in corridor.rooms:
             room.elements = [el for el in room.elements

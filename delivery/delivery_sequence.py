@@ -22,7 +22,9 @@ _APPROACH_CRAWL = [
     "A reckless courier. A rusted ship. Crushing compound interest.",
     "The Union of Repo Men demands satisfaction. Again.",
 ]
-from core.event_bus import bus, EVT_BAX_SPEAK, EVT_DOCK_APPROACH, EVT_DOCK_PERFECT, EVT_DOCK_ROUGH
+from core.event_bus import (bus, EVT_BAX_SPEAK, EVT_DOCK_APPROACH,
+                            EVT_DOCK_PERFECT, EVT_DOCK_ROUGH,
+                            EVT_DOCK_GARY_LINE, EVT_DOCK_RADIO, EVT_COMMS_SPEAK)
 
 # ── Payout config ──────────────────────────────────────────────────────────
 _DELIVERY_BONUS   = {3: 8000, 2: 4000, 1: 1000}   # credits added
@@ -50,6 +52,84 @@ _BAX_LAND_SMOOTH = [
     "Silk. Pure SILK. I'm actually impressed.",
     "Textbook. If the textbook was written by someone good.",
 ]
+
+# ── Aliveness G.1 — Gary dock lines (Beat 3, per chapter) ────────────────────
+_GARY_DOCK_LINES: dict[int, list[str]] = {
+    1: [
+        "Right. You made it. Again.",
+        "Gary Pruitt, Local 404. Official: outstanding fees. "
+        "Unofficial: ...yeah. Good run.",
+        "You're here. Still owe us. But you're here.",
+    ],
+    2: [
+        "Biolab cleared the incoming. You're... fine. Probably.",
+        "Right. Delivery confirmed. Don't ask what they're doing with it.",
+        "Made it through the spore run. Gary Pruitt, receiving. Sign here.",
+    ],
+    3: [
+        "Forms received. Nova Soma's processing. "
+        "Paperwork acknowledges the paperwork. That's how it works.",
+        "Received. Processed. Filed. Gary Pruitt, compliance dock. "
+        "*sighs* ...good run.",
+        "Compliance desk. You made it. The forms are happy. "
+        "Whatever that means.",
+    ],
+    4: [
+        "VIP received. Status: observed. Condition: determined. "
+        "Gary Pruitt, Meridian receiving. ...You look terrible.",
+        "Right. That's it. That's the last one. "
+        "*quiet* You did good. Don't tell Blevins.",
+        "Received. Final chapter. "
+        "Outstanding fees still apply. Outstanding run, though. ...Still outstanding fees.",
+    ],
+}
+
+# ── Aliveness G.2 — Dock Control radio (Beat 1 approach) ────────────────────
+_DOCK_RADIO_CLEAR = [
+    "DOCK CONTROL to inbound: clearance granted. Bay Three is yours.",
+    "Inbound courier, you are cleared for Bay Three approach.",
+    "DOCK CONTROL: approach confirmed. Keep her steady.",
+]
+_DOCK_RADIO_IRREGULAR = [
+    "DOCK CONTROL: account irregularity flagged on your vessel. "
+    "You may proceed but expect a hold on release.",
+    "Inbound courier — DOCK CONTROL. "
+    "Your account shows outstanding items. Bay Three, but don't make yourself comfortable.",
+    "DOCK CONTROL: clearance conditional. "
+    "Outstanding debt flag on your transponder. Bay Three. Move it.",
+]
+
+# ── Aliveness G.4 — Landing damage echo lines ────────────────────────────────
+_DOCK_DAMAGE_HEAVY = [
+    "That hull... dock crew's stepping back. "
+    "Standard protocol when the ship looks like it might not hold.",
+    "Bay systems flagging structural instability. "
+    "Dock crew maintaining distance. Good call on their part.",
+]
+
+# ── Aliveness G.5 — Bax dock wind-down (Beat 3, per chapter) ────────────────
+_BAX_DOCK_WINDUP_DELIVERY: dict[int, list[str]] = {
+    1: [
+        "Mag-lock confirmed. Fuel cells are still intact. Mostly.",
+        "She's down. Clamps are on. I'll allow it.",
+        "Right. That's docked. I'm choosing to feel good about that.",
+    ],
+    2: [
+        "Biolab. Smells like regret and something floral. Good run.",
+        "Clamps are on. Don't ask me what's in the cargo. Just don't.",
+        "Docked. ...That was a lot. You did well.",
+    ],
+    3: [
+        "Nova Soma. Forms in triplicate, probably. Good run though.",
+        "Clamps on. Ready to hand over the paperwork to more paperwork.",
+        "Compliance dock. We're legal. For now. Probably.",
+    ],
+    4: [
+        "Meridian. VIP receiving. Well. We made it.",
+        "Clamps on. I'm not saying I'm impressed but. ...You know.",
+        "Final chapter. Clamps are on. ...You did good. Don't tell anyone I said that.",
+    ],
+}
 
 
 # ── Phase constants ─────────────────────────────────────────────────────────
@@ -398,6 +478,8 @@ class DeliverySequence:
         # Beat 3: cutscene
         self._clamp_anim_t  = 0.0
         self._dock_bonus_cr = 0      # +500 perfect, -200 both missed
+        self._gary_line_fired   = False
+        self._dock_radio_fired  = False
 
         # Run state
         self._run = None
@@ -487,6 +569,18 @@ class DeliverySequence:
             self._align_held_t = 0.0
 
         self._lock_flash_t = max(0.0, self._lock_flash_t - dt)
+
+        # G.2 — Dock Control radio fires once at ~1.2s into approach
+        if self._t >= 1.2 and not self._dock_radio_fired:
+            self._dock_radio_fired = True
+            debt = getattr(self.meta, "debt", 0)
+            if debt > 5000:
+                line = random.choice(_DOCK_RADIO_IRREGULAR)
+                bus.emit(EVT_DOCK_RADIO, line=line, clear=False)
+            else:
+                line = random.choice(_DOCK_RADIO_CLEAR)
+                bus.emit(EVT_DOCK_RADIO, line=line, clear=True)
+            bus.emit(EVT_COMMS_SPEAK, speaker="DOCK CONTROL", line=line)
 
         # Advance: magnetic lock after 0.5s aligned, or timeout
         should_advance = self._align_held_t >= 0.5 or self._t >= _APPROACH_DURATION
@@ -890,14 +984,28 @@ class DeliverySequence:
 
     def _update_beat3(self, dt: float):
         self._clamp_anim_t += dt
+
+        # G.1 — Gary dock line fires at ~0.6s (clamps engaging)
+        if self._clamp_anim_t >= 0.6 and not self._gary_line_fired:
+            self._gary_line_fired = True
+            lines = _GARY_DOCK_LINES.get(self.chapter, _GARY_DOCK_LINES[1])
+            line = random.choice(lines)
+            bus.emit(EVT_DOCK_GARY_LINE, line=line)
+            bus.emit(EVT_COMMS_SPEAK, speaker="GARY PRUITT", line=line)
+
         if self._clamp_anim_t >= 1.8 and self._run is None:
-            # Fire Bax landing line once
-            bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_LAND_SMOOTH
-                     if self._land_score == 2 else _BAX_LAND_ROUGH))
+            # G.5 — chapter-specific Bax dock wind-down (smooth) or generic rough feedback
+            if self._land_score == 2:
+                wd = _BAX_DOCK_WINDUP_DELIVERY.get(self.chapter, _BAX_DOCK_WINDUP_DELIVERY[1])
+                bus.emit(EVT_BAX_SPEAK, line=random.choice(wd))
+            else:
+                bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_LAND_ROUGH))
+            cargo = getattr(self._ship_ref, "cargo", None) if self._ship_ref else None
             self._run = make_corridor(
                 self.chapter,
                 hardcore=bool(getattr(self.meta, "is_hardcore", False)),
                 meta=self.meta,
+                cargo=cargo,
             )
         if self._clamp_anim_t >= _BEAT3_DURATION:
             self._t     = 0.0
@@ -1243,6 +1351,54 @@ class DeliverySequence:
                              (cx + sign * 20, pad_y - 8, sign * int(60 * clamp_prog), 6))
             pygame.draw.circle(surface, (0, 200, 100),
                                (cx + sign * int(20 + 60 * clamp_prog), pad_y - 5), 4)
+
+        # G.4 — Heavy hull damage: sparks, smoke, crew backing away
+        hull_pct = getattr(self._ship_ref, "hull_pct", 1.0) if self._ship_ref else 1.0
+        if hull_pct < 0.25:
+            rng_sp = random.Random(int(t * 8))
+            for _ in range(6):
+                sx = cx + rng_sp.randint(-22, 22)
+                sy = pad_y + rng_sp.randint(-8, 22)
+                sc = (255, rng_sp.randint(60, 160), 0)
+                pygame.draw.line(surface, sc, (sx, sy),
+                                 (sx + rng_sp.randint(-8, 8), sy - rng_sp.randint(4, 12)), 1)
+            sm_a = int(60 + 30 * math.sin(t * 2.0))
+            sm = pygame.Surface((54, 32), pygame.SRCALPHA)
+            sm.fill((40, 40, 40, sm_a))
+            surface.blit(sm, (cx - 27, pad_y - 18))
+            if t > 0.8:
+                warn_f = get_font(10, bold=True)
+                w_lbl = warn_f.render("DOCK CREW MAINTAINING DISTANCE", True, (200, 120, 40))
+                surface.blit(w_lbl, (cx - w_lbl.get_width() // 2, pad_y - 44))
+
+        # G.3 — Cargo offload workers (appear after ~0.5s, walk box away from ship)
+        if t > 0.5:
+            worker_prog = min(1.0, (t - 0.5) / 2.0)
+            cargo = getattr(self._ship_ref, "cargo", None) if self._ship_ref else None
+            cargo_col = (120, 80, 40)
+            if cargo is not None:
+                ctag = type(cargo).__name__
+                if ctag == "EpistemologicalShrooms":
+                    cargo_col = (60, 160, 40)
+                elif "Biohazard" in ctag:
+                    cargo_col = (220, 200, 0)
+                elif "Paperwork" in ctag:
+                    cargo_col = (200, 200, 160)
+            for wi, (wx_start, wx_end, facing) in enumerate([
+                (cx - 20, cx - 100, -1),
+                (cx + 20, cx + 100,  1),
+            ]):
+                wx  = int(wx_start + (wx_end - wx_start) * worker_prog)
+                wy  = pad_y - 14
+                bob = int(2 * math.sin(t * 6.0 + wi * math.pi))
+                pygame.draw.rect(surface, (0, 80, 40), (wx - 6, wy - 24, 12, 18))
+                pygame.draw.circle(surface, (0, 60, 30), (wx, wy - 30), 7)
+                pygame.draw.rect(surface, cargo_col, (wx + facing * 4 - 7, wy - 22, 14, 11))
+                pygame.draw.rect(surface, (40, 40, 20), (wx + facing * 4 - 7, wy - 22, 14, 11), 1)
+                pygame.draw.line(surface, (0, 70, 35),
+                                 (wx - 4, wy - 6), (wx - 8, wy + 6 + bob), 2)
+                pygame.draw.line(surface, (0, 70, 35),
+                                 (wx + 4, wy - 6), (wx + 8, wy + 6 - bob), 2)
 
         # "DOCKED" flash after clamps close
         if t > 1.5:

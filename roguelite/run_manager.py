@@ -892,7 +892,12 @@ class RunManager:
         ctx: dict = {"sector_index":    self._sector_index,
                      "run_credits":     self._run_debt_reduced,
                      "run_snaps":       self._run_snaps,
-                     "run_slingshots":  self._run_slingshots}
+                     "run_slingshots":  self._run_slingshots,
+                     # Aliveness F.6 — Gary run-count recognition
+                     "gary_encounter_count": (
+                         self.meta.milestone("gary_encounters")
+                         if hasattr(self, "meta") else 0
+                     )}
         if self._ship is not None:
             ctx["hull_pct"] = self._ship.hull / S.HULL_MAX
             cargo = self._ship.cargo
@@ -1013,6 +1018,9 @@ class RunManager:
                 "Local 404 hail. It's Gary again. Talk 'im down before the 'arpoon.",
                 "Barge is hailing. Gary Pruitt. Outstanding fees. You know the script.",
             ]))
+            # Aliveness F.6 — track Gary encounter count for run-count recognition
+            if hasattr(self, "meta"):
+                self.meta.inc_milestone("gary_encounters")
             return self.open_terminal("gary", intercepted=True)
         framing = {
             "union_dispatcher": [

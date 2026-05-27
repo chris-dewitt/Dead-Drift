@@ -79,6 +79,32 @@ class Gary(BaseNPC):
         self._ctx              = run_context or {}
 
     def _intro_line(self) -> str:
+        # Aliveness F.6 — run-count recognition: Gary notices returning players
+        gary_count = self._ctx.get("gary_encounter_count", 0)
+        if self._intercepted and gary_count >= 10:
+            return random.choice([
+                "Gary Pruitt, Local 404. You know what — I've filed you under "
+                "'quarterly projection' at this point. You're a line item. "
+                "Outstanding fees. Same as always. Let's not pretend this is news.",
+                "Oh, you. Again. I've stopped being surprised. Outstanding fees, "
+                "outstanding debt, outstandingly predictable. "
+                "Power down. We'll do this like professionals.",
+                "Gary Pruitt. Outstanding fees. And before you start — "
+                "I know your moves. All of them. You've used them all. "
+                "Seven times. On me. This is run eight. Try something new.",
+            ])
+        if self._intercepted and gary_count >= 3:
+            return random.choice([
+                "Oh. You again. Gary Pruitt, Local 404. "
+                "Outstanding fees. As you know. As you ALWAYS know. "
+                "I'm starting to think you enjoy this. Power down.",
+                "Gary Pruitt. I am not surprised to see you. "
+                "Outstanding fees. Same as last time. And the time before. "
+                "At what point does this become a relationship? Power down.",
+                "Local 404, Gary Pruitt. Outstanding fees. "
+                "Look — I've got your file memorized at this point. "
+                "Power down and let's make this quick. We both have places to be.",
+            ])
         if self._intercepted:
             return random.choice([
                 "Oi! Gary Pruitt, Local 404. I am RIGHT BEHIND YOU. "

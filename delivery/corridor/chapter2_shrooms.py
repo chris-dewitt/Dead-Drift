@@ -14,6 +14,7 @@ from delivery.corridor.elements import (
     BossRoomTrigger, StealthZone, SporeZone,
     SteamVent, Tripwire, SecurityBeam,
     BossRoomActor, boss_actor_mycelium_chamber,
+    LoreRoom, NPCShortcut,
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H,
 )
 from delivery.corridor.base import Room, Corridor
@@ -426,6 +427,12 @@ def build() -> Corridor:
         SporeZone(280, 120),
         SporeZone(520, 100),
         SporeZone(780, 130),
+        # G.7 — Dr. Valeria's side-tunnel: skip growth gallery for 250cr
+        NPCShortcut(
+            300, "DR. VALERIA",
+            flavor="Maintenance tunnel. Valeria's clearance still active.",
+            skip_x=940, cost=250, path_tag=None,
+        ),
         # Moving hazard drones
         MovingHazard(400, CEIL_Y + 40, 22, 18, left=340, right=500, speed=65),
         MovingHazard(700, CEIL_Y + 50, 22, 18, left=620, right=800, speed=75),
@@ -444,6 +451,12 @@ def build() -> Corridor:
             path_tag="high",
         ),
         Ladder(900, CEIL_Y, CEIL_Y + 80, path_tag="high"),
+        # G.6 — Lore wall in vent: lab safety memo gone wrong
+        LoreRoom(
+            820, CEIL_Y + 35,
+            lore_text="Lab log 7-E: the mycelium is attempting communication via bioluminescent pulse. We stopped recording. Budget review pending.",
+            chapter=2, npc_voice="DR. VALERIA", path_tag="high",
+        ),
     ]
     room2 = Room(
         length     = 1100,
