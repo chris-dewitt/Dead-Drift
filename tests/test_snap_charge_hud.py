@@ -37,9 +37,10 @@ def test_snap_charge_draws_only_when_tethered():
     )
     hud = HUD(ship)
 
-    surface = pygame.Surface((320, 220))
+    # HUD layout: SNAP CHARGE bar sits at y=206 after the fuel-bar reorder
+    surface = pygame.Surface((320, 240))
     hud.draw(surface, snap_charge=None)
-    assert surface.get_at((60, 176))[:3] == (0, 0, 0)
+    assert surface.get_at((60, 208))[:3] == (0, 0, 0)
 
     hud.draw(surface, snap_charge=0.5)
-    assert surface.get_at((60, 176))[:3] != (0, 0, 0)
+    assert surface.get_at((60, 208))[:3] != (0, 0, 0)
