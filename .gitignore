@@ -12,6 +12,7 @@ pytest-cache-files-*/
 pytest_tmp/
 .mypy_cache/
 assets/audio/
+assets/nltk_data/
 data/
 *.sqlite3
 "data/bax_vocabulary.json" 
