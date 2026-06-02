@@ -29,9 +29,11 @@ import threading
 from pathlib import Path
 from typing import Iterable
 
+from core.resource_path import resource_path
+
 # Bundled NLTK data shipped alongside the game executable.  Populated by
 # tools/bundle_nltk.py at build time; ignored by git (binary data).
-_BUNDLE_DIR = Path(__file__).resolve().parent.parent / "assets" / "nltk_data"
+_BUNDLE_DIR = Path(resource_path("assets", "nltk_data"))
 
 # (package, data path) — same list main.py used eagerly.
 _PACKAGES: tuple[tuple[str, str], ...] = (
