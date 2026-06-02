@@ -4,6 +4,7 @@ import random
 import pygame
 
 from config import settings as S
+from core import settings_store
 from core.state_manager import StateManager, GameState
 from renderer.visual_fx import VisualFX
 from core.transitions import TransitionManager
@@ -101,6 +102,13 @@ class Game:
             self.screen, self.ship, self.run_mgr, self.meta
         )
         self.audio = AudioManager()
+
+        # Load + apply persisted user settings (volume, fullscreen)
+        settings_store.load()
+        self.audio.set_master_volume(settings_store.get("master_volume"))
+        if settings_store.get("fullscreen"):
+            pygame.display.toggle_fullscreen()
+        self._settings_cursor: int = 0
 
         # CRT power-down scene transitions
         self.transition = TransitionManager()
@@ -440,6 +448,7 @@ class Game:
         # Jukebox unlocks after the player has completed all 4 chapters at least once
         if self.meta.campaign_cleared_at_least_once:
             rows.append(("BAX'S TAPES", True, "jukebox"))
+        rows.append(("SETTINGS", True, "settings"))
         rows.append(("QUIT", True, "quit"))
         return rows
 
@@ -505,6 +514,9 @@ class Game:
         elif action == "dossiers":
             self._menu_mode = "dossiers"
             self._dossier_cursor = 0
+        elif action == "settings":
+            self._menu_mode = "settings"
+            self._settings_cursor = 0
         elif action == "quit":
             self.running = False
 
@@ -628,6 +640,35 @@ class Game:
                     self._begin_run_from_carousel(ch)
             elif event.key == pygame.K_ESCAPE:
                 self._menu_mode = "main"
+            return
+
+        if self._menu_mode == "settings":
+            from renderer.settings_screen import ROWS, VOL_STEP
+            n = len(ROWS)
+            if event.key in (pygame.K_UP, pygame.K_w):
+                self._settings_cursor = (self._settings_cursor - 1) % n
+            elif event.key in (pygame.K_DOWN, pygame.K_s):
+                self._settings_cursor = (self._settings_cursor + 1) % n
+            elif event.key == pygame.K_ESCAPE:
+                self._menu_mode = "main"
+            elif ROWS[self._settings_cursor] == "BACK" and event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                self._menu_mode = "main"
+            elif ROWS[self._settings_cursor] == "MASTER VOLUME":
+                vol = settings_store.get("master_volume")
+                if event.key in (pygame.K_LEFT, pygame.K_a):
+                    vol = max(0.0, round(vol - VOL_STEP, 2))
+                elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                    vol = min(1.0, round(vol + VOL_STEP, 2))
+                if event.key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d):
+                    settings_store.set_value("master_volume", vol)
+                    if self.audio:
+                        self.audio.set_master_volume(vol)
+            elif ROWS[self._settings_cursor] == "FULLSCREEN":
+                if event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_LEFT,
+                                  pygame.K_RIGHT, pygame.K_a, pygame.K_d):
+                    fs = not settings_store.get("fullscreen")
+                    settings_store.set_value("fullscreen", fs)
+                    pygame.display.toggle_fullscreen()
             return
 
         if self._menu_mode == "records":
@@ -2236,6 +2277,17 @@ class Game:
                 col = (220, 140, 60) if i == 0 else (140, 140, 160)
                 s = font_row.render(line, True, col)
                 self.screen.blit(s, (cx - s.get_width() // 2, py + i * 28))
+            return
+
+        if self._menu_mode == "settings":
+            from renderer.settings_screen import draw as _draw_settings
+            _draw_settings(
+                self.screen,
+                cursor=self._settings_cursor,
+                master_volume=settings_store.get("master_volume"),
+                fullscreen=settings_store.get("fullscreen"),
+                t=t,
+            )
             return
 
         if self._menu_mode == "jukebox":
