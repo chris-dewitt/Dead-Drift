@@ -487,7 +487,7 @@ class AudioManager:
             self._radio_station_order = []
 
         print("[audio] loading chapter inflection modules…", flush=True)
-        for ch_num in (1, 2, 3, 4):
+        for ch_num in (1, 2, 3, 4, 5, 6):
             try:
                 mod = __import__(f"audio.chapter_{ch_num}", fromlist=["*"])
                 self._chapter_modules[ch_num] = mod

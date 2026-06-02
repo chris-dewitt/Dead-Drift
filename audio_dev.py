@@ -8,7 +8,7 @@ Controls:
   1-8     Set scene  (1=menu 2=flight 3=terminal 4=delivery 5=shop 6=decanting 7=loadout 8=interstitial)
   Q/A     Pressure -0.1 / +0.1   (drives BPM, kit intensity, arp gate)
   W/S     Hull % +10 / -10
-  C 1-4   Load chapter  (e.g. press C then 1)
+  C 1-6   Load chapter  (e.g. press C then 1)
   E       Fire EVT_SLINGSHOT (musical stinger + pad modulation)
   T       Fire EVT_TETHER_SNAP (snare flam + pad open)
   B       Fire EVT_BARGE_NEARBY (motif drone toggle)
@@ -95,7 +95,7 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 k = event.key
 
-                if await_chapter and pygame.K_1 <= k <= pygame.K_4:
+                if await_chapter and pygame.K_1 <= k <= pygame.K_6:
                     chapter = k - pygame.K_0
                     audio.set_scene(_SCENES[scene_idx], chapter=chapter)
                     await_chapter = False
@@ -240,7 +240,7 @@ def main():
         ly += 6
         _label(font_sm, "SCENES: 1=menu 2=flight 3=terminal 4=delivery", _DIM, lx, ly, screen); ly += 14
         _label(font_sm, "        5=shop  6=decanting 7=loadout 8=intersit", _DIM, lx, ly, screen); ly += 14
-        _label(font_sm, "C then 1-4 = load chapter palette", _DIM, lx, ly, screen); ly += 14
+        _label(font_sm, "C then 1-6 = load chapter palette", _DIM, lx, ly, screen); ly += 14
         _label(font_sm, "R = cockpit radio scene", _DIM, lx, ly, screen); ly += 14
         _label(font_sm, "X / ESC = quit", _DIM, lx, ly, screen)
 
@@ -273,8 +273,8 @@ def main():
 
         # Chapter badges
         cx2, cy2 = rx, ry + bar_h + 30
-        _label(font_sm, "CHAPTER  (press C then 1-4)", _AMBER, cx2, cy2 - 14, screen)
-        for i in range(1, 5):
+        _label(font_sm, "CHAPTER  (press C then 1-6)", _AMBER, cx2, cy2 - 14, screen)
+        for i in range(1, 7):
             bx = cx2 + (i - 1) * 52
             bc = _AMBER if i == chapter else _DIM
             pygame.draw.rect(screen, (20, 15, 5) if i == chapter else (10, 10, 15),
