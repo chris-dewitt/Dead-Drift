@@ -809,7 +809,9 @@ class RunManager:
                     triggered = wreck.hit_weak_point(bullet.pos)
                     if triggered:
                         bullet.lifetime = -1
+                        self.meta.pay_off(1200, source="WRECK SALVAGE")
                         self._run_debt_reduced += 1200
+                        self._sector_credits += 1200
                         bus.emit(EVT_BAX_SPEAK, line=random.choice([
                             "Weak point cracked! Emergency cache is ours!",
                             "She gave up her secrets. Scrap manifest unlocked!",
@@ -2041,7 +2043,7 @@ class RunManager:
         # Awards a small kill bonus when a hostile pirate goes down
         if ship is None:
             return
-        if ship.is_pirate:
+        if getattr(ship, "is_pirate", False):
             bus.emit(EVT_BAX_SPEAK, priority=True, line=random.choice([
                 "Hostile down. Nice shooting.",
                 "Pirate gunboat scrapped. They had it coming.",

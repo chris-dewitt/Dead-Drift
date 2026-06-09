@@ -590,7 +590,7 @@ class LoadoutDraft:
     def _draw_cargo_preview(self, surface, rect, cargo, slot_i, t):
         # Identify which cargo this is via the cargo_idx list
         idx_in_pool = self._cargo_idx[self._selected[slot_i]]
-        key = ["ARCHIVE", "SHROOMS", "PAPERS", "VIP"][idx_in_pool]
+        key = _CARGO_META[idx_in_pool]["key"]
 
         cx, cy = rect.centerx, rect.centery - 4
 
@@ -600,6 +600,8 @@ class LoadoutDraft:
             self._draw_cargo_shrooms(surface, cx, cy, t)
         elif key == "PAPERS":
             self._draw_cargo_papers(surface, cx, cy, t)
+        elif key in ("DRIVE-PICKUP", "DRIVE"):
+            self._draw_cargo_drive(surface, cx, cy, t, pickup=(key == "DRIVE-PICKUP"))
         else:
             self._draw_cargo_vip(surface, cx, cy, t)
 
@@ -723,6 +725,27 @@ class LoadoutDraft:
             py = int(cy + math.sin(phase) * r)
             c  = _hsv((i * 0.1 + t * 0.15) % 1.0, 0.7, 0.85)
             pygame.draw.circle(surface, c, (px, py), 2)
+
+    # ----- cargo: encrypted drive / pickup rendezvous -----
+    def _draw_cargo_drive(self, surface, cx, cy, t, pickup: bool = False):
+        pulse = 0.5 + 0.5 * math.sin(t * 3.0)
+        body = pygame.Rect(cx - 58, cy - 24, 116, 48)
+        pygame.draw.rect(surface, (18, 22, 26), body, border_radius=5)
+        pygame.draw.rect(surface, (80, 110, 120), body, 2, border_radius=5)
+        plug = pygame.Rect(body.right - 2, cy - 12, 26, 24)
+        pygame.draw.rect(surface, (80, 80, 88), plug)
+        pygame.draw.rect(surface, (150, 155, 165), plug, 1)
+        for i in range(5):
+            x = body.left + 16 + i * 18
+            col = (50, 220, 190) if (i + int(t * 8)) % 2 == 0 else (20, 80, 80)
+            pygame.draw.line(surface, col, (x, cy - 14), (x + 8, cy + 14), 2)
+        ring_col = (int(40 + 80 * pulse), int(150 + 90 * pulse), int(130 + 80 * pulse))
+        pygame.draw.circle(surface, ring_col, (cx, cy), int(70 + 10 * pulse), 1)
+
+        font = get_font(11, bold=True)
+        label = "RENDEZVOUS" if pickup else "ZERO-WRITE"
+        text = font.render(label, True, (120, 230, 200))
+        surface.blit(text, (cx - text.get_width() // 2, cy + 34))
 
     # ------------------------------------------------------------------ bax commentary
     def _draw_bax_panel(self, surface, t):

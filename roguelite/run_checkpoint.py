@@ -51,6 +51,9 @@ def _cargo_to_dict(cargo) -> dict | None:
         })
     elif t == "SchrodingerVIP":
         d["alive_state"] = getattr(cargo, "alive_state", "unknown")
+    elif t == "EncryptedDrive":
+        d["trace_level"] = getattr(cargo, "trace_level", 0.0)
+        d["ping_t"] = getattr(cargo, "_ping_t", 0.0)
     return d
 
 
@@ -59,12 +62,14 @@ def _cargo_from_dict(d: dict | None):
         return None
     from cargo.acoustic_archive import AcousticArchive
     from cargo.epi_shrooms import EpistemologicalShrooms
+    from cargo.encrypted_drive import EncryptedDrive
     from cargo.paperwork import SentientPaperwork
     from cargo.schrodinger_vip import SchrodingerVIP
 
     factories = {
         "AcousticArchive": AcousticArchive,
         "EpistemologicalShrooms": EpistemologicalShrooms,
+        "EncryptedDrive": EncryptedDrive,
         "SentientPaperwork": SentientPaperwork,
         "SchrodingerVIP": SchrodingerVIP,
     }
@@ -86,6 +91,9 @@ def _cargo_from_dict(d: dict | None):
         c._next_trigger = float(d.get("next_trigger", 20.0))
     elif d["type"] == "SchrodingerVIP":
         c.alive_state = d.get("alive_state", "unknown")
+    elif d["type"] == "EncryptedDrive":
+        c.trace_level = float(d.get("trace_level", 0.0))
+        c._ping_t = float(d.get("ping_t", 0.0))
     return c
 
 
@@ -121,7 +129,12 @@ def _ship_to_dict(ship) -> dict:
         modules.append(ent)
 
     bullets = [
-        {"x": b.pos.x, "y": b.pos.y, "vx": b.vel.x, "vy": b.vel.y, "life": b.lifetime}
+        {
+            "x": b.pos.x, "y": b.pos.y,
+            "vx": b.vel.x, "vy": b.vel.y,
+            "life": b.lifetime,
+            "damage": getattr(b, "damage", getattr(ship.gun, "damage_mult", 1)),
+        }
         for b in ship.gun.bullets
     ]
     return {
@@ -130,6 +143,7 @@ def _ship_to_dict(ship) -> dict:
         "angle": ship.body.angle,
         "mass": ship.body.mass,
         "hull": ship.hull,
+        "fuel": getattr(ship, "fuel", S.FUEL_MAX),
         "destroyed": ship._destroyed,
         "controls_inverted": ship.controls_inverted,
         "cargo": _cargo_to_dict(ship.cargo),
@@ -137,6 +151,8 @@ def _ship_to_dict(ship) -> dict:
         "gun": {
             "cooldown": ship.gun._cooldown,
             "jam_t": ship.gun._jam_t,
+            "fire_rate_mult": getattr(ship.gun, "fire_rate_mult", 1.0),
+            "damage_mult": getattr(ship.gun, "damage_mult", 1),
             "bullets": bullets,
         },
     }
@@ -152,6 +168,7 @@ def _restore_ship(ship, d: dict) -> None:
     ship.body.angle = float(d["angle"])
     ship.body.mass = float(d.get("mass", S.SHIP_MASS))
     ship.hull = float(d["hull"])
+    ship.fuel = float(d.get("fuel", S.FUEL_MAX))
     ship._destroyed = bool(d.get("destroyed", False))
     ship.controls_inverted = bool(d.get("controls_inverted", False))
     ship.cargo = _cargo_from_dict(d.get("cargo"))
@@ -175,9 +192,12 @@ def _restore_ship(ship, d: dict) -> None:
     g = d.get("gun", {})
     ship.gun._cooldown = float(g.get("cooldown", 0.0))
     ship.gun._jam_t = float(g.get("jam_t", 0.0))
+    ship.gun.fire_rate_mult = float(g.get("fire_rate_mult", 1.0))
+    ship.gun.damage_mult = int(g.get("damage_mult", 1))
     ship.gun.bullets.clear()
     for b in g.get("bullets", []):
-        bul = Bullet(_vec({"x": b["x"], "y": b["y"]}), 0.0)
+        bul = Bullet(_vec({"x": b["x"], "y": b["y"]}), 0.0,
+                     damage=int(b.get("damage", ship.gun.damage_mult)))
         bul.vel = _vec({"x": b["vx"], "y": b["vy"]})
         bul.lifetime = float(b["life"])
         ship.gun.bullets.append(bul)
