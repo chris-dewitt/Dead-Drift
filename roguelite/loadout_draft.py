@@ -590,7 +590,7 @@ class LoadoutDraft:
     def _draw_cargo_preview(self, surface, rect, cargo, slot_i, t):
         # Identify which cargo this is via the cargo_idx list
         idx_in_pool = self._cargo_idx[self._selected[slot_i]]
-        key = ["ARCHIVE", "SHROOMS", "PAPERS", "VIP"][idx_in_pool]
+        key = _CARGO_META[idx_in_pool]["key"]
 
         cx, cy = rect.centerx, rect.centery - 4
 
@@ -600,6 +600,8 @@ class LoadoutDraft:
             self._draw_cargo_shrooms(surface, cx, cy, t)
         elif key == "PAPERS":
             self._draw_cargo_papers(surface, cx, cy, t)
+        elif key in ("DRIVE-PICKUP", "DRIVE"):
+            self._draw_cargo_drive(surface, cx, cy, t, active=(key == "DRIVE"))
         else:
             self._draw_cargo_vip(surface, cx, cy, t)
 
@@ -723,6 +725,47 @@ class LoadoutDraft:
             py = int(cy + math.sin(phase) * r)
             c  = _hsv((i * 0.1 + t * 0.15) % 1.0, 0.7, 0.85)
             pygame.draw.circle(surface, c, (px, py), 2)
+
+    # ----- cargo: encrypted drive (Ch.5 pickup / Ch.6 delivery) -----
+    def _draw_cargo_drive(self, surface, cx, cy, t, active: bool):
+        pulse = 0.5 + 0.5 * math.sin(t * 3.0)
+        body = pygame.Rect(cx - 66, cy - 28, 112, 56)
+        plug = pygame.Rect(cx + 46, cy - 16, 24, 32)
+        core_col = (90, 210, 255) if active else (100, 130, 150)
+        glow_col = (30, 150, 220) if active else (70, 70, 80)
+
+        glow = pygame.Surface((180, 120), pygame.SRCALPHA)
+        pygame.draw.ellipse(
+            glow,
+            (*glow_col, int(30 + 50 * pulse)),
+            pygame.Rect(16, 24, 148, 72),
+        )
+        surface.blit(glow, (cx - 90, cy - 60))
+
+        pygame.draw.rect(surface, (10, 14, 18), body, border_radius=8)
+        pygame.draw.rect(surface, (70, 90, 105), body, 2, border_radius=8)
+        pygame.draw.rect(surface, (18, 22, 26), plug, border_radius=3)
+        pygame.draw.rect(surface, (120, 140, 150), plug, 2, border_radius=3)
+
+        for pin_x in (plug.left + 6, plug.left + 16):
+            pygame.draw.line(surface, (160, 170, 180),
+                             (pin_x, plug.top + 6), (pin_x, plug.bottom - 6), 2)
+
+        pygame.draw.circle(surface, core_col, (cx - 34, cy), int(7 + 3 * pulse))
+        pygame.draw.circle(surface, (180, 235, 255), (cx - 34, cy), 10, 1)
+
+        font = get_font(11, bold=True)
+        label = "ZERO-WRITE" if active else "EMPTY HOLD"
+        surf = font.render(label, True, core_col)
+        surface.blit(surf, (cx - surf.get_width() // 2 + 8, cy - 8))
+
+        # Trace pings orbit the drive once the payload is actually hot.
+        if active:
+            for i in range(3):
+                ang = t * 2.2 + i * math.tau / 3
+                px = cx + int(math.cos(ang) * 72)
+                py = cy + int(math.sin(ang) * 38)
+                pygame.draw.circle(surface, (255, 80, 70), (px, py), 3)
 
     # ------------------------------------------------------------------ bax commentary
     def _draw_bax_panel(self, surface, t):
