@@ -51,6 +51,9 @@ def _cargo_to_dict(cargo) -> dict | None:
         })
     elif t == "SchrodingerVIP":
         d["alive_state"] = getattr(cargo, "alive_state", "unknown")
+    elif t == "EncryptedDrive":
+        d["trace_level"] = getattr(cargo, "trace_level", 0.0)
+        d["ping_t"] = getattr(cargo, "_ping_t", 0.0)
     return d
 
 
@@ -61,12 +64,14 @@ def _cargo_from_dict(d: dict | None):
     from cargo.epi_shrooms import EpistemologicalShrooms
     from cargo.paperwork import SentientPaperwork
     from cargo.schrodinger_vip import SchrodingerVIP
+    from cargo.encrypted_drive import EncryptedDrive
 
     factories = {
         "AcousticArchive": AcousticArchive,
         "EpistemologicalShrooms": EpistemologicalShrooms,
         "SentientPaperwork": SentientPaperwork,
         "SchrodingerVIP": SchrodingerVIP,
+        "EncryptedDrive": EncryptedDrive,
     }
     cls = factories.get(d["type"])
     if cls is None:
@@ -86,6 +91,9 @@ def _cargo_from_dict(d: dict | None):
         c._next_trigger = float(d.get("next_trigger", 20.0))
     elif d["type"] == "SchrodingerVIP":
         c.alive_state = d.get("alive_state", "unknown")
+    elif d["type"] == "EncryptedDrive":
+        c.trace_level = float(d.get("trace_level", 0.0))
+        c._ping_t = float(d.get("ping_t", 0.0))
     return c
 
 
@@ -121,7 +129,12 @@ def _ship_to_dict(ship) -> dict:
         modules.append(ent)
 
     bullets = [
-        {"x": b.pos.x, "y": b.pos.y, "vx": b.vel.x, "vy": b.vel.y, "life": b.lifetime}
+        {
+            "x": b.pos.x, "y": b.pos.y,
+            "vx": b.vel.x, "vy": b.vel.y,
+            "life": b.lifetime,
+            "damage": getattr(b, "damage", 1),
+        }
         for b in ship.gun.bullets
     ]
     return {
@@ -130,6 +143,7 @@ def _ship_to_dict(ship) -> dict:
         "angle": ship.body.angle,
         "mass": ship.body.mass,
         "hull": ship.hull,
+        "fuel": getattr(ship, "fuel", S.FUEL_MAX),
         "destroyed": ship._destroyed,
         "controls_inverted": ship.controls_inverted,
         "cargo": _cargo_to_dict(ship.cargo),
@@ -137,6 +151,8 @@ def _ship_to_dict(ship) -> dict:
         "gun": {
             "cooldown": ship.gun._cooldown,
             "jam_t": ship.gun._jam_t,
+            "fire_rate_mult": getattr(ship.gun, "fire_rate_mult", 1.0),
+            "damage_mult": getattr(ship.gun, "damage_mult", 1),
             "bullets": bullets,
         },
     }
@@ -152,6 +168,7 @@ def _restore_ship(ship, d: dict) -> None:
     ship.body.angle = float(d["angle"])
     ship.body.mass = float(d.get("mass", S.SHIP_MASS))
     ship.hull = float(d["hull"])
+    ship.fuel = float(d.get("fuel", S.FUEL_MAX))
     ship._destroyed = bool(d.get("destroyed", False))
     ship.controls_inverted = bool(d.get("controls_inverted", False))
     ship.cargo = _cargo_from_dict(d.get("cargo"))
@@ -175,9 +192,12 @@ def _restore_ship(ship, d: dict) -> None:
     g = d.get("gun", {})
     ship.gun._cooldown = float(g.get("cooldown", 0.0))
     ship.gun._jam_t = float(g.get("jam_t", 0.0))
+    ship.gun.fire_rate_mult = float(g.get("fire_rate_mult", 1.0))
+    ship.gun.damage_mult = int(g.get("damage_mult", 1))
     ship.gun.bullets.clear()
     for b in g.get("bullets", []):
-        bul = Bullet(_vec({"x": b["x"], "y": b["y"]}), 0.0)
+        bul = Bullet(_vec({"x": b["x"], "y": b["y"]}), 0.0,
+                     damage=int(b.get("damage", 1)))
         bul.vel = _vec({"x": b["vx"], "y": b["vy"]})
         bul.lifetime = float(b["life"])
         ship.gun.bullets.append(bul)
@@ -334,6 +354,36 @@ def _alien_from(d: dict):
     return a
 
 
+def _wreck_dict(w) -> dict:
+    return {
+        "t": "wreck",
+        "x": w.pos.x, "y": w.pos.y,
+        "subtype": getattr(w, "subtype", None),
+        "angle": getattr(w, "angle", 0.0),
+        "rot_speed": getattr(w, "rot_speed", 0.0),
+        "length": getattr(w, "length", 160),
+        "width": getattr(w, "width", 55),
+        "gap_frac": getattr(w, "gap_frac", 0.5),
+        "weak_hp": getattr(w, "weak_hp", 3),
+        "is_triggered": getattr(w, "is_triggered", False),
+        "trigger_t": getattr(w, "_trigger_t", 0.0),
+    }
+
+
+def _wreck_from(d: dict):
+    from antagonists.wreck import SpaceWreck
+    w = SpaceWreck(d.get("x"), d.get("y"), subtype=d.get("subtype"))
+    w.angle = float(d.get("angle", w.angle))
+    w.rot_speed = float(d.get("rot_speed", w.rot_speed))
+    w.length = int(d.get("length", w.length))
+    w.width = int(d.get("width", w.width))
+    w.gap_frac = float(d.get("gap_frac", w.gap_frac))
+    w.weak_hp = int(d.get("weak_hp", w.weak_hp))
+    w.is_triggered = bool(d.get("is_triggered", w.is_triggered))
+    w._trigger_t = float(d.get("trigger_t", w._trigger_t))
+    return w
+
+
 def _entities_to_dict(rm) -> list[dict]:
     out: list[dict] = []
     for r in rm._debris:
@@ -357,7 +407,7 @@ def _entities_to_dict(rm) -> list[dict]:
     if rm._comet_trail is not None:
         out.append({"t": "comet_trail"})
     for w in rm._wrecks:
-        out.append({"t": "wreck", "x": w.pos.x, "y": w.pos.y})
+        out.append(_wreck_dict(w))
     return out
 
 
@@ -366,7 +416,6 @@ def _restore_entities(rm, entities: list[dict]) -> None:
     from antagonists.dead_station import DeadStation
     from antagonists.ice_field import IceField
     from antagonists.mine_field import MineField
-    from antagonists.wreck import SpaceWreck
     from antagonists.trash_field import TrashField
 
     rm._debris.clear()
@@ -375,6 +424,7 @@ def _restore_entities(rm, entities: list[dict]) -> None:
     rm._barges.clear()
     rm._alien = None
     rm._wrecks.clear()
+    rm._compliance_vessels.clear()
     rm._dead_station = None
     rm._trash_field = None
     rm._mine_field = None
@@ -404,7 +454,7 @@ def _restore_entities(rm, entities: list[dict]) -> None:
         elif t == "comet_trail":
             rm._comet_trail = CometTrail()
         elif t == "wreck":
-            rm._wrecks.append(SpaceWreck(d.get("x"), d.get("y")))
+            rm._wrecks.append(_wreck_from(d))
 
 
 # ---------------------------------------------------------------------------
@@ -449,6 +499,9 @@ def build_checkpoint(game) -> dict:
             "kress_called": rm._kress_called_this_sector,
             "kress_tip_pending": getattr(rm, "_kress_tip_pending", False),
             "barge_suppression_t": getattr(rm, "_barge_suppression_t", 0.0),
+            "compliance_spawn_cd": getattr(rm, "_compliance_spawn_cd", 12.0),
+            "emp_burst_available": getattr(rm, "_emp_burst_available", False),
+            "emp_burst_active_t": getattr(rm, "_emp_burst_active_t", 0.0),
             "run_debt_reduced": rm._run_debt_reduced,
             "run_snaps": rm._run_snaps,
             "run_slingshots": rm._run_slingshots,
@@ -495,6 +548,9 @@ def restore_checkpoint(game, data: dict) -> bool:
     rm._kress_called_this_sector = bool(rmd.get("kress_called", False))
     rm._kress_tip_pending = bool(rmd.get("kress_tip_pending", False))
     rm._barge_suppression_t = float(rmd.get("barge_suppression_t", 0.0))
+    rm._compliance_spawn_cd = float(rmd.get("compliance_spawn_cd", 12.0))
+    rm._emp_burst_available = bool(rmd.get("emp_burst_available", False))
+    rm._emp_burst_active_t = float(rmd.get("emp_burst_active_t", 0.0))
     rm._run_debt_reduced = int(rmd.get("run_debt_reduced", 0))
     rm._run_snaps = int(rmd.get("run_snaps", 0))
     rm._run_slingshots = int(rmd.get("run_slingshots", 0))

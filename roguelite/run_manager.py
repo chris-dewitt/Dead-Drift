@@ -411,6 +411,10 @@ class RunManager:
         self._alien_spoken = False
         self._ai_ships.clear()
         self._aiship_hail_pending = None
+        self._compliance_vessels.clear()
+        self._compliance_spawn_cd = 12.0
+        self._emp_burst_available = False
+        self._emp_burst_active_t  = 0.0
         self._shower_rocks.clear()
         self._active_terminal    = None
         self._pending_terminal   = None
@@ -2041,7 +2045,7 @@ class RunManager:
         # Awards a small kill bonus when a hostile pirate goes down
         if ship is None:
             return
-        if ship.is_pirate:
+        if getattr(ship, "is_pirate", False):
             bus.emit(EVT_BAX_SPEAK, priority=True, line=random.choice([
                 "Hostile down. Nice shooting.",
                 "Pirate gunboat scrapped. They had it coming.",
@@ -2069,13 +2073,13 @@ class RunManager:
         # Epic 8.2 — chapter dossier carousel may set an explicit replay
         # target; honour it before falling back to the natural progression.
         override = getattr(self, "_chapter_override", None)
-        if override is not None and 1 <= override <= 6:
+        if override is not None and 1 <= override <= S.TOTAL_CHAPTERS:
             return override
         completed = self.meta.chapters_completed
-        for ch in [1, 2, 3, 4, 5, 6]:
+        for ch in range(1, S.TOTAL_CHAPTERS + 1):
             if ch not in completed:
                 return ch
-        return 6
+        return S.TOTAL_CHAPTERS
 
     def set_chapter_override(self, chapter: int | None) -> None:
         """Force the next run to use a specific chapter (Epic 8.2).
@@ -2233,6 +2237,10 @@ class RunManager:
     @property
     def ai_ships(self) -> list[AIShip]:
         return self._ai_ships
+
+    @property
+    def compliance_vessels(self):
+        return self._compliance_vessels
 
     @property
     def debris_cloud(self) -> DebrisCloud | None:

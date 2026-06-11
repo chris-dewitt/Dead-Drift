@@ -1,7 +1,7 @@
 """
 Cargo Dossier Carousel — Epic 8.2.
 
-Main-menu replay screen. Shows four chapter cargo cards, each with:
+Main-menu replay screen. Shows chapter cargo cards, each with:
   * vector silhouette of the cargo
   * chapter title + cargo brief + flight quirk
   * "✓ DELIVERED" stamp (or "??? — UNCOVERED" stamp for incomplete chapters)
@@ -43,6 +43,14 @@ _CARDS: tuple[tuple[int, str, str, str, str, tuple, tuple], ...] = (
      "Passenger: alive or deceased.",
      "Observation collapses payout.",
      (200, 160,  40), (255, 220,  90)),
+    (5, "THE EDGE",          "empty",
+     "Rendezvous with Chen.",
+     "Pick up the drive in-corridor.",
+     (190,  90,  45), (255, 170,  85)),
+    (6, "COMPLIANCE",        "drive",
+     "Nova Soma zero-write.",
+     "Upload while Compliance swarms.",
+     ( 90, 160, 190), (180, 240, 255)),
 )
 
 
@@ -115,6 +123,30 @@ def _draw_cargo_silhouette(surf: pygame.Surface, cx: int, cy: int,
         f = get_font(22, bold=True)
         s = f.render("?", True, col_q)
         surf.blit(s, (cx - s.get_width() // 2, cy - s.get_height() // 2))
+        return
+    if kind == "empty":
+        # Empty cargo cradle for the Edge rendezvous.
+        edge = (int(255 * dim), int(170 * dim), int(90 * dim))
+        dark = (int(30 * dim), int(16 * dim), int(10 * dim))
+        pygame.draw.rect(surf, dark, pygame.Rect(cx - 28, cy - 18, 56, 36), 2)
+        pygame.draw.line(surf, edge, (cx - 28, cy - 18), (cx - 12, cy - 30), 1)
+        pygame.draw.line(surf, edge, (cx + 28, cy - 18), (cx + 12, cy - 30), 1)
+        pygame.draw.line(surf, edge, (cx - 28, cy + 18), (cx - 12, cy + 30), 1)
+        pygame.draw.line(surf, edge, (cx + 28, cy + 18), (cx + 12, cy + 30), 1)
+        pygame.draw.rect(surf, edge, pygame.Rect(cx - 18, cy - 2, 36, 4))
+        return
+    if kind == "drive":
+        # Encrypted drive: tiny object, oversized threat signature.
+        pulse = 0.55 + 0.45 * math.sin(t * 6.0)
+        edge = (int(180 * dim), int(240 * dim), int(255 * dim))
+        glow = (int(70 * dim * pulse), int(210 * dim * pulse), int(255 * dim * pulse))
+        pygame.draw.circle(surf, glow, (cx, cy), 34, 1)
+        pygame.draw.rect(surf, (int(16 * dim), int(26 * dim), int(34 * dim)),
+                         pygame.Rect(cx - 24, cy - 12, 38, 24))
+        pygame.draw.rect(surf, edge, pygame.Rect(cx - 24, cy - 12, 38, 24), 2)
+        pygame.draw.rect(surf, edge, pygame.Rect(cx + 14, cy - 6, 10, 12))
+        for off in (-6, 0, 6):
+            pygame.draw.line(surf, glow, (cx - 18, cy + off), (cx + 8, cy + off), 1)
         return
 
 
@@ -292,11 +324,11 @@ def _draw_card(surf, x, y, w, h, card, t, *,
 def visible_chapters(meta) -> list[int]:
     """Chapters the player can currently launch via the carousel.
     Always includes chapter 1 (the entry chapter); previously-cleared
-    chapters are always available; chapter 4 only opens after campaign clear.
+    chapters are always available; each next chapter opens after the previous clear.
     """
     completed = set(meta.chapters_completed) if meta else set()
     out = [1]
-    for ch in (2, 3, 4):
+    for ch in range(2, S.TOTAL_CHAPTERS + 1):
         prev_done = (ch - 1) in completed
         if prev_done or ch in completed:
             out.append(ch)

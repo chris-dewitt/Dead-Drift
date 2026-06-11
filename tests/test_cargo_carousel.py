@@ -32,9 +32,9 @@ def _stats_with(temp_dir, career=None):
 
 def test_card_count_and_chapter_lookup():
     from renderer.cargo_carousel import card_count, card_chapter
-    assert card_count() == 4
+    assert card_count() == 6
     chapters = [card_chapter(i) for i in range(card_count())]
-    assert chapters == [1, 2, 3, 4]
+    assert chapters == [1, 2, 3, 4, 5, 6]
 
 
 def test_carousel_renders_for_empty_meta():
@@ -58,7 +58,7 @@ def test_carousel_renders_with_completed_chapters_and_stats():
 
     with tempfile.TemporaryDirectory() as tmp:
         meta = _meta_with(tmp,
-                          chapters_completed=[1, 2, 3, 4],
+                          chapters_completed=[1, 2, 3, 4, 5, 6],
                           hardcore_unlocked=[1, 2],
                           hardcore_best_s={"1": 540})
         stats = _stats_with(tmp, career={
@@ -81,6 +81,8 @@ def test_visible_chapters_progression_gates_chapter_two():
         cleared_one = _meta_with(tmp + "_b" if False else tmp,
                                  chapters_completed=[1])
         assert 2 in visible_chapters(cleared_one)
+        cleared_four = _meta_with(tmp, chapters_completed=[1, 2, 3, 4])
+        assert visible_chapters(cleared_four) == [1, 2, 3, 4, 5]
 
 
 def test_run_manager_chapter_override_round_trips():

@@ -77,6 +77,7 @@ SPORE_FIRST_TRIGGER_MAX = 9.0
 
 # --- Roguelite ---
 SECTORS_PER_RUN   = 5             # the 5-sector sprint
+TOTAL_CHAPTERS    = 6
 BASE_CLONE_DEBT   = 15000         # credits tacked on per death
 CLONE_FLUID_FEE   = 3500
 WRECKAGE_TOW_FEE  = 8000

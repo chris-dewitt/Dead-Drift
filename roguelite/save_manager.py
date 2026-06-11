@@ -27,13 +27,13 @@ class SaveSlotInfo:
         if not self.chapters_completed:
             return "Ch.1 (new)"
         nxt = 1
-        for ch in (1, 2, 3, 4):
+        for ch in range(1, S.TOTAL_CHAPTERS + 1):
             if ch not in self.chapters_completed:
                 nxt = ch
                 break
         else:
-            nxt = 4
-        return f"Ch.{nxt}  ({len(self.chapters_completed)}/4 done)"
+            return "Campaign complete"
+        return f"Ch.{nxt}  ({len(self.chapters_completed)}/{S.TOTAL_CHAPTERS} done)"
 
 
 class SaveManager:

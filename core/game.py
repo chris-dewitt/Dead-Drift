@@ -1712,12 +1712,16 @@ class Game:
         2: "MYCORRHIZAL PAYLOAD",
         3: "THE PAPERWORK",
         4: "SCHRÖDINGER VIP",
+        5: "THE EDGE",
+        6: "COMPLIANCE",
     }
     _CHAPTER_SUBTITLES = {
         1: "contraband uncompressed audio",
         2: "weaponized epistemological fungi",
         3: "telepathic bureaucratic forms",
         4: "sealed box. alive AND dead.",
+        5: "off-grid Remnants rendezvous",
+        6: "Nova Soma server-room zero-write",
     }
     _INTERSTITIAL_BAX = {
         1: ("Archive's in their hands. Don't think too hard about who 'they' are. "
@@ -1729,8 +1733,14 @@ class Game:
         3: ("Forms signed and silenced. The Union now has bureaucracy that files itself. "
             "Whoever runs that office is doomed and doesn't know it yet. "
             "Next: one passenger, sealed box. Don't open it. ...Fine, open it. I'm curious too."),
-        4: ("All four cargos. All four payouts. Local 404 didn't win. Neither did we. "
-            "We just kept goin'. That's the gig. Rest up. "
+        4: ("VIP delivered. Box closed. Mostly. That should have been the finale, "
+            "but Chen's called in a marker. Next stop: The Edge. "
+            "Empty hold, full consequences."),
+        5: ("The drive is aboard. Chen looked scared, which is not a thing I enjoy seeing. "
+            "Nova Soma will know the second we light the engines. "
+            "Next gig: plug it into the beast and hold the line."),
+        6: ("All six chapters. Archive, spores, forms, VIP, the drive, the upload. "
+            "Nova Soma blinked. We didn't. Rest up, mate. "
             "We'll be back. We're always back."),
     }
 
@@ -1738,7 +1748,10 @@ class Game:
         # Mark delivery complete in meta_progression handled by DeliverySequence._compute_result
         completed = self._delivery_chapter
         next_ch = completed + 1
-        campaign_end = next_ch > 4 or len(self.meta.chapters_completed) >= 4
+        campaign_end = (
+            next_ch > S.TOTAL_CHAPTERS
+            or len(self.meta.chapters_completed) >= S.TOTAL_CHAPTERS
+        )
         self._interstitial_completed     = completed
         self._interstitial_next          = next_ch
         self._interstitial_campaign_end  = campaign_end
@@ -1847,7 +1860,7 @@ class Game:
             end_col = (int(160 + 80 * pulse), int(220 * pulse + 35), int(40 + 40 * pulse))
             top_label = f_end_l.render("CAMPAIGN COMPLETE", True, (140, 200, 80))
             self.screen.blit(top_label, (cx - top_label.get_width() // 2, next_y))
-            big = f_end_t.render("ALL FOUR CARGOS DELIVERED", True, end_col)
+            big = f_end_t.render("ALL SIX CHAPTERS DELIVERED", True, end_col)
             self.screen.blit(big, (cx - big.get_width() // 2, next_y + 18))
             stats = (f"DEBT: {self.meta.debt:,} cr   ·   CLONES: {self.meta.clone_count}   ·   "
                      "ROUTE: CLEAR")
