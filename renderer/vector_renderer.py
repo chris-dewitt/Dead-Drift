@@ -210,6 +210,7 @@ class VectorRenderer:
         self._draw_bullets(ship)
         self._draw_alien(run_mgr, t)
         self._draw_ai_ships(run_mgr, t)
+        self._draw_compliance_vessels(run_mgr, t)
         self._draw_barges(run_mgr, ship, t)
         self._draw_barge_radar(run_mgr, ship, t)
         self._draw_trail(ship, t)
@@ -1645,6 +1646,50 @@ class VectorRenderer:
              int(lx * sin_a + ly * cos_a + aiship.pos.y))
             for lx, ly in raw_pts
         ]
+
+    def _draw_compliance_vessels(self, run_mgr, t: float):
+        vessels = getattr(run_mgr, "compliance_vessels", None)
+        if not vessels:
+            return
+        for vessel in list(vessels):
+            if not getattr(vessel, "alive", False):
+                continue
+            self._draw_compliance_vessel(vessel, t)
+
+    def _draw_compliance_vessel(self, vessel, t: float):
+        rad = math.radians(getattr(vessel, "heading", 0.0))
+        cos_a, sin_a = math.cos(rad), math.sin(rad)
+
+        def world_pts(raw_pts):
+            return [
+                (int(x * cos_a - y * sin_a + vessel.pos.x),
+                 int(x * sin_a + y * cos_a + vessel.pos.y))
+                for x, y in raw_pts
+            ]
+
+        hull = world_pts([(26, 0), (8, -16), (-22, -13),
+                          (-32, 0), (-22, 13), (8, 16)])
+        core = world_pts([(8, -5), (18, 0), (8, 5), (-4, 4), (-4, -4)])
+        fin_l = world_pts([(-8, -12), (-25, -28), (-19, -8)])
+        fin_r = world_pts([(-8, 12), (-25, 28), (-19, 8)])
+
+        stunned = bool(getattr(vessel, "is_stunned", False))
+        hit = getattr(vessel, "hit_flash_t", 0.0) > 0
+        pulse = 0.55 + 0.45 * math.sin(t * 6.0)
+        hull_col = (10, 14, 18) if not stunned else (18, 20, 24)
+        edge_col = (255, 70, 70) if hit else ((80, 230, 255) if stunned else (190, 220, 235))
+        core_col = (255, 50, 45) if not stunned else (70, 210, 255)
+
+        pygame.draw.polygon(self.surface, (18, 22, 28), fin_l)
+        pygame.draw.polygon(self.surface, (18, 22, 28), fin_r)
+        pygame.draw.polygon(self.surface, edge_col, fin_l, 1)
+        pygame.draw.polygon(self.surface, edge_col, fin_r, 1)
+        pygame.draw.polygon(self.surface, hull_col, hull)
+        pygame.draw.polygon(self.surface, edge_col, hull, 2)
+        pygame.draw.polygon(self.surface, core_col, core)
+
+        px, py = int(vessel.pos.x), int(vessel.pos.y)
+        pygame.draw.circle(self.surface, core_col, (px, py), max(8, int(18 * pulse)), 1)
 
     def _aiship_hit_tint(self, aiship, base_col):
         if aiship._hit_t > 0:
