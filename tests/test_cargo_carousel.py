@@ -72,6 +72,19 @@ def test_carousel_renders_with_completed_chapters_and_stats():
             assert screen.get_at((640, 360))[:3] != (0, 0, 0)
 
 
+def test_loadout_renders_chapter_five_and_six_cargo_previews():
+    pygame.init()
+    pygame.font.init()
+    from config import settings as S
+    from roguelite.loadout_draft import LoadoutDraft
+
+    screen = pygame.Surface((S.SCREEN_W, S.SCREEN_H))
+    for chapter in (5, 6):
+        draft = LoadoutDraft(chapter=chapter)
+        draft.render(screen)
+        assert screen.get_at((640, 360))[:3] != (0, 0, 0)
+
+
 def test_visible_chapters_progression_gates_chapter_two():
     """Chapter 2 stays locked until chapter 1 is cleared."""
     from renderer.cargo_carousel import visible_chapters

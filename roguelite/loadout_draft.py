@@ -382,6 +382,8 @@ class LoadoutDraft:
             2: "CH.2  THE MYCORRHIZAL PAYLOAD",
             3: "CH.3  THE PAPERWORK",
             4: "CH.4  THE SCHRÖDINGER VIP",
+            5: "CH.5  THE EDGE",
+            6: "CH.6  COMPLIANCE",
         }
         ch = chapter_names.get(self._chapter, f"CH.{self._chapter}")
         ch_surf = font_ch.render(ch, True, (200, 140, 0))
@@ -590,7 +592,7 @@ class LoadoutDraft:
     def _draw_cargo_preview(self, surface, rect, cargo, slot_i, t):
         # Identify which cargo this is via the cargo_idx list
         idx_in_pool = self._cargo_idx[self._selected[slot_i]]
-        key = ["ARCHIVE", "SHROOMS", "PAPERS", "VIP"][idx_in_pool]
+        key = _CARGO_META[idx_in_pool]["key"]
 
         cx, cy = rect.centerx, rect.centery - 4
 
@@ -600,13 +602,37 @@ class LoadoutDraft:
             self._draw_cargo_shrooms(surface, cx, cy, t)
         elif key == "PAPERS":
             self._draw_cargo_papers(surface, cx, cy, t)
-        else:
+        elif key == "VIP":
             self._draw_cargo_vip(surface, cx, cy, t)
+        else:
+            self._draw_cargo_drive(surface, cx, cy, t, pickup=(key == "DRIVE-PICKUP"))
 
         font_spec = get_font(10)
         label = f"PAYLOAD // {key}"
         spec = font_spec.render(label, True, (60, 70, 80))
         surface.blit(spec, (rect.left + 8, rect.bottom - 18))
+
+    def _draw_cargo_drive(self, surface, cx, cy, t, pickup: bool = False):
+        pulse = 0.55 + 0.45 * math.sin(t * 3.2)
+        core = (40, 220, 200) if not pickup else (110, 120, 130)
+        glow = tuple(int(c * pulse) for c in core)
+
+        # Small isolated data wafer / empty-hold beacon for chapters 5-6.
+        body = pygame.Rect(cx - 62, cy - 34, 124, 68)
+        pygame.draw.rect(surface, (8, 12, 16), body, border_radius=6)
+        pygame.draw.rect(surface, core, body, 2, border_radius=6)
+        pygame.draw.rect(surface, (28, 34, 42), pygame.Rect(cx - 44, cy - 20, 88, 40), 1)
+        pygame.draw.circle(surface, glow, (cx - 34, cy), 7)
+        pygame.draw.circle(surface, core, (cx - 34, cy), 7, 1)
+        for i in range(5):
+            x = cx - 12 + i * 13
+            pygame.draw.line(surface, (60, 95, 100), (x, cy - 14), (x + 8, cy - 14), 1)
+            pygame.draw.line(surface, (60, 95, 100), (x, cy), (x + 8, cy), 1)
+            pygame.draw.line(surface, (60, 95, 100), (x, cy + 14), (x + 8, cy + 14), 1)
+        if pickup:
+            font = get_font(11, bold=True)
+            txt = font.render("PICKUP AT EDGE", True, (150, 160, 170))
+            surface.blit(txt, (cx - txt.get_width() // 2, cy + 52))
 
     # ----- cargo: acoustic archive (vinyl record) -----
     def _draw_cargo_archive(self, surface, cx, cy, t):

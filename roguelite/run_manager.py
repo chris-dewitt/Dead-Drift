@@ -411,6 +411,10 @@ class RunManager:
         self._alien_spoken = False
         self._ai_ships.clear()
         self._aiship_hail_pending = None
+        self._compliance_vessels.clear()
+        self._compliance_spawn_cd = 12.0
+        self._emp_burst_available = False
+        self._emp_burst_active_t  = 0.0
         self._shower_rocks.clear()
         self._active_terminal    = None
         self._pending_terminal   = None
