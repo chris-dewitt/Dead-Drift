@@ -140,6 +140,7 @@ def _ship_to_dict(ship) -> dict:
         "angle": ship.body.angle,
         "mass": ship.body.mass,
         "hull": ship.hull,
+        "fuel": getattr(ship, "fuel", S.FUEL_MAX),
         "destroyed": ship._destroyed,
         "controls_inverted": ship.controls_inverted,
         "cargo": _cargo_to_dict(ship.cargo),
@@ -164,6 +165,7 @@ def _restore_ship(ship, d: dict) -> None:
     ship.body.angle = float(d["angle"])
     ship.body.mass = float(d.get("mass", S.SHIP_MASS))
     ship.hull = float(d["hull"])
+    ship.fuel = float(d.get("fuel", S.FUEL_MAX))
     ship._destroyed = bool(d.get("destroyed", False))
     ship.controls_inverted = bool(d.get("controls_inverted", False))
     ship.cargo = _cargo_from_dict(d.get("cargo"))
@@ -348,6 +350,35 @@ def _alien_from(d: dict):
     return a
 
 
+def _compliance_dict(cv) -> dict:
+    return {
+        "t": "compliance",
+        "x": cv.pos.x, "y": cv.pos.y,
+        "vx": cv.vel.x, "vy": cv.vel.y,
+        "heading": cv.heading,
+        "state": cv.state,
+        "state_t": cv._state_t,
+        "hits": cv._hits,
+        "stun_t": cv._stun_t,
+        "hit_flash_t": cv.hit_flash_t,
+        "alive": cv.alive,
+    }
+
+
+def _compliance_from(d: dict, run_mgr):
+    from antagonists.compliance_vessel import ComplianceVessel
+    cv = ComplianceVessel(d["x"], d["y"], run_mgr)
+    cv.vel = Vec2(d.get("vx", 0.0), d.get("vy", 0.0))
+    cv.heading = float(d.get("heading", 0.0))
+    cv.state = d.get("state", cv.state)
+    cv._state_t = float(d.get("state_t", 0.0))
+    cv._hits = int(d.get("hits", 0))
+    cv._stun_t = float(d.get("stun_t", 0.0))
+    cv._hit_flash_t = float(d.get("hit_flash_t", 0.0))
+    cv.alive = bool(d.get("alive", True))
+    return cv
+
+
 def _entities_to_dict(rm) -> list[dict]:
     out: list[dict] = []
     for r in rm._debris:
@@ -360,6 +391,8 @@ def _entities_to_dict(rm) -> list[dict]:
         out.append(_barge_dict(b))
     if rm._alien is not None:
         out.append(_alien_dict(rm._alien))
+    for cv in getattr(rm, "_compliance_vessels", []):
+        out.append(_compliance_dict(cv))
     if rm._dead_station is not None:
         out.append({"t": "dead_station"})
     if rm._trash_field is not None:
@@ -388,6 +421,7 @@ def _restore_entities(rm, entities: list[dict]) -> None:
     rm._satellites.clear()
     rm._barges.clear()
     rm._alien = None
+    rm._compliance_vessels.clear()
     rm._wrecks.clear()
     rm._dead_station = None
     rm._trash_field = None
@@ -407,6 +441,8 @@ def _restore_entities(rm, entities: list[dict]) -> None:
             rm._barges.append(_barge_from(d, rm))
         elif t == "alien":
             rm._alien = _alien_from(d)
+        elif t == "compliance":
+            rm._compliance_vessels.append(_compliance_from(d, rm))
         elif t == "dead_station":
             rm._dead_station = DeadStation()
         elif t == "trash_field":
@@ -460,6 +496,9 @@ def build_checkpoint(game) -> dict:
             "event_cd": rm._event_cd,
             "kress_cd": rm._kress_cd,
             "collector_cd": rm._collector_cd,
+            "compliance_spawn_cd": getattr(rm, "_compliance_spawn_cd", 12.0),
+            "emp_burst_available": getattr(rm, "_emp_burst_available", False),
+            "emp_burst_active_t": getattr(rm, "_emp_burst_active_t", 0.0),
             "kress_called": rm._kress_called_this_sector,
             "kress_tip_pending": getattr(rm, "_kress_tip_pending", False),
             "barge_suppression_t": getattr(rm, "_barge_suppression_t", 0.0),
@@ -506,6 +545,9 @@ def restore_checkpoint(game, data: dict) -> bool:
     rm._event_cd = float(rmd.get("event_cd", 40.0))
     rm._kress_cd = float(rmd.get("kress_cd", 80.0))
     rm._collector_cd = float(rmd.get("collector_cd", 110.0))
+    rm._compliance_spawn_cd = float(rmd.get("compliance_spawn_cd", 12.0))
+    rm._emp_burst_available = bool(rmd.get("emp_burst_available", False))
+    rm._emp_burst_active_t = float(rmd.get("emp_burst_active_t", 0.0))
     rm._kress_called_this_sector = bool(rmd.get("kress_called", False))
     rm._kress_tip_pending = bool(rmd.get("kress_tip_pending", False))
     rm._barge_suppression_t = float(rmd.get("barge_suppression_t", 0.0))

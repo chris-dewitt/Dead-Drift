@@ -2235,6 +2235,10 @@ class RunManager:
         return self._ai_ships
 
     @property
+    def compliance_vessels(self) -> list:
+        return self._compliance_vessels
+
+    @property
     def debris_cloud(self) -> DebrisCloud | None:
         return self._debris_cloud
 

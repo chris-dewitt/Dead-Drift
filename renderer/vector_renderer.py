@@ -210,6 +210,7 @@ class VectorRenderer:
         self._draw_bullets(ship)
         self._draw_alien(run_mgr, t)
         self._draw_ai_ships(run_mgr, t)
+        self._draw_compliance_vessels(run_mgr, t)
         self._draw_barges(run_mgr, ship, t)
         self._draw_barge_radar(run_mgr, ship, t)
         self._draw_trail(ship, t)
@@ -1608,6 +1609,43 @@ class VectorRenderer:
                 continue
             self._draw_ai_ship(ship, t)
             self._draw_ai_ship_status(ship, t)
+
+    def _draw_compliance_vessels(self, run_mgr, t: float):
+        vessels = getattr(run_mgr, "compliance_vessels", None)
+        if not vessels:
+            return
+        for vessel in vessels:
+            if not getattr(vessel, "alive", False):
+                continue
+            self._draw_compliance_vessel(vessel, t)
+
+    def _draw_compliance_vessel(self, vessel, t: float):
+        x, y = int(vessel.pos.x), int(vessel.pos.y)
+        heading = math.radians(getattr(vessel, "heading", 0.0))
+        cos_a, sin_a = math.cos(heading), math.sin(heading)
+
+        def world(pt):
+            lx, ly = pt
+            return (int(lx * cos_a - ly * sin_a + x),
+                    int(lx * sin_a + ly * cos_a + y))
+
+        hull = [world(p) for p in ((28, 0), (6, -16), (-24, -12), (-16, 0), (-24, 12), (6, 16))]
+        state = getattr(vessel, "state", "")
+        stunned = state == "stunned"
+        flash = max(0.0, min(1.0, getattr(vessel, "hit_flash_t", 0.0) / 0.18))
+        pulse = 0.5 + 0.5 * math.sin(t * 7.0)
+        hull_col = (64, 76, 82) if not stunned else (34, 56, 78)
+        edge_col = (170, 235, 240) if not stunned else (80, 150, 255)
+        if flash > 0:
+            edge_col = (255, int(80 + 120 * flash), int(80 + 80 * flash))
+
+        pygame.draw.polygon(self.surface, hull_col, hull)
+        pygame.draw.polygon(self.surface, edge_col, hull, 2)
+        pygame.draw.line(self.surface, (30, 210, 220), world((-8, -8)), world((10, 0)), 1)
+        pygame.draw.line(self.surface, (30, 210, 220), world((-8, 8)), world((10, 0)), 1)
+        pygame.draw.circle(self.surface, edge_col, (x, y), int(3 + 2 * pulse), 1)
+        if stunned:
+            pygame.draw.circle(self.surface, (90, 150, 255), (x, y), 30, 1)
 
     def _draw_ai_ship(self, aiship, t: float) -> None:
         from antagonists.ai_ship import (
