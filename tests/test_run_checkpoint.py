@@ -58,3 +58,42 @@ def test_checkpoint_roundtrip(mini_game, tmp_path):
     assert mini_game.ship.hull == pytest.approx(
         float(json.loads(path.read_text())["ship"]["hull"])
     )
+
+
+def test_checkpoint_roundtrip_preserves_encrypted_drive(mini_game, tmp_path):
+    from cargo.encrypted_drive import EncryptedDrive
+
+    drive = EncryptedDrive()
+    drive.trace_level = 0.75
+    drive._ping_t = 9.5
+    mini_game.ship.cargo = drive
+
+    path = tmp_path / "drive-run.json"
+    save_checkpoint_file(path, mini_game)
+    data = load_checkpoint_file(path)
+    assert data is not None
+
+    mini_game.ship.cargo = None
+    assert restore_checkpoint(mini_game, data) is True
+
+    restored = mini_game.ship.cargo
+    assert isinstance(restored, EncryptedDrive)
+    assert restored.trace_level == pytest.approx(0.75)
+    assert restored._ping_t == pytest.approx(9.5)
+
+
+def test_checkpoint_roundtrip_preserves_gun_upgrades(mini_game, tmp_path):
+    mini_game.ship.gun.fire_rate_mult = 2.0
+    mini_game.ship.gun.damage_mult = 2
+
+    path = tmp_path / "gun-run.json"
+    save_checkpoint_file(path, mini_game)
+    data = load_checkpoint_file(path)
+    assert data is not None
+
+    mini_game.ship.gun.fire_rate_mult = 1.0
+    mini_game.ship.gun.damage_mult = 1
+    assert restore_checkpoint(mini_game, data) is True
+
+    assert mini_game.ship.gun.fire_rate_mult == pytest.approx(2.0)
+    assert mini_game.ship.gun.damage_mult == 2

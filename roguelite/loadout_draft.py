@@ -590,7 +590,7 @@ class LoadoutDraft:
     def _draw_cargo_preview(self, surface, rect, cargo, slot_i, t):
         # Identify which cargo this is via the cargo_idx list
         idx_in_pool = self._cargo_idx[self._selected[slot_i]]
-        key = ["ARCHIVE", "SHROOMS", "PAPERS", "VIP"][idx_in_pool]
+        key = _CARGO_META[idx_in_pool]["key"]
 
         cx, cy = rect.centerx, rect.centery - 4
 
@@ -600,8 +600,10 @@ class LoadoutDraft:
             self._draw_cargo_shrooms(surface, cx, cy, t)
         elif key == "PAPERS":
             self._draw_cargo_papers(surface, cx, cy, t)
-        else:
+        elif key == "VIP":
             self._draw_cargo_vip(surface, cx, cy, t)
+        else:
+            self._draw_cargo_drive(surface, cx, cy, t, picked_up=(key == "DRIVE"))
 
         font_spec = get_font(10)
         label = f"PAYLOAD // {key}"
@@ -723,6 +725,28 @@ class LoadoutDraft:
             py = int(cy + math.sin(phase) * r)
             c  = _hsv((i * 0.1 + t * 0.15) % 1.0, 0.7, 0.85)
             pygame.draw.circle(surface, c, (px, py), 2)
+
+    # ----- cargo: encrypted drive (empty bay / data shard) -----
+    def _draw_cargo_drive(self, surface, cx, cy, t, picked_up: bool):
+        # Chapter 5 starts with an empty bay; Chapter 6 carries the drive.
+        bay = pygame.Rect(cx - 78, cy - 44, 156, 88)
+        pygame.draw.rect(surface, (8, 12, 16), bay)
+        pygame.draw.rect(surface, (45, 80, 95), bay, 2)
+        pygame.draw.line(surface, (20, 45, 55), (bay.left + 10, cy), (bay.right - 10, cy), 1)
+        for x in range(bay.left + 14, bay.right - 12, 18):
+            pygame.draw.line(surface, (20, 55, 65), (x, bay.top + 8), (x + 10, bay.bottom - 8), 1)
+
+        if picked_up:
+            drive = pygame.Rect(cx - 36, cy - 12, 72, 24)
+            pygame.draw.rect(surface, (18, 22, 26), drive, border_radius=4)
+            pygame.draw.rect(surface, (120, 220, 230), drive, 2, border_radius=4)
+            pygame.draw.rect(surface, (95, 110, 120), pygame.Rect(drive.right - 10, cy - 8, 16, 16), border_radius=2)
+            pulse = 0.45 + 0.55 * math.sin(t * 4.0)
+            pygame.draw.circle(surface, (int(60 + 160 * pulse), 255, 230), (drive.left + 14, cy), 4)
+        else:
+            font = get_font(16, bold=True)
+            text = font.render("EMPTY HOLD", True, (95, 145, 150))
+            surface.blit(text, (cx - text.get_width() // 2, cy - text.get_height() // 2))
 
     # ------------------------------------------------------------------ bax commentary
     def _draw_bax_panel(self, surface, t):

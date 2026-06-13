@@ -51,6 +51,11 @@ def _cargo_to_dict(cargo) -> dict | None:
         })
     elif t == "SchrodingerVIP":
         d["alive_state"] = getattr(cargo, "alive_state", "unknown")
+    elif t == "EncryptedDrive":
+        d.update({
+            "trace_level": getattr(cargo, "trace_level", 0.0),
+            "ping_t": getattr(cargo, "_ping_t", 0.0),
+        })
     return d
 
 
@@ -59,12 +64,14 @@ def _cargo_from_dict(d: dict | None):
         return None
     from cargo.acoustic_archive import AcousticArchive
     from cargo.epi_shrooms import EpistemologicalShrooms
+    from cargo.encrypted_drive import EncryptedDrive
     from cargo.paperwork import SentientPaperwork
     from cargo.schrodinger_vip import SchrodingerVIP
 
     factories = {
         "AcousticArchive": AcousticArchive,
         "EpistemologicalShrooms": EpistemologicalShrooms,
+        "EncryptedDrive": EncryptedDrive,
         "SentientPaperwork": SentientPaperwork,
         "SchrodingerVIP": SchrodingerVIP,
     }
@@ -86,6 +93,9 @@ def _cargo_from_dict(d: dict | None):
         c._next_trigger = float(d.get("next_trigger", 20.0))
     elif d["type"] == "SchrodingerVIP":
         c.alive_state = d.get("alive_state", "unknown")
+    elif d["type"] == "EncryptedDrive":
+        c.trace_level = float(d.get("trace_level", 0.0))
+        c._ping_t = float(d.get("ping_t", 0.0))
     return c
 
 
@@ -137,6 +147,8 @@ def _ship_to_dict(ship) -> dict:
         "gun": {
             "cooldown": ship.gun._cooldown,
             "jam_t": ship.gun._jam_t,
+            "fire_rate_mult": ship.gun.fire_rate_mult,
+            "damage_mult": ship.gun.damage_mult,
             "bullets": bullets,
         },
     }
@@ -175,6 +187,8 @@ def _restore_ship(ship, d: dict) -> None:
     g = d.get("gun", {})
     ship.gun._cooldown = float(g.get("cooldown", 0.0))
     ship.gun._jam_t = float(g.get("jam_t", 0.0))
+    ship.gun.fire_rate_mult = float(g.get("fire_rate_mult", 1.0))
+    ship.gun.damage_mult = int(g.get("damage_mult", 1))
     ship.gun.bullets.clear()
     for b in g.get("bullets", []):
         bul = Bullet(_vec({"x": b["x"], "y": b["y"]}), 0.0)
