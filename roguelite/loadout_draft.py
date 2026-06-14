@@ -382,6 +382,8 @@ class LoadoutDraft:
             2: "CH.2  THE MYCORRHIZAL PAYLOAD",
             3: "CH.3  THE PAPERWORK",
             4: "CH.4  THE SCHRÖDINGER VIP",
+            5: "CH.5  THE EDGE",
+            6: "CH.6  COMPLIANCE",
         }
         ch = chapter_names.get(self._chapter, f"CH.{self._chapter}")
         ch_surf = font_ch.render(ch, True, (200, 140, 0))
@@ -590,7 +592,7 @@ class LoadoutDraft:
     def _draw_cargo_preview(self, surface, rect, cargo, slot_i, t):
         # Identify which cargo this is via the cargo_idx list
         idx_in_pool = self._cargo_idx[self._selected[slot_i]]
-        key = ["ARCHIVE", "SHROOMS", "PAPERS", "VIP"][idx_in_pool]
+        key = _CARGO_META[idx_in_pool]["key"]
 
         cx, cy = rect.centerx, rect.centery - 4
 
@@ -600,6 +602,8 @@ class LoadoutDraft:
             self._draw_cargo_shrooms(surface, cx, cy, t)
         elif key == "PAPERS":
             self._draw_cargo_papers(surface, cx, cy, t)
+        elif key in ("DRIVE-PICKUP", "DRIVE"):
+            self._draw_cargo_drive(surface, cx, cy, t, empty=(key == "DRIVE-PICKUP"))
         else:
             self._draw_cargo_vip(surface, cx, cy, t)
 
@@ -723,6 +727,35 @@ class LoadoutDraft:
             py = int(cy + math.sin(phase) * r)
             c  = _hsv((i * 0.1 + t * 0.15) % 1.0, 0.7, 0.85)
             pygame.draw.circle(surface, c, (px, py), 2)
+
+    # ----- cargo: encrypted drive (data shard / empty-hold rendezvous) -----
+    def _draw_cargo_drive(self, surface, cx, cy, t, *, empty: bool):
+        pulse = 0.5 + 0.5 * math.sin(t * 3.0)
+        glow = int(70 + 70 * pulse)
+        pygame.draw.circle(surface, (10, 20, 24), (cx, cy), 76)
+        pygame.draw.circle(surface, (0, glow, glow), (cx, cy), 76, 2)
+
+        # Data shard silhouette.
+        body = [
+            (cx - 16, cy - 58),
+            (cx + 38, cy - 28),
+            (cx + 18, cy + 58),
+            (cx - 42, cy + 24),
+        ]
+        fill = (18, 28, 32) if empty else (12, 34, 44)
+        edge = (80, 140, 150) if empty else (0, 220, 230)
+        pygame.draw.polygon(surface, fill, body)
+        pygame.draw.polygon(surface, edge, body, 2)
+        for i in range(5):
+            y = cy - 30 + i * 16
+            x1 = cx - 22 + i * 3
+            x2 = cx + 22 - i * 2
+            pygame.draw.line(surface, (0, 120 + i * 18, 130), (x1, y), (x2, y), 1)
+
+        font = get_font(10, bold=True)
+        label = "RENDEZVOUS" if empty else "ZERO-WRITE"
+        text = font.render(label, True, edge)
+        surface.blit(text, (cx - text.get_width() // 2, cy + 70))
 
     # ------------------------------------------------------------------ bax commentary
     def _draw_bax_panel(self, surface, t):

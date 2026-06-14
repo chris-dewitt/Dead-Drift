@@ -512,6 +512,7 @@ class Game:
         if self.run_mgr._sector is None and not self.run_mgr.draft.is_confirmed():
             return
         try:
+            self.meta.save()
             self.save_mgr.save_run_checkpoint(self)
         except OSError:
             pass
@@ -530,6 +531,17 @@ class Game:
                     target = GameState.FLIGHT
                 if target == GameState.SHOP:
                     self._shop = ShopScreen(self.run_mgr, self.ship)
+                elif target == GameState.DELIVERY:
+                    chapter = int((data or {}).get("chapter", self.run_mgr._current_chapter()))
+                    self._delivery_chapter = chapter
+                    self._delivery = DeliverySequence(self.meta, chapter=chapter,
+                                                      ship=self.ship)
+                    self._delivery._total_time_for_hardcore = float(
+                        getattr(self.run_mgr, "_run_total_time", 0.0))
+                elif target == GameState.TERMINAL:
+                    # Terminal conversations are transient and not checkpointed.
+                    # Resume in flight so the player can re-open the comms path.
+                    target = GameState.FLIGHT
                 self._goto(target)
                 return
         if self.save_mgr.slot_info(self.save_mgr.active_slot_id).exists:
@@ -1712,12 +1724,16 @@ class Game:
         2: "MYCORRHIZAL PAYLOAD",
         3: "THE PAPERWORK",
         4: "SCHRÖDINGER VIP",
+        5: "THE EDGE",
+        6: "COMPLIANCE",
     }
     _CHAPTER_SUBTITLES = {
         1: "contraband uncompressed audio",
         2: "weaponized epistemological fungi",
         3: "telepathic bureaucratic forms",
         4: "sealed box. alive AND dead.",
+        5: "rendezvous at the edge of Union reach",
+        6: "Nova Soma compliance server breach",
     }
     _INTERSTITIAL_BAX = {
         1: ("Archive's in their hands. Don't think too hard about who 'they' are. "
@@ -1730,15 +1746,19 @@ class Game:
             "Whoever runs that office is doomed and doesn't know it yet. "
             "Next: one passenger, sealed box. Don't open it. ...Fine, open it. I'm curious too."),
         4: ("All four cargos. All four payouts. Local 404 didn't win. Neither did we. "
-            "We just kept goin'. That's the gig. Rest up. "
-            "We'll be back. We're always back."),
+            "We just kept goin'. That's the gig. But Marrow's got one more call. "
+            "We're headin' for The Edge."),
+        5: ("Chen's drive is aboard. Every corporate sensor in the region just learned our name. "
+            "Next stop: Nova Soma. Keep the Q key close; she left us a little insurance."),
+        6: ("Ledger wiped. Nova Soma blinked. Local 404 didn't win. Neither did we. "
+            "We just kept goin'. That's the gig. Rest up. We'll be back. We're always back."),
     }
 
     def _enter_interstitial(self):
         # Mark delivery complete in meta_progression handled by DeliverySequence._compute_result
         completed = self._delivery_chapter
         next_ch = completed + 1
-        campaign_end = next_ch > 4 or len(self.meta.chapters_completed) >= 4
+        campaign_end = next_ch > 6 or len(self.meta.chapters_completed) >= 6
         self._interstitial_completed     = completed
         self._interstitial_next          = next_ch
         self._interstitial_campaign_end  = campaign_end

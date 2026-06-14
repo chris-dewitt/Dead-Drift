@@ -51,6 +51,9 @@ def _cargo_to_dict(cargo) -> dict | None:
         })
     elif t == "SchrodingerVIP":
         d["alive_state"] = getattr(cargo, "alive_state", "unknown")
+    elif t == "EncryptedDrive":
+        d["trace_level"] = getattr(cargo, "trace_level", 0.0)
+        d["ping_t"] = getattr(cargo, "_ping_t", 0.0)
     return d
 
 
@@ -59,12 +62,14 @@ def _cargo_from_dict(d: dict | None):
         return None
     from cargo.acoustic_archive import AcousticArchive
     from cargo.epi_shrooms import EpistemologicalShrooms
+    from cargo.encrypted_drive import EncryptedDrive
     from cargo.paperwork import SentientPaperwork
     from cargo.schrodinger_vip import SchrodingerVIP
 
     factories = {
         "AcousticArchive": AcousticArchive,
         "EpistemologicalShrooms": EpistemologicalShrooms,
+        "EncryptedDrive": EncryptedDrive,
         "SentientPaperwork": SentientPaperwork,
         "SchrodingerVIP": SchrodingerVIP,
     }
@@ -86,6 +91,9 @@ def _cargo_from_dict(d: dict | None):
         c._next_trigger = float(d.get("next_trigger", 20.0))
     elif d["type"] == "SchrodingerVIP":
         c.alive_state = d.get("alive_state", "unknown")
+    elif d["type"] == "EncryptedDrive":
+        c.trace_level = float(d.get("trace_level", 0.0))
+        c._ping_t = float(d.get("ping_t", 0.0))
     return c
 
 
@@ -449,6 +457,9 @@ def build_checkpoint(game) -> dict:
             "kress_called": rm._kress_called_this_sector,
             "kress_tip_pending": getattr(rm, "_kress_tip_pending", False),
             "barge_suppression_t": getattr(rm, "_barge_suppression_t", 0.0),
+            "compliance_spawn_cd": getattr(rm, "_compliance_spawn_cd", 12.0),
+            "emp_burst_available": getattr(rm, "_emp_burst_available", False),
+            "emp_burst_active_t": getattr(rm, "_emp_burst_active_t", 0.0),
             "run_debt_reduced": rm._run_debt_reduced,
             "run_snaps": rm._run_snaps,
             "run_slingshots": rm._run_slingshots,
@@ -495,6 +506,9 @@ def restore_checkpoint(game, data: dict) -> bool:
     rm._kress_called_this_sector = bool(rmd.get("kress_called", False))
     rm._kress_tip_pending = bool(rmd.get("kress_tip_pending", False))
     rm._barge_suppression_t = float(rmd.get("barge_suppression_t", 0.0))
+    rm._compliance_spawn_cd = float(rmd.get("compliance_spawn_cd", 12.0))
+    rm._emp_burst_available = bool(rmd.get("emp_burst_available", False))
+    rm._emp_burst_active_t = float(rmd.get("emp_burst_active_t", 0.0))
     rm._run_debt_reduced = int(rmd.get("run_debt_reduced", 0))
     rm._run_snaps = int(rmd.get("run_snaps", 0))
     rm._run_slingshots = int(rmd.get("run_slingshots", 0))
