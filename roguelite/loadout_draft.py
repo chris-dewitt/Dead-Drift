@@ -382,6 +382,8 @@ class LoadoutDraft:
             2: "CH.2  THE MYCORRHIZAL PAYLOAD",
             3: "CH.3  THE PAPERWORK",
             4: "CH.4  THE SCHRÖDINGER VIP",
+            5: "CH.5  THE EDGE",
+            6: "CH.6  COMPLIANCE",
         }
         ch = chapter_names.get(self._chapter, f"CH.{self._chapter}")
         ch_surf = font_ch.render(ch, True, (200, 140, 0))

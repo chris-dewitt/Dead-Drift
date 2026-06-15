@@ -92,7 +92,8 @@ _DEFAULT_BPM = 96.0
 # Per-chapter home keys (root frequencies in Hz).
 # Am=220, Cm=261.6, F#m=185, Em=164.8 (Locrian)
 _CHAPTER_ROOTS = {1: 220.0, 2: 261.6, 3: 185.0, 4: 164.81}
-_CHAPTER_MODES = {1: "minor", 2: "dorian", 3: "sus2", 4: "locrian"}
+_CHAPTER_MODES = {1: "minor", 2: "dorian", 3: "sus2", 4: "locrian",
+                  5: "dorian", 6: "minor"}
 
 # 5 BPM tiers driven by flight_pressure
 _DRUM_BPMS = [84.0, 96.0, 108.0, 120.0, 128.0]
@@ -248,7 +249,11 @@ class AudioManager:
         self._music_active = 0
         self._music_xfade  = 0.0
         self._music_xfade_dur = 2.5
-        self._music_target_vol = 0.34
+        # Aliveness H.1 — "less is more" pact (SOUNDTRACK_PLAN v2 §2.5): the v2
+        # mix sits quieter than the jarring v1 so silence can read as a stem.
+        # This is the single global music lever; tune here before touching the
+        # per-scene targets. (See docs/SOUNDTRACK_IMPL_H1.md.)
+        self._music_target_vol = 0.27
 
         # Bax voice timer
         self._bax_speaking   = False
@@ -371,6 +376,8 @@ class AudioManager:
             2: (5.0, 0.30),
             3: (1.6, 0.36),
             4: (4.0, 0.28),
+            5: (3.0, 0.40),   # The Edge — warm, intimate, frequent
+            6: (1.4, 0.34),   # Compliance — the clock; tight, insistent
         }
         # Cached signature sounds per chapter so we don't rebuild on every cue.
         self._corr_sig_cache: dict[int, list[pygame.mixer.Sound]] = {}
@@ -487,7 +494,7 @@ class AudioManager:
             self._radio_station_order = []
 
         print("[audio] loading chapter inflection modules…", flush=True)
-        for ch_num in (1, 2, 3, 4):
+        for ch_num in (1, 2, 3, 4, 5, 6):
             try:
                 mod = __import__(f"audio.chapter_{ch_num}", fromlist=["*"])
                 self._chapter_modules[ch_num] = mod

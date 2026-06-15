@@ -82,6 +82,34 @@ _GARY_DOCK_LINES: dict[int, list[str]] = {
         "Received. Final chapter. "
         "Outstanding fees still apply. Outstanding run, though. ...Still outstanding fees.",
     ],
+    # Ch.5 — The Edge. No Union dock here. Fitz waves you in off the books.
+    5: [
+        "There she is. Off the grid and still in one piece. Get in here.",
+        "Fitz. Harbour control, if you can call it that. "
+        "No transponder, no log, no Gary. Welcome to The Edge.",
+        "You made it past the patrols. Good. Chen's waiting. Don't keep her.",
+    ],
+    # Ch.6 — Compliance. Nova Soma greets you itself. Polite. Terrifying.
+    6: [
+        "Nova Soma Station welcomes you, courier. "
+        "Please proceed to the ledger floor. Compliance is appreciated.",
+        "Bowen. Central Ledger. We've been expecting your delivery. "
+        "*smiles* Do come in.",
+        "Docking authorised. Your account has been... noted. "
+        "Welcome to Nova Soma. Mind the gap.",
+    ],
+}
+
+# ── Aliveness H.3 — per-chapter dock receiver (who greets you at the clamp) ──
+# Chapters 1–4 are the Union loop (Gary). 5–6 leave the loop: The Edge is the
+# Remnants (Fitz), Compliance is Nova Soma itself (Bowen).
+_DOCK_RECEIVER: dict[int, str] = {
+    1: "GARY PRUITT",
+    2: "GARY PRUITT",
+    3: "GARY PRUITT",
+    4: "GARY PRUITT",
+    5: "FITZ",
+    6: "BOWEN",
 }
 
 # ── Aliveness G.2 — Dock Control radio (Beat 1 approach) ────────────────────
@@ -129,6 +157,16 @@ _BAX_DOCK_WINDUP_DELIVERY: dict[int, list[str]] = {
         "Clamps on. I'm not saying I'm impressed but. ...You know.",
         "Final chapter. Clamps are on. ...You did good. Don't tell anyone I said that.",
     ],
+    5: [
+        "The Edge. No Union, no scanners, no Gary. ...I could get used to this.",
+        "Clamps on. Smells like solder and somebody's actual cooking. Feels like home.",
+        "Docked. Off the grid. First time in a while I don't want to leave.",
+    ],
+    6: [
+        "Nova Soma. The big one. ...I don't like how quiet it is in here.",
+        "Clamps on. Everything's clean and nothing's kind. Stay sharp.",
+        "We're inside the ledger. End of the line. ...Whatever happens, I'm with you.",
+    ],
 }
 
 
@@ -144,6 +182,8 @@ _STATION_THEMES = {
     2: ((40, 120, 200), (80, 200, 160), "BIOLAB STATION RAYA-7"),
     3: ((140, 160, 80), (180, 200, 100), "NOVA SOMA COMPLIANCE HUB 3"),
     4: ((200, 160, 40), (255, 210, 80), "THE MERIDIAN HOTEL — ORBITAL"),
+    5: ((150, 70, 40),  (230, 140, 70), "THE EDGE / REMNANT HARBOR"),
+    6: ((90, 150, 180), (200, 235, 255), "NOVA SOMA STATION — CENTRAL LEDGER"),
 }
 
 
@@ -990,8 +1030,9 @@ class DeliverySequence:
             self._gary_line_fired = True
             lines = _GARY_DOCK_LINES.get(self.chapter, _GARY_DOCK_LINES[1])
             line = random.choice(lines)
+            speaker = _DOCK_RECEIVER.get(self.chapter, "GARY PRUITT")
             bus.emit(EVT_DOCK_GARY_LINE, line=line)
-            bus.emit(EVT_COMMS_SPEAK, speaker="GARY PRUITT", line=line)
+            bus.emit(EVT_COMMS_SPEAK, speaker=speaker, line=line)
 
         if self._clamp_anim_t >= 1.8 and self._run is None:
             # G.5 — chapter-specific Bax dock wind-down (smooth) or generic rough feedback

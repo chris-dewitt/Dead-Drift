@@ -42,9 +42,9 @@ meantime. Sandbox flight without NLTK at all: `play.py`.
 | **Interstitial** | Chapter bridge → next chapter loadout or campaign complete |
 | **Death** | Decanting invoice → **ENTER** → menu; **retry same sector** on next run start |
 
-Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sentient Paperwork, Schrödinger VIP). Each cargo adds a unique mid-flight mechanic.
+Six chapters. Chapters 1–4 each carry a distinct cargo (Acoustic Archive, Epistemological Shrooms, Sentient Paperwork, Schrödinger VIP), each adding a unique mid-flight mechanic. Chapters 5–6 — **The Edge** and **Compliance** — close the campaign: you pick up Chen's encrypted drive off-grid, then carry it into Nova Soma's Central Ledger.
 
-> **Cargo mechanics:** Ch.2 Epistemological Shrooms — periodic control inversion (Aliveness A.2). Ch.3+ cargos verified in play.
+> **Cargo mechanics:** Ch.2 Epistemological Shrooms — periodic control inversion (Aliveness A.2). Ch.3+ cargos verified in play. Ch.5–6 run the EncryptedDrive payload (acquired in-corridor, then hunted by Compliance vessels).
 
 ---
 
@@ -132,7 +132,7 @@ Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sent
 - Engine tiers, drums, bass, pad, harmonica licks, guitar phrases
 - BPM scales with flight pressure; barge proximity motif
 - Scene mixing: menu, flight, terminal, shop, delivery, decanting, radio
-- Per-chapter inflection modules (`audio/chapter_1.py` … `chapter_4.py`)
+- Per-chapter inflection modules (`audio/chapter_1.py` … `chapter_6.py`)
 
 Spec + implementation status → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLAN.md)
 
@@ -153,6 +153,8 @@ Spec + implementation status → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLA
 | TOLL AUTHORITY | Mid-sector toll booth |
 | RELAY-7 FELIX | Nervous fence |
 | INSPECTOR HOLT | STA cargo inspection |
+| EDMUND | Local 404 idealist rep (Union charter true-believer) |
+| VINCE | Local 404 corrupt rep (skims impounds, takes bribes) |
 
 ---
 
