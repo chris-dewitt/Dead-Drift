@@ -51,6 +51,11 @@ def _cargo_to_dict(cargo) -> dict | None:
         })
     elif t == "SchrodingerVIP":
         d["alive_state"] = getattr(cargo, "alive_state", "unknown")
+    elif t == "EncryptedDrive":
+        d.update({
+            "trace_level": getattr(cargo, "trace_level", 0.0),
+            "ping_t": getattr(cargo, "_ping_t", 0.0),
+        })
     return d
 
 
@@ -61,12 +66,14 @@ def _cargo_from_dict(d: dict | None):
     from cargo.epi_shrooms import EpistemologicalShrooms
     from cargo.paperwork import SentientPaperwork
     from cargo.schrodinger_vip import SchrodingerVIP
+    from cargo.encrypted_drive import EncryptedDrive
 
     factories = {
         "AcousticArchive": AcousticArchive,
         "EpistemologicalShrooms": EpistemologicalShrooms,
         "SentientPaperwork": SentientPaperwork,
         "SchrodingerVIP": SchrodingerVIP,
+        "EncryptedDrive": EncryptedDrive,
     }
     cls = factories.get(d["type"])
     if cls is None:
@@ -86,6 +93,9 @@ def _cargo_from_dict(d: dict | None):
         c._next_trigger = float(d.get("next_trigger", 20.0))
     elif d["type"] == "SchrodingerVIP":
         c.alive_state = d.get("alive_state", "unknown")
+    elif d["type"] == "EncryptedDrive":
+        c.trace_level = float(d.get("trace_level", 0.0))
+        c._ping_t = float(d.get("ping_t", 0.0))
     return c
 
 
@@ -334,6 +344,35 @@ def _alien_from(d: dict):
     return a
 
 
+def _compliance_dict(v) -> dict:
+    return {
+        "t": "compliance_vessel",
+        "x": v.pos.x, "y": v.pos.y,
+        "vx": v.vel.x, "vy": v.vel.y,
+        "state": v.state,
+        "state_t": getattr(v, "_state_t", 0.0),
+        "hits": getattr(v, "_hits", 0),
+        "stun_t": getattr(v, "_stun_t", 0.0),
+        "hit_flash_t": getattr(v, "_hit_flash_t", 0.0),
+        "alive": v.alive,
+        "heading": getattr(v, "heading", 0.0),
+    }
+
+
+def _compliance_from(d: dict, run_mgr):
+    from antagonists.compliance_vessel import ComplianceVessel
+    v = ComplianceVessel(d["x"], d["y"], run_mgr)
+    v.vel = Vec2(d.get("vx", 0.0), d.get("vy", 0.0))
+    v.state = d.get("state", v.state)
+    v._state_t = float(d.get("state_t", 0.0))
+    v._hits = int(d.get("hits", 0))
+    v._stun_t = float(d.get("stun_t", 0.0))
+    v._hit_flash_t = float(d.get("hit_flash_t", 0.0))
+    v.alive = bool(d.get("alive", True))
+    v.heading = float(d.get("heading", 0.0))
+    return v
+
+
 def _entities_to_dict(rm) -> list[dict]:
     out: list[dict] = []
     for r in rm._debris:
@@ -346,6 +385,8 @@ def _entities_to_dict(rm) -> list[dict]:
         out.append(_barge_dict(b))
     if rm._alien is not None:
         out.append(_alien_dict(rm._alien))
+    for v in getattr(rm, "_compliance_vessels", []):
+        out.append(_compliance_dict(v))
     if rm._dead_station is not None:
         out.append({"t": "dead_station"})
     if rm._trash_field is not None:
@@ -373,6 +414,8 @@ def _restore_entities(rm, entities: list[dict]) -> None:
     rm._canisters.clear()
     rm._satellites.clear()
     rm._barges.clear()
+    if hasattr(rm, "_compliance_vessels"):
+        rm._compliance_vessels.clear()
     rm._alien = None
     rm._wrecks.clear()
     rm._dead_station = None
@@ -393,6 +436,8 @@ def _restore_entities(rm, entities: list[dict]) -> None:
             rm._barges.append(_barge_from(d, rm))
         elif t == "alien":
             rm._alien = _alien_from(d)
+        elif t == "compliance_vessel":
+            rm._compliance_vessels.append(_compliance_from(d, rm))
         elif t == "dead_station":
             rm._dead_station = DeadStation()
         elif t == "trash_field":
@@ -418,6 +463,8 @@ def build_checkpoint(game) -> dict:
     state_name = game.states.state.name
     if game.states.state.name == "PAUSED" and game._state_before_pause is not None:
         state_name = game._state_before_pause.name
+    if state_name in {"TERMINAL", "DELIVERY", "INTERSTITIAL"}:
+        state_name = "FLIGHT"
 
     return {
         "version": CHECKPOINT_VERSION,
@@ -449,6 +496,9 @@ def build_checkpoint(game) -> dict:
             "kress_called": rm._kress_called_this_sector,
             "kress_tip_pending": getattr(rm, "_kress_tip_pending", False),
             "barge_suppression_t": getattr(rm, "_barge_suppression_t", 0.0),
+            "compliance_spawn_cd": getattr(rm, "_compliance_spawn_cd", 12.0),
+            "emp_burst_available": getattr(rm, "_emp_burst_available", False),
+            "emp_burst_active_t": getattr(rm, "_emp_burst_active_t", 0.0),
             "run_debt_reduced": rm._run_debt_reduced,
             "run_snaps": rm._run_snaps,
             "run_slingshots": rm._run_slingshots,
@@ -495,6 +545,9 @@ def restore_checkpoint(game, data: dict) -> bool:
     rm._kress_called_this_sector = bool(rmd.get("kress_called", False))
     rm._kress_tip_pending = bool(rmd.get("kress_tip_pending", False))
     rm._barge_suppression_t = float(rmd.get("barge_suppression_t", 0.0))
+    rm._compliance_spawn_cd = float(rmd.get("compliance_spawn_cd", 12.0))
+    rm._emp_burst_available = bool(rmd.get("emp_burst_available", False))
+    rm._emp_burst_active_t = float(rmd.get("emp_burst_active_t", 0.0))
     rm._run_debt_reduced = int(rmd.get("run_debt_reduced", 0))
     rm._run_snaps = int(rmd.get("run_snaps", 0))
     rm._run_slingshots = int(rmd.get("run_slingshots", 0))
@@ -508,6 +561,9 @@ def restore_checkpoint(game, data: dict) -> bool:
     rm._active_terminal = None
     rm._intercepting_barge = None
     rm._ship = ship
+    saved_chapter = int(data.get("chapter", 0) or 0)
+    if 1 <= saved_chapter <= 6:
+        rm._chapter_override = saved_chapter
 
     sec = data.get("sector")
     if sec:

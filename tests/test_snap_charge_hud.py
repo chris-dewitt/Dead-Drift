@@ -44,3 +44,24 @@ def test_snap_charge_draws_only_when_tethered():
 
     hud.draw(surface, snap_charge=0.5)
     assert surface.get_at((60, 208))[:3] != (0, 0, 0)
+
+
+def test_vector_renderer_draws_compliance_vessels():
+    from physics.body import Vec2
+    from renderer.vector_renderer import VectorRenderer
+
+    pygame.font.init()
+    surface = pygame.Surface((320, 240))
+    renderer = VectorRenderer(surface)
+    vessel = SimpleNamespace(
+        pos=Vec2(160.0, 120.0),
+        heading=0.0,
+        alive=True,
+        hit_flash_t=0.0,
+        is_stunned=False,
+    )
+    run_mgr = SimpleNamespace(compliance_vessels=[vessel])
+
+    renderer._draw_compliance_vessels(run_mgr, t=0.0)
+
+    assert surface.get_at((160, 120))[:3] != (0, 0, 0)

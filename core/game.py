@@ -50,6 +50,8 @@ def _format_slingshot_flash_value(stats: dict) -> str:
 
 
 class Game:
+    _TOTAL_CHAPTERS = 6
+
     _PAUSEABLE = frozenset({
         GameState.FLIGHT,
         GameState.TERMINAL,
@@ -1712,12 +1714,16 @@ class Game:
         2: "MYCORRHIZAL PAYLOAD",
         3: "THE PAPERWORK",
         4: "SCHRÖDINGER VIP",
+        5: "THE EDGE",
+        6: "COMPLIANCE",
     }
     _CHAPTER_SUBTITLES = {
         1: "contraband uncompressed audio",
         2: "weaponized epistemological fungi",
         3: "telepathic bureaucratic forms",
         4: "sealed box. alive AND dead.",
+        5: "rendezvous at the remnant edge",
+        6: "plug in the debt-wipe and hold",
     }
     _INTERSTITIAL_BAX = {
         1: ("Archive's in their hands. Don't think too hard about who 'they' are. "
@@ -1731,14 +1737,21 @@ class Game:
             "Next: one passenger, sealed box. Don't open it. ...Fine, open it. I'm curious too."),
         4: ("All four cargos. All four payouts. Local 404 didn't win. Neither did we. "
             "We just kept goin'. That's the gig. Rest up. "
-            "We'll be back. We're always back."),
+            "We'll be back. We're always back. Except Chen's call just came in, so... less rest."),
+        5: ("Chen handed us the drive and somehow made treason sound tidy. "
+            "Nova Soma heard the handoff, which means the next stop is their front door. "
+            "One last run, mate. Plug it in and don't let Compliance write the ending."),
+        6: ("Ledger's ash. Debt's dead. Nova Soma can print invoices, but they can't invoice "
+            "what doesn't exist anymore. Local 404 didn't save us. We did. "
+            "Now let's see what a free courier does with a bar tab."),
     }
 
     def _enter_interstitial(self):
         # Mark delivery complete in meta_progression handled by DeliverySequence._compute_result
         completed = self._delivery_chapter
         next_ch = completed + 1
-        campaign_end = next_ch > 4 or len(self.meta.chapters_completed) >= 4
+        campaign_end = (next_ch > self._TOTAL_CHAPTERS
+                        or len(self.meta.chapters_completed) >= self._TOTAL_CHAPTERS)
         self._interstitial_completed     = completed
         self._interstitial_next          = next_ch
         self._interstitial_campaign_end  = campaign_end
@@ -1751,6 +1764,7 @@ class Game:
             self._goto(GameState.MAIN_MENU)
         else:
             # Auto-advance into next chapter's loadout draft
+            self.run_mgr.set_chapter_override(None)
             self.run_mgr.start_run(self.ship)
             self._run_just_completed = False
             self._goto(GameState.LOADOUT_DRAFT)
@@ -1847,7 +1861,7 @@ class Game:
             end_col = (int(160 + 80 * pulse), int(220 * pulse + 35), int(40 + 40 * pulse))
             top_label = f_end_l.render("CAMPAIGN COMPLETE", True, (140, 200, 80))
             self.screen.blit(top_label, (cx - top_label.get_width() // 2, next_y))
-            big = f_end_t.render("ALL FOUR CARGOS DELIVERED", True, end_col)
+            big = f_end_t.render("ALL SIX CHAPTERS DELIVERED", True, end_col)
             self.screen.blit(big, (cx - big.get_width() // 2, next_y + 18))
             stats = (f"DEBT: {self.meta.debt:,} cr   ·   CLONES: {self.meta.clone_count}   ·   "
                      "ROUTE: CLEAR")

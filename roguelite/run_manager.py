@@ -407,6 +407,12 @@ class RunManager:
         self._debris.clear()
         self._canisters.clear()
         self._satellites.clear()
+        self._compliance_vessels.clear()
+        self._compliance_spawn_cd = 12.0
+        self._emp_burst_available = (
+            self._current_chapter() >= 6 and 5 in self.meta.chapters_completed
+        )
+        self._emp_burst_active_t = 0.0
         self._alien      = None
         self._alien_spoken = False
         self._ai_ships.clear()
@@ -1125,7 +1131,18 @@ class RunManager:
     def _open_jump_terminal(self):
         # Final sector: chapter climax — face the NPC tied to the cargo
         is_final = self._sector_index == S.SECTORS_PER_RUN - 1
-        if is_final and self._ship is not None and self._ship.cargo is not None:
+        chapter_climax = {
+            5: "chen",
+            6: "bowen",
+        }.get(self._current_chapter())
+        if is_final and chapter_climax is not None:
+            npc_type = chapter_climax
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "Final negotiation. Chapter climax. Make this one COUNT.",
+                "Last terminal of the run. Cargo-specific contact incoming. Be sharp.",
+                "Right — final exit interview. The whole chapter hinges on this.",
+            ]))
+        elif is_final and self._ship is not None and self._ship.cargo is not None:
             npc_type = self._ship.cargo.terminal_climax()
             bus.emit(EVT_BAX_SPEAK, line=random.choice([
                 "Final negotiation. Chapter climax. Make this one COUNT.",
@@ -2233,6 +2250,10 @@ class RunManager:
     @property
     def ai_ships(self) -> list[AIShip]:
         return self._ai_ships
+
+    @property
+    def compliance_vessels(self) -> list:
+        return self._compliance_vessels
 
     @property
     def debris_cloud(self) -> DebrisCloud | None:
