@@ -27,13 +27,13 @@ class SaveSlotInfo:
         if not self.chapters_completed:
             return "Ch.1 (new)"
         nxt = 1
-        for ch in (1, 2, 3, 4):
+        for ch in (1, 2, 3, 4, 5, 6):
             if ch not in self.chapters_completed:
                 nxt = ch
                 break
         else:
-            nxt = 4
-        return f"Ch.{nxt}  ({len(self.chapters_completed)}/4 done)"
+            nxt = 6
+        return f"Ch.{nxt}  ({len(self.chapters_completed)}/6 done)"
 
 
 class SaveManager:

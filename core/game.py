@@ -530,6 +530,16 @@ class Game:
                     target = GameState.FLIGHT
                 if target == GameState.SHOP:
                     self._shop = ShopScreen(self.run_mgr, self.ship)
+                elif target == GameState.DELIVERY:
+                    self._delivery = DeliverySequence(
+                        self.meta,
+                        chapter=self._delivery_chapter,
+                        ship=self.ship,
+                    )
+                    self._delivery._total_time_for_hardcore = float(
+                        getattr(self.run_mgr, "_run_total_time", 0.0))
+                elif target == GameState.INTERSTITIAL:
+                    self._delivery = None
                 self._goto(target)
                 return
         if self.save_mgr.slot_info(self.save_mgr.active_slot_id).exists:
@@ -1738,7 +1748,7 @@ class Game:
         # Mark delivery complete in meta_progression handled by DeliverySequence._compute_result
         completed = self._delivery_chapter
         next_ch = completed + 1
-        campaign_end = next_ch > 4 or len(self.meta.chapters_completed) >= 4
+        campaign_end = next_ch > 6 or len(self.meta.chapters_completed) >= 6
         self._interstitial_completed     = completed
         self._interstitial_next          = next_ch
         self._interstitial_campaign_end  = campaign_end

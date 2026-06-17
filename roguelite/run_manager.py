@@ -411,6 +411,13 @@ class RunManager:
         self._alien_spoken = False
         self._ai_ships.clear()
         self._aiship_hail_pending = None
+        self._compliance_vessels.clear()
+        self._compliance_spawn_cd = 12.0
+        self._emp_burst_available = (
+            self._current_chapter() >= 6
+            and 5 in getattr(self.meta, "chapters_completed", [])
+        )
+        self._emp_burst_active_t = 0.0
         self._shower_rocks.clear()
         self._active_terminal    = None
         self._pending_terminal   = None
@@ -969,6 +976,7 @@ class RunManager:
     # ------------------------------------------------------------------
     def _build_run_context(self) -> dict:
         ctx: dict = {"sector_index":    self._sector_index,
+                     "chapter":         self._current_chapter(),
                      "run_credits":     self._run_debt_reduced,
                      "run_snaps":       self._run_snaps,
                      "run_slingshots":  self._run_slingshots,
@@ -1125,8 +1133,16 @@ class RunManager:
     def _open_jump_terminal(self):
         # Final sector: chapter climax — face the NPC tied to the cargo
         is_final = self._sector_index == S.SECTORS_PER_RUN - 1
-        if is_final and self._ship is not None and self._ship.cargo is not None:
-            npc_type = self._ship.cargo.terminal_climax()
+        if is_final:
+            chapter = self._current_chapter()
+            if chapter == 5:
+                npc_type = "chen"
+            elif chapter >= 6:
+                npc_type = "bowen"
+            elif self._ship is not None and self._ship.cargo is not None:
+                npc_type = self._ship.cargo.terminal_climax()
+            else:
+                npc_type = "cargo_inspector"
             bus.emit(EVT_BAX_SPEAK, line=random.choice([
                 "Final negotiation. Chapter climax. Make this one COUNT.",
                 "Last terminal of the run. Cargo-specific contact incoming. Be sharp.",
@@ -2271,6 +2287,18 @@ class RunManager:
                 return 1.0
         return max(0.0, 1.0 - min_dist / (proximity_range * 2.0))
 
+    @property
+    def compliance_vessels(self):
+        return list(getattr(self, "_compliance_vessels", []))
+
+    @property
+    def emp_burst_available(self) -> bool:
+        return bool(getattr(self, "_emp_burst_available", False))
+
+    @property
+    def emp_burst_active_t(self) -> float:
+        return float(getattr(self, "_emp_burst_active_t", 0.0))
+
     def cargo_alarm_level(self) -> float:
         """0..1 chapter-specific cargo stress level for flight_pressure."""
         if self._ship is None or self._ship.cargo is None:
@@ -2282,6 +2310,9 @@ class RunManager:
         # MycoShroom: spore level
         if hasattr(cargo, 'spore_level'):
             return float(cargo.spore_level)
+        # EncryptedDrive: Nova Soma trace pressure.
+        if hasattr(cargo, 'trace_level'):
+            return float(cargo.trace_level)
         return 0.0
 
     # ------------------------------------------------------------------
