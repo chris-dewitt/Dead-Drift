@@ -474,11 +474,33 @@ def build_checkpoint(game) -> dict:
     if state_name == "TERMINAL":
         state_name = "FLIGHT"
 
+    def _int_game_attr(name: str, default: int) -> int:
+        try:
+            return int(getattr(game, name))
+        except (TypeError, ValueError):
+            return int(default)
+
+    def _float_game_attr(name: str, default: float) -> float:
+        try:
+            return float(getattr(game, name))
+        except (TypeError, ValueError):
+            return float(default)
+
+    def _bool_game_attr(name: str, default: bool) -> bool:
+        value = getattr(game, name, default)
+        # unittest.mock dynamically manufactures attributes; those should not
+        # leak into JSON checkpoints.
+        if value.__class__.__module__.startswith("unittest.mock"):
+            return bool(default)
+        return bool(value)
+
+    current_chapter = rm._current_chapter()
+
     return {
         "version": CHECKPOINT_VERSION,
         "game_state": state_name,
         "run_seed": getattr(rm, "_run_seed", 0),
-        "chapter": rm._current_chapter(),
+        "chapter": current_chapter,
         "draft_applied": rm._sector is not None,
         "sector": _sector_to_dict(rm._sector) if rm._sector else None,
         "entities": _entities_to_dict(rm),
@@ -522,13 +544,13 @@ def build_checkpoint(game) -> dict:
         "ship": _ship_to_dict(ship),
         "frame_name": getattr(rm, "_frame_name", ""),
         "delivery": {
-            "chapter": getattr(game, "_delivery_chapter", rm._current_chapter()),
-            "pending": getattr(game, "_delivery_pending", False),
-            "delay_t": getattr(game, "_delivery_delay_t", 0.0),
-            "interstitial_completed": getattr(game, "_interstitial_completed", rm._current_chapter()),
-            "interstitial_next": getattr(game, "_interstitial_next", rm._current_chapter() + 1),
-            "interstitial_campaign_end": getattr(game, "_interstitial_campaign_end", False),
-            "interstitial_t": getattr(game, "_interstitial_t", 0.0),
+            "chapter": _int_game_attr("_delivery_chapter", current_chapter),
+            "pending": _bool_game_attr("_delivery_pending", False),
+            "delay_t": _float_game_attr("_delivery_delay_t", 0.0),
+            "interstitial_completed": _int_game_attr("_interstitial_completed", current_chapter),
+            "interstitial_next": _int_game_attr("_interstitial_next", current_chapter + 1),
+            "interstitial_campaign_end": _bool_game_attr("_interstitial_campaign_end", False),
+            "interstitial_t": _float_game_attr("_interstitial_t", 0.0),
         },
     }
 
