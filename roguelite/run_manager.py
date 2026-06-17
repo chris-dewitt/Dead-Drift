@@ -975,8 +975,12 @@ class RunManager:
 
     # ------------------------------------------------------------------
     def _build_run_context(self) -> dict:
+        try:
+            chapter = self._current_chapter()
+        except AttributeError:
+            chapter = 1
         ctx: dict = {"sector_index":    self._sector_index,
-                     "chapter":         self._current_chapter(),
+                     "chapter":         chapter,
                      "run_credits":     self._run_debt_reduced,
                      "run_snaps":       self._run_snaps,
                      "run_slingshots":  self._run_slingshots,
