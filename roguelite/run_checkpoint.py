@@ -477,13 +477,13 @@ def build_checkpoint(game) -> dict:
     def _int_game_attr(name: str, default: int) -> int:
         try:
             return int(getattr(game, name))
-        except (TypeError, ValueError):
+        except (AttributeError, TypeError, ValueError):
             return int(default)
 
     def _float_game_attr(name: str, default: float) -> float:
         try:
             return float(getattr(game, name))
-        except (TypeError, ValueError):
+        except (AttributeError, TypeError, ValueError):
             return float(default)
 
     def _bool_game_attr(name: str, default: bool) -> bool:
