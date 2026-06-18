@@ -210,6 +210,7 @@ class VectorRenderer:
         self._draw_bullets(ship)
         self._draw_alien(run_mgr, t)
         self._draw_ai_ships(run_mgr, t)
+        self._draw_compliance_vessels(run_mgr, t)
         self._draw_barges(run_mgr, ship, t)
         self._draw_barge_radar(run_mgr, ship, t)
         self._draw_trail(ship, t)
@@ -1608,6 +1609,63 @@ class VectorRenderer:
                 continue
             self._draw_ai_ship(ship, t)
             self._draw_ai_ship_status(ship, t)
+
+    def _draw_compliance_vessels(self, run_mgr, t: float):
+        vessels = getattr(run_mgr, "compliance_vessels", None)
+        if vessels is None:
+            vessels = getattr(run_mgr, "_compliance_vessels", [])
+        if not vessels:
+            return
+
+        for cv in vessels:
+            if not getattr(cv, "alive", False):
+                continue
+            pos = getattr(cv, "pos", None)
+            if pos is None:
+                continue
+            heading = math.radians(getattr(cv, "heading", 0.0))
+            ca, sa = math.cos(heading), math.sin(heading)
+
+            def pt(x, y):
+                return (
+                    int(pos.x + x * ca - y * sa),
+                    int(pos.y + x * sa + y * ca),
+                )
+
+            stunned = bool(getattr(cv, "is_stunned", False))
+            flash = float(getattr(cv, "hit_flash_t", 0.0))
+            pulse = 0.55 + 0.45 * abs(math.sin(t * 8.0))
+            hull = (230, 245, 255) if flash > 0 else (110, 135, 150)
+            trim = (80, 220, 255) if stunned else (255, int(70 + 90 * pulse), 45)
+            glow_col = (50, 180, 255, 55) if stunned else (255, 70, 35, 42)
+
+            glow = pygame.Surface((96, 96), pygame.SRCALPHA)
+            pygame.draw.circle(glow, glow_col, (48, 48), int(30 + 10 * pulse))
+            self.surface.blit(glow, (int(pos.x) - 48, int(pos.y) - 48))
+
+            hull_pts = [pt(32, 0), pt(10, -13), pt(-22, -10),
+                        pt(-30, 0), pt(-22, 10), pt(10, 13)]
+            pygame.draw.polygon(self.surface, (10, 12, 16), hull_pts)
+            pygame.draw.polygon(self.surface, hull, hull_pts, 2)
+            pygame.draw.line(self.surface, trim, pt(12, -10), pt(30, 0), 2)
+            pygame.draw.line(self.surface, trim, pt(12, 10), pt(30, 0), 2)
+            pygame.draw.circle(self.surface, trim, pt(-8, 0), 4)
+
+            if stunned:
+                font = get_font(9, bold=True)
+                tag = font.render("EMP", True, (120, 230, 255))
+                self.surface.blit(tag, (int(pos.x) - tag.get_width() // 2,
+                                        int(pos.y) - 30))
+
+        emp_t = float(getattr(run_mgr, "emp_burst_active_t", 0.0))
+        if emp_t > 0:
+            frac = max(0.0, min(1.0, emp_t / 0.35))
+            ring = pygame.Surface((S.SCREEN_W, S.FLIGHT_H), pygame.SRCALPHA)
+            radius = int((1.0 - frac) * 420 + 60)
+            alpha = int(120 * frac)
+            pygame.draw.circle(ring, (80, 220, 255, alpha),
+                               (S.SCREEN_W // 2, S.FLIGHT_H // 2), radius, 3)
+            self.surface.blit(ring, (0, 0))
 
     def _draw_ai_ship(self, aiship, t: float) -> None:
         from antagonists.ai_ship import (

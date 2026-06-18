@@ -58,3 +58,52 @@ def test_checkpoint_roundtrip(mini_game, tmp_path):
     assert mini_game.ship.hull == pytest.approx(
         float(json.loads(path.read_text())["ship"]["hull"])
     )
+
+
+def test_checkpoint_preserves_encrypted_drive_and_compliance_state(mini_game):
+    from antagonists.compliance_vessel import ComplianceVessel
+    from cargo.encrypted_drive import EncryptedDrive
+
+    drive = EncryptedDrive()
+    drive.trace_level = 0.75
+    drive._ping_t = 6.5
+    mini_game.ship.cargo = drive
+    mini_game.ship.fuel = 12.0
+    mini_game.ship.gun.fire_rate_mult = 1.6
+    mini_game.ship.gun.damage_mult = 2
+    mini_game.run_mgr._emp_burst_available = True
+    mini_game.run_mgr._emp_burst_active_t = 0.2
+    mini_game.run_mgr._compliance_spawn_cd = 3.25
+    cv = ComplianceVessel(100.0, 120.0, mini_game.run_mgr)
+    cv.vel.x = 12.0
+    cv.vel.y = -4.0
+    cv._hits = 1
+    cv.emp_stun()
+    mini_game.run_mgr._compliance_vessels.append(cv)
+
+    data = build_checkpoint(mini_game)
+    assert data["ship"]["cargo"]["type"] == "EncryptedDrive"
+
+    mini_game.ship.cargo = None
+    mini_game.ship.fuel = 99.0
+    mini_game.ship.gun.fire_rate_mult = 1.0
+    mini_game.ship.gun.damage_mult = 1
+    mini_game.run_mgr._emp_burst_available = False
+    mini_game.run_mgr._emp_burst_active_t = 0.0
+    mini_game.run_mgr._compliance_spawn_cd = 12.0
+    mini_game.run_mgr._compliance_vessels.clear()
+
+    assert restore_checkpoint(mini_game, data) is True
+
+    restored_drive = mini_game.ship.cargo
+    assert type(restored_drive).__name__ == "EncryptedDrive"
+    assert restored_drive.trace_level == pytest.approx(0.75)
+    assert restored_drive._ping_t == pytest.approx(6.5)
+    assert mini_game.ship.fuel == pytest.approx(12.0)
+    assert mini_game.ship.gun.fire_rate_mult == pytest.approx(1.6)
+    assert mini_game.ship.gun.damage_mult == 2
+    assert mini_game.run_mgr._emp_burst_available is True
+    assert mini_game.run_mgr._emp_burst_active_t == pytest.approx(0.2)
+    assert mini_game.run_mgr._compliance_spawn_cd == pytest.approx(3.25)
+    assert len(mini_game.run_mgr._compliance_vessels) == 1
+    assert mini_game.run_mgr._compliance_vessels[0].is_stunned is True

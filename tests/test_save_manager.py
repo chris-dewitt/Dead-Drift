@@ -45,6 +45,16 @@ def test_set_active_and_list_slots(save_env):
     assert slots == {1: True, 2: False, 3: True}
 
 
+def test_chapter_display_uses_six_chapter_campaign(save_env):
+    mgr = SaveManager()
+    path = mgr.create_fresh_save(1)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["chapters_completed"] = [1, 2, 3, 4]
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    assert mgr.slot_info(1).chapter_display == "Ch.5  (4/6 done)"
+
+
 def test_delete_run_checkpoint(save_env):
     mgr = SaveManager()
     mgr.create_fresh_save(1)
