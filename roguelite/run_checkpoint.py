@@ -51,6 +51,9 @@ def _cargo_to_dict(cargo) -> dict | None:
         })
     elif t == "SchrodingerVIP":
         d["alive_state"] = getattr(cargo, "alive_state", "unknown")
+    elif t == "EncryptedDrive":
+        d["trace_level"] = getattr(cargo, "trace_level", 0.0)
+        d["ping_t"] = getattr(cargo, "_ping_t", 0.0)
     return d
 
 
@@ -59,12 +62,14 @@ def _cargo_from_dict(d: dict | None):
         return None
     from cargo.acoustic_archive import AcousticArchive
     from cargo.epi_shrooms import EpistemologicalShrooms
+    from cargo.encrypted_drive import EncryptedDrive
     from cargo.paperwork import SentientPaperwork
     from cargo.schrodinger_vip import SchrodingerVIP
 
     factories = {
         "AcousticArchive": AcousticArchive,
         "EpistemologicalShrooms": EpistemologicalShrooms,
+        "EncryptedDrive": EncryptedDrive,
         "SentientPaperwork": SentientPaperwork,
         "SchrodingerVIP": SchrodingerVIP,
     }
@@ -86,6 +91,9 @@ def _cargo_from_dict(d: dict | None):
         c._next_trigger = float(d.get("next_trigger", 20.0))
     elif d["type"] == "SchrodingerVIP":
         c.alive_state = d.get("alive_state", "unknown")
+    elif d["type"] == "EncryptedDrive":
+        c.trace_level = float(d.get("trace_level", 0.0))
+        c._ping_t = float(d.get("ping_t", 0.0))
     return c
 
 
@@ -121,7 +129,14 @@ def _ship_to_dict(ship) -> dict:
         modules.append(ent)
 
     bullets = [
-        {"x": b.pos.x, "y": b.pos.y, "vx": b.vel.x, "vy": b.vel.y, "life": b.lifetime}
+        {
+            "x": b.pos.x,
+            "y": b.pos.y,
+            "vx": b.vel.x,
+            "vy": b.vel.y,
+            "life": b.lifetime,
+            "damage": getattr(b, "damage", 1),
+        }
         for b in ship.gun.bullets
     ]
     return {
@@ -130,13 +145,17 @@ def _ship_to_dict(ship) -> dict:
         "angle": ship.body.angle,
         "mass": ship.body.mass,
         "hull": ship.hull,
+        "fuel": getattr(ship, "fuel", S.FUEL_MAX),
         "destroyed": ship._destroyed,
+        "iframe_t": getattr(ship, "_iframe_t", 0.0),
         "controls_inverted": ship.controls_inverted,
         "cargo": _cargo_to_dict(ship.cargo),
         "modules": modules,
         "gun": {
             "cooldown": ship.gun._cooldown,
             "jam_t": ship.gun._jam_t,
+            "fire_rate_mult": getattr(ship.gun, "fire_rate_mult", 1.0),
+            "damage_mult": getattr(ship.gun, "damage_mult", 1),
             "bullets": bullets,
         },
     }
@@ -152,7 +171,9 @@ def _restore_ship(ship, d: dict) -> None:
     ship.body.angle = float(d["angle"])
     ship.body.mass = float(d.get("mass", S.SHIP_MASS))
     ship.hull = float(d["hull"])
+    ship.fuel = float(d.get("fuel", S.FUEL_MAX))
     ship._destroyed = bool(d.get("destroyed", False))
+    ship._iframe_t = float(d.get("iframe_t", 0.0))
     ship.controls_inverted = bool(d.get("controls_inverted", False))
     ship.cargo = _cargo_from_dict(d.get("cargo"))
 
@@ -175,9 +196,12 @@ def _restore_ship(ship, d: dict) -> None:
     g = d.get("gun", {})
     ship.gun._cooldown = float(g.get("cooldown", 0.0))
     ship.gun._jam_t = float(g.get("jam_t", 0.0))
+    ship.gun.fire_rate_mult = float(g.get("fire_rate_mult", 1.0))
+    ship.gun.damage_mult = int(g.get("damage_mult", 1))
     ship.gun.bullets.clear()
     for b in g.get("bullets", []):
-        bul = Bullet(_vec({"x": b["x"], "y": b["y"]}), 0.0)
+        bul = Bullet(_vec({"x": b["x"], "y": b["y"]}), 0.0,
+                     damage=int(b.get("damage", 1)))
         bul.vel = _vec({"x": b["vx"], "y": b["vy"]})
         bul.lifetime = float(b["life"])
         ship.gun.bullets.append(bul)
@@ -334,6 +358,37 @@ def _alien_from(d: dict):
     return a
 
 
+def _compliance_dict(cv) -> dict:
+    return {
+        "t": "compliance",
+        "x": cv.pos.x,
+        "y": cv.pos.y,
+        "vx": cv.vel.x,
+        "vy": cv.vel.y,
+        "state": cv.state,
+        "state_t": cv._state_t,
+        "hits": cv._hits,
+        "stun_t": cv._stun_t,
+        "hit_flash_t": cv.hit_flash_t,
+        "alive": cv.alive,
+        "heading": cv.heading,
+    }
+
+
+def _compliance_from(d: dict, run_mgr):
+    from antagonists.compliance_vessel import ComplianceVessel
+    cv = ComplianceVessel(d["x"], d["y"], run_mgr)
+    cv.vel = Vec2(d.get("vx", 0.0), d.get("vy", 0.0))
+    cv.state = d.get("state", cv.state)
+    cv._state_t = float(d.get("state_t", 0.0))
+    cv._hits = int(d.get("hits", 0))
+    cv._stun_t = float(d.get("stun_t", 0.0))
+    cv._hit_flash_t = float(d.get("hit_flash_t", 0.0))
+    cv.alive = bool(d.get("alive", True))
+    cv.heading = float(d.get("heading", 0.0))
+    return cv
+
+
 def _entities_to_dict(rm) -> list[dict]:
     out: list[dict] = []
     for r in rm._debris:
@@ -346,6 +401,8 @@ def _entities_to_dict(rm) -> list[dict]:
         out.append(_barge_dict(b))
     if rm._alien is not None:
         out.append(_alien_dict(rm._alien))
+    for cv in getattr(rm, "_compliance_vessels", []):
+        out.append(_compliance_dict(cv))
     if rm._dead_station is not None:
         out.append({"t": "dead_station"})
     if rm._trash_field is not None:
@@ -374,6 +431,7 @@ def _restore_entities(rm, entities: list[dict]) -> None:
     rm._satellites.clear()
     rm._barges.clear()
     rm._alien = None
+    rm._compliance_vessels.clear()
     rm._wrecks.clear()
     rm._dead_station = None
     rm._trash_field = None
@@ -393,6 +451,8 @@ def _restore_entities(rm, entities: list[dict]) -> None:
             rm._barges.append(_barge_from(d, rm))
         elif t == "alien":
             rm._alien = _alien_from(d)
+        elif t == "compliance":
+            rm._compliance_vessels.append(_compliance_from(d, rm))
         elif t == "dead_station":
             rm._dead_station = DeadStation()
         elif t == "trash_field":
@@ -418,6 +478,10 @@ def build_checkpoint(game) -> dict:
     state_name = game.states.state.name
     if game.states.state.name == "PAUSED" and game._state_before_pause is not None:
         state_name = game._state_before_pause.name
+    # Terminal instances are transient and not serialized. Resume at the
+    # underlying flight gate unless the terminal had already queued delivery.
+    if state_name == "TERMINAL":
+        state_name = "DELIVERY" if getattr(game, "_delivery_pending", False) else "FLIGHT"
 
     return {
         "version": CHECKPOINT_VERSION,
@@ -449,6 +513,9 @@ def build_checkpoint(game) -> dict:
             "kress_called": rm._kress_called_this_sector,
             "kress_tip_pending": getattr(rm, "_kress_tip_pending", False),
             "barge_suppression_t": getattr(rm, "_barge_suppression_t", 0.0),
+            "compliance_spawn_cd": getattr(rm, "_compliance_spawn_cd", 12.0),
+            "emp_burst_available": getattr(rm, "_emp_burst_available", False),
+            "emp_burst_active_t": getattr(rm, "_emp_burst_active_t", 0.0),
             "run_debt_reduced": rm._run_debt_reduced,
             "run_snaps": rm._run_snaps,
             "run_slingshots": rm._run_slingshots,
@@ -462,6 +529,16 @@ def build_checkpoint(game) -> dict:
         },
         "ship": _ship_to_dict(ship),
         "frame_name": getattr(rm, "_frame_name", ""),
+        "game_flow": {
+            "delivery_chapter": getattr(game, "_delivery_chapter", rm._current_chapter()),
+            "delivery_pending": bool(getattr(game, "_delivery_pending", False)),
+            "delivery_delay_t": float(getattr(game, "_delivery_delay_t", 0.0)),
+            "terminal_win_hold_t": float(getattr(game, "_terminal_win_hold_t", 0.0)),
+            "interstitial_completed": getattr(game, "_interstitial_completed", 1),
+            "interstitial_next": getattr(game, "_interstitial_next", 2),
+            "interstitial_campaign_end": bool(getattr(game, "_interstitial_campaign_end", False)),
+            "interstitial_t": float(getattr(game, "_interstitial_t", 0.0)),
+        },
     }
 
 
@@ -495,6 +572,9 @@ def restore_checkpoint(game, data: dict) -> bool:
     rm._kress_called_this_sector = bool(rmd.get("kress_called", False))
     rm._kress_tip_pending = bool(rmd.get("kress_tip_pending", False))
     rm._barge_suppression_t = float(rmd.get("barge_suppression_t", 0.0))
+    rm._compliance_spawn_cd = float(rmd.get("compliance_spawn_cd", 12.0))
+    rm._emp_burst_available = bool(rmd.get("emp_burst_available", False))
+    rm._emp_burst_active_t = float(rmd.get("emp_burst_active_t", 0.0))
     rm._run_debt_reduced = int(rmd.get("run_debt_reduced", 0))
     rm._run_snaps = int(rmd.get("run_snaps", 0))
     rm._run_slingshots = int(rmd.get("run_slingshots", 0))
@@ -518,6 +598,39 @@ def restore_checkpoint(game, data: dict) -> bool:
     _restore_entities(rm, data.get("entities", []))
     _restore_ship(ship, data.get("ship", {}))
     rm._frame_name = data.get("frame_name", "")
+
+    flow = data.get("game_flow", {})
+    game_state = data.get("game_state", "FLIGHT")
+    delivery_chapter = int(flow.get("delivery_chapter", data.get("chapter", rm._current_chapter())))
+    if hasattr(game, "_delivery_chapter"):
+        game._delivery_chapter = delivery_chapter
+    if hasattr(game, "_delivery_pending"):
+        game._delivery_pending = bool(flow.get("delivery_pending", False))
+    if hasattr(game, "_delivery_delay_t"):
+        game._delivery_delay_t = float(flow.get("delivery_delay_t", 0.0))
+    if hasattr(game, "_terminal_win_hold_t"):
+        game._terminal_win_hold_t = 0.0
+    if hasattr(game, "_terminal_win_str"):
+        game._terminal_win_str = ""
+
+    if hasattr(game, "_delivery"):
+        if game_state == "DELIVERY":
+            from delivery.delivery_sequence import DeliverySequence
+            game._delivery_pending = False
+            game._delivery = DeliverySequence(rm.meta, chapter=delivery_chapter, ship=ship)
+            game._delivery._total_time_for_hardcore = float(rmd.get("run_total_time", 0.0))
+        else:
+            game._delivery = None
+
+    if game_state == "INTERSTITIAL":
+        if hasattr(game, "_interstitial_completed"):
+            game._interstitial_completed = int(flow.get("interstitial_completed", delivery_chapter))
+        if hasattr(game, "_interstitial_next"):
+            game._interstitial_next = int(flow.get("interstitial_next", delivery_chapter + 1))
+        if hasattr(game, "_interstitial_campaign_end"):
+            game._interstitial_campaign_end = bool(flow.get("interstitial_campaign_end", False))
+        if hasattr(game, "_interstitial_t"):
+            game._interstitial_t = float(flow.get("interstitial_t", 11.0))
     return True
 
 

@@ -411,6 +411,12 @@ class RunManager:
         self._alien_spoken = False
         self._ai_ships.clear()
         self._aiship_hail_pending = None
+        self._compliance_vessels.clear()
+        self._compliance_spawn_cd = 12.0
+        self._emp_burst_available = (
+            self._current_chapter() == 6 and 5 in self.meta.chapters_completed
+        )
+        self._emp_burst_active_t = 0.0
         self._shower_rocks.clear()
         self._active_terminal    = None
         self._pending_terminal   = None
@@ -1126,7 +1132,11 @@ class RunManager:
         # Final sector: chapter climax — face the NPC tied to the cargo
         is_final = self._sector_index == S.SECTORS_PER_RUN - 1
         if is_final and self._ship is not None and self._ship.cargo is not None:
-            npc_type = self._ship.cargo.terminal_climax()
+            cargo = self._ship.cargo
+            if type(cargo).__name__ == "EncryptedDrive" and self._current_chapter() == 5:
+                npc_type = "chen"
+            else:
+                npc_type = cargo.terminal_climax()
             bus.emit(EVT_BAX_SPEAK, line=random.choice([
                 "Final negotiation. Chapter climax. Make this one COUNT.",
                 "Last terminal of the run. Cargo-specific contact incoming. Be sharp.",

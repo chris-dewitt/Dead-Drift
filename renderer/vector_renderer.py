@@ -210,6 +210,7 @@ class VectorRenderer:
         self._draw_bullets(ship)
         self._draw_alien(run_mgr, t)
         self._draw_ai_ships(run_mgr, t)
+        self._draw_compliance_vessels(run_mgr, t)
         self._draw_barges(run_mgr, ship, t)
         self._draw_barge_radar(run_mgr, ship, t)
         self._draw_trail(ship, t)
@@ -1636,6 +1637,56 @@ class VectorRenderer:
             self._draw_aiship_belt_hauler(aiship, t)
         elif cls == CLASS_COMPLIANCE_COURIER:
             self._draw_aiship_compliance_courier(aiship, t)
+
+    def _draw_compliance_vessels(self, run_mgr, t: float):
+        vessels = getattr(run_mgr, "_compliance_vessels", [])
+        if not vessels:
+            return
+        for cv in vessels:
+            if not getattr(cv, "alive", False):
+                continue
+            self._draw_compliance_vessel(cv, t)
+
+    def _draw_compliance_vessel(self, cv, t: float):
+        cx, cy = int(cv.pos.x), int(cv.pos.y)
+        rad = math.radians(getattr(cv, "heading", 0.0))
+        cos_a, sin_a = math.cos(rad), math.sin(rad)
+
+        def world(raw_pts):
+            return [
+                (int(lx * cos_a - ly * sin_a + cx),
+                 int(lx * sin_a + ly * cos_a + cy))
+                for lx, ly in raw_pts
+            ]
+
+        pulse = 0.5 + 0.5 * math.sin(t * 7.0)
+        stunned = bool(getattr(cv, "is_stunned", False))
+        hit_flash = getattr(cv, "hit_flash_t", 0.0) > 0
+        hull_col = (210, 240, 255) if hit_flash else ((35, 80, 110) if stunned else (8, 12, 18))
+        edge_col = (255, 255, 255) if hit_flash else ((120, 220, 255) if stunned else (190, 230, 255))
+        glow_col = (70, 180, 255) if stunned else (255, 70, 70)
+
+        halo = pygame.Surface((96, 96), pygame.SRCALPHA)
+        pygame.draw.circle(halo, (*glow_col, int(24 + 22 * pulse)), (48, 48), 34)
+        self.surface.blit(halo, (cx - 48, cy - 48))
+
+        hull = world([(28, 0), (8, -17), (-22, -12), (-30, 0), (-22, 12), (8, 17)])
+        wing_l = world([(2, -14), (-10, -30), (-22, -12)])
+        wing_r = world([(2, 14), (-10, 30), (-22, 12)])
+        pygame.draw.polygon(self.surface, (16, 22, 30), wing_l)
+        pygame.draw.polygon(self.surface, edge_col, wing_l, 1)
+        pygame.draw.polygon(self.surface, (16, 22, 30), wing_r)
+        pygame.draw.polygon(self.surface, edge_col, wing_r, 1)
+        pygame.draw.polygon(self.surface, hull_col, hull)
+        pygame.draw.polygon(self.surface, edge_col, hull, 2)
+
+        sensor = world([(20, -4), (28, 0), (20, 4)])
+        pygame.draw.polygon(self.surface, glow_col, sensor)
+        if stunned:
+            for off in (-10, 0, 10):
+                pygame.draw.line(self.surface, (120, 220, 255),
+                                 (cx - 20 + off, cy - 26),
+                                 (cx + 8 + off, cy + 26), 1)
 
     def _aiship_world_pts(self, aiship, raw_pts):
         rad = math.radians(aiship.heading)
