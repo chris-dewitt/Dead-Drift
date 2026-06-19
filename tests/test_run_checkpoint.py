@@ -39,6 +39,16 @@ def mini_game(tmp_path, monkeypatch):
     game.ship = ship
     game.states = MagicMock(state=GameState.FLIGHT)
     game._state_before_pause = None
+    game._delivery_chapter = 1
+    game._delivery_pending = False
+    game._delivery_delay_t = 0.0
+    game._delivery = None
+    game._terminal_win_hold_t = 0.0
+    game._terminal_win_str = ""
+    game._interstitial_completed = 1
+    game._interstitial_next = 2
+    game._interstitial_campaign_end = False
+    game._interstitial_t = 0.0
     return game
 
 
