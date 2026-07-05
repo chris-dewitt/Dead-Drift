@@ -382,6 +382,8 @@ class LoadoutDraft:
             2: "CH.2  THE MYCORRHIZAL PAYLOAD",
             3: "CH.3  THE PAPERWORK",
             4: "CH.4  THE SCHRÖDINGER VIP",
+            5: "CH.5  THE EDGE",
+            6: "CH.6  COMPLIANCE",
         }
         ch = chapter_names.get(self._chapter, f"CH.{self._chapter}")
         ch_surf = font_ch.render(ch, True, (200, 140, 0))
@@ -590,7 +592,7 @@ class LoadoutDraft:
     def _draw_cargo_preview(self, surface, rect, cargo, slot_i, t):
         # Identify which cargo this is via the cargo_idx list
         idx_in_pool = self._cargo_idx[self._selected[slot_i]]
-        key = ["ARCHIVE", "SHROOMS", "PAPERS", "VIP"][idx_in_pool]
+        key = _CARGO_META[idx_in_pool]["key"]
 
         cx, cy = rect.centerx, rect.centery - 4
 
@@ -600,8 +602,10 @@ class LoadoutDraft:
             self._draw_cargo_shrooms(surface, cx, cy, t)
         elif key == "PAPERS":
             self._draw_cargo_papers(surface, cx, cy, t)
-        else:
+        elif key == "VIP":
             self._draw_cargo_vip(surface, cx, cy, t)
+        else:
+            self._draw_cargo_drive(surface, cx, cy, t, empty=(key == "DRIVE-PICKUP"))
 
         font_spec = get_font(10)
         label = f"PAYLOAD // {key}"
@@ -723,6 +727,34 @@ class LoadoutDraft:
             py = int(cy + math.sin(phase) * r)
             c  = _hsv((i * 0.1 + t * 0.15) % 1.0, 0.7, 0.85)
             pygame.draw.circle(surface, c, (px, py), 2)
+
+    # ----- cargo: encrypted drive / empty hold pickup marker -----
+    def _draw_cargo_drive(self, surface, cx, cy, t, *, empty: bool):
+        pulse = 0.5 + 0.5 * math.sin(t * 3.0)
+        glow_col = (80, int(120 + 90 * pulse), int(190 + 60 * pulse))
+
+        if empty:
+            pygame.draw.rect(surface, (10, 14, 18), pygame.Rect(cx - 78, cy - 54, 156, 108), 2)
+            pygame.draw.line(surface, glow_col, (cx - 58, cy - 34), (cx + 58, cy + 34), 2)
+            pygame.draw.line(surface, glow_col, (cx + 58, cy - 34), (cx - 58, cy + 34), 2)
+            font = get_font(13, bold=True)
+            label = font.render("PICKUP AT THE EDGE", True, glow_col)
+            surface.blit(label, (cx - label.get_width() // 2, cy + 64))
+            return
+
+        body = pygame.Rect(cx - 66, cy - 24, 132, 48)
+        plug = pygame.Rect(cx + 66, cy - 12, 22, 24)
+        pygame.draw.rect(surface, (12, 16, 22), body)
+        pygame.draw.rect(surface, glow_col, body, 2)
+        pygame.draw.rect(surface, (24, 30, 38), plug)
+        pygame.draw.rect(surface, glow_col, plug, 1)
+        for i in range(5):
+            x = cx - 46 + i * 20
+            led = (int(40 + 120 * pulse), int(120 + 100 * pulse), 255)
+            pygame.draw.rect(surface, led, pygame.Rect(x, cy - 5, 8, 10))
+        font = get_font(12, bold=True)
+        label = font.render("ZERO-WRITE KEY", True, glow_col)
+        surface.blit(label, (cx - label.get_width() // 2, cy + 42))
 
     # ------------------------------------------------------------------ bax commentary
     def _draw_bax_panel(self, surface, t):
