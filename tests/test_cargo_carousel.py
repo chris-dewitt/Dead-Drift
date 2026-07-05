@@ -32,9 +32,9 @@ def _stats_with(temp_dir, career=None):
 
 def test_card_count_and_chapter_lookup():
     from renderer.cargo_carousel import card_count, card_chapter
-    assert card_count() == 4
+    assert card_count() == 6
     chapters = [card_chapter(i) for i in range(card_count())]
-    assert chapters == [1, 2, 3, 4]
+    assert chapters == [1, 2, 3, 4, 5, 6]
 
 
 def test_carousel_renders_for_empty_meta():
