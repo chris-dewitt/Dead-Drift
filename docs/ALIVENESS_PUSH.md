@@ -297,6 +297,25 @@ New union reps from B.6 each need a voice profile in `audio/voices.py` distinct 
 
 ---
 
+## Confirmed Scope Expansion (June 2026)
+
+**Campaign is 6 chapters, not 4.** Chapters 5 (MERCY / The Remnants' station) and 6
+(The Upload / Nova Soma Station) corridor code existed and was wired into `make_corridor()`
+but undocumented. Now confirmed shipped:
+
+- `delivery/corridor/chapter5_edge.py` — The Remnants' off-grid station (Names Wall,
+  Chen's Workshop, Chen's Office boss room)
+- `delivery/corridor/chapter6_compliance.py` — Nova Soma Station (Glass elevator,
+  Server room 90-second upload, Escape corridor)
+- `audio/chapter_5.py` — G minor, acoustic guitar, soft brushes. The quiet chapter.
+- `audio/chapter_6.py` — B Phrygian, fluorescent-light buzz, clinical precision kit.
+- `renderer/cargo_carousel.py` — Six-card dossier carousel (ch5: MERCY drive,
+  ch6: Nova Soma keycard). `visible_chapters()` unlocks sequentially.
+- `roguelite/save_manager.py` — Display now reads `/6 done`; COMPLETE state for full clear.
+- `audio/audio_manager.py` — Chapter inflection loop extended to chapters 1–6.
+
+---
+
 ## Out of Scope (deferred)
 
 - Epic 8.4 — Hardcore mode (post-this-push)

@@ -1,7 +1,7 @@
 """
 Cargo Dossier Carousel — Epic 8.2.
 
-Main-menu replay screen. Shows four chapter cargo cards, each with:
+Main-menu replay screen. Shows six chapter cargo cards, each with:
   * vector silhouette of the cargo
   * chapter title + cargo brief + flight quirk
   * "✓ DELIVERED" stamp (or "??? — UNCOVERED" stamp for incomplete chapters)
@@ -43,6 +43,14 @@ _CARDS: tuple[tuple[int, str, str, str, str, tuple, tuple], ...] = (
      "Passenger: alive or deceased.",
      "Observation collapses payout.",
      (200, 160,  40), (255, 220,  90)),
+    (5, "MERCY",             "drive",
+     "Chen's zero-write exploit drive.",
+     "One plug-in ends the debt.",
+     (180, 100,  40), (255, 160,  70)),
+    (6, "THE UPLOAD",        "keycard",
+     "Deploy MERCY. Hold the line.",
+     "90 seconds. Alarms. No exit.",
+     ( 60, 130, 180), (140, 210, 240)),
 )
 
 
@@ -115,6 +123,48 @@ def _draw_cargo_silhouette(surf: pygame.Surface, cx: int, cy: int,
         f = get_font(22, bold=True)
         s = f.render("?", True, col_q)
         surf.blit(s, (cx - s.get_width() // 2, cy - s.get_height() // 2))
+        return
+    if kind == "drive":
+        # MERCY drive — a data stick with a small amber LED
+        col_b = (int(40 * dim), int(26 * dim), int(14 * dim))
+        col_e = (int(200 * dim), int(130 * dim), int(60 * dim))
+        col_l = (int(255 * dim), int(160 * dim), int(40 * dim))
+        # Body of the drive
+        pygame.draw.rect(surf, col_b, pygame.Rect(cx - 10, cy - 28, 20, 44))
+        pygame.draw.rect(surf, col_e, pygame.Rect(cx - 10, cy - 28, 20, 44), 2)
+        # USB connector nub at the bottom
+        pygame.draw.rect(surf, col_e, pygame.Rect(cx - 6, cy + 16, 12, 8))
+        pygame.draw.rect(surf, col_b, pygame.Rect(cx - 4, cy + 18, 8, 4))
+        # Pulsing LED indicator on the face
+        led_pulse = 0.5 + 0.5 * abs(math.sin(t * 2.8))
+        led_col = tuple(int(c * led_pulse) for c in col_l)
+        pygame.draw.circle(surf, led_col, (cx, cy - 16), 4)
+        # Label etched on the body
+        f8 = get_font(7, bold=True)
+        lbl = f8.render("MERCY", True, col_e)
+        surf.blit(lbl, (cx - lbl.get_width() // 2, cy - 4))
+        return
+    if kind == "keycard":
+        # Nova Soma access keycard — flat, corporate, cold
+        pulse = 0.6 + 0.4 * abs(math.sin(t * 1.4))
+        col_b = (int(20 * dim), int(34 * dim), int(46 * dim))
+        col_e = (int(100 * dim), int(180 * dim), int(220 * dim))
+        col_s = (int(140 * dim * pulse), int(210 * dim * pulse), int(240 * dim * pulse))
+        # Card body — landscape orientation
+        pygame.draw.rect(surf, col_b, pygame.Rect(cx - 30, cy - 20, 60, 38))
+        pygame.draw.rect(surf, col_e, pygame.Rect(cx - 30, cy - 20, 60, 38), 2)
+        # Magnetic stripe
+        pygame.draw.rect(surf, (int(30 * dim), int(40 * dim), int(50 * dim)),
+                         pygame.Rect(cx - 28, cy - 14, 56, 8))
+        # Nova Soma logo — a cold rectangle with "NS" in it
+        pygame.draw.rect(surf, col_e, pygame.Rect(cx - 22, cy - 2, 18, 14))
+        f7 = get_font(7, bold=True)
+        ns = f7.render("NS", True, col_b)
+        surf.blit(ns, (cx - 22 + (18 - ns.get_width()) // 2,
+                       cy - 2 + (14 - ns.get_height()) // 2))
+        # Pulsing "UPLOAD" status indicator on the right side
+        st = f7.render("UPLOAD", True, col_s)
+        surf.blit(st, (cx + 2, cy + 2))
         return
 
 
@@ -291,13 +341,12 @@ def _draw_card(surf, x, y, w, h, card, t, *,
 
 def visible_chapters(meta) -> list[int]:
     """Chapters the player can currently launch via the carousel.
-    Always includes chapter 1 (the entry chapter); previously-cleared
-    chapters are always available; chapter 4 only opens after campaign clear.
+    Ch.1 is always available. Each subsequent chapter unlocks once the
+    previous chapter has been completed (or if it has already been cleared).
     """
     completed = set(meta.chapters_completed) if meta else set()
     out = [1]
-    for ch in (2, 3, 4):
-        prev_done = (ch - 1) in completed
-        if prev_done or ch in completed:
+    for ch in (2, 3, 4, 5, 6):
+        if (ch - 1) in completed or ch in completed:
             out.append(ch)
     return out

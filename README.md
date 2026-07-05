@@ -42,9 +42,16 @@ meantime. Sandbox flight without NLTK at all: `play.py`.
 | **Interstitial** | Chapter bridge → next chapter loadout or campaign complete |
 | **Death** | Decanting invoice → **ENTER** → menu; **retry same sector** on next run start |
 
-Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sentient Paperwork, Schrödinger VIP). Each cargo adds a unique mid-flight mechanic.
+Six chapters, six cargo types. Each cargo adds a unique mid-flight or corridor mechanic.
 
-> **Cargo mechanics:** Ch.2 Epistemological Shrooms — periodic control inversion (Aliveness A.2). Ch.3+ cargos verified in play.
+| Chapter | Cargo | Mechanic |
+|---------|-------|---------|
+| **Ch.1** | Acoustic Archive | Cargo damage → audio bit-crush degrades |
+| **Ch.2** | Mycorrhizal Payload | Spore leak → periodic control inversion |
+| **Ch.3** | The Paperwork | Filing popups fire mid-flight under fire |
+| **Ch.4** | Schrödinger VIP | Observation collapses payout (alive/dead) |
+| **Ch.5** | MERCY | Chen's zero-write exploit drive — inert until deployed |
+| **Ch.6** | The Upload | 90-second server upload while alarms scream |
 
 ---
 
@@ -132,7 +139,7 @@ Four chapters, four cargo types (Acoustic Archive, Epistemological Shrooms, Sent
 - Engine tiers, drums, bass, pad, harmonica licks, guitar phrases
 - BPM scales with flight pressure; barge proximity motif
 - Scene mixing: menu, flight, terminal, shop, delivery, decanting, radio
-- Per-chapter inflection modules (`audio/chapter_1.py` … `chapter_4.py`)
+- Per-chapter inflection modules (`audio/chapter_1.py` … `chapter_6.py`)
 
 Spec + implementation status → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLAN.md)
 
