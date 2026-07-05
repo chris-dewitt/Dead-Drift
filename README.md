@@ -42,9 +42,16 @@ meantime. Sandbox flight without NLTK at all: `play.py`.
 | **Interstitial** | Chapter bridge → next chapter loadout or campaign complete |
 | **Death** | Decanting invoice → **ENTER** → menu; **retry same sector** on next run start |
 
-Six chapters. Chapters 1–4 each carry a distinct cargo (Acoustic Archive, Epistemological Shrooms, Sentient Paperwork, Schrödinger VIP), each adding a unique mid-flight mechanic. Chapters 5–6 — **The Edge** and **Compliance** — close the campaign: you pick up Chen's encrypted drive off-grid, then carry it into Nova Soma's Central Ledger.
+Six chapters, six cargo types. Each cargo adds a unique mid-flight or corridor mechanic.
 
-> **Cargo mechanics:** Ch.2 Epistemological Shrooms — periodic control inversion (Aliveness A.2). Ch.3+ cargos verified in play. Ch.5–6 run the EncryptedDrive payload (acquired in-corridor, then hunted by Compliance vessels).
+| Chapter | Cargo | Mechanic |
+|---------|-------|---------|
+| **Ch.1** | Acoustic Archive | Cargo damage → audio bit-crush degrades |
+| **Ch.2** | Mycorrhizal Payload | Spore leak → periodic control inversion |
+| **Ch.3** | The Paperwork | Filing popups fire mid-flight under fire |
+| **Ch.4** | Schrödinger VIP | Observation collapses payout (alive/dead) |
+| **Ch.5** | Encrypted Drive (The Edge) | Chen's drive picked up in-corridor; damage spikes its trace level → Compliance vessels hunt you |
+| **Ch.6** | Encrypted Drive (Compliance) | Carry the drive into Nova Soma — 90-second server-room upload while alarms scream |
 
 ---
 

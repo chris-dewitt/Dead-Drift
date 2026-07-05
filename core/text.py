@@ -16,11 +16,11 @@ from __future__ import annotations
 import os
 import pygame
 
+from core.resource_path import resource_path
+
 # ── Font discovery ───────────────────────────────────────────────────────
-_FONTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                          "assets", "fonts")
-_BUNDLED_REGULAR = os.path.join(_FONTS_DIR, "DejaVuSansMono.ttf")
-_BUNDLED_BOLD    = os.path.join(_FONTS_DIR, "DejaVuSansMono-Bold.ttf")
+_BUNDLED_REGULAR = resource_path("assets", "fonts", "DejaVuSansMono.ttf")
+_BUNDLED_BOLD    = resource_path("assets", "fonts", "DejaVuSansMono-Bold.ttf")
 
 # SysFont fallback chain — first match wins on each OS
 _SYSFONT_FALLBACK = "consolas,jetbrainsmono,dejavusansmono,menlo,monospace"

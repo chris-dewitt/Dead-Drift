@@ -4,6 +4,7 @@ import random
 import pygame
 
 from config import settings as S
+from core import settings_store
 from core.state_manager import StateManager, GameState
 from renderer.visual_fx import VisualFX
 from core.transitions import TransitionManager
@@ -101,6 +102,13 @@ class Game:
             self.screen, self.ship, self.run_mgr, self.meta
         )
         self.audio = AudioManager()
+
+        # Load + apply persisted user settings (volume, fullscreen)
+        settings_store.load()
+        self.audio.set_master_volume(settings_store.get("master_volume"))
+        if settings_store.get("fullscreen"):
+            pygame.display.toggle_fullscreen()
+        self._settings_cursor: int = 0
 
         # CRT power-down scene transitions
         self.transition = TransitionManager()
@@ -440,6 +448,7 @@ class Game:
         # Jukebox unlocks after the player has completed all 4 chapters at least once
         if self.meta.campaign_cleared_at_least_once:
             rows.append(("BAX'S TAPES", True, "jukebox"))
+        rows.append(("SETTINGS", True, "settings"))
         rows.append(("QUIT", True, "quit"))
         return rows
 
@@ -505,6 +514,9 @@ class Game:
         elif action == "dossiers":
             self._menu_mode = "dossiers"
             self._dossier_cursor = 0
+        elif action == "settings":
+            self._menu_mode = "settings"
+            self._settings_cursor = 0
         elif action == "quit":
             self.running = False
 
@@ -628,6 +640,35 @@ class Game:
                     self._begin_run_from_carousel(ch)
             elif event.key == pygame.K_ESCAPE:
                 self._menu_mode = "main"
+            return
+
+        if self._menu_mode == "settings":
+            from renderer.settings_screen import ROWS, VOL_STEP
+            n = len(ROWS)
+            if event.key in (pygame.K_UP, pygame.K_w):
+                self._settings_cursor = (self._settings_cursor - 1) % n
+            elif event.key in (pygame.K_DOWN, pygame.K_s):
+                self._settings_cursor = (self._settings_cursor + 1) % n
+            elif event.key == pygame.K_ESCAPE:
+                self._menu_mode = "main"
+            elif ROWS[self._settings_cursor] == "BACK" and event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                self._menu_mode = "main"
+            elif ROWS[self._settings_cursor] == "MASTER VOLUME":
+                vol = settings_store.get("master_volume")
+                if event.key in (pygame.K_LEFT, pygame.K_a):
+                    vol = max(0.0, round(vol - VOL_STEP, 2))
+                elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                    vol = min(1.0, round(vol + VOL_STEP, 2))
+                if event.key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d):
+                    settings_store.set_value("master_volume", vol)
+                    if self.audio:
+                        self.audio.set_master_volume(vol)
+            elif ROWS[self._settings_cursor] == "FULLSCREEN":
+                if event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_LEFT,
+                                  pygame.K_RIGHT, pygame.K_a, pygame.K_d):
+                    fs = not settings_store.get("fullscreen")
+                    settings_store.set_value("fullscreen", fs)
+                    pygame.display.toggle_fullscreen()
             return
 
         if self._menu_mode == "records":
@@ -1712,12 +1753,16 @@ class Game:
         2: "MYCORRHIZAL PAYLOAD",
         3: "THE PAPERWORK",
         4: "SCHRÖDINGER VIP",
+        5: "THE EDGE",
+        6: "COMPLIANCE",
     }
     _CHAPTER_SUBTITLES = {
         1: "contraband uncompressed audio",
         2: "weaponized epistemological fungi",
         3: "telepathic bureaucratic forms",
         4: "sealed box. alive AND dead.",
+        5: "off-grid rendezvous with the Remnants",
+        6: "Nova Soma's ledger floor",
     }
     _INTERSTITIAL_BAX = {
         1: ("Archive's in their hands. Don't think too hard about who 'they' are. "
@@ -1731,14 +1776,19 @@ class Game:
             "Next: one passenger, sealed box. Don't open it. ...Fine, open it. I'm curious too."),
         4: ("All four cargos. All four payouts. Local 404 didn't win. Neither did we. "
             "We just kept goin'. That's the gig. Rest up. "
-            "We'll be back. We're always back."),
+            "We'll be back. We're always back. Wait. New hail. The Edge wants us."),
+        5: ("Chen's drive is aboard. Nova Soma knows someone touched the cage. "
+            "Next stop is the company floor itself. Compliance, clone tanks, the whole ledger. "
+            "No pressure. Apart from all of it."),
+        6: ("Six chapters. Ledger wiped. Debt gone. If this is what winning feels like, "
+            "I might need a minute. Then a drink. Then maybe a bar."),
     }
 
     def _enter_interstitial(self):
         # Mark delivery complete in meta_progression handled by DeliverySequence._compute_result
         completed = self._delivery_chapter
         next_ch = completed + 1
-        campaign_end = next_ch > 4 or len(self.meta.chapters_completed) >= 4
+        campaign_end = next_ch > 6 or self.meta.campaign_cleared_at_least_once
         self._interstitial_completed     = completed
         self._interstitial_next          = next_ch
         self._interstitial_campaign_end  = campaign_end
@@ -1847,7 +1897,7 @@ class Game:
             end_col = (int(160 + 80 * pulse), int(220 * pulse + 35), int(40 + 40 * pulse))
             top_label = f_end_l.render("CAMPAIGN COMPLETE", True, (140, 200, 80))
             self.screen.blit(top_label, (cx - top_label.get_width() // 2, next_y))
-            big = f_end_t.render("ALL FOUR CARGOS DELIVERED", True, end_col)
+            big = f_end_t.render("ALL SIX CHAPTERS CLEARED", True, end_col)
             self.screen.blit(big, (cx - big.get_width() // 2, next_y + 18))
             stats = (f"DEBT: {self.meta.debt:,} cr   ·   CLONES: {self.meta.clone_count}   ·   "
                      "ROUTE: CLEAR")
@@ -2236,6 +2286,17 @@ class Game:
                 col = (220, 140, 60) if i == 0 else (140, 140, 160)
                 s = font_row.render(line, True, col)
                 self.screen.blit(s, (cx - s.get_width() // 2, py + i * 28))
+            return
+
+        if self._menu_mode == "settings":
+            from renderer.settings_screen import draw as _draw_settings
+            _draw_settings(
+                self.screen,
+                cursor=self._settings_cursor,
+                master_volume=settings_store.get("master_volume"),
+                fullscreen=settings_store.get("fullscreen"),
+                t=t,
+            )
             return
 
         if self._menu_mode == "jukebox":

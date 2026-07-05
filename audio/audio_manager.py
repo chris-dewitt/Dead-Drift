@@ -697,6 +697,10 @@ class AudioManager:
     # ------------------------------------------------------------------
     # Scene system
 
+    def set_master_volume(self, volume: float) -> None:
+        """Set master volume (0.0–1.0). Takes effect on next update() tick."""
+        self._master = max(0.0, min(1.0, float(volume)))
+
     def set_scene(self, scene_name: str, chapter: int | None = None):
         """Switch musical scene. Optionally load a chapter's sonic palette."""
         if chapter is not None and chapter != self._chapter:
