@@ -107,7 +107,9 @@ Six chapters, six cargo types. Each cargo adds a unique mid-flight or corridor m
 | P | Pause |
 | ESC | Pause in-flight; **abort** terminal (−20 hull); shop leave |
 
-**Delivery (dock):** Beat 1 — A/D/W/S align nose · Beat 2 — **J** when gauge centred, then **hold SPACE** ~1.2s for retro burn · Corridor — platformer keys
+**Delivery (dock):** Beat 1 — A/D/W/S align nose · Beat 2 — **J** when gauge centred, then **hold SPACE** ~1.2s for retro burn
+
+**Corridor (on foot):** A/D or ←/→ move (with momentum) · SPACE/W jump — **hold for height**, tap for a hop · **hold SHIFT to sprint** (earned after a sustained run) · S/↓ + W climb ladders · E talk/shortcuts
 
 **Menus:** ↑↓ navigate · ENTER confirm · ESC back / quit where noted
 

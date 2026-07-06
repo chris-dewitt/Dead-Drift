@@ -24,6 +24,8 @@ from audio.synth import (
     sector_pad, slide_blues_note,
     tape_hum_bed, slingshot_stinger, barge_motif, decanting_printer,
     npc_sig_dispatcher, npc_sig_adjuster, torch_slow_clap,
+    corridor_jump_blip, corridor_land_thud, corridor_skid_scrape,
+    corridor_sprint_chirp,
     _to_sound, _2PI,
     drum_kick, drum_snare_gated, drum_hihat, drum_clap,
     synth_bass_note,
@@ -232,6 +234,8 @@ class AudioManager:
         self._bax_hums: list[pygame.mixer.Sound] = []
         self._licks:    list[pygame.mixer.Sound] = []
         self._sfx:      dict[str, pygame.mixer.Sound] = {}
+        # Delivery v2 I.1.4 — per-key debounce for movement SFX (ms ticks)
+        self._corr_move_last: dict[str, int] = {}
         self._voices:   dict[str, list[pygame.mixer.Sound]] = {}
         # Epic 7.4 — Bax voice hull-tier variants (higher pitch under damage)
         self._bax_voice_tiers: list[list[pygame.mixer.Sound]] = []
@@ -401,6 +405,10 @@ class AudioManager:
         self._sfx["clang"]     = tether_clang()
         self._sfx["snap"]      = tether_snap()
         self._sfx["beep"]      = terminal_beep()
+        self._sfx["corr_jump"]   = corridor_jump_blip()
+        self._sfx["corr_land"]   = corridor_land_thud()
+        self._sfx["corr_skid"]   = corridor_skid_scrape()
+        self._sfx["corr_sprint"] = corridor_sprint_chirp()
         self._sfx["term_key_normal"] = terminal_key_click("normal")
         self._sfx["term_key_backspace"] = terminal_key_click("backspace")
         self._sfx["term_key_enter"] = terminal_key_click("enter")
@@ -598,6 +606,13 @@ class AudioManager:
         bus.subscribe(EVT_CORRIDOR_ENTER,     self._on_corridor_enter)
         bus.subscribe(EVT_CORRIDOR_BOSS_ROOM, self._on_corridor_boss_room)
         bus.subscribe(EVT_CORRIDOR_EXIT,      self._on_corridor_exit)
+        # Delivery v2 I.1.4 — corridor movement feel SFX
+        from core.event_bus import (EVT_CORRIDOR_JUMP, EVT_CORRIDOR_LAND,
+                                    EVT_CORRIDOR_SKID, EVT_CORRIDOR_SPRINT)
+        bus.subscribe(EVT_CORRIDOR_JUMP,   self._on_corridor_jump)
+        bus.subscribe(EVT_CORRIDOR_LAND,   self._on_corridor_land)
+        bus.subscribe(EVT_CORRIDOR_SKID,   self._on_corridor_skid)
+        bus.subscribe(EVT_CORRIDOR_SPRINT, self._on_corridor_sprint)
         # Aliveness F.4 — harmonica lick when Bax hums at critical hull
         bus.subscribe(EVT_BAX_HARMONICA,      self._on_bax_harmonica)
 
@@ -1028,6 +1043,28 @@ class AudioManager:
         self._corridor_intensity = 0.0
         if self._corr_sig_ch is not None:
             self._corr_sig_ch.set_volume(0.0)
+
+    # Delivery v2 I.1.4 — movement feel SFX (debounced; land/skid can
+    # fire every frame at a ledge lip without the gap guard).
+    def _corr_move_sfx(self, key: str, vol: float, min_gap_ms: int = 90):
+        now  = pygame.time.get_ticks()
+        last = self._corr_move_last.get(key, -1_000_000)
+        if now - last < min_gap_ms:
+            return
+        self._corr_move_last[key] = now
+        self._play_sfx(key, vol)
+
+    def _on_corridor_jump(self, **_):
+        self._corr_move_sfx("corr_jump", 0.50)
+
+    def _on_corridor_land(self, **_):
+        self._corr_move_sfx("corr_land", 0.55)
+
+    def _on_corridor_skid(self, **_):
+        self._corr_move_sfx("corr_skid", 0.48, 240)
+
+    def _on_corridor_sprint(self, **_):
+        self._corr_move_sfx("corr_sprint", 0.60, 500)
 
     def _build_corridor_signature(self, chapter: int) -> list[pygame.mixer.Sound]:
         """Lazily build a small bank of signature instrument sounds for

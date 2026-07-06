@@ -52,7 +52,8 @@ def test_no_raw_sysfont_calls_in_hot_paths():
 
     These are the hot paths from Epic 1.2: cockpit, HUD, vector/sci-fi
     renderers, terminal, npc portraits, delivery sequence + corridor
-    framework, platformer, obstacles. They should now use get_font.
+    framework. They should now use get_font. (The old platformer/obstacles
+    modules were deleted in Delivery v2 I.1.5.)
     """
     from pathlib import Path
     targets = [
@@ -63,8 +64,6 @@ def test_no_raw_sysfont_calls_in_hot_paths():
         "terminal/terminal.py",
         "terminal/npc_portraits.py",
         "delivery/delivery_sequence.py",
-        "delivery/platformer.py",
-        "delivery/obstacles.py",
         "delivery/corridor/base.py",
         "delivery/corridor/elements.py",
         "roguelite/loadout_draft.py",

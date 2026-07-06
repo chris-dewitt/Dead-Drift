@@ -851,3 +851,40 @@ def torch_slow_clap(duration: float = 2.8) -> pygame.mixer.Sound:
     _one_clap(0.40, 0.62)
     _one_clap(1.65, 0.55)
     return _to_sound(buf.clip(-1.0, 1.0))
+
+
+# ---------------------------------------------------------------------------
+# Delivery v2 I.1.4 — corridor movement SFX (chunky, 16-bit-flavoured)
+# ---------------------------------------------------------------------------
+
+def corridor_jump_blip() -> pygame.mixer.Sound:
+    """Rising square chirp — the classic console jump voice."""
+    dur  = 0.12
+    inst = np.linspace(300.0, 620.0, int(SAMPLE_RATE * dur))
+    phase = np.cumsum(_2PI * inst / SAMPLE_RATE)
+    w = np.sign(np.sin(phase)).astype(np.float32) * 0.22
+    return _to_sound(_adsr(w, 0.002, 0.03, 0.55, 0.05))
+
+
+def corridor_land_thud() -> pygame.mixer.Sound:
+    """Short low thud with a dusting of noise — boots on deck plate."""
+    dur  = 0.14
+    inst = np.linspace(150.0, 55.0, int(SAMPLE_RATE * dur))
+    phase = np.cumsum(_2PI * inst / SAMPLE_RATE)
+    w = np.sin(phase).astype(np.float32) * 0.50 + _noise(dur, amp=0.10)
+    return _to_sound(_adsr(w, 0.001, 0.05, 0.25, 0.07))
+
+
+def corridor_skid_scrape() -> pygame.mixer.Sound:
+    """Differenced noise = high hiss — soles scrubbing off momentum."""
+    dur = 0.16
+    w = _noise(dur, amp=0.5)
+    w = (np.diff(w, prepend=0.0) * 2.2).astype(np.float32)
+    return _to_sound(_adsr(w, 0.004, 0.06, 0.35, 0.08))
+
+
+def corridor_sprint_chirp() -> pygame.mixer.Sound:
+    """Two-note lock-on — full sprint earned."""
+    n1 = _adsr(_sine(660.0, 0.07, amp=0.30), 0.002, 0.02, 0.6, 0.03)
+    n2 = _adsr(_sine(990.0, 0.09, amp=0.30), 0.002, 0.02, 0.6, 0.05)
+    return _to_sound(np.concatenate([n1, n2]))
