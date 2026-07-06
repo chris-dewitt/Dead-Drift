@@ -27,11 +27,30 @@ from core.event_bus import (bus, EVT_BAX_SPEAK, EVT_DELIVERY_DONE,
                             EVT_CORRIDOR_RUN, EVT_CORRIDOR_JUMP,
                             EVT_CORRIDOR_SECRET, EVT_CORRIDOR_DEATH,
                             EVT_LORE_FOUND, EVT_CORRIDOR_ENTER,
-                            EVT_CORRIDOR_BOSS_ROOM, EVT_CORRIDOR_EXIT)
+                            EVT_CORRIDOR_BOSS_ROOM, EVT_CORRIDOR_EXIT,
+                            EVT_CORRIDOR_LAND, EVT_CORRIDOR_SKID,
+                            EVT_CORRIDOR_SPRINT)
 
-GRAVITY   = 980.0
-JUMP_VY   = -440.0
-RUN_SPEED = 220.0
+# ── Movement feel — Delivery v2 I.1 tunables ────────────────────────────────
+# These constants ARE the corridor's game feel. Tune here, nowhere else.
+GRAVITY          = 980.0    # base gravity px/s²
+FALL_GRAV_MULT   = 1.28     # falling is heavier than rising (the Mario asymmetry)
+JUMP_CUT_MULT    = 2.35     # extra gravity while rising after jump is released
+JUMP_VY          = -470.0   # jump take-off velocity
+COYOTE_TIME      = 0.10     # s of jump grace after running off a ledge
+JUMP_BUFFER      = 0.12     # s a jump press is remembered before landing
+WALK_SPEED       = 220.0    # px/s ground cap (pre-v2 RUN_SPEED)
+SPRINT_SPEED     = 320.0    # px/s cap at full sprint charge
+SPRINT_CHARGE_T  = 0.8      # s of sustained ground running to earn full sprint
+GROUND_ACCEL     = 900.0    # px/s² toward target speed on the ground
+GROUND_DECEL     = 1400.0   # px/s² toward zero with no input
+AIR_CONTROL      = 0.55     # fraction of ground accel available in the air
+SKID_DECEL       = 2200.0   # px/s² while skidding out of a reversal
+SKID_MIN_SPEED   = 130.0    # |vx| needed for a reversal to read as a skid
+RETREAT_FACTOR   = 0.6      # backward cap fraction (corridor is forward-biased)
+LAND_SFX_VY      = 260.0    # touchdown vy that warrants a land thud/squash
+
+RUN_SPEED = WALK_SPEED      # legacy alias (ladder side-step, oneway hints)
 CLIMB_SPD = 120.0
 LADDER_REGRAB_COOLDOWN = 0.18
 LADDER_SIDE_STEP_SPEED = RUN_SPEED * 0.75
@@ -262,11 +281,26 @@ class Corridor:
         # Player state
         self._px        = 120.0
         self._py        = float(FLOOR_Y - PLAYER_H)
+        self._pvx       = 0.0
         self._pvy       = 0.0
         self._grounded  = True
         self._on_ladder  = False
         self._ladder_release_t = 0.0
         self._cam_x     = 0.0
+
+        # Delivery v2 I.1 — movement feel state
+        self._coyote_t       = 0.0     # >0: may still jump after leaving ground
+        self._jump_buf_t     = 0.0     # >0: a jump press is waiting for ground
+        self._jump_held      = False   # polled each frame for variable height
+        self._sprint_charge  = 0.0     # 0..1 — earned by sustained ground run
+        self._sprint_locked  = False   # latch for the sprint-lock event/burst
+        self._skid_t         = 0.0     # >0: currently skidding out of a turn
+        self._facing         = 1
+        self._walk_phase     = 0.0     # leg-cycle phase, advances with |vx|
+        self._land_squash_t  = 0.0     # >0: landing squash animation
+        self._jump_stretch_t = 0.0     # >0: take-off stretch animation
+        self._victory        = False   # finished — victory pose
+        self._dust: list[list[float]] = []   # [x, y, vx, vy, life, size]
 
         # Run state
         self._room_idx  = 0
@@ -336,16 +370,18 @@ class Corridor:
         if self._done:
             return
         if event.key in (pygame.K_SPACE, pygame.K_w, pygame.K_UP):
-            if self._grounded and not self._on_ladder:
-                self._pvy      = JUMP_VY
-                self._grounded = False
-                bus.emit(EVT_CORRIDOR_JUMP)
-            elif self._on_ladder and event.key == pygame.K_SPACE:
+            if self._on_ladder and event.key == pygame.K_SPACE:
                 # Jump off ladder mid-way
                 self._pvy       = JUMP_VY * 0.75
                 self._grounded  = False
+                self._jump_stretch_t = 0.10
                 self._release_ladder()
                 bus.emit(EVT_CORRIDOR_JUMP)
+            elif not self._on_ladder:
+                # Delivery v2 I.1.2 — buffered jump: remember the press and
+                # let _try_jump honour ground OR coyote grace.
+                self._jump_buf_t = JUMP_BUFFER
+                self._try_jump()
         elif event.key in (pygame.K_s, pygame.K_DOWN):
             pass  # descend on ladder handled by held-key
         elif event.key in (pygame.K_e, pygame.K_RETURN):
@@ -382,6 +418,18 @@ class Corridor:
         self._stun_t        = max(0.0, self._stun_t - dt)
         self._invert_t      = max(0.0, self._invert_t - dt)
         self._ladder_release_t = max(0.0, self._ladder_release_t - dt)
+
+        # Delivery v2 I.1 — feel timers + dust particles
+        self._jump_buf_t     = max(0.0, self._jump_buf_t - dt)
+        self._land_squash_t  = max(0.0, self._land_squash_t - dt)
+        self._jump_stretch_t = max(0.0, self._jump_stretch_t - dt)
+        if self._dust:
+            for d in self._dust:
+                d[0] += d[2] * dt
+                d[1] += d[3] * dt
+                d[3] += 300.0 * dt
+                d[4] -= dt
+            self._dust = [d for d in self._dust if d[4] > 0]
         self._run_speak_t  -= dt
         if self._run_speak_t <= 0:
             self._run_speak_t = 12.0
@@ -410,12 +458,19 @@ class Corridor:
         if inverted:
             move_fwd, move_bck = move_bck, move_fwd
 
+        # Jump key polled every frame for variable jump height (I.1.2)
+        self._jump_held = bool(keys[pygame.K_SPACE] or keys[pygame.K_w]
+                               or keys[pygame.K_UP])
+
         # Ladder check
         ladder = self._active_ladder(wants_ladder, climb_down)
         self._on_ladder = ladder is not None and (self._on_ladder or wants_ladder)
 
         if self._on_ladder:
             self._pvy = 0.0
+            self._pvx = 0.0
+            self._coyote_t = 0.0
+            self._skid_t   = 0.0
             if climb_up:
                 self._py  -= CLIMB_SPD * dt
             if climb_down:
@@ -456,24 +511,92 @@ class Corridor:
                 else:
                     self._active_path = "low"
 
-            if move_fwd:
-                proposed = self._px + RUN_SPEED * dt
-                # Aliveness A.6 — wire OneWayWall collision so the
-                # Ch.3 cubicle zigzag actually constrains movement
-                # instead of decorating it. Block forward motion if any
-                # OneWayWall says we're entering its blocked side.
-                if not self._blocked_by_oneway(proposed, +RUN_SPEED, room):
-                    self._px = proposed
-            elif move_bck:
-                # Can retreat but only back to the camera left edge (can't go behind camera)
-                min_x = self._cam_x + _PLAYER_X_FIXED * 0.5
-                proposed = self._px - RUN_SPEED * 0.6 * dt
-                if not self._blocked_by_oneway(proposed, -RUN_SPEED, room):
-                    self._px = max(min_x, proposed)
+            # ── Delivery v2 I.1.1 — momentum movement ────────────────────
+            axis = (1 if move_fwd else 0) - (1 if move_bck else 0)
 
-            # Gravity
-            self._pvy += GRAVITY * dt
+            # Sprint charge is earned by sustained forward ground running
+            # with the sprint key held; airborne time keeps it (jumps don't
+            # break P-speed), anything else bleeds it off fast.
+            sprint_held = (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+                           or keys[pygame.K_x])
+            if sprint_held and axis > 0 and self._grounded:
+                self._sprint_charge = min(
+                    1.0, self._sprint_charge + dt / SPRINT_CHARGE_T)
+            elif axis > 0 and not self._grounded:
+                pass
+            else:
+                self._sprint_charge = max(0.0, self._sprint_charge - dt * 2.5)
+            if self._sprint_charge >= 1.0 and not self._sprint_locked:
+                self._sprint_locked = True
+                self._spawn_dust(self._px - 8, self._py + PLAYER_H,
+                                 n=6, spread=90.0)
+                bus.emit(EVT_CORRIDOR_SPRINT)
+            elif self._sprint_charge < 0.5:
+                self._sprint_locked = False
+
+            # Forward may sprint; retreat stays capped (forward-biased level)
+            if axis > 0:
+                top = WALK_SPEED + (SPRINT_SPEED - WALK_SPEED) * self._sprint_charge
+            else:
+                top = WALK_SPEED * RETREAT_FACTOR
+            target_vx = axis * top
+
+            # Skid: reversing against real speed on the ground
+            if (self._grounded and axis != 0
+                    and axis * self._pvx < 0
+                    and abs(self._pvx) > SKID_MIN_SPEED
+                    and self._skid_t <= 0):
+                self._skid_t = 0.14
+                self._spawn_dust(self._px + (6 if self._pvx > 0 else -6),
+                                 self._py + PLAYER_H, n=5, spread=70.0)
+                bus.emit(EVT_CORRIDOR_SKID)
+            self._skid_t = max(0.0, self._skid_t - dt)
+
+            if self._skid_t > 0:
+                accel = SKID_DECEL
+            elif axis != 0:
+                accel = GROUND_ACCEL
+            else:
+                accel = GROUND_DECEL
+            if not self._grounded:
+                accel *= AIR_CONTROL
+            if self._pvx < target_vx:
+                self._pvx = min(target_vx, self._pvx + accel * dt)
+            elif self._pvx > target_vx:
+                self._pvx = max(target_vx, self._pvx - accel * dt)
+            if abs(self._pvx) > 2.0:
+                self._facing = 1 if self._pvx > 0 else -1
+
+            if abs(self._pvx) > 0.01:
+                proposed = self._px + self._pvx * dt
+                # Aliveness A.6 — OneWayWall still constrains movement;
+                # a blocked wall also kills momentum.
+                if self._blocked_by_oneway(proposed, self._pvx, room):
+                    self._pvx = 0.0
+                else:
+                    # Can retreat only back to the camera left edge
+                    min_x = self._cam_x + _PLAYER_X_FIXED * 0.5
+                    if proposed < min_x:
+                        proposed  = min_x
+                        self._pvx = max(0.0, self._pvx)
+                    self._px = proposed
+
+            # 0.041 rad/px ≈ the pre-v2 leg cadence at walk speed; sprinting
+            # naturally quickens the stride because phase follows |vx|.
+            self._walk_phase += abs(self._pvx) * dt * 0.041
+
+            # ── Delivery v2 I.1.2 — jump-feel gravity ────────────────────
+            g = GRAVITY
+            if self._pvy < 0:
+                if not self._jump_held:
+                    g *= JUMP_CUT_MULT      # early release cuts the jump
+            else:
+                g *= FALL_GRAV_MULT         # falls read heavier than rises
+            self._pvy += g * dt
             self._py  += self._pvy * dt
+
+            impact_vy    = self._pvy
+            was_airborne = not self._grounded
 
             # Platform collision (floor first)
             self._grounded = False
@@ -499,6 +622,21 @@ class Corridor:
                         self._py      = el.y - PLAYER_H
                         self._pvy     = 0.0
                         self._grounded = True
+
+            # ── Delivery v2 I.1.2 — landing, coyote, buffered jump ───────
+            if self._grounded:
+                self._coyote_t = COYOTE_TIME
+                if was_airborne:
+                    if impact_vy > LAND_SFX_VY:
+                        self._land_squash_t = 0.12
+                        self._spawn_dust(
+                            self._px, self._py + PLAYER_H,
+                            n=4 + min(4, int(impact_vy / 200)), spread=60.0)
+                        bus.emit(EVT_CORRIDOR_LAND, impact=impact_vy)
+                    if self._jump_buf_t > 0:
+                        self._try_jump()
+            else:
+                self._coyote_t = max(0.0, self._coyote_t - dt)
 
         # Camera
         self._cam_x = self._px - _PLAYER_X_FIXED
@@ -788,6 +926,29 @@ class Corridor:
                     self._cam_x = self._px - _PLAYER_X_FIXED
                     break
 
+    def _try_jump(self) -> None:
+        """Execute a jump if grounded or within coyote grace (I.1.2)."""
+        if self._on_ladder or self._done:
+            return
+        if not (self._grounded or self._coyote_t > 0):
+            return
+        self._pvy        = JUMP_VY
+        self._grounded   = False
+        self._coyote_t   = 0.0
+        self._jump_buf_t = 0.0
+        self._jump_stretch_t = 0.10
+        bus.emit(EVT_CORRIDOR_JUMP)
+
+    def _spawn_dust(self, x: float, y: float, n: int = 4,
+                    spread: float = 60.0) -> None:
+        """Chunky dust puffs at (x, y) world-space — landing/skid/sprint."""
+        for _ in range(n):
+            self._dust.append([
+                x + random.uniform(-4, 4), y + random.uniform(-2, 0),
+                random.uniform(-spread, spread), random.uniform(-70, -20),
+                random.uniform(0.18, 0.34), random.uniform(1.5, 3.0),
+            ])
+
     def _take_hit(self):
         self._hits    += 1
         self._stun_t   = 1.2
@@ -832,6 +993,7 @@ class Corridor:
 
     def _finish(self):
         self._done = True
+        self._victory = True
         bus.emit(EVT_DELIVERY_DONE)
         if not self._exit_emitted:
             self._exit_emitted = True
@@ -1042,23 +1204,70 @@ class Corridor:
             wash.fill((180, 30, 30, int(40 + 30 * pulse)))
             surf.blit(wash, (0, 0))
 
+    def _pose(self) -> str:
+        """Delivery v2 I.1.3 — pick the courier pose from movement state."""
+        if self._victory:
+            return "victory"
+        if self._on_ladder:
+            return "jump"                       # climbing tuck
+        if self._skid_t > 0:
+            return "skid"
+        if not self._grounded:
+            return "jump" if self._pvy < -40 else "fall"
+        if abs(self._pvx) > 15:
+            return "run"
+        return "idle"
+
     def _draw_player(self, surf, t):
         px       = _PLAYER_X_FIXED
         py       = int(self._py)
         stun_fls = self._stun_t > 0 and int(t * 10) % 2 == 0
         inv_glow = self._invert_t > 0
 
-        if not stun_fls:
-            draw_courier_sprite(surf, px, py - 8, t,
-                                inv=inv_glow, grounded=self._grounded)
+        # Dust puffs (world-space, behind the courier)
+        for d in self._dust:
+            dx = int(d[0] - self._cam_x)
+            dy = int(d[1])
+            a  = max(0.0, min(1.0, d[4] / 0.3))
+            g  = int(120 + 80 * a)
+            s  = max(1, int(d[5]))
+            pygame.draw.rect(surf, (g, g, g), (dx, dy, s, s))
+
+        if stun_fls:
+            return
+
+        pose = self._pose()
+        # Squash on landing, stretch at take-off (I.1.3). k>0 squashes.
+        k = 2.3 * self._land_squash_t - 1.6 * self._jump_stretch_t
+        if abs(k) < 0.02:
+            draw_courier_sprite(surf, px, py - 8, t, inv=inv_glow,
+                                grounded=self._grounded, pose=pose,
+                                walk_phase=self._walk_phase)
             self._draw_cargo_silhouette(surf, px, py)
-            if not self._grounded and not self._on_ladder:
-                pygame.draw.line(surf, (0, 160, 70),
-                                 (px - 4, py + PLAYER_H),
-                                 (px - 8, py + PLAYER_H + 8), 2)
-                pygame.draw.line(surf, (0, 160, 70),
-                                 (px + 4, py + PLAYER_H),
-                                 (px + 10, py + PLAYER_H + 6), 2)
+        else:
+            # Render to a small temp surface, scale, anchor at the feet.
+            tmp = getattr(self, "_sprite_tmp", None)
+            if tmp is None:
+                tmp = pygame.Surface((64, 76), pygame.SRCALPHA)
+                self._sprite_tmp = tmp
+            tmp.fill((0, 0, 0, 0))
+            draw_courier_sprite(tmp, 32, 22, t, inv=inv_glow,
+                                grounded=self._grounded, pose=pose,
+                                walk_phase=self._walk_phase)
+            self._draw_cargo_silhouette(tmp, 32, 30)
+            sw = max(1, int(64 * (1.0 + 0.9 * k)))
+            sh = max(1, int(76 * (1.0 - k)))
+            scaled = pygame.transform.scale(tmp, (sw, sh))
+            # Feet anchor: world bottom of the temp canvas is py + 46
+            surf.blit(scaled, (px - sw // 2, py + 46 - sh))
+
+        if not self._grounded and not self._on_ladder:
+            pygame.draw.line(surf, (0, 160, 70),
+                             (px - 4, py + PLAYER_H),
+                             (px - 8, py + PLAYER_H + 8), 2)
+            pygame.draw.line(surf, (0, 160, 70),
+                             (px + 4, py + PLAYER_H),
+                             (px + 10, py + PLAYER_H + 6), 2)
 
     def _draw_cargo_silhouette(self, surf, px, py):
         cs = self.cargo_silhouette

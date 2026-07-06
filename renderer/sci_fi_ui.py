@@ -62,7 +62,9 @@ def draw_corporate_pipe(surf: pygame.Surface, sx: int, y: int, h: int,
 
 
 def draw_courier_sprite(surf: pygame.Surface, px: int, py: int, t: float, *,
-                        inv: bool = False, grounded: bool = True) -> None:
+                        inv: bool = False, grounded: bool = True,
+                        pose: str | None = None,
+                        walk_phase: float | None = None) -> None:
     """
     Detailed sci-fi courier sprite with walk animation.
 
@@ -129,18 +131,42 @@ def draw_courier_sprite(surf: pygame.Surface, px: int, py: int, t: float, *,
             pygame.draw.polygon(surf, bc or c_trim, ipts, bw)
 
     # ── Animation state ───────────────────────────────────────────────────────
-    wp   = t * 9.0
+    # Delivery v2 I.1.3 — pose resolution. Explicit pose wins; legacy callers
+    # keep the old grounded-flag behaviour (run when grounded, tuck in air).
+    if pose is None:
+        pose = "run" if grounded else "jump"
+    # walk_phase lets the caller drive leg cadence from actual speed;
+    # t keeps driving blinks/LEDs so idling never freezes the electronics.
+    wp   = walk_phase if walk_phase is not None else t * 9.0
     blink = int(t * 3.5) % 2 == 0
     blink2 = int(t * 2.0) % 2 == 0
 
-    if grounded:
+    if pose == "run":
         ll_sw = math.sin(wp)          * 5.5  # left  leg  swing
         lr_sw = math.sin(wp + math.pi) * 5.5  # right leg  swing
         al_sw = math.sin(wp + math.pi) * 4.5  # left  arm  (opposite leg)
         ar_sw = math.sin(wp)          * 4.5  # right arm
         bob   = int(abs(math.sin(wp * 2)) * 1.5)
+    elif pose == "idle":
+        sway = math.sin(t * 2.2)             # slow breathe, feet planted
+        ll_sw = lr_sw = sway * 0.8
+        al_sw = ar_sw = -sway * 1.2
+        bob   = int(abs(math.sin(t * 2.2)) * 1.0)
+    elif pose == "fall":
+        ll_sw, lr_sw = -9.0,  8.0            # legs split wide
+        al_sw, ar_sw =  9.0, -9.0            # arms flung out
+        bob = 0
+    elif pose == "skid":
+        ll_sw, lr_sw =  9.0,  7.0            # both legs braced forward
+        al_sw, ar_sw = -9.0, -7.0            # arms trail behind
+        bob = 1
+    elif pose == "victory":
+        hop = abs(math.sin(t * 6.0))         # bouncing on the spot
+        ll_sw = lr_sw = 0.0
+        al_sw, ar_sw = -10.0, 10.0           # arms thrown wide
+        bob = -int(hop * 3.0)
     else:
-        # Tucked jump pose
+        # "jump" — tucked
         ll_sw, lr_sw = -7.0,  5.0
         al_sw, ar_sw = -8.0, -6.0
         bob = 0

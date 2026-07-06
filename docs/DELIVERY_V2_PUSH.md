@@ -1,7 +1,7 @@
 # THE DELIVERY V2 PUSH
 
 **Started:** July 6 2026
-**Status:** Planned — Phase I.1 next
+**Status:** Phase I.1 shipped (`[~]` pending Chris play-verify) — I.2 next
 **Scope:** Open-ended (no time cap)
 **North star for all agents:** this document supersedes `ALIVENESS_PUSH.md` (completed July 2026) for active work.
 
@@ -75,32 +75,40 @@ What holds it back:
 The four constants that separate stiff from Nintendo. Everything else in
 this push lands harder if I.1 lands first.
 
-### I.1.1 Momentum movement — [ ]
+### I.1.1 Momentum movement — [~]
 Ground acceleration/deceleration with a skid state (reverse at speed →
 skid dust + short slide). Air control slightly weaker than ground. Walk cap
 stays ~220 px/s; **sprint** (hold SHIFT / X) ramps toward ~320 px/s after
 sustained running (P-speed style — speed is earned, not toggled).
 
-### I.1.2 Jump feel — [ ]
+### I.1.2 Jump feel — [~]
 Variable jump height (release early → cut vertical velocity), coyote time
 (~0.10 s), jump buffering (~0.12 s). Constants live in one tunable block at
 the top of `corridor/base.py` with comments — Chris will play-tune these.
 
-### I.1.3 Squash, stretch & poses — [ ]
+### I.1.3 Squash, stretch & poses — [~]
 Courier sprite gains: land squash, jump stretch, skid pose, fall pose,
 victory pose. Dust puffs on landing/skid/sprint-start. (Procedural — extend
 `draw_courier_sprite` with pose params; no image assets.)
 
-### I.1.4 Movement audio hooks — [ ]
+### I.1.4 Movement audio hooks — [~]
 Jump / land / skid / sprint-lock blips through `audio_manager`, quantized
 to the corridor music where the engine already supports it.
 
-### I.1.5 Dead code removal — [ ]
+### I.1.5 Dead code removal — [x]
 Delete `delivery/platformer.py` and `delivery/obstacles.py`.
 
 *Note: corridor kinematics are hand-rolled (not `RigidBody2D`) — the
 flight-physics dt rule doesn't apply here; keep platformer integration
 local and simple.*
+
+**I.1 ship note (July 6):** all five items landed on one branch;
+I.1.1–I.1.4 are `[~]` until the feel passes a windowed play-test. The
+tunable block sits at the top of `delivery/corridor/base.py`. 14 new
+regression tests in `tests/test_corridor_feel_i1.py`; suite 300 passed.
+Play-check list: does walk→sprint ramp feel earned? Held vs tapped jump
+read clearly? Skid turn feel snappy or slippery? Land thud/squash sell
+weight? Dial the constants block, not the code.
 
 ---
 
