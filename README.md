@@ -50,8 +50,8 @@ Six chapters, six cargo types. Each cargo adds a unique mid-flight or corridor m
 | **Ch.2** | Mycorrhizal Payload | Spore leak → periodic control inversion |
 | **Ch.3** | The Paperwork | Filing popups fire mid-flight under fire |
 | **Ch.4** | Schrödinger VIP | Observation collapses payout (alive/dead) |
-| **Ch.5** | MERCY | Chen's zero-write exploit drive — inert until deployed |
-| **Ch.6** | The Upload | 90-second server upload while alarms scream |
+| **Ch.5** | Encrypted Drive (The Edge) | Chen's drive picked up in-corridor; damage spikes its trace level → Compliance vessels hunt you |
+| **Ch.6** | Encrypted Drive (Compliance) | Carry the drive into Nova Soma — 90-second server-room upload while alarms scream |
 
 ---
 
@@ -160,6 +160,8 @@ Spec + implementation status → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLA
 | TOLL AUTHORITY | Mid-sector toll booth |
 | RELAY-7 FELIX | Nervous fence |
 | INSPECTOR HOLT | STA cargo inspection |
+| EDMUND | Local 404 idealist rep (Union charter true-believer) |
+| VINCE | Local 404 corrupt rep (skims impounds, takes bribes) |
 
 ---
 

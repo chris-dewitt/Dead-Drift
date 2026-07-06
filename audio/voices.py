@@ -21,6 +21,7 @@ from audio.synth import SAMPLE_RATE, _2PI, _to_sound, _adsr
 _SPEAKER_ALIASES: dict[str, str] = {
     "bax": "bax",
     "gary": "gary",
+    "gary pruitt": "gary",   # dock receiver emits the full name (G.1 / H.3)
     "tk-9": "tk-9",
     "tk9": "tk-9",
     "synthetic_droid": "tk-9",
@@ -49,6 +50,18 @@ _SPEAKER_ALIASES: dict[str, str] = {
     "dock_7": "dock_7",
     "galactic infra.": "union_dispatcher",
     "galactic infra": "union_dispatcher",
+    # Aliveness B.6 / H.4 — the two new Local 404 union reps
+    "edmund": "idealist_rep",
+    "eddie": "idealist_rep",
+    "edmund (idealist)": "idealist_rep",
+    "idealist rep": "idealist_rep",
+    "vince": "corrupt_rep",
+    "vinny": "corrupt_rep",
+    "vince (corrupt)": "corrupt_rep",
+    "corrupt rep": "corrupt_rep",
+    # Aliveness H.3 — chapter 5/6 dock receivers
+    "fitz": "fitz",
+    "bowen": "bowen",
     "unknown": "default",
     "system": "default",
     "you": "default",
@@ -237,6 +250,48 @@ _VOICES: dict[str, VoiceProfile] = {
         80, 230, 170, 560, 0.10,
         (1.0, 0.35, 0.12, 0.04),
         (0.005, 0.20, 0.62, 0.30),
+    ),
+    # Aliveness H.4 — Idealist Union Rep (Edmund "Eddie" Marlowe).
+    # Earnest true-believer: clear, clean, a hair higher and brighter than
+    # Gary's gruffness, with a sincere vibrato. No comm crush — he's right
+    # there, reading you the charter to your face.
+    "idealist_rep": VoiceProfile(
+        80, 300, 240, 1500, 0.05,
+        (1.0, 0.52, 0.28, 0.12),
+        (0.008, 0.22, 0.58, 0.32),
+        bp_lo_end=300, bp_hi_end=1250,
+        vibrato_hz=4.5, vibrato_depth=0.03,
+    ),
+    # Aliveness H.4 — Corrupt Union Rep (Vince "Two-Tap" Brogan).
+    # Crooked, low, gravelly, always half on a side channel — comm static on,
+    # a slow wobble like he's leaning back in a chair he didn't pay for.
+    "corrupt_rep": VoiceProfile(
+        92, 165, 110, 640, 0.30,
+        (1.0, 0.58, 0.26, 0.11),
+        (0.012, 0.26, 0.46, 0.40),
+        bp_lo_end=150, bp_hi_end=560,
+        wobble_hz=1.8, wobble_depth=0.045,
+        comm_static=True,
+    ),
+    # Aliveness H.3 — Fitz, The Edge's off-grid harbour greeter. Warm, wry,
+    # lived-in low-mid with a little radio grit from a transmitter held
+    # together with solder and spite.
+    "fitz": VoiceProfile(
+        86, 200, 150, 700, 0.20,
+        (1.0, 0.56, 0.24, 0.10),
+        (0.010, 0.24, 0.52, 0.38),
+        bp_lo_end=180, bp_hi_end=640,
+        vibrato_hz=3.2, vibrato_depth=0.02,
+        comm_static=True,
+    ),
+    # Aliveness H.3 — Bowen, Nova Soma Central Ledger. Polite and terrifying:
+    # smooth, pristine, controlled, almost synthetic in its calm. The
+    # institution speaking with a human mouth.
+    "bowen": VoiceProfile(
+        78, 268, 210, 1150, 0.03,
+        (1.0, 0.44, 0.18, 0.06),
+        (0.006, 0.20, 0.66, 0.30),
+        vibrato_hz=2.4, vibrato_depth=0.012,
     ),
     "default": VoiceProfile(
         62, 430, 290, 1050, 0.16,

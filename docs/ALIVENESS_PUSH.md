@@ -2,7 +2,7 @@
 
 **Branch:** `rhubarb/aliveness-push`
 **Started:** May 25 2026
-**Status:** Phase E code/test complete - Phase F next
+**Status:** Phases A–G complete. Phase H: H.2/H.3/H.4 shipped; H.1 `[~]` (mix audit landed, accessibility UI + audible play-pass pending). This is the final phase.
 **Scope:** Open-ended (no time cap)
 **North star for all agents:** this document supersedes `IMPROVEMENT_PLAN.md` and `NEXT_PUSH.md` for active work.
 
@@ -282,18 +282,23 @@ Mutator or specific runs: visible threat (gas seeping in, station failing, dock 
 
 ## Phase H — Audio & Soundtrack
 
-### H.1 Soundtrack implementation — [ ]
+### H.1 Soundtrack implementation — [~]
 Build the music system from the cursor branch SOUNDTRACK_PLAN. Hybrid model: ambient pads + sci-fi film homages + recurring Bax hum motif. Accessibility-first (mixable, mutable, captioned cues).
 **Risk:** Large audio engineering task. May warrant a sub-plan doc.
+**Shipped (Slice 1):** the engine already exists (~1.5k-line `audio_manager`); H.1 is the v2 "less is more" *audit*, not a from-scratch build. Landed the baseline mix trim (`_music_target_vol` 0.34 → 0.27, the single global music lever, documented in-code). Sub-plan written: `docs/SOUNDTRACK_IMPL_H1.md`.
+**`[~]` because:** the audible mix level and the §7.5 accessibility UI (music subtitles, per-stem sliders, master mute) need a real windowed play-pass — can't be ear-verified headless. Slices 2 (max-4-stem guard) and 3 (signposting) are specced in the sub-plan.
 
-### H.2 Bax harmonica synth — [ ]
+### H.2 Bax harmonica synth — [x]
 Procedural harmonica voice in `audio/synth.py` or `audio/voices.py`. Used by F.4. 2–4 phrases, each ~1.5s, bluesy in feel.
+**Shipped:** the harmonica voice is `audio/blues_licks.py` (`_harp_note` + 30 mood-tagged `generate_lick` patterns). F.4 chain verified end-to-end: `bax.py` emits `EVT_BAX_HARMONICA` at critical hull → `audio_manager._on_bax_harmonica` plays a weary lick on the lick channel. Runtime-confirmed the lick fires (`_lick_ch.get_busy()` True after emit).
 
-### H.3 Per-chapter music verification — [ ]
+### H.3 Per-chapter music verification — [x]
 Doc says corridor music is partial. Verify each chapter has its track playing; fill gaps.
+**Shipped:** added `audio/chapter_5.py` (The Edge — clean acoustic harmonica, D Dorian, warm intimate mix) and `audio/chapter_6.py` (Compliance — fluorescent compliance chime, cold A minor, quantised clock kit). Wired both into `audio_manager` (`_CHAPTER_MODES`, the chapter-module loader `(1..6)`, `_corr_sig_profiles`). Filled the ch5/6 delivery gaps too: per-chapter **dock receiver** (the Union loop's Gary hands off to Fitz at The Edge and Bowen at Nova Soma), station themes, Bax dock wind-downs, and loadout chapter names. AudioManager boots all six modules headlessly; signatures render as real Sounds.
 
-### H.4 NPC voice expansion — [ ]
+### H.4 NPC voice expansion — [x]
 New union reps from B.6 each need a voice profile in `audio/voices.py` distinct from Gary.
+**Shipped:** added `idealist_rep` (Edmund — earnest, clean, bright, no comm crush) and `corrupt_rep` (Vince — low, gravelly, side-channel static) voice profiles, plus the ch5/6 dock receivers `fitz` (warm, off-grid grit) and `bowen` (smooth, pristine, institutional). Speaker aliases route every label variant. Also fixed a pre-existing dock bug: `GARY PRUITT` (the full name the dock emits) was falling through to the default voice — now aliased to `gary`.
 
 ---
 
