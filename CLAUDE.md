@@ -4,7 +4,8 @@
 
 | Doc | Use for |
 |-----|---------|
-| **[docs/ALIVENESS_PUSH.md](docs/ALIVENESS_PUSH.md)** | **North star** — active push/phase roadmap (A→H) |
+| **[docs/DELIVERY_V2_PUSH.md](docs/DELIVERY_V2_PUSH.md)** | **North star** — active push (corridor/delivery overhaul, phases I.1→I.5) |
+| [docs/ALIVENESS_PUSH.md](docs/ALIVENESS_PUSH.md) | Previous push roadmap (A→H — complete July 2026) |
 | [README.md](README.md) | Player quick start, controls, feature overview |
 | [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md) | Historical epic checklist (Phase 0 + Epics 1–14 — complete May 2026) |
 | [docs/DOCUMENTATION_STATUS.md](docs/DOCUMENTATION_STATUS.md) | Stale-doc tracker, resolved decisions |
