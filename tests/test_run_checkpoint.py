@@ -142,3 +142,31 @@ def test_terminal_checkpoint_resumes_safe_state(mini_game):
     data = build_checkpoint(mini_game)
 
     assert data["game_state"] == "DELIVERY"
+
+
+def test_checkpoint_roundtrips_wreck_state(mini_game):
+    from antagonists.wreck import SpaceWreck
+
+    rm = mini_game.run_mgr
+    wreck = SpaceWreck(400.0, 300.0, subtype=SpaceWreck.SUBTYPE_INTERACTIVE)
+    wreck.angle = 123.0
+    wreck.rot_speed = -1.25
+    wreck.length = 170
+    wreck.width = 55
+    wreck.gap_frac = 0.42
+    wreck.weak_hp = 1          # two weak-point hits already landed
+    rm._wrecks = [wreck]
+
+    data = build_checkpoint(mini_game)
+    rm._wrecks = []
+    assert restore_checkpoint(mini_game, data) is True
+
+    assert len(rm._wrecks) == 1
+    restored = rm._wrecks[0]
+    assert restored.subtype == SpaceWreck.SUBTYPE_INTERACTIVE
+    assert restored.angle == pytest.approx(123.0)
+    assert restored.rot_speed == pytest.approx(-1.25)
+    assert (restored.length, restored.width) == (170, 55)
+    assert restored.gap_frac == pytest.approx(0.42)
+    assert restored.weak_hp == 1
+    assert restored.is_triggered is False

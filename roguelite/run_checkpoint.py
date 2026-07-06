@@ -389,6 +389,36 @@ def _compliance_from(d: dict, run_mgr):
     return cv
 
 
+def _wreck_dict(w) -> dict:
+    return {
+        "t": "wreck",
+        "x": w.pos.x, "y": w.pos.y,
+        "subtype": w.subtype,
+        "angle": w.angle,
+        "rot_speed": w.rot_speed,
+        "length": w.length,
+        "width": w.width,
+        "gap_frac": w.gap_frac,
+        "weak_hp": w.weak_hp,
+        "is_triggered": w.is_triggered,
+        "trigger_t": w._trigger_t,
+    }
+
+
+def _wreck_from(d: dict):
+    from antagonists.wreck import SpaceWreck
+    w = SpaceWreck(d.get("x"), d.get("y"), subtype=d.get("subtype"))
+    w.angle = float(d.get("angle", w.angle))
+    w.rot_speed = float(d.get("rot_speed", w.rot_speed))
+    w.length = int(d.get("length", w.length))
+    w.width = int(d.get("width", w.width))
+    w.gap_frac = float(d.get("gap_frac", w.gap_frac))
+    w.weak_hp = int(d.get("weak_hp", w.weak_hp))
+    w.is_triggered = bool(d.get("is_triggered", w.is_triggered))
+    w._trigger_t = float(d.get("trigger_t", w._trigger_t))
+    return w
+
+
 def _entities_to_dict(rm) -> list[dict]:
     out: list[dict] = []
     for r in rm._debris:
@@ -414,7 +444,7 @@ def _entities_to_dict(rm) -> list[dict]:
     if rm._comet_trail is not None:
         out.append({"t": "comet_trail"})
     for w in rm._wrecks:
-        out.append({"t": "wreck", "x": w.pos.x, "y": w.pos.y})
+        out.append(_wreck_dict(w))
     return out
 
 
@@ -423,7 +453,6 @@ def _restore_entities(rm, entities: list[dict]) -> None:
     from antagonists.dead_station import DeadStation
     from antagonists.ice_field import IceField
     from antagonists.mine_field import MineField
-    from antagonists.wreck import SpaceWreck
     from antagonists.trash_field import TrashField
 
     rm._debris.clear()
@@ -464,7 +493,7 @@ def _restore_entities(rm, entities: list[dict]) -> None:
         elif t == "comet_trail":
             rm._comet_trail = CometTrail()
         elif t == "wreck":
-            rm._wrecks.append(SpaceWreck(d.get("x"), d.get("y")))
+            rm._wrecks.append(_wreck_from(d))
 
 
 # ---------------------------------------------------------------------------
