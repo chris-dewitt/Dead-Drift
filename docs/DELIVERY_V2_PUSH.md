@@ -1,0 +1,234 @@
+# THE DELIVERY V2 PUSH
+
+**Started:** July 6 2026
+**Status:** Planned — Phase I.1 next
+**Scope:** Open-ended (no time cap)
+**North star for all agents:** this document supersedes `ALIVENESS_PUSH.md` (completed July 2026) for active work.
+
+---
+
+## Vision
+
+The flight game earns its fun through physics — momentum, risk, mastery. The
+delivery corridor is currently a ~30-second interlude with none of that: a
+constant-speed walk, one fixed jump, and a star rating that *punishes* the
+player for exploring the secrets and lore that are its best content.
+
+This push makes the corridor the second half of the game instead of the
+epilogue: a **2–3 minute, early-90s-console platformer level** the player
+doesn't want to end. Think SMW / DKC: chunky outlined tiles, generous
+feedback, coin-trails that teach routes, a tally screen that makes you want
+one more run.
+
+**The signature test for every item:** *would a player ever say "let me just
+do one more delivery" for its own sake?* If an item doesn't push toward that,
+it's cut.
+
+**Theme keyword:** *arcade*. The flight is a simulation; the corridor is an
+arcade cabinet inside it. Changing phases should feel like changing TV
+channels in 1993 — same era, different show.
+
+---
+
+## Resolved decisions (July 6 2026, with Chris)
+
+1. **Scoring — style over speed.** Stars come from collection % + secrets
+   found + hits avoided. Par time becomes a small credit bonus
+   ("UNION PUNCTUALITY BONUS"), never the rating. Exploring IS the game.
+2. **Length — 2–3 minutes.** 6–8 rooms per chapter with mid-level
+   checkpoints. Delivery becomes co-equal with flight.
+3. **Art — full 16-bit pastiche.** Outlined tiles, dithered gradients,
+   sprite poses, period HUD, iris wipes. The 400×360 internal canvas with
+   nearest-neighbor upscale stays — it's period-correct (SNES was 256×224).
+4. **Scope — corridor first, then chain.** Phases I.1–I.4 are the corridor.
+   I.5 then juices APPROACH / LAND / RESULT so the whole delivery chain ends
+   on the same high.
+
+---
+
+## Baseline audit (July 6 2026)
+
+What exists and is good — build on it, don't rebuild:
+
+- `delivery/corridor/` (~5k lines): per-chapter themed corridors, Room
+  system with branch/converge high–low paths, rich element vocabulary
+  (moving/collapsing platforms, ladders, beams, vents, tripwires, stealth
+  zones, NPC encounters, collectibles, secrets, lore rooms, NPC shortcuts,
+  checkpoints, boss rooms with actors), cargo-driven mutators, per-room
+  palettes, 3-layer parallax base, `draw_mario_brick_platform` helper.
+
+What holds it back:
+
+- ~2,700 px of world per chapter at fixed 220 px/s → ~30 s runs.
+- No movement feel: constant walk speed, fixed-height jump, no momentum,
+  no coyote time, no jump buffering, no sprint.
+- Stars are time-based (3★ = under 18 s) — anti-exploration.
+- Sparse reward feedback: no pickup pop, no chains, no tally.
+- Ch5/ch6 corridors are the leanest (274/312 lines vs 763 for ch3).
+- `delivery/platformer.py` + `delivery/obstacles.py` are dead code
+  (pre-corridor system; nothing imports them but each other).
+
+---
+
+## Phase I.1 — Feel (movement & moment-to-moment)
+
+The four constants that separate stiff from Nintendo. Everything else in
+this push lands harder if I.1 lands first.
+
+### I.1.1 Momentum movement — [ ]
+Ground acceleration/deceleration with a skid state (reverse at speed →
+skid dust + short slide). Air control slightly weaker than ground. Walk cap
+stays ~220 px/s; **sprint** (hold SHIFT / X) ramps toward ~320 px/s after
+sustained running (P-speed style — speed is earned, not toggled).
+
+### I.1.2 Jump feel — [ ]
+Variable jump height (release early → cut vertical velocity), coyote time
+(~0.10 s), jump buffering (~0.12 s). Constants live in one tunable block at
+the top of `corridor/base.py` with comments — Chris will play-tune these.
+
+### I.1.3 Squash, stretch & poses — [ ]
+Courier sprite gains: land squash, jump stretch, skid pose, fall pose,
+victory pose. Dust puffs on landing/skid/sprint-start. (Procedural — extend
+`draw_courier_sprite` with pose params; no image assets.)
+
+### I.1.4 Movement audio hooks — [ ]
+Jump / land / skid / sprint-lock blips through `audio_manager`, quantized
+to the corridor music where the engine already supports it.
+
+### I.1.5 Dead code removal — [ ]
+Delete `delivery/platformer.py` and `delivery/obstacles.py`.
+
+*Note: corridor kinematics are hand-rolled (not `RigidBody2D`) — the
+flight-physics dt rule doesn't apply here; keep platformer integration
+local and simple.*
+
+---
+
+## Phase I.2 — Reward loop (scoring & feedback)
+
+### I.2.1 Style scoring + tally screen — [ ]
+Stars from: chip collection % / secrets found / hits taken. Par time pays a
+small credit bonus only. End-of-corridor **tally screen** in the DKC/SMW
+tradition: chips tick up with sound, secrets stamp in, stars burst on one at
+a time, Bax reacts to the grade.
+
+### I.2.2 Chip language — [ ]
+Redesign chip placement as *communication*: arcs over gaps teach jump
+timing, lines mark safe routes, rings halo secrets. Pickup pop: sparkle +
+floating "+200" + blip that rises in pitch per chain.
+
+### I.2.3 Chip chains — [ ]
+Chips collected within ~1.5 s of each other build a ×1→×5 chain multiplier.
+Chain meter in HUD; breaking the chain drops the pitch back down. Makes
+greed lines and risky routes self-rewarding.
+
+### I.2.4 Room-clear flourish — [ ]
+Door iris + room name stamp + per-room mini-tally chip count
+("7/9 — two still in there, mate").
+
+### I.2.5 Completion feeds meta — [ ]
+100% chips + all secrets in a chapter corridor → permanent dossier stamp
+("COURIER'S PRIDE") on that chapter's carousel card.
+
+---
+
+## Phase I.3 — Levels (length, variety, set pieces)
+
+### I.3.1 6–8 rooms per chapter — [ ]
+Target 2–3 min clear (full-clear with secrets ~4 min). Extend existing
+chapters with new rooms rather than rebuilding — current rooms keep their
+identity; boss rooms stay the finale. Checkpoints every 2–3 rooms.
+
+### I.3.2 New element vocabulary — [ ]
+Springs/bounce pads, conveyor belts, breakable blocks (sprint-through),
+hidden ?-blocks, warp pipes (the corporate pipes finally pay off —
+shortcuts + secret sub-rooms), timed lift rides.
+
+### I.3.3 Power-ups — [ ] *(risk gate: confirm scope before building)*
+Temporary, corridor-scoped, era-flavored: **Mag-Boots** (chip magnet),
+**Union Hardhat** (absorbs one hit, Mario-style de-power instead of raw
+damage), **Stim Soles** (speed + jump boost). Spawn from ?-blocks.
+
+### I.3.4 One chase set piece — [ ] *(risk gate: feel-check early)*
+A single auto-scroll pressure room in a late chapter (ch6 Compliance sweep
+is the natural home). Max one per campaign — pressure is the spice, not
+the meal.
+
+### I.3.5 Ch5/ch6 parity + hit rebalance — [ ]
+Bring The Edge and Compliance corridors to full room-count/secret parity
+with ch1–4. `MAX_HITS` scales with length (5 for 6+ rooms); checkpoints
+restore one.
+
+---
+
+## Phase I.4 — 16-bit pastiche (graphics)
+
+### I.4.1 Tile vocabulary — [ ]
+Extend `draw_mario_brick_platform` into a per-chapter tile set: brick,
+girder, glass, fungus shelf, filing cabinet, chrome. Chunky black outlines,
+2-tone dither gradients, fat highlights. All procedural.
+
+### I.4.2 Parallax upgrade — [ ]
+3 → 4 layers with per-chapter skyline silhouettes and animated mid-layer
+props (fans, signage, drips, passing trams).
+
+### I.4.3 Sprite sheet feel — [ ]
+Courier: 4-frame run cycle + the I.1.3 poses. Boss actors and corridor NPCs
+get idle bob + blink so nothing stands statue-still.
+
+### I.4.4 Period HUD & transitions — [ ]
+Chunky counters (chips, chain, hits-as-helmets), room name plate on entry,
+iris-wipe between rooms. Everything drawn on the 400×360 canvas so the
+upscale keeps it honest.
+
+### I.4.5 Palette discipline — [ ]
+Per-room palettes capped ~16 visible colors for the era look. Light audit
+script; skip the tooling if it turns fiddly (risk gate).
+
+---
+
+## Phase I.5 — Chain juice (APPROACH / LAND / RESULT)
+
+### I.5.1 Approach rings — [ ]
+Optional ring line through the approach; clean line ticks small credits.
+
+### I.5.2 Landing grade — [ ]
+Touchdown graded on descent rate + pad centering: SILK / FIRM / ROUGH
+plate stamp, small bonus, existing Bax landing lines wired to grade.
+
+### I.5.3 RESULT card v2 — [ ]
+Payout card rebuilt in the I.2.1 tally style so the whole delivery chain
+ends on the same arcade high.
+
+---
+
+## Execution Plan
+
+**Branch strategy:** one branch + PR per phase (the Aliveness push's
+single-branch approach made review heavy; PR-per-phase matches how #70/#75
+landed cleanly).
+
+**Commit format:** `delivery-v2(I.x): <item>` — one commit per logical item,
+phase summary commit on close.
+
+**Verification:**
+- Headless-testable logic gets tests: physics windows (coyote/buffer),
+  chain math, scoring, new element collisions, corridor construction for
+  all six chapters.
+- Feel and graphics are play-verified by Chris before checkboxing —
+  same `[x]` / `[~]` / `[ ]` legend as the Aliveness push.
+- Tunable constants (I.1) land in one commented block for play-tuning.
+
+**Risk gates (revisit before starting):**
+- I.3.3 power-ups — confirm the three picks and de-power rule.
+- I.3.4 chase room — prototype early, cut without ceremony if it fights
+  the explore-first scoring.
+- I.4.5 palette audit tooling — manual discipline is fine if the script
+  gets fiddly.
+
+---
+
+**Status legend:**
+- `[x]` shipped + play-verified
+- `[~]` shipped but partial / failed play-verify
+- `[ ]` not started
