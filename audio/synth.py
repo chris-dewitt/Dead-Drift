@@ -888,3 +888,30 @@ def corridor_sprint_chirp() -> pygame.mixer.Sound:
     n1 = _adsr(_sine(660.0, 0.07, amp=0.30), 0.002, 0.02, 0.6, 0.03)
     n2 = _adsr(_sine(990.0, 0.09, amp=0.30), 0.002, 0.02, 0.6, 0.05)
     return _to_sound(np.concatenate([n1, n2]))
+
+
+def corridor_chip_blip(step: int = 1) -> pygame.mixer.Sound:
+    """Chip pickup blip — pitch climbs a pentatonic step per chain level
+    (1..5), so a maintained chain audibly 'stacks'."""
+    step = max(1, min(5, int(step)))
+    semis = (0, 3, 5, 7, 10)[step - 1]
+    freq = 740.0 * (2.0 ** (semis / 12.0))
+    dur = 0.09
+    w = _sine(freq, dur, amp=0.30) + _sine(freq * 2.0, dur, amp=0.10)
+    return _to_sound(_adsr(w, 0.002, 0.02, 0.5, 0.04))
+
+
+def corridor_tally_tick() -> pygame.mixer.Sound:
+    """Tiny counter tick for the end-of-corridor tally screen."""
+    dur = 0.035
+    w = _sine(1500.0, dur, amp=0.22) + _noise(dur, amp=0.05)
+    return _to_sound(_adsr(w, 0.001, 0.012, 0.4, 0.015))
+
+
+def corridor_star_sting() -> pygame.mixer.Sound:
+    """Short bright major-triad burst — one per star on the tally."""
+    n1 = _adsr(_sine(660.0, 0.07, amp=0.26), 0.002, 0.02, 0.6, 0.03)
+    n2 = _adsr(_sine(830.6, 0.07, amp=0.26), 0.002, 0.02, 0.6, 0.03)
+    n3 = _adsr(_sine(988.0, 0.12, amp=0.30) + _sine(1976.0, 0.12, amp=0.08),
+               0.002, 0.03, 0.6, 0.06)
+    return _to_sound(np.concatenate([n1, n2, n3]))

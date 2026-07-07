@@ -29,7 +29,8 @@ from core.event_bus import (bus, EVT_BAX_SPEAK, EVT_DELIVERY_DONE,
                             EVT_LORE_FOUND, EVT_CORRIDOR_ENTER,
                             EVT_CORRIDOR_BOSS_ROOM, EVT_CORRIDOR_EXIT,
                             EVT_CORRIDOR_LAND, EVT_CORRIDOR_SKID,
-                            EVT_CORRIDOR_SPRINT)
+                            EVT_CORRIDOR_SPRINT, EVT_CORRIDOR_CHIP,
+                            EVT_CORRIDOR_TALLY, EVT_CORRIDOR_STAR)
 
 # ── Movement feel — Delivery v2 I.1 tunables ────────────────────────────────
 # These constants ARE the corridor's game feel. Tune here, nowhere else.
@@ -54,6 +55,13 @@ RUN_SPEED = WALK_SPEED      # legacy alias (ladder side-step, oneway hints)
 CLIMB_SPD = 120.0
 LADDER_REGRAB_COOLDOWN = 0.18
 LADDER_SIDE_STEP_SPEED = RUN_SPEED * 0.75
+
+# ── Reward loop — Delivery v2 I.2 tunables ──────────────────────────────────
+CHIP_CHAIN_WINDOW  = 1.5     # s between chips to keep a chain alive
+CHIP_CHAIN_MAX     = 5       # chain multiplier cap (×1..×5)
+PUNCTUALITY_BONUS  = 1500    # credits for beating total par (never affects stars)
+STAR3_CHIP_PCT     = 0.75    # chip collection needed for 3★ (with ≤1 hit)
+STAR2_CHIP_PCT     = 0.40    # chip collection needed for 2★
 
 STAR_3_TIME = 18.0
 STAR_2_TIME = 28.0
@@ -325,6 +333,7 @@ class Corridor:
         self._wipe_dir  = 1     # 1=entering, -1=exiting
         self._transition_pending = False
         self._transition_caption = ""  # "ENTERING: <room name>" shown over wipe
+        self._transition_subcaption = ""  # I.2.4 — per-room chip tally line
 
         # NPC dialog
         self._dialog: _CorridorDialog | None = None
@@ -343,6 +352,30 @@ class Corridor:
             sum(1 for el in r.elements if isinstance(el, Collectible))
             for r in rooms
         )
+        self._secrets_total = sum(
+            sum(1 for el in r.elements if isinstance(el, Secret))
+            for r in rooms
+        )
+
+        # Delivery v2 I.2 — reward loop state
+        self._chain      = 0          # current chip chain (×multiplier)
+        self._chain_t    = 0.0        # window remaining to extend the chain
+        self._best_chain = 0
+        self._floaters: list[list] = []   # [x, y, text, life, (r,g,b)]
+        self._room_chip_total = [
+            sum(1 for el in r.elements if isinstance(el, Collectible))
+            for r in rooms
+        ]
+        self._room_chip_got = [0] * len(rooms)
+        self._par_total  = sum(r.star3_t for r in rooms)
+        self._punctual   = False
+        self._tally_t    = 0.0        # drives the staged tally screen
+        self._tally_schedule: list[tuple[float, str]] = []
+        self._tally_done_t = 0.0      # when the last tally stage lands
+        self._tally_chip_shown = 0    # chips counted up so far (for ticks)
+        self._stars_shown  = 0
+        self._bax_graded   = False
+        self.meta = None              # attached by make_corridor (I.2.5)
 
         # Ambient run Bax commentary timer
         self._run_speak_t = 10.0   # fire first corridor-run line after 10s
@@ -368,6 +401,13 @@ class Corridor:
             self._dialog.handle_key(event)
             return
         if self._done:
+            # Tally screen: first press fast-forwards the count-up,
+            # second press hands the cargo off (ends the corridor).
+            if event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                if self._tally_t < self._tally_done_t:
+                    self._skip_tally()
+                else:
+                    self._result_t = 0.0
             return
         if event.key in (pygame.K_SPACE, pygame.K_w, pygame.K_UP):
             if self._on_ladder and event.key == pygame.K_SPACE:
@@ -411,7 +451,8 @@ class Corridor:
             return
 
         if self._done:
-            self._result_t -= dt
+            self._result_t = max(0.0, self._result_t - dt)
+            self._advance_tally(dt)
             return
 
         self._elapsed      += dt
@@ -430,6 +471,17 @@ class Corridor:
                 d[3] += 300.0 * dt
                 d[4] -= dt
             self._dust = [d for d in self._dust if d[4] > 0]
+
+        # Delivery v2 I.2 — chip chain window + floating pickup text
+        if self._chain_t > 0:
+            self._chain_t = max(0.0, self._chain_t - dt)
+            if self._chain_t <= 0:
+                self._chain = 0
+        if self._floaters:
+            for fl in self._floaters:
+                fl[1] -= 34.0 * dt
+                fl[3] -= dt
+            self._floaters = [fl for fl in self._floaters if fl[3] > 0]
         self._run_speak_t  -= dt
         if self._run_speak_t <= 0:
             self._run_speak_t = 12.0
@@ -769,6 +821,17 @@ class Corridor:
                 cap.set_alpha(alpha)
                 surf.blit(cap, (CORRIDOR_W // 2 - cs.get_width() // 2,
                                 CORRIDOR_H // 2 - cs.get_height() // 2))
+                # I.2.4 — per-room chip tally under the room name
+                if self._transition_subcaption:
+                    fs2 = get_font(11)
+                    gold = (255, 210, 60) if "SWEEP" in self._transition_subcaption \
+                           else (170, 150, 90)
+                    ss = fs2.render(self._transition_subcaption, True, gold)
+                    sub = pygame.Surface(ss.get_size(), pygame.SRCALPHA)
+                    sub.blit(ss, (0, 0))
+                    sub.set_alpha(alpha)
+                    surf.blit(sub, (CORRIDOR_W // 2 - ss.get_width() // 2,
+                                    CORRIDOR_H // 2 + cs.get_height() // 2 + 4))
 
         # Aliveness G.9 / G.10 — mutator overlay (drawn last, on top of everything)
         self._mutator.draw_overlay(surf, t, self._cam_x, self._px, self._py)
@@ -851,13 +914,33 @@ class Corridor:
             if isinstance(el, Collectible):
                 v = el.try_collect(self._px, self._py)
                 if v:
-                    self._credits += v
+                    # I.2.3 — chips inside the window build a ×1→×5 chain
+                    if self._chain_t > 0:
+                        self._chain = min(CHIP_CHAIN_MAX, self._chain + 1)
+                    else:
+                        self._chain = 1
+                    self._chain_t    = CHIP_CHAIN_WINDOW
+                    self._best_chain = max(self._best_chain, self._chain)
+                    gained = v * self._chain
+                    self._credits += gained
                     self._collectibles_found += 1
+                    self._room_chip_got[self._room_idx] += 1
+                    # I.2.2 — pickup pop: floating value + gold sparkle
+                    txt = f"+{gained}"
+                    if self._chain > 1:
+                        txt += f" ×{self._chain}"
+                    self._floaters.append(
+                        [el.x, el.y - 12, txt, 0.8, (255, 220, 60)])
+                    self._spawn_dust(el.x, el.y, n=4, spread=50.0,
+                                     color=(255, 210, 40))
+                    bus.emit(EVT_CORRIDOR_CHIP, chain=self._chain)
             elif isinstance(el, Secret):
                 v, lore = el.try_collect(self._px, self._py)
                 if v or lore:
                     self._credits += v
                     self._secrets_found += 1
+                    self._floaters.append(
+                        [el.x, el.y - 14, "SECRET!", 1.1, (0, 230, 210)])
                     bus.emit(EVT_CORRIDOR_SECRET)
                     if lore:
                         bus.emit(EVT_BAX_SPEAK, line=lore[:60])
@@ -940,13 +1023,16 @@ class Corridor:
         bus.emit(EVT_CORRIDOR_JUMP)
 
     def _spawn_dust(self, x: float, y: float, n: int = 4,
-                    spread: float = 60.0) -> None:
-        """Chunky dust puffs at (x, y) world-space — landing/skid/sprint."""
+                    spread: float = 60.0,
+                    color: tuple | None = None) -> None:
+        """Chunky particle puffs at (x, y) world-space. Grey dust for
+        landing/skid/sprint; pass a color for pickup sparkles (I.2.2)."""
         for _ in range(n):
             self._dust.append([
                 x + random.uniform(-4, 4), y + random.uniform(-2, 0),
                 random.uniform(-spread, spread), random.uniform(-70, -20),
                 random.uniform(0.18, 0.34), random.uniform(1.5, 3.0),
+                color,
             ])
 
     def _take_hit(self):
@@ -963,6 +1049,20 @@ class Corridor:
             self._transition_caption = f"ENTERING: {n}" if n else f"ENTERING: ROOM {next_idx + 1}"
         else:
             self._transition_caption = ""
+        # I.2.4 — room-clear flourish: per-room chip tally on the wipe
+        got = self._room_chip_got[self._room_idx]
+        tot = self._room_chip_total[self._room_idx]
+        if tot > 0:
+            self._transition_subcaption = f"CHIPS {got}/{tot}"
+            if got >= tot:
+                self._transition_subcaption += " — CLEAN SWEEP"
+                bus.emit(EVT_BAX_SPEAK,
+                         line="Every chip in that room. You SWEPT it. Framing this.")
+            elif tot - got >= 2:
+                bus.emit(EVT_BAX_SPEAK,
+                         line=f"Left {tot - got} chips back there, mate. They don't walk out on their own.")
+        else:
+            self._transition_subcaption = ""
         self._wipe_t             = 0.5
         self._wipe_dir           = -1   # fade to black
         self._transition_pending = True
@@ -991,6 +1091,16 @@ class Corridor:
             if line:
                 bus.emit(EVT_BAX_SPEAK, line=line)
 
+    _BAX_GRADE_LINES = {
+        3: ["THREE STARS. The Union'll think I bribed someone.",
+            "Full marks, mate! I'd hug ya if I had arms in 'ere.",
+            "Swept it CLEAN. That's goin' in me records."],
+        2: ["Two stars. Solid. The third one's still back in that corridor.",
+            "Decent run! Left a bit of shine behind, mind."],
+        1: ["One star. We delivered. That's... technically the job.",
+            "Rough one. Cargo's intact, pride's negotiable."],
+    }
+
     def _finish(self):
         self._done = True
         self._victory = True
@@ -998,16 +1108,93 @@ class Corridor:
         if not self._exit_emitted:
             self._exit_emitted = True
             bus.emit(EVT_CORRIDOR_EXIT, chapter=self.chapter)
-        total_t = self._elapsed
-        room    = self.rooms[self._room_idx]
-        if total_t <= room.star3_t and self._hits == 0:
+
+        # I.2.1 — style scoring: exploration and clean play rate the run.
+        # Time NEVER rates it (Delivery v2 resolved decision #1).
+        total = self._collectibles_total
+        pct   = (self._collectibles_found / total) if total else 1.0
+        if pct >= STAR3_CHIP_PCT and self._hits <= 1:
             self._stars = 3
-        elif total_t <= room.star2_t and self._hits <= 1:
+        elif pct >= STAR2_CHIP_PCT and self._hits <= MAX_HITS:
             self._stars = 2
         else:
-            self._stars = max(1, 3 - self._hits)
+            self._stars = 1
+
+        # Par pays credits, not stars.
+        self._punctual = self._elapsed <= self._par_total
+        if self._punctual:
+            self._credits += PUNCTUALITY_BONUS
+
+        # I.2.5 — COURIER'S PRIDE: a perfect sweep (every chip, every
+        # secret) stamps the chapter's dossier card permanently.
+        if (total > 0 and self._collectibles_found >= total
+                and self._secrets_found >= self._secrets_total
+                and self.meta is not None
+                and hasattr(self.meta, "mark_courier_pride")):
+            self.meta.mark_courier_pride(self.chapter)
+
         self._result_credits = self._credits
-        self._result_t = 4.0
+
+        # I.2.1 — tally reveal schedule: one beat per row, DKC-style.
+        chips_dur = min(2.2, 0.06 * max(1, self._collectibles_found)) \
+                    if total else 0.0
+        t0 = 0.6
+        marks: list[tuple[str, float]] = [("chips_start", t0)]
+        t1 = t0 + chips_dur
+        marks.append(("secrets", t1 + 0.35))
+        marks.append(("hits",    t1 + 0.70))
+        t2 = t1 + 1.05
+        if self._punctual:
+            marks.append(("punctual", t2))
+            t2 += 0.35
+        marks.append(("credits", t2))
+        for i in range(self._stars):
+            marks.append((f"star{i + 1}", t2 + 0.5 + 0.45 * i))
+        t_end = t2 + 0.5 + 0.45 * self._stars + 0.3
+        marks.append(("bax", t_end))
+        self._tally_schedule = marks
+        self._tally_done_t   = t_end
+        self._tally_t        = 0.0
+        self._result_t       = t_end + 3.0   # auto-advance; ENTER skips
+
+    def _mark_t(self, name: str) -> float | None:
+        for n, mt in self._tally_schedule:
+            if n == name:
+                return mt
+        return None
+
+    def _advance_tally(self, dt: float) -> None:
+        """Step the staged tally reveal; emits tick/star/Bax cues (I.2.1)."""
+        prev = self._tally_t
+        self._tally_t += dt
+        cs = self._mark_t("chips_start")
+        if cs is not None and self._tally_t > cs and self._collectibles_total:
+            shown = min(self._collectibles_found,
+                        int((self._tally_t - cs) / 0.06))
+            if shown > self._tally_chip_shown:
+                self._tally_chip_shown = shown
+                bus.emit(EVT_CORRIDOR_TALLY)
+        for name, mt in self._tally_schedule:
+            if prev < mt <= self._tally_t:
+                if name.startswith("star"):
+                    self._stars_shown = min(self._stars, self._stars_shown + 1)
+                    bus.emit(EVT_CORRIDOR_STAR)
+                elif name in ("secrets", "hits", "punctual", "credits"):
+                    bus.emit(EVT_CORRIDOR_TALLY)
+                elif name == "bax" and not self._bax_graded:
+                    self._bax_graded = True
+                    bus.emit(EVT_BAX_SPEAK,
+                             line=random.choice(self._BAX_GRADE_LINES[self._stars]))
+
+    def _skip_tally(self) -> None:
+        """ENTER during the count-up: reveal everything at once."""
+        self._tally_t = self._tally_done_t
+        self._tally_chip_shown = self._collectibles_found
+        self._stars_shown = self._stars
+        if not self._bax_graded:
+            self._bax_graded = True
+            bus.emit(EVT_BAX_SPEAK,
+                     line=random.choice(self._BAX_GRADE_LINES[self._stars]))
 
     def _draw_default_bg(self, surf, t, pal):
         """Atmospheric sci-fi corridor background with parallax layers."""
@@ -1229,9 +1416,14 @@ class Corridor:
             dx = int(d[0] - self._cam_x)
             dy = int(d[1])
             a  = max(0.0, min(1.0, d[4] / 0.3))
-            g  = int(120 + 80 * a)
-            s  = max(1, int(d[5]))
-            pygame.draw.rect(surf, (g, g, g), (dx, dy, s, s))
+            if d[6] is not None:   # coloured sparkle (chip pop)
+                col = tuple(max(0, min(255, int(c * (0.35 + 0.65 * a))))
+                            for c in d[6])
+            else:
+                g = int(120 + 80 * a)
+                col = (g, g, g)
+            s = max(1, int(d[5]))
+            pygame.draw.rect(surf, col, (dx, dy, s, s))
 
         if stun_fls:
             return
@@ -1268,6 +1460,19 @@ class Corridor:
             pygame.draw.line(surf, (0, 160, 70),
                              (px + 4, py + PLAYER_H),
                              (px + 10, py + PLAYER_H + 6), 2)
+
+        # I.2.2 — floating pickup text (rises + fades, on top of the courier)
+        if self._floaters:
+            ff = get_font(11, bold=True)
+            for fl in self._floaters:
+                fx = int(fl[0] - self._cam_x)
+                fy = int(fl[1])
+                a  = max(0, min(255, int(255 * (fl[3] / 0.8))))
+                fs = ff.render(fl[2], True, fl[4])
+                fsurf = pygame.Surface(fs.get_size(), pygame.SRCALPHA)
+                fsurf.blit(fs, (0, 0))
+                fsurf.set_alpha(a)
+                surf.blit(fsurf, (fx - fs.get_width() // 2, fy))
 
     def _draw_cargo_silhouette(self, surf, px, py):
         cs = self.cargo_silhouette
@@ -1308,13 +1513,32 @@ class Corridor:
     def _draw_hud(self, surf, t, room):
         f    = get_font(13)
         fsm  = get_font(10)
-        t_col = (0, 220, 100) if self._elapsed < room.star3_t else \
-                (255, 180, 0) if self._elapsed < room.star2_t else (220, 60, 60)
-        surf.blit(f.render(f"TIME  {self._elapsed:>5.1f}s", True, t_col), (6, 4))
+        # I.2.1 — time no longer rates the run, so it no longer glares red.
+        surf.blit(f.render(f"TIME  {self._elapsed:>5.1f}s", True,
+                           (120, 150, 120)), (6, 4))
         h_col = (220, 60, 60) if self._hits > 0 else (0, 180, 80)
         surf.blit(f.render(f"HITS  {self._hits}", True, h_col), (140, 4))
+        # Chip count — the number the run is now about
+        if self._collectibles_total > 0:
+            chip_s = f.render(
+                f"CHIPS {self._collectibles_found}/{self._collectibles_total}",
+                True, (255, 210, 60))
+            surf.blit(chip_s, (228, 4))
         cr_s  = fsm.render(f"+{self._credits} cr", True, (200, 160, 0))
         surf.blit(cr_s, (CORRIDOR_W - cr_s.get_width() - 6, 4))
+
+        # I.2.3 — chain meter: multiplier + draining window bar
+        if self._chain >= 2 and self._chain_t > 0 and not self._done:
+            pul = 0.75 + 0.25 * math.sin(t * 10.0)
+            ch_col = (int(255 * pul), int(215 * pul), 40)
+            ch_s = f.render(f"CHAIN ×{self._chain}", True, ch_col)
+            chx = CORRIDOR_W // 2 - ch_s.get_width() // 2
+            surf.blit(ch_s, (chx, 18))
+            bar_w = int(56 * (self._chain_t / CHIP_CHAIN_WINDOW))
+            pygame.draw.rect(surf, (90, 75, 20),
+                             (CORRIDOR_W // 2 - 28, 34, 56, 3))
+            pygame.draw.rect(surf, ch_col,
+                             (CORRIDOR_W // 2 - 28, 34, bar_w, 3))
 
         # Inversion warning
         if self._invert_t > 0:
@@ -1350,51 +1574,109 @@ class Corridor:
         surf.blit(ri, (6, CORRIDOR_H - 20))
 
     def _draw_result(self, surf):
+        """Delivery v2 I.2.1 — staged DKC-style tally screen.
+        Rows reveal on the _finish() schedule as _tally_t advances."""
         ov = pygame.Surface((CORRIDOR_W, CORRIDOR_H), pygame.SRCALPHA)
-        ov.fill((0, 0, 0, 170))
+        ov.fill((0, 0, 0, 190))
         surf.blit(ov, (0, 0))
 
-        fh  = get_font(20, bold=True)
-        f   = get_font(12)
-        fsm = get_font(11)
+        tt   = self._tally_t
+        fh   = get_font(20, bold=True)
+        f    = get_font(13, bold=True)
+        fsm  = get_font(11)
+        cx   = CORRIDOR_W // 2
 
-        label_col = [(220, 60, 60), (255, 180, 0), (0, 240, 110)][self._stars - 1]
-        label_txt = ["★☆☆  1 STAR", "★★☆  2 STARS", "★★★  3 STARS!"][self._stars - 1]
-        ls = fh.render(label_txt, True, label_col)
-        cy = CORRIDOR_H // 2 - 46
-        surf.blit(ls, (CORRIDOR_W // 2 - ls.get_width() // 2, cy))
+        # Title plate
+        title = fh.render("CARGO DELIVERED", True, (0, 230, 120))
+        surf.blit(title, (cx - title.get_width() // 2, 34))
+        pygame.draw.line(surf, (40, 90, 60),
+                         (cx - 120, 62), (cx + 120, 62), 1)
 
-        # Separator
-        pygame.draw.line(surf, (60, 80, 60),
-                         (CORRIDOR_W // 2 - 100, cy + 28),
-                         (CORRIDOR_W // 2 + 100, cy + 28), 1)
-
-        def _stat(label, value, col, y):
-            lbl = fsm.render(label, True, (100, 120, 100))
+        def _row(label, value, col, y):
+            lbl = fsm.render(label, True, (110, 130, 110))
             val = f.render(value, True, col)
-            surf.blit(lbl, (CORRIDOR_W // 2 - 120, y))
-            surf.blit(val, (CORRIDOR_W // 2 + 10, y))
+            surf.blit(lbl, (cx - 130, y + 2))
+            surf.blit(val, (cx + 18, y))
 
-        room = self.rooms[self._room_idx]
-        lh   = f.get_linesize() + 2
-        y0   = cy + 36
+        lh = f.get_linesize() + 6
+        y  = 82
 
-        t_col = (0, 220, 100) if self._elapsed <= room.star3_t else \
-                (255, 180, 0) if self._elapsed <= room.star2_t else (200, 80, 80)
-        _stat("TIME",       f"{self._elapsed:.1f}s", t_col, y0)
+        # CHIPS — counts up with ticks
+        cs = self._mark_t("chips_start")
+        if cs is not None and tt >= cs:
+            total = self._collectibles_total
+            if total > 0:
+                shown = self._tally_chip_shown
+                pct   = int(100 * self._collectibles_found / total)
+                done_counting = shown >= self._collectibles_found
+                c_col = (255, 215, 60) if (done_counting and pct == 100) \
+                        else (220, 190, 100)
+                val = f"{shown} / {total}"
+                if done_counting:
+                    val += f"   {pct}%"
+                _row("CHIPS", val, c_col, y)
+                if done_counting and self._best_chain >= 2:
+                    bc = fsm.render(f"best chain ×{self._best_chain}", True,
+                                    (170, 150, 80))
+                    surf.blit(bc, (cx + 18, y + f.get_linesize() - 2))
+                    y += 10
+            else:
+                _row("CHIPS", "—", (110, 110, 110), y)
+        y += lh
 
-        h_col = (0, 200, 80) if self._hits == 0 else \
-                (255, 180, 0) if self._hits <= 1 else (200, 80, 80)
-        _stat("DAMAGE",     f"{self._hits} hit{'s' if self._hits != 1 else ''}", h_col, y0 + lh)
+        m = self._mark_t("secrets")
+        if m is not None and tt >= m:
+            s_col = (0, 220, 200) if self._secrets_found >= self._secrets_total \
+                    and self._secrets_total > 0 else (140, 170, 170)
+            _row("SECRETS", f"{self._secrets_found} / {self._secrets_total}",
+                 s_col, y)
+        y += lh
 
-        if self._collectibles_total > 0:
-            c_col = (0, 220, 100) if self._collectibles_found == self._collectibles_total \
-                    else (200, 160, 60)
-            _stat("COLLECT", f"{self._collectibles_found} / {self._collectibles_total}",
-                  c_col, y0 + lh * 2)
+        m = self._mark_t("hits")
+        if m is not None and tt >= m:
+            h_col = (0, 210, 90) if self._hits == 0 else \
+                    (255, 180, 0) if self._hits <= 1 else (210, 90, 90)
+            _row("HITS", f"{self._hits}", h_col, y)
+        y += lh
 
-        s_col = (0, 200, 200) if self._secrets_found > 0 else (100, 100, 100)
-        _stat("SECRETS",    str(self._secrets_found), s_col, y0 + lh * 3)
+        m = self._mark_t("punctual")
+        if m is not None and tt >= m:
+            _row("UNION PUNCTUALITY", f"+{PUNCTUALITY_BONUS:,} cr",
+                 (120, 200, 255), y)
+            y += lh
 
-        cr_col = (200, 160, 0) if self._credits > 0 else (100, 100, 100)
-        _stat("CREDITS",    f"+{self._credits} cr", cr_col, y0 + lh * 4)
+        m = self._mark_t("credits")
+        if m is not None and tt >= m:
+            _row("CREDITS", f"+{self._result_credits:,} cr",
+                 (255, 200, 40), y)
+        y += lh + 6
+
+        # Stars burst in one at a time
+        if self._stars_shown > 0:
+            star_f = get_font(26, bold=True)
+            spacing = 40
+            x0 = cx - spacing * (3 - 1) // 2
+            for i in range(3):
+                lit  = i < self._stars_shown
+                col  = (255, 220, 40) if lit else (60, 60, 55)
+                # newest star flashes bright for its first beat
+                if lit and i == self._stars_shown - 1:
+                    mt = self._mark_t(f"star{i + 1}") or 0.0
+                    if tt - mt < 0.3:
+                        col = (255, 235, 120)
+                s = star_f.render("★" if lit else "☆", True, col)
+                surf.blit(s, (x0 + i * spacing - s.get_width() // 2, y))
+            y += 34
+
+        # Exit hint once the tally has fully landed
+        if tt >= self._tally_done_t:
+            blink = int(tt * 2.4) % 2 == 0
+            if blink:
+                hint = fsm.render("ENTER — hand off the cargo", True,
+                                  (0, 190, 90))
+                surf.blit(hint, (cx - hint.get_width() // 2,
+                                 CORRIDOR_H - 34))
+            par = fsm.render(
+                f"time {self._elapsed:.0f}s · par {self._par_total:.0f}s",
+                True, (90, 100, 90))
+            surf.blit(par, (cx - par.get_width() // 2, CORRIDOR_H - 20))

@@ -42,6 +42,9 @@ class MetaProgression:
         "npc_state":          {},
         # Aliveness F.5 — Bax player-style observations (cumulative across runs)
         "bax_style":          {"bribe": 0, "brute": 0, "exploit": 0},
+        # Delivery v2 I.2.5 — chapters cleared with a perfect corridor sweep
+        # (every chip + every secret). Stamps the dossier card permanently.
+        "courier_pride":      [],
     }
 
     def __init__(self, save_path: Path | str | None = None):
@@ -308,6 +311,21 @@ class MetaProgression:
         heard.append(idx)
         self.save()
         return True
+
+    # ── Delivery v2 I.2.5 — COURIER'S PRIDE (perfect corridor sweeps) ──
+    def mark_courier_pride(self, chapter: int) -> bool:
+        """Record a perfect sweep (every chip + every secret) of a
+        chapter's corridor. Returns True if newly earned."""
+        earned = self._data.setdefault("courier_pride", [])
+        chapter = int(chapter)
+        if chapter in earned:
+            return False
+        earned.append(chapter)
+        self.save()
+        return True
+
+    def has_courier_pride(self, chapter: int) -> bool:
+        return int(chapter) in self._data.get("courier_pride", [])
 
     # ------------------------------------------------------------------
     @property

@@ -301,6 +301,15 @@ def _draw_card(surf, x, y, w, h, card, t, *,
         st = fh.render("???   UNCOVERED", True, stamp_col)
     surf.blit(st, (x + (w - st.get_width()) // 2, stamp_y))
 
+    # Delivery v2 I.2.5 — COURIER'S PRIDE ribbon: perfect corridor sweep
+    # (every chip + every secret). Permanent, gold, earned not given.
+    if completed and meta is not None \
+            and getattr(meta, "has_courier_pride", None) \
+            and meta.has_courier_pride(chapter):
+        gold = (int(255 * dim), int(210 * dim), int(60 * dim))
+        pr = fsm.render("★ COURIER'S PRIDE ★", True, gold)
+        surf.blit(pr, (x + (w - pr.get_width()) // 2, stamp_y - 14))
+
     # Description + quirk
     desc_y = stamp_y + 22
     for j, line in enumerate((desc, quirk)):
