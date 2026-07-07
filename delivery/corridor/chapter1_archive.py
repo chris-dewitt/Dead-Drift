@@ -14,6 +14,7 @@ from delivery.corridor.elements import (
     SteamVent, Tripwire, SecurityBeam,
     BossRoomActor, boss_actor_gary_den,
     LoreRoom, NPCShortcut,
+    Spring, QuestionBlock, BreakableBlock, chip_arc,
     CORRIDOR_W, CORRIDOR_H, FLOOR_Y, CEIL_Y, PLAYER_H,
 )
 from delivery.corridor.base import Room, Corridor, STAR_3_TIME, STAR_2_TIME
@@ -546,6 +547,15 @@ def build(meta=None) -> Corridor:
         Collectible(280, FLOOR_Y - 65, 200, path_tag="low"),
         Collectible(420, FLOOR_Y - 20, 200, path_tag="low"),
         Collectible(600, FLOOR_Y - 20, 200, path_tag="low"),
+        # Delivery v2 I.3a — first taste of the new vocabulary: a spring
+        # up to the catwalk, a hardhat ?-block, a chip arc over the
+        # catwalk gap, and a sprint-through crate before the ladder.
+        Spring(150),
+        QuestionBlock(470, FLOOR_Y - 150, contains="hardhat",
+                      path_tag="low"),
+        *chip_arc(530, CEIL_Y + 52, 640, CEIL_Y + 52, n=4,
+                  path_tag="high"),
+        BreakableBlock(1000, chips=3, path_tag="low"),
         # NPC KENJI on low path
         NPCEncounter(
             550,

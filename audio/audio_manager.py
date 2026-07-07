@@ -26,7 +26,9 @@ from audio.synth import (
     npc_sig_dispatcher, npc_sig_adjuster, torch_slow_clap,
     corridor_jump_blip, corridor_land_thud, corridor_skid_scrape,
     corridor_sprint_chirp, corridor_chip_blip, corridor_tally_tick,
-    corridor_star_sting,
+    corridor_star_sting, corridor_spring_boing, corridor_block_break,
+    corridor_qblock_pop, corridor_pipe_warp, corridor_powerup_jingle,
+    corridor_powerdown_sag,
     _to_sound, _2PI,
     drum_kick, drum_snare_gated, drum_hihat, drum_clap,
     synth_bass_note,
@@ -414,6 +416,12 @@ class AudioManager:
             self._sfx[f"corr_chip_{_step}"] = corridor_chip_blip(_step)
         self._sfx["corr_tally"] = corridor_tally_tick()
         self._sfx["corr_star"]  = corridor_star_sting()
+        self._sfx["corr_spring"]    = corridor_spring_boing()
+        self._sfx["corr_break"]     = corridor_block_break()
+        self._sfx["corr_qblock"]    = corridor_qblock_pop()
+        self._sfx["corr_pipe"]      = corridor_pipe_warp()
+        self._sfx["corr_powerup"]   = corridor_powerup_jingle()
+        self._sfx["corr_powerdown"] = corridor_powerdown_sag()
         self._sfx["term_key_normal"] = terminal_key_click("normal")
         self._sfx["term_key_backspace"] = terminal_key_click("backspace")
         self._sfx["term_key_enter"] = terminal_key_click("enter")
@@ -624,6 +632,17 @@ class AudioManager:
         bus.subscribe(EVT_CORRIDOR_CHIP,  self._on_corridor_chip)
         bus.subscribe(EVT_CORRIDOR_TALLY, self._on_corridor_tally)
         bus.subscribe(EVT_CORRIDOR_STAR,  self._on_corridor_star)
+        # Delivery v2 I.3 — element + power-up SFX
+        from core.event_bus import (EVT_CORRIDOR_SPRING, EVT_CORRIDOR_BREAK,
+                                    EVT_CORRIDOR_QBLOCK, EVT_CORRIDOR_PIPE,
+                                    EVT_CORRIDOR_POWERUP,
+                                    EVT_CORRIDOR_POWERDOWN)
+        bus.subscribe(EVT_CORRIDOR_SPRING,    self._on_corridor_spring)
+        bus.subscribe(EVT_CORRIDOR_BREAK,     self._on_corridor_break)
+        bus.subscribe(EVT_CORRIDOR_QBLOCK,    self._on_corridor_qblock)
+        bus.subscribe(EVT_CORRIDOR_PIPE,      self._on_corridor_pipe)
+        bus.subscribe(EVT_CORRIDOR_POWERUP,   self._on_corridor_powerup)
+        bus.subscribe(EVT_CORRIDOR_POWERDOWN, self._on_corridor_powerdown)
         # Aliveness F.4 — harmonica lick when Bax hums at critical hull
         bus.subscribe(EVT_BAX_HARMONICA,      self._on_bax_harmonica)
 
@@ -1086,6 +1105,24 @@ class AudioManager:
 
     def _on_corridor_star(self, **_):
         self._corr_move_sfx("corr_star", 0.65, 200)
+
+    def _on_corridor_spring(self, **_):
+        self._corr_move_sfx("corr_spring", 0.58, 120)
+
+    def _on_corridor_break(self, **_):
+        self._corr_move_sfx("corr_break", 0.62, 150)
+
+    def _on_corridor_qblock(self, **_):
+        self._corr_move_sfx("corr_qblock", 0.58, 120)
+
+    def _on_corridor_pipe(self, **_):
+        self._corr_move_sfx("corr_pipe", 0.60, 300)
+
+    def _on_corridor_powerup(self, **_):
+        self._corr_move_sfx("corr_powerup", 0.65, 300)
+
+    def _on_corridor_powerdown(self, **_):
+        self._corr_move_sfx("corr_powerdown", 0.55, 300)
 
     def _build_corridor_signature(self, chapter: int) -> list[pygame.mixer.Sound]:
         """Lazily build a small bank of signature instrument sounds for

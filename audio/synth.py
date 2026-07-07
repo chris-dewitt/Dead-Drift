@@ -915,3 +915,56 @@ def corridor_star_sting() -> pygame.mixer.Sound:
     n3 = _adsr(_sine(988.0, 0.12, amp=0.30) + _sine(1976.0, 0.12, amp=0.08),
                0.002, 0.03, 0.6, 0.06)
     return _to_sound(np.concatenate([n1, n2, n3]))
+
+
+def corridor_spring_boing() -> pygame.mixer.Sound:
+    """Rising sweep — the eternal bounce-pad voice."""
+    dur = 0.18
+    inst = np.linspace(220.0, 760.0, int(SAMPLE_RATE * dur))
+    phase = np.cumsum(_2PI * inst / SAMPLE_RATE)
+    w = np.sin(phase).astype(np.float32) * 0.34
+    w += np.sign(np.sin(phase * 0.5)).astype(np.float32) * 0.08
+    return _to_sound(_adsr(w, 0.002, 0.05, 0.5, 0.08))
+
+
+def corridor_block_break() -> pygame.mixer.Sound:
+    """Low crunch + splinters — a crate giving way to a sprint."""
+    dur = 0.20
+    inst = np.linspace(140.0, 60.0, int(SAMPLE_RATE * dur))
+    phase = np.cumsum(_2PI * inst / SAMPLE_RATE)
+    w = np.sin(phase).astype(np.float32) * 0.35 + _noise(dur, amp=0.40)
+    return _to_sound(_adsr(w, 0.001, 0.06, 0.3, 0.10))
+
+
+def corridor_qblock_pop() -> pygame.mixer.Sound:
+    """Two-tone bonk-and-reward pop for ?-blocks."""
+    n1 = _adsr(_sine(392.0, 0.05, amp=0.30), 0.002, 0.015, 0.5, 0.02)
+    n2 = _adsr(_sine(784.0, 0.10, amp=0.32) + _sine(1568.0, 0.10, amp=0.08),
+               0.002, 0.03, 0.5, 0.05)
+    return _to_sound(np.concatenate([n1, n2]))
+
+
+def corridor_pipe_warp() -> pygame.mixer.Sound:
+    """Descending gurgle — going down the corporate drain."""
+    dur = 0.30
+    inst = np.linspace(600.0, 130.0, int(SAMPLE_RATE * dur))
+    phase = np.cumsum(_2PI * inst / SAMPLE_RATE)
+    w = np.sign(np.sin(phase)).astype(np.float32) * 0.16
+    w += _noise(dur, amp=0.05)
+    return _to_sound(_adsr(w, 0.004, 0.08, 0.5, 0.12))
+
+
+def corridor_powerup_jingle() -> pygame.mixer.Sound:
+    """Three quick rising notes — you are now briefly wonderful."""
+    seq = []
+    for f, d in ((523.3, 0.06), (659.3, 0.06), (784.0, 0.12)):
+        seq.append(_adsr(_sine(f, d, amp=0.30) + _sine(f * 2, d, amp=0.08),
+                         0.002, 0.02, 0.6, 0.03))
+    return _to_sound(np.concatenate(seq))
+
+
+def corridor_powerdown_sag() -> pygame.mixer.Sound:
+    """Two sagging notes — the wonder has expired."""
+    n1 = _adsr(_sine(392.0, 0.09, amp=0.26), 0.002, 0.03, 0.5, 0.04)
+    n2 = _adsr(_sine(293.7, 0.14, amp=0.26), 0.002, 0.04, 0.5, 0.07)
+    return _to_sound(np.concatenate([n1, n2]))

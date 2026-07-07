@@ -1,7 +1,7 @@
 # THE DELIVERY V2 PUSH
 
 **Started:** July 6 2026
-**Status:** Phases I.1 + I.2 shipped (`[~]` pending Chris play-verify) — I.3 next
+**Status:** I.1 + I.2 + I.3a (systems) shipped (`[~]` pending play-verify) — I.3b (rooms) next
 **Scope:** Open-ended (no time cap)
 **North star for all agents:** this document supersedes `ALIVENESS_PUSH.md` (completed July 2026) for active work.
 
@@ -158,25 +158,37 @@ Target 2–3 min clear (full-clear with secrets ~4 min). Extend existing
 chapters with new rooms rather than rebuilding — current rooms keep their
 identity; boss rooms stay the finale. Checkpoints every 2–3 rooms.
 
-### I.3.2 New element vocabulary — [ ]
+### I.3.2 New element vocabulary — [~]
 Springs/bounce pads, conveyor belts, breakable blocks (sprint-through),
 hidden ?-blocks, warp pipes (the corporate pipes finally pay off —
 shortcuts + secret sub-rooms), timed lift rides.
 
-### I.3.3 Power-ups — [ ] *(risk gate: confirm scope before building)*
+### I.3.3 Power-ups — [~] *(risk gate cleared July 7: all three approved)*
 Temporary, corridor-scoped, era-flavored: **Mag-Boots** (chip magnet),
 **Union Hardhat** (absorbs one hit, Mario-style de-power instead of raw
 damage), **Stim Soles** (speed + jump boost). Spawn from ?-blocks.
 
-### I.3.4 One chase set piece — [ ] *(risk gate: feel-check early)*
+### I.3.4 One chase set piece — [~] *(risk gate cleared July 7: ch6 approved; systems shipped, room lands in I.3b)*
 A single auto-scroll pressure room in a late chapter (ch6 Compliance sweep
 is the natural home). Max one per campaign — pressure is the spice, not
 the meal.
 
-### I.3.5 Ch5/ch6 parity + hit rebalance — [ ]
+### I.3.5 Ch5/ch6 parity + hit rebalance — [~]
 Bring The Edge and Compliance corridors to full room-count/secret parity
 with ch1–4. `MAX_HITS` scales with length (5 for 6+ rooms); checkpoints
 restore one.
+
+**I.3a ship note (July 7):** the systems half landed: Spring /
+ConveyorBelt / BreakableBlock (sprint-through, scatters chips) /
+QuestionBlock (chips or power-up) / WarpPipe (DOWN to warp) / TimedLift;
+all three power-ups (Mag-Boots magnet, Hardhat hit-eater, Stim Soles
+speed+jump); chase-room camera (Room(auto_scroll=px/s), sweep wall
+crush); max-hits 5 on 6+-room corridors; checkpoints patch one hit.
+Spring launches are exempt from jump-cut gravity. First taste placed in
+ch1 room 2 (spring to catwalk, hardhat ?-block, chip arc, crate).
+18 new tests in tests/test_corridor_levels_i3.py; suite 339 passed.
+I.3.1 room expansion + ch5/6 parity + the actual ch6 chase room are
+I.3b — the content pass.
 
 ---
 

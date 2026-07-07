@@ -1342,3 +1342,289 @@ class NPCShortcut(Element):
             f_fl  = get_font(7)
             fl    = f_fl.render(self.flavor[:32], True, (0, 80, 40))
             surf.blit(fl, (sx - fl.get_width() // 2, FLOOR_Y + 4))
+
+
+# ---------------------------------------------------------------------------
+# Delivery v2 I.3.2 — new element vocabulary
+# ---------------------------------------------------------------------------
+
+class Spring(Element):
+    """Bounce pad — land on it and it launches you. Boing."""
+    W, H = 34, 12
+    LAUNCH_VY = -680.0     # ~2.2× a full jump; springs reach what jumps can't
+
+    def __init__(self, x: float, y: float | None = None,
+                 path_tag: str | None = None):
+        super().__init__(x, path_tag)
+        self.y = y if y is not None else float(FLOOR_Y - self.H)
+        self._compress_t = 0.0
+
+    def try_bounce(self, px: float, py: float, pvy: float) -> bool:
+        if abs(px - self.x) > self.W // 2 + PLAYER_W // 2:
+            return False
+        if pvy >= 0 and self.y <= py + PLAYER_H <= self.y + self.H + 16:
+            self._compress_t = 0.18
+            return True
+        return False
+
+    def update(self, dt, player_x, player_y):
+        self._compress_t = max(0.0, self._compress_t - dt)
+
+    def draw(self, surf, camera_x, t, palette):
+        sx = int(self.x - camera_x)
+        squish = 0.45 if self._compress_t > 0 else 1.0
+        h  = max(4, int(self.H * squish))
+        y0 = int(self.y + self.H - h)
+        coil = palette.get("spring", (200, 60, 60))
+        cap  = palette.get("spring_cap", (230, 230, 240))
+        # coil zigzag
+        n = 3
+        for i in range(n):
+            yy = y0 + int(h * (i + 0.5) / n)
+            off = 6 if i % 2 == 0 else -6
+            pygame.draw.line(surf, coil,
+                             (sx - 8, yy), (sx + off, yy), 3)
+        pygame.draw.rect(surf, cap, (sx - self.W // 2, y0 - 4, self.W, 5))
+        pygame.draw.rect(surf, (30, 30, 36),
+                         (sx - self.W // 2, y0 - 4, self.W, 5), 1)
+
+
+class ConveyorBelt(Platform):
+    """Platform that drags whoever stands on it (drift px/s, +right)."""
+
+    def __init__(self, x: float, y: float, w: int, drift: float = 80.0,
+                 path_tag: str | None = None):
+        super().__init__(x, y, w, 12, path_tag)
+        self.drift   = drift
+        self._scroll = 0.0
+
+    def update(self, dt, player_x, player_y):
+        self._scroll = (self._scroll + self.drift * dt) % 16.0
+
+    def draw(self, surf, camera_x, t, palette):
+        sx = int(self.x - camera_x)
+        x0 = sx - self.w // 2
+        body = palette.get("conveyor", (70, 70, 84))
+        chev = palette.get("conveyor_hi", (180, 180, 60))
+        pygame.draw.rect(surf, body, (x0, int(self.y), self.w, self.h))
+        pygame.draw.rect(surf, (20, 20, 26),
+                         (x0, int(self.y), self.w, self.h), 1)
+        # animated chevrons show direction
+        step = 16
+        off = int(self._scroll) if self.drift > 0 else -int(self._scroll)
+        cx0 = x0 + (off % step)
+        d   = 1 if self.drift > 0 else -1
+        for cx in range(cx0, x0 + self.w - 4, step):
+            if cx < x0 + 2:
+                continue
+            pygame.draw.line(surf, chev,
+                             (cx, int(self.y) + 2),
+                             (cx + 5 * d, int(self.y) + self.h // 2), 2)
+            pygame.draw.line(surf, chev,
+                             (cx + 5 * d, int(self.y) + self.h // 2),
+                             (cx, int(self.y) + self.h - 2), 2)
+
+
+class BreakableBlock(Element):
+    """Crate wall — shatters if hit at sprint speed, else it's a wall."""
+    W, H = 26, 44
+    BREAK_SPEED = 280.0     # sprint territory; walking bonks
+
+    def __init__(self, x: float, chips: int = 2,
+                 path_tag: str | None = None):
+        super().__init__(x, path_tag)
+        self.y_top  = float(FLOOR_Y - self.H)
+        self.chips  = chips      # chips scattered on break
+        self.broken = False
+        self._shake_t = 0.0
+
+    def blocks(self, proposed_px: float, py: float) -> bool:
+        if self.broken:
+            return False
+        if py + PLAYER_H < self.y_top + 4:      # jumping clean over
+            return False
+        return abs(proposed_px - self.x) < self.W // 2 + PLAYER_W // 2
+
+    def try_break(self, pvx: float) -> bool:
+        if not self.broken and abs(pvx) >= self.BREAK_SPEED:
+            self.broken = True
+            return True
+        self._shake_t = 0.2
+        return False
+
+    def update(self, dt, player_x, player_y):
+        self._shake_t = max(0.0, self._shake_t - dt)
+
+    def draw(self, surf, camera_x, t, palette):
+        if self.broken:
+            return
+        sx = int(self.x - camera_x)
+        if self._shake_t > 0:
+            sx += int(2 * math.sin(t * 60.0))
+        body = palette.get("crate", (140, 96, 40))
+        line = palette.get("crate_hi", (200, 150, 80))
+        r = pygame.Rect(sx - self.W // 2, int(self.y_top), self.W, self.H)
+        pygame.draw.rect(surf, body, r)
+        pygame.draw.rect(surf, (25, 18, 8), r, 2)
+        pygame.draw.line(surf, line, r.topleft, r.bottomright, 2)
+        pygame.draw.line(surf, line, r.topright, r.bottomleft, 2)
+
+
+class QuestionBlock(Element):
+    """?-block — bonk it from below for chips or a power-up."""
+    W, H = 26, 26
+
+    def __init__(self, x: float, y: float, contains: str = "chips",
+                 n_chips: int = 3, path_tag: str | None = None):
+        super().__init__(x, path_tag)
+        self.y        = y            # top of the block
+        self.contains = contains     # "chips" | "magboots" | "hardhat" | "stimsoles"
+        self.n_chips  = n_chips
+        self.used     = False
+        self._bump_t  = 0.0
+
+    def try_bump(self, px: float, py: float, pvy: float) -> str | None:
+        """Rising head into the underside pops the block."""
+        if self.used or pvy >= 0:
+            return None
+        if abs(px - self.x) > self.W // 2 + PLAYER_W // 2 - 2:
+            return None
+        head = py
+        bottom = self.y + self.H
+        if bottom - 4 <= head <= bottom + 14:
+            self.used    = True
+            self._bump_t = 0.22
+            return self.contains
+        return None
+
+    def update(self, dt, player_x, player_y):
+        self._bump_t = max(0.0, self._bump_t - dt)
+
+    def draw(self, surf, camera_x, t, palette):
+        sx = int(self.x - camera_x)
+        yy = int(self.y)
+        if self._bump_t > 0.11:
+            yy -= 5      # bump hop
+        if self.used:
+            body, edge = (70, 62, 46), (30, 26, 18)
+        else:
+            pul  = 0.75 + 0.25 * math.sin(t * 5.0)
+            body = (int(220 * pul), int(170 * pul), 20)
+            edge = (60, 44, 0)
+        r = pygame.Rect(sx - self.W // 2, yy, self.W, self.H)
+        pygame.draw.rect(surf, body, r)
+        pygame.draw.rect(surf, edge, r, 2)
+        f = get_font(14, bold=True)
+        q = f.render("?" if not self.used else "·", True, edge)
+        surf.blit(q, (sx - q.get_width() // 2, yy + 4))
+
+
+class PowerUp(Element):
+    """Floating pickup: magboots | hardhat | stimsoles (I.3.3)."""
+    KINDS = ("magboots", "hardhat", "stimsoles")
+
+    def __init__(self, x: float, y: float, kind: str,
+                 path_tag: str | None = None):
+        super().__init__(x, path_tag)
+        self.y    = y
+        self.kind = kind
+        self._collected = False
+
+    def try_collect(self, px: float, py: float) -> str | None:
+        if self._collected:
+            return None
+        if abs(px - self.x) < 20 and abs((py + PLAYER_H / 2) - self.y) < 24:
+            self._collected = True
+            return self.kind
+        return None
+
+    def draw(self, surf, camera_x, t, palette):
+        if self._collected:
+            return
+        sx = int(self.x - camera_x)
+        sy = int(self.y + 3.0 * math.sin(t * 3.0))
+        if self.kind == "magboots":
+            pygame.draw.rect(surf, (60, 120, 255), (sx - 8, sy - 4, 10, 12))
+            pygame.draw.rect(surf, (120, 190, 255), (sx - 8, sy + 4, 16, 5))
+            pygame.draw.rect(surf, (10, 20, 60), (sx - 8, sy - 4, 16, 13), 1)
+        elif self.kind == "hardhat":
+            pygame.draw.ellipse(surf, (255, 205, 40), (sx - 10, sy - 2, 20, 9))
+            pygame.draw.rect(surf, (255, 205, 40), (sx - 6, sy - 8, 12, 8))
+            pygame.draw.rect(surf, (80, 60, 0), (sx - 10, sy - 8, 20, 15), 1)
+        else:  # stimsoles
+            pygame.draw.rect(surf, (255, 70, 70), (sx - 9, sy, 18, 5))
+            pygame.draw.rect(surf, (255, 150, 150), (sx - 9, sy - 4, 8, 5))
+            pygame.draw.rect(surf, (70, 8, 8), (sx - 9, sy - 4, 18, 10), 1)
+        # sparkle ring
+        pul = int(120 + 100 * abs(math.sin(t * 4.0)))
+        pygame.draw.circle(surf, (pul, pul, pul), (sx, sy + 1), 14, 1)
+
+
+class WarpPipe(Element):
+    """Corporate pipe — stand on it and press DOWN to warp to exit_x."""
+
+    def __init__(self, x: float, exit_x: float, h: int = 46,
+                 path_tag: str | None = None):
+        super().__init__(x, path_tag)
+        self.exit_x = exit_x
+        self.h      = h
+        self.y_top  = float(FLOOR_Y - h)
+
+    def can_enter(self, px: float, py: float, grounded: bool) -> bool:
+        return (grounded and abs(px - self.x) < 14
+                and py + PLAYER_H <= self.y_top + 8)
+
+    def collides_top(self, px: float, py: float, pvy: float) -> bool:
+        if abs(px - self.x) > 14 + PLAYER_W // 2:
+            return False
+        return (pvy >= 0 and self.y_top <= py + PLAYER_H <= self.y_top + 16)
+
+    def blocks(self, proposed_px: float, py: float) -> bool:
+        if py + PLAYER_H < self.y_top + 4:
+            return False
+        return abs(proposed_px - self.x) < 14 + PLAYER_W // 2
+
+    def draw(self, surf, camera_x, t, palette):
+        from renderer.sci_fi_ui import draw_corporate_pipe
+        sx = int(self.x - camera_x)
+        body = palette.get("pipe", (30, 140, 60))
+        hi   = palette.get("pipe_hi", (80, 210, 110))
+        draw_corporate_pipe(surf, sx, int(self.y_top), self.h, body, hi)
+
+
+class TimedLift(Element):
+    """Vertical platform looping between y_top and y_bot."""
+    W, H = 70, 10
+
+    def __init__(self, x: float, y_top: float, y_bot: float,
+                 speed: float = 55.0, path_tag: str | None = None):
+        super().__init__(x, path_tag)
+        self.y      = y_bot
+        self._y_top = y_top
+        self._y_bot = y_bot
+        self._speed = speed
+        self._dir   = -1
+
+    def update(self, dt, player_x, player_y):
+        self.y += self._dir * self._speed * dt
+        if self.y <= self._y_top:
+            self.y, self._dir = self._y_top, 1
+        elif self.y >= self._y_bot:
+            self.y, self._dir = self._y_bot, -1
+
+    def collides_top(self, px: float, py: float, pvy: float) -> bool:
+        if abs(px - self.x) > self.W // 2 + PLAYER_W // 2:
+            return False
+        return (pvy >= 0
+                and py + PLAYER_H >= self.y
+                and py + PLAYER_H <= self.y + self.H + 14)
+
+    def draw(self, surf, camera_x, t, palette):
+        sx = int(self.x - camera_x)
+        brick = palette.get("lift", (90, 90, 140))
+        hi    = palette.get("lift_hi", (170, 170, 230))
+        draw_mario_brick_platform(surf, sx, int(self.y), self.W, self.H,
+                                  brick, hi, t)
+        # guide rail
+        pygame.draw.line(surf, (50, 50, 70),
+                         (sx, int(self._y_top) - 4), (sx, int(self._y_bot) + 12), 1)
