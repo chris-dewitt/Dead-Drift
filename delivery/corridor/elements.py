@@ -420,6 +420,34 @@ class Collectible(Element):
                              (sx, sy + 8), (sx - 8, sy)], 1)
 
 
+# Delivery v2 I.2.2 — chip placement helpers. Chip trails are the level's
+# body language: arcs teach jump timing, lines mark the safe route.
+
+def chip_arc(x0: float, y0: float, x1: float, y1: float, n: int = 5,
+             value: int = 200, path_tag: str | None = None,
+             lift: float = 46.0) -> list[Collectible]:
+    """A parabolic trail of chips from (x0, y0) to (x1, y1) — place over a
+    gap so following the chips IS the jump arc."""
+    chips: list[Collectible] = []
+    peak = min(y0, y1) - lift
+    for i in range(max(2, n)):
+        f = i / (max(2, n) - 1)
+        x = x0 + (x1 - x0) * f
+        base = y0 + (y1 - y0) * f
+        # lerp toward the raised apex on a 4f(1-f) bump
+        y = base + (peak - base) * (4.0 * f * (1.0 - f))
+        chips.append(Collectible(x, y, value=value, path_tag=path_tag))
+    return chips
+
+
+def chip_line(x: float, y: float, n: int = 4, dx: float = 34.0,
+              value: int = 200, path_tag: str | None = None) -> list[Collectible]:
+    """A straight run of chips — marks the intended route (or the greed
+    line, if you put it somewhere spicy)."""
+    return [Collectible(x + i * dx, y, value=value, path_tag=path_tag)
+            for i in range(max(1, n))]
+
+
 class Secret(Element):
     """Off-path secret — credits or lore fragment."""
     def __init__(self, x: float, y: float, value: int = 500,

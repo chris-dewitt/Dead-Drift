@@ -39,6 +39,9 @@ def make_corridor(chapter: int, hardcore: bool = False,
     # Aliveness G.9 / G.10 — wire cargo mutator after build
     from delivery.corridor.mutators import get_corridor_mutator
     corridor._mutator = get_corridor_mutator(cargo, force_time_pressure=force_time_pressure)
+    # Delivery v2 I.2.5 — meta rides along so a perfect sweep can stamp
+    # the chapter's dossier (COURIER'S PRIDE).
+    corridor.meta = meta
     if hardcore:
         for room in corridor.rooms:
             room.elements = [el for el in room.elements

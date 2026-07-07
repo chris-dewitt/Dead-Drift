@@ -25,7 +25,8 @@ from audio.synth import (
     tape_hum_bed, slingshot_stinger, barge_motif, decanting_printer,
     npc_sig_dispatcher, npc_sig_adjuster, torch_slow_clap,
     corridor_jump_blip, corridor_land_thud, corridor_skid_scrape,
-    corridor_sprint_chirp,
+    corridor_sprint_chirp, corridor_chip_blip, corridor_tally_tick,
+    corridor_star_sting,
     _to_sound, _2PI,
     drum_kick, drum_snare_gated, drum_hihat, drum_clap,
     synth_bass_note,
@@ -409,6 +410,10 @@ class AudioManager:
         self._sfx["corr_land"]   = corridor_land_thud()
         self._sfx["corr_skid"]   = corridor_skid_scrape()
         self._sfx["corr_sprint"] = corridor_sprint_chirp()
+        for _step in range(1, 6):
+            self._sfx[f"corr_chip_{_step}"] = corridor_chip_blip(_step)
+        self._sfx["corr_tally"] = corridor_tally_tick()
+        self._sfx["corr_star"]  = corridor_star_sting()
         self._sfx["term_key_normal"] = terminal_key_click("normal")
         self._sfx["term_key_backspace"] = terminal_key_click("backspace")
         self._sfx["term_key_enter"] = terminal_key_click("enter")
@@ -613,6 +618,12 @@ class AudioManager:
         bus.subscribe(EVT_CORRIDOR_LAND,   self._on_corridor_land)
         bus.subscribe(EVT_CORRIDOR_SKID,   self._on_corridor_skid)
         bus.subscribe(EVT_CORRIDOR_SPRINT, self._on_corridor_sprint)
+        # Delivery v2 I.2 — chip chain + tally screen SFX
+        from core.event_bus import (EVT_CORRIDOR_CHIP, EVT_CORRIDOR_TALLY,
+                                    EVT_CORRIDOR_STAR)
+        bus.subscribe(EVT_CORRIDOR_CHIP,  self._on_corridor_chip)
+        bus.subscribe(EVT_CORRIDOR_TALLY, self._on_corridor_tally)
+        bus.subscribe(EVT_CORRIDOR_STAR,  self._on_corridor_star)
         # Aliveness F.4 — harmonica lick when Bax hums at critical hull
         bus.subscribe(EVT_BAX_HARMONICA,      self._on_bax_harmonica)
 
@@ -1065,6 +1076,16 @@ class AudioManager:
 
     def _on_corridor_sprint(self, **_):
         self._corr_move_sfx("corr_sprint", 0.60, 500)
+
+    def _on_corridor_chip(self, chain: int = 1, **_):
+        step = max(1, min(5, int(chain)))
+        self._corr_move_sfx(f"corr_chip_{step}", 0.55, 40)
+
+    def _on_corridor_tally(self, **_):
+        self._corr_move_sfx("corr_tally", 0.45, 30)
+
+    def _on_corridor_star(self, **_):
+        self._corr_move_sfx("corr_star", 0.65, 200)
 
     def _build_corridor_signature(self, chapter: int) -> list[pygame.mixer.Sound]:
         """Lazily build a small bank of signature instrument sounds for

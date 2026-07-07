@@ -1,7 +1,7 @@
 # THE DELIVERY V2 PUSH
 
 **Started:** July 6 2026
-**Status:** Phase I.1 shipped (`[~]` pending Chris play-verify) — I.2 next
+**Status:** Phases I.1 + I.2 shipped (`[~]` pending Chris play-verify) — I.3 next
 **Scope:** Open-ended (no time cap)
 **North star for all agents:** this document supersedes `ALIVENESS_PUSH.md` (completed July 2026) for active work.
 
@@ -114,29 +114,40 @@ weight? Dial the constants block, not the code.
 
 ## Phase I.2 — Reward loop (scoring & feedback)
 
-### I.2.1 Style scoring + tally screen — [ ]
+### I.2.1 Style scoring + tally screen — [~]
 Stars from: chip collection % / secrets found / hits taken. Par time pays a
 small credit bonus only. End-of-corridor **tally screen** in the DKC/SMW
 tradition: chips tick up with sound, secrets stamp in, stars burst on one at
 a time, Bax reacts to the grade.
 
-### I.2.2 Chip language — [ ]
+### I.2.2 Chip language — [~]
 Redesign chip placement as *communication*: arcs over gaps teach jump
 timing, lines mark safe routes, rings halo secrets. Pickup pop: sparkle +
 floating "+200" + blip that rises in pitch per chain.
 
-### I.2.3 Chip chains — [ ]
+### I.2.3 Chip chains — [~]
 Chips collected within ~1.5 s of each other build a ×1→×5 chain multiplier.
 Chain meter in HUD; breaking the chain drops the pitch back down. Makes
 greed lines and risky routes self-rewarding.
 
-### I.2.4 Room-clear flourish — [ ]
+### I.2.4 Room-clear flourish — [~]
 Door iris + room name stamp + per-room mini-tally chip count
 ("7/9 — two still in there, mate").
 
-### I.2.5 Completion feeds meta — [ ]
+### I.2.5 Completion feeds meta — [~]
 100% chips + all secrets in a chapter corridor → permanent dossier stamp
 ("COURIER'S PRIDE") on that chapter's carousel card.
+
+**I.2 ship note (July 7):** all five items landed on one branch; `[~]`
+until the tally/chain feel passes a windowed play-test. Reward tunables
+(chain window, star thresholds, punctuality bonus) sit in the I.2 block
+at the top of `delivery/corridor/base.py`. 18 new regression tests in
+`tests/test_corridor_reward_i2.py`; suite 321 passed. Chip *placement*
+redesign (arcs over real gaps, greed lines) deliberately waits for the
+I.3 room expansion — the `chip_arc`/`chip_line` helpers are ready.
+Play-check list: chain window too tight/loose at 1.5s? Chip blip pitch
+climb satisfying? Tally pacing — too slow to sit through, or skipped
+instinctively? 75%/40% star thresholds fair for how you actually play?
 
 ---
 
