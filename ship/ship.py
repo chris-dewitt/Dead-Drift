@@ -158,7 +158,12 @@ class PlayerShip:
     # ------------------------------------------------------------------
     @property
     def hull_pct(self) -> float:
-        return self.hull / S.HULL_MAX
+        # Clamped: CASUAL difficulty starts hull above HULL_MAX (+30
+        # headroom), but every consumer (renderer colour lerps, damage
+        # scars, audio tiers, HUD bars) expects a 0..1 fraction —
+        # unclamped this produced negative colour channels and crashed
+        # the DELTA-7 ship draw the moment a casual run rendered.
+        return max(0.0, min(1.0, self.hull / S.HULL_MAX))
 
     @property
     def pos(self) -> Vec2:
