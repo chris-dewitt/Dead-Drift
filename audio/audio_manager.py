@@ -259,7 +259,7 @@ class AudioManager:
         # Aliveness H.1 — "less is more" pact (SOUNDTRACK_PLAN v2 §2.5): the v2
         # mix sits quieter than the jarring v1 so silence can read as a stem.
         # This is the single global music lever; tune here before touching the
-        # per-scene targets. (See docs/SOUNDTRACK_IMPL_H1.md.)
+        # per-scene targets. (See docs/SOUNDTRACK_PLAN.md open-work note.)
         self._music_target_vol = 0.27
 
         # Bax voice timer

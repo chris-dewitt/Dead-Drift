@@ -37,7 +37,7 @@ _AISHIP_HAIL = (
 class TutorialManager:
     """
     First-run contextual hints fired once per mechanic, delivered as Bax lines.
-    Instantiated when meta.clone_count <= 3 (per IMPROVEMENT_PLAN Epic 2.7 —
+    Instantiated when meta.clone_count <= 3 (first few clone runs —
     extends tutorial reach to first three lives, not just the first).
     """
 

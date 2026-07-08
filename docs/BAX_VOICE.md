@@ -1,7 +1,6 @@
 # DEAD DRIFT — BAX Voice Guide & Line Bank
 
-**Companion to:** `IMPROVEMENT_PLAN.md` Epic 7.
-**Audience:** Implementation team — port these lines into `bax/bax.py` constants alongside the existing `_IDLE`, `_FAST`, `_SLOW`, etc.
+**Audience:** Writers and implementers — port lines into `bax/bax.py` constants alongside the existing `_IDLE`, `_FAST`, `_SLOW`, etc.
 
 ---
 

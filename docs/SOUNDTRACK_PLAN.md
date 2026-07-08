@@ -1,8 +1,8 @@
 # DEAD DRIFT — Soundtrack Master Plan (v2)
 
 **Codename:** *HIGHWAY BLUES FROM THE EDGE OF THE HELIOSPHERE*
-**Companion to:** `IMPROVEMENT_PLAN.md`, `CORRIDOR_DESIGN.md`, `BAX_VOICE.md`, `RECORDING_BRIEF.md`
-**Audience:** Dead Drift implementation team. Read after the master plan.
+**Companion to:** `BAX_VOICE.md`, `RECORDING_BRIEF.md`, `README.md`
+**Audience:** Dead Drift audio implementation team.
 **Approach:** **Hybrid.** Recorded stems form the canvas. The procedural audio system in `audio/` is the interactive layer that performs them in real-time.
 
 > **Read order.** Section 1 = the pitch. Section 1.5 = the four sci-fi film homages that anchor each chapter. Section 2 = the production rules ("the DEAD DRIFT SOUND"). Section 2.5 = the hybrid contract (recorded vs procedural). Sections 3–5 = album structure, per-chapter palette, per-sector dramatic curve. Sections 6–7 = the reactive systems that turn the score from playlist into performance. Section 7.5 = music subtitles & visual indicators (accessibility, first-class). Section 8 = implementation roadmap. Section 9 = falsifiable success metrics.
@@ -15,7 +15,8 @@ These are the directional answers backing this plan. Don't re-litigate — imple
 
 - **Hybrid approach.** Recorded stems (Chris-sourced or commissioned) form the backbone. The procedural system layers on top: tempo modulation, key modulation, pad swells, arp, threat motif drone, master FX, cargo-degradation effects, mix-bus automation. Graceful degradation: every recorded stem has a procedural fallback already in the codebase so the game stays playable as stems land incrementally. (Section 2.5.)
 - **Cohesion-forward, but not genre-locked.** The signature backbone is highway-blues space-noir. Within that backbone, *each chapter explicitly honors a different great sci-fi film score* (Section 1.5). The cockpit is the constant; the films change.
-- **The four film homages.** Ch 1 Acoustic Archive → **Blade Runner** (Vangelis). Ch 2 Mycorrhizal Payload → **Solaris** (Artemyev, 1972). Ch 3 Paperwork → **Brazil** (Michael Kamen, 1985). Ch 4 Schrödinger VIP → **2001: A Space Odyssey** (Ligeti). These are not pastiches. They are *nods*: we steal texture, voicing, and concept; we never copy melody.
+- **Film homages (Ch1–4).** Ch 1 Acoustic Archive → **Blade Runner** (Vangelis). Ch 2 Mycorrhizal Payload → **Solaris** (Artemyev, 1972). Ch 3 Paperwork → **Brazil** (Michael Kamen, 1985). Ch 4 Schrödinger VIP → **2001: A Space Odyssey** (Ligeti). These are not pastiches. They are *nods*: we steal texture, voicing, and concept; we never copy melody.
+- **Ch5–6 extensions (shipped Phase H).** Ch 5 The Edge → warm acoustic D Dorian, off-grid intimacy (`audio/chapter_5.py`). Ch 6 Compliance → cold A minor / fluorescent quantised clock (`audio/chapter_6.py`). No fourth-film homage locked — treat as original palette.
 - **No vocals, except Bax humming.** Bax hums on every successful delivery (recurring signature, not precious rarity). 12-hum pool, mood-tagged, chosen by run context. Heard hums unlock in a main-menu jukebox. (Section 7.4.)
 - **Diegetic-first.** Whenever music can come from a thing in the world — Bax's harmonica, a fuel canister chime, a Repo Barge's tow-warning siren, the cockpit radio — it does. Non-diegetic only for menus, decanting, and run-end stings.
 - **The "less is more" pact.** The current procedural soundtrack reads as **jarring and overwhelming.** The v2 default mix sits ~6 dB quieter. Max 4 active stems at any moment (was 5). One full-bar mix-drop per sector minimum — silence is a stem. Every adaptive audio change must be *signposted* via subtitle, HUD line, Bax line, or visual cue. If it can't be signposted, it doesn't ship.
@@ -274,7 +275,7 @@ A 4-chapter campaign is a 4-side double album. The track listing the player expe
 4. **Roadside Confession** *(terminal encounter, sector 2)* — drums drop out. Pad alone + sparse harp.
 5. **The Long Inhale** *(sectors 3–4)* — drums return, bass walks darker.
 6. **Last Mile Before the Tunnel** *(sector 5)* — pressure peaks. Threat motif on harp.
-7. **Smuggler's Welcome** *(delivery corridor)* — chapter cargo theme. Vinyl-warm, bass-heavy, harp solos. (See `CORRIDOR_DESIGN.md`.)
+7. **Smuggler's Welcome** *(delivery corridor)* — chapter cargo theme. Vinyl-warm, bass-heavy, harp solos. Per-chapter corridor palettes in `delivery/corridor/chapter*.py`.
 8. **Sign Here, Please** *(delivery success)* — mixolydian for 12 s. **Bax hums.** Back to silence.
 
 ### Side B — *The Mycorrhizal Payload* (Solaris homage)
@@ -348,6 +349,26 @@ Each chapter modulates the home key, adopts its film-homage texture, adds a *sig
 ### 4.5 Risk note on Ch4
 
 Locrian-style clusters are easy to get wrong — they can sound like a bug. Mitigation: every Ch4 cluster is **anchored to a sustained E in the sub-bass**, so the listener always has a tonal floor even when the upper register is functionally atonal. If playtest reads it as broken, the fallback is natural-minor-with-chromatic-passing-tones (still Ligeti-adjacent, less unstable). The fallback is wired into the chapter loader from day one.
+
+### 4.6 Chapter 5 — The Edge *(shipped)*
+- **Home key:** D Dorian.
+- **Signature instrument:** Acoustic guitar + soft harmonica — the quiet chapter.
+- **Implementation:** `audio/chapter_5.py`; dock receiver voice **Fitz** (warm, off-grid grit).
+
+### 4.7 Chapter 6 — Compliance *(shipped)*
+- **Home key:** A natural minor / B Phrygian inflections.
+- **Signature instrument:** Fluorescent compliance chime + quantised clock kit — clinical, no swing.
+- **Implementation:** `audio/chapter_6.py`; dock receiver voice **Bowen** (smooth, institutional).
+
+---
+
+## Open work (soundtrack v2 audit)
+
+Baseline mix trim landed (`_music_target_vol` 0.34 → 0.27 in `audio/audio_manager.py`). Still pending Chris play-verify:
+
+1. **Max-4-active-stems guard** — enforce Section 2.4 in code
+2. **Accessibility UI** — music subtitles, per-stem volume sliders, master mute (Section 7.5)
+3. **Audible play-pass** — confirm quieter default reads as intentional, not broken
 
 ---
 

@@ -3,7 +3,7 @@
 **Started:** July 6 2026
 **Status:** I.1–I.3 shipped (`[~]` pending play-verify) — I.4 (16-bit graphics) next
 **Scope:** Open-ended (no time cap)
-**North star for all agents:** this document supersedes `ALIVENESS_PUSH.md` (completed July 2026) for active work.
+**North star for all agents:** this is the only active push doc. The Aliveness push (A–H) completed July 2026; prior roadmaps were removed — see `docs/archive/README.md`.
 
 ---
 

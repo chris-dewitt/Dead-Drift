@@ -1,17 +1,18 @@
 # DEAD DRIFT — Agent pointer
 
-**May 2026:** The old combined session doc + GDD that lived here is archived. Do **not** use it as current spec.
+Read this first. Do **not** use deleted or git-archived docs as current spec.
 
 | Doc | Use for |
 |-----|---------|
 | **[docs/DELIVERY_V2_PUSH.md](docs/DELIVERY_V2_PUSH.md)** | **North star** — active push (corridor/delivery overhaul, phases I.1→I.5) |
-| [docs/ALIVENESS_PUSH.md](docs/ALIVENESS_PUSH.md) | Previous push roadmap (A→H — complete July 2026) |
 | [README.md](README.md) | Player quick start, controls, feature overview |
-| [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md) | Historical epic checklist (Phase 0 + Epics 1–14 — complete May 2026) |
-| [docs/DOCUMENTATION_STATUS.md](docs/DOCUMENTATION_STATUS.md) | Stale-doc tracker, resolved decisions |
-| [docs/STRING_AUDIT_RESULTS.md](docs/STRING_AUDIT_RESULTS.md) | Epic 9.4 string audit report |
-| [docs/CLAUDE_ARCHIVED.md](docs/CLAUDE_ARCHIVED.md) | Historical session/GDD excerpt (out of date) |
-| [docs/DEAD_DRIFT_GDD_ARCHIVED.md](docs/DEAD_DRIFT_GDD_ARCHIVED.md) | Original pitch GDD (historical) |
+| [WORKING_ON.md](WORKING_ON.md) | File-claim coordination before editing subsystems |
+| [docs/BAX_VOICE.md](docs/BAX_VOICE.md) | Bax line bank + tone guide |
+| [docs/NPC_SCHEMA.md](docs/NPC_SCHEMA.md) | Terminal NPC keyword/bribe floors (enforced by tests) |
+| [docs/SOUNDTRACK_PLAN.md](docs/SOUNDTRACK_PLAN.md) | Audio design spec |
+| [docs/RECORDING_BRIEF.md](docs/RECORDING_BRIEF.md) | Stem recording shot list |
+
+Prior roadmaps (Improvement Plan, Aliveness push, corridor design notes, documentation status tracker, etc.) were **removed July 2026**. Git history has the old files. See [docs/archive/README.md](docs/archive/README.md).
 
 ---
 
@@ -41,12 +42,26 @@ git push origin main
 
 ---
 
-## Physics rule (still true)
+## Physics rule (flight only)
 
 Never multiply force by `dt` at the call site — `RigidBody2D.integrate(dt)` handles that.
 
+Corridor platformer kinematics in `delivery/corridor/base.py` are hand-rolled — the dt rule does not apply there.
+
 ---
 
-## Tuning constant (locked May 2026)
+## Tuning constants
 
-**`MAX_VELOCITY = 280` px/s** — see `config/settings.py`. Slingshot overdrive cap = **420** px/s (1.5×).
+| Constant | Value | Where |
+|----------|-------|-------|
+| `MAX_VELOCITY` | 280 px/s | `config/settings.py` |
+| Slingshot overdrive cap | 420 px/s (1.5×) | `config/settings.py` |
+| Corridor feel + reward | coyote, buffer, chains, star thresholds | top of `delivery/corridor/base.py` |
+
+---
+
+## Current push status (July 2026)
+
+**Delivery v2** — I.1–I.3b shipped `[~]` (pending Chris play-verify). **I.4** (16-bit graphics) is next.
+
+Update checkboxes in `docs/DELIVERY_V2_PUSH.md` only. Do not recreate old push docs.

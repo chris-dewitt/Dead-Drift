@@ -226,7 +226,7 @@ class RepoBarge:
         # Playtest fix: brief stagger so the barge stops accelerating away
         # mid-volley and the player actually sees the recoil. Matches the
         # 'barge should slow down briefly so you can land another shot'
-        # feedback note in docs/PLAYTEST_FEEDBACK.md.
+        # Playtest feedback: brief slowdown on hit so follow-up shots land.
         self._stagger_t = 0.5
         # Damp current velocity right at the moment of impact so the
         # response is felt this frame, not next.

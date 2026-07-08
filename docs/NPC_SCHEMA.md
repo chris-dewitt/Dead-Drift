@@ -1,8 +1,7 @@
 # NPC SCHEMA — keywords, bribes, exploits
 
-**Phase:** ALIVENESS_PUSH B.1
+**Maintained by:** `tests/test_npc_schema_b1.py` (regenerates this table on demand).
 **Last audit:** May 25 2026
-**Source of truth:** the script in `tests/test_npc_schema_b1.py` regenerates this table on demand.
 
 ---
 

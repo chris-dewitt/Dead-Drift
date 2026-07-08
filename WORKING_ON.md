@@ -13,11 +13,6 @@ After committing your work, remove your row.
 |-----------|--------|------------|-----------|
 | *(none)* | | | |
 
-### Recent releases
-
-- 2026-05-25: `bax/bax.py` + `audio/audio_manager.py` + `audio/voices.py` + `core/event_bus.py` + `renderer/cockpit_renderer.py` + `antagonists/repo_barge.py` + `play.py` — Phase 1/2 sweep: Epics 1.2 (font cache), 1.4 (Subscriber mixin), 1.8 (length_sq), 7.2 (first-kill-of-sector pool), 7.3 (voice modes), 7.4 (Bax pitch tiers). Branch `rhubarb/phase-1-2-implementation`.
-- 2026-05-24: terminal + dray/mira_voss/nova_soma/toll_authority + run_manager (popup gate) — Epic 9.1-9.3 + partial 9.4 shipped. Branch `claude/improve-game-mechanics-RkgJV`.
-
 ---
 
 ## Subsystem map
@@ -28,14 +23,15 @@ After committing your work, remove your row.
 | `terminal` | `terminal/terminal.py`, `terminal/npc_portraits.py` |
 | `npcs` | `terminal/npcs/*` — claim individual NPC files separately |
 | `bax` | `bax/bax.py`, `bax/vocabulary_vault.py`, `audio/audio_manager.py` |
-| `corridor` | `delivery/corridor/*`, `delivery/platformer.py`, `delivery/obstacles.py` |
-| `landing` | `delivery/landing_sequence.py` |
+| `corridor` | `delivery/corridor/*` (incl. `base.py`, `rooms_v2.py`, per-chapter files) |
+| `landing` | `delivery/landing_sequence.py`, `delivery/delivery_sequence.py` |
 | `run_manager` | `roguelite/run_manager.py` |
 | `meta` | `roguelite/meta_progression.py`, `data/saves/stats.json`, `data/saves/unlocks.json` |
 | `settings` | `config/settings.py` |
-| `ai_ships` | `antagonists/ai_ship.py` |
+| `ai_ships` | `antagonists/ai_ship.py`, `antagonists/repo_barge.py` |
 | `loadout` | `roguelite/loadout_draft.py` |
 | `shop` | `roguelite/shop.py`, `roguelite/shop_items.py` |
+| `audio` | `audio/audio_manager.py`, `audio/chapter_*.py`, `audio/voices.py` |
 
 ---
 
@@ -44,7 +40,7 @@ After committing your work, remove your row.
 Add a row before starting work:
 
 ```
-| renderer | claude/my-branch | agent-session-xyz | 2026-05-24 14:00 |
+| corridor | claude/my-branch | agent-session-xyz | 2026-07-08 14:00 |
 ```
 
 Remove the row after committing. If a claim is > 4 hours old with no commit, treat it as stale and override.
@@ -53,6 +49,7 @@ Remove the row after committing. If a claim is > 4 hours old with no commit, tre
 
 ## Related docs
 
-- `docs/NEXT_PUSH.md` — full priority stack and design decisions for this push
-- `docs/IMPROVEMENT_PLAN.md` — Epics 1-8 (historical + baseline)
-- `docs/BAX_VOICE.md` — Bax line bank and tone guide
+- **`docs/DELIVERY_V2_PUSH.md`** — active north star
+- **`README.md`** — player + dev overview
+- **`docs/BAX_VOICE.md`** — Bax line bank
+- **`docs/NPC_SCHEMA.md`** — terminal NPC schema
