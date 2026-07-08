@@ -190,7 +190,9 @@ Spec → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLAN.md) · Recording stems
 |------|---------|
 | `config/settings.py` | Flight tuning constants — edit here first |
 | `delivery/corridor/base.py` | Corridor feel + reward tunables (I.1/I.2 blocks at top) |
-| `docs/DELIVERY_V2_PUSH.md` | **North star** — active push checklist |
+| `docs/DELIVERY_V2_PUSH.md` | **North star** — corridor push checklist (I.4 next) |
+| `docs/Issues.md` | Locked spec — combat, saves, EncryptedDrive, paperwork |
+| `docs/MakeTheTerminalFunAgain.md` | Locked spec — terminal overhaul |
 | `docs/BAX_VOICE.md` | Bax line bank + tone guide |
 | `docs/NPC_SCHEMA.md` | Terminal NPC keyword/bribe floors |
 | `docs/SOUNDTRACK_PLAN.md` | Audio design spec |

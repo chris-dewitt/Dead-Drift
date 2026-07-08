@@ -24,7 +24,9 @@
 
 - [`README.md`](../../README.md) — player + dev overview
 - [`CLAUDE.md`](../../CLAUDE.md) — agent pointer
-- [`DELIVERY_V2_PUSH.md`](../DELIVERY_V2_PUSH.md) — active roadmap
+- [`DELIVERY_V2_PUSH.md`](../DELIVERY_V2_PUSH.md) — corridor push (I.4 next)
+- [`Issues.md`](../Issues.md) — combat/checkpoint/cargo spec
+- [`MakeTheTerminalFunAgain.md`](../MakeTheTerminalFunAgain.md) — terminal overhaul spec
 - [`BAX_VOICE.md`](../BAX_VOICE.md) — Bax lines
 - [`NPC_SCHEMA.md`](../NPC_SCHEMA.md) — terminal NPC schema
 - [`SOUNDTRACK_PLAN.md`](../SOUNDTRACK_PLAN.md) — audio spec

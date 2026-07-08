@@ -4,7 +4,9 @@ Read this first. Do **not** use deleted or git-archived docs as current spec.
 
 | Doc | Use for |
 |-----|---------|
-| **[docs/DELIVERY_V2_PUSH.md](docs/DELIVERY_V2_PUSH.md)** | **North star** — active push (corridor/delivery overhaul, phases I.1→I.5) |
+| **[docs/DELIVERY_V2_PUSH.md](docs/DELIVERY_V2_PUSH.md)** | **North star** — corridor/delivery overhaul (I.4 next) |
+| **[docs/Issues.md](docs/Issues.md)** | **Locked spec** — combat, checkpoints, EncryptedDrive, paperwork |
+| **[docs/MakeTheTerminalFunAgain.md](docs/MakeTheTerminalFunAgain.md)** | **Locked spec** — terminal economy, coding exploits, NPC parity |
 | [README.md](README.md) | Player quick start, controls, feature overview |
 | [WORKING_ON.md](WORKING_ON.md) | File-claim coordination before editing subsystems |
 | [docs/BAX_VOICE.md](docs/BAX_VOICE.md) | Bax line bank + tone guide |
@@ -62,6 +64,9 @@ Corridor platformer kinematics in `delivery/corridor/base.py` are hand-rolled �
 
 ## Current push status (July 2026)
 
-**Delivery v2** — I.1–I.3b shipped `[~]` (pending Chris play-verify). **I.4** (16-bit graphics) is next.
+| Push | Doc | Status |
+|------|-----|--------|
+| Delivery v2 | `DELIVERY_V2_PUSH.md` | I.1–I.3b shipped `[~]`; **I.4** next |
+| Issues + Terminal | `Issues.md` + `MakeTheTerminalFunAgain.md` | **Spec locked** — implement when Chris greenlights |
 
-Update checkboxes in `docs/DELIVERY_V2_PUSH.md` only. Do not recreate old push docs.
+Update checkboxes in active push docs only. Do not recreate deleted roadmaps.
