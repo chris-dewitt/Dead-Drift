@@ -252,16 +252,34 @@ play-verify.
 
 ## Phase I.5 — Chain juice (APPROACH / LAND / RESULT)
 
-### I.5.1 Approach rings — [ ]
+### I.5.1 Approach rings — [~]
 Optional ring line through the approach; clean line ticks small credits.
 
-### I.5.2 Landing grade — [ ]
+### I.5.2 Landing grade — [~]
 Touchdown graded on descent rate + pad centering: SILK / FIRM / ROUGH
 plate stamp, small bonus, existing Bax landing lines wired to grade.
 
-### I.5.3 RESULT card v2 — [ ]
+### I.5.3 RESULT card v2 — [~]
 Payout card rebuilt in the I.2.1 tally style so the whole delivery chain
 ends on the same arcade high.
+
+**I.5 ship note (July 8):** all three landed in `delivery/delivery_sequence.py`.
+I.5.1 — five pre-placed rings drift toward the ship during APPROACH
+(Star-Fox style); each clean pass pays 150cr with a ping, a flawless
+line adds 400cr + a Bax line, and the approach now holds open until the
+ring line resolves (magnetic lock still ends Beat 1 once aligned AND
+rings done). I.5.2 — `_finish_dock` tags the existing perfect/mid/rough
+envelope as SILK/FIRM/ROUGH with a plate stamp that settles onto the
+Beat-3 dock and shows the ±bonus; Bax's landing lines already wired.
+I.5.3 — RESULT card rebuilt as a staged tally: rows stamp in on a
+schedule (rings → landing grade → corridor stars → cargo), payout
+counts up, balance lands last; ring credits fold into the payout.
+Ring/grade tunables (`_RING_SPEED/_RADIUS/_CREDIT/_LINE_BONUS`) sit by
+the approach constants. 12 new tests in `tests/test_delivery_chain_i5.py`
+(ring line math, miss case, lock-hold, SILK/FIRM/ROUGH matrix, stamp +
+tally render, ring credits fold in, all-chapters chain). Suite 368
+passed. **This closes the Delivery v2 push (I.1–I.5).** Play-check:
+ring spacing/forgiveness, grade thresholds, tally pacing at 6.5s hold.
 
 ---
 

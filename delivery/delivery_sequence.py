@@ -172,9 +172,13 @@ _BAX_DOCK_WINDUP_DELIVERY: dict[int, list[str]] = {
 
 # ── Phase constants ─────────────────────────────────────────────────────────
 _APPROACH_DURATION = 5.0    # seconds to fly into the bay (Beat 1)
+_RING_SPEED        = 240.0  # px/s the approach rings drift toward the ship
+_RING_RADIUS       = 54.0   # px — clean-pass tolerance (forgiving; it's a bonus)
+_RING_CREDIT       = 150    # credits per clean ring
+_RING_LINE_BONUS   = 400    # extra for a flawless line (every ring clean)
 _BEAT2_DURATION    = 4.0    # seconds for gauge + burn (Beat 2)
 _BEAT3_DURATION    = 6.0    # seconds for cutscene     (Beat 3)
-_RESULT_HOLD       = 4.0    # seconds to show result card
+_RESULT_HOLD       = 6.5    # seconds to show result card (I.5.3 staged tally)
 
 # Chapter station themes: (primary_col, accent_col, name)
 _STATION_THEMES = {
@@ -493,6 +497,25 @@ class DeliverySequence:
         self._align_held_t  = 0.0
         self._lock_flash_t  = 0.0
 
+        # I.5.1 — approach rings: fly a clean line through them for credits.
+        # Pre-placed so each ring reaches the ship at a staggered time
+        # inside the approach window; purely a bonus, never a gate.
+        self._rings: list[list] = []
+        base_y = float(S.SCREEN_H // 2)
+        for arrival, dy in ((1.0, -70.0), (1.9, 55.0), (2.8, -40.0),
+                            (3.7, 70.0), (4.6, 0.0)):
+            self._rings.append([
+                self._ship_screen_x + _RING_SPEED * arrival,   # x
+                base_y + dy,                                    # y
+                False,                                          # evaluated
+                False,                                          # clean pass
+            ])
+        self._rings_total   = len(self._rings)
+        self._rings_hit     = 0
+        self._ring_cr       = 0
+        self._ring_flash_t  = 0.0
+        self._ring_line_done = False
+
         # Landing state (Beat 2) — Epic 14.2: continuous speed-dock gauge.
         # Legacy fields kept so Beat 3 scoring display stays compatible.
         self._land_sub        = "speed_dock"   # always 'speed_dock' in new design
@@ -502,6 +525,8 @@ class DeliverySequence:
         self._burn_overshoot  = False     # set by _finish_dock for Beat 3 display
         self._land_y          = 60.0
         self._land_score      = 0
+        self._land_grade      = "FIRM"    # I.5.2 — SILK / FIRM / ROUGH
+        self._grade_stamp_t   = 0.0
         self._beat2_sub_t     = 0.0
         # Epic 14.2 — speed-dock minigame state
         self._dock_speed         = 0.55     # current displayed speed 0..1
@@ -610,6 +635,27 @@ class DeliverySequence:
 
         self._lock_flash_t = max(0.0, self._lock_flash_t - dt)
 
+        # I.5.1 — approach rings drift toward the ship; a clean line pays.
+        self._ring_flash_t = max(0.0, self._ring_flash_t - dt)
+        for ring in self._rings:
+            ring[0] -= _RING_SPEED * dt
+            if not ring[2] and ring[0] <= self._ship_screen_x:
+                ring[2] = True                       # evaluated at the ship plane
+                if abs(ring[1] - self._ship_screen_y) < _RING_RADIUS:
+                    ring[3] = True
+                    self._rings_hit += 1
+                    self._ring_cr   += _RING_CREDIT
+                    self._ring_flash_t = 0.25
+                    bus.emit(EVT_DOCK_PERFECT)       # reuse the clean-dock ping
+        # Flawless line bonus, awarded once when every ring is clean
+        if (not self._ring_line_done
+                and self._rings_hit == self._rings_total
+                and all(r[2] for r in self._rings)):
+            self._ring_line_done = True
+            self._ring_cr += _RING_LINE_BONUS
+            bus.emit(EVT_BAX_SPEAK,
+                     line="CLEAN line through every ring. Show-off. I love it.")
+
         # G.2 — Dock Control radio fires once at ~1.2s into approach
         if self._t >= 1.2 and not self._dock_radio_fired:
             self._dock_radio_fired = True
@@ -622,8 +668,11 @@ class DeliverySequence:
                 bus.emit(EVT_DOCK_RADIO, line=line, clear=True)
             bus.emit(EVT_COMMS_SPEAK, speaker="DOCK CONTROL", line=line)
 
-        # Advance: magnetic lock after 0.5s aligned, or timeout
-        should_advance = self._align_held_t >= 0.5 or self._t >= _APPROACH_DURATION
+        # Advance: magnetic lock after 0.5s aligned — but hold the approach
+        # open until the ring line has played out (I.5.1), or timeout.
+        rings_done = all(r[2] for r in self._rings)
+        should_advance = ((self._align_held_t >= 0.5 and rings_done)
+                          or self._t >= _APPROACH_DURATION)
         if should_advance:
             if self._aligned:
                 self._approach_score = 2
@@ -848,6 +897,35 @@ class DeliverySequence:
             ls = fl.render("LOCKED", True, (0, 0, 0))
             surface.blit(ls, (cone_cx - ls.get_width() // 2, cone_cy - 8))
 
+        # ── I.5.1 approach rings ─────────────────────────────────────────
+        for ring in self._rings:
+            rx, ry, evaluated, clean = int(ring[0]), int(ring[1]), ring[2], ring[3]
+            if rx < -60 or rx > W + 60:
+                continue
+            if evaluated:
+                col = (0, 220, 120) if clean else (120, 60, 60)
+                width = 2 if clean else 1
+            else:
+                pul = 0.6 + 0.4 * math.sin(t * 5.0 + rx * 0.02)
+                col = (int(255 * pul), int(200 * pul), 0)
+                width = 3
+            # perspective oval — narrower as it nears the ship plane
+            near = max(0.35, min(1.0, (rx - self._ship_screen_x + 400) / 800))
+            rw = int(46 * near)
+            rh = 46
+            pygame.draw.ellipse(surface, col, (rx - rw, ry - rh, rw * 2, rh * 2), width)
+            if not evaluated:
+                pygame.draw.ellipse(surface, (col[0] // 2, col[1] // 2, 0),
+                                    (rx - rw + 3, ry - rh + 3,
+                                     (rw - 3) * 2, (rh - 3) * 2), 1)
+        # Ring-credit ticker (top-left, only while rings are in play)
+        if self._ring_cr > 0 or any(not r[2] for r in self._rings):
+            fr = get_font(13, bold=True)
+            rc_col = (0, 255, 140) if self._ring_flash_t > 0 else (0, 190, 110)
+            rs = fr.render(f"RINGS {self._rings_hit}/{self._rings_total}"
+                           f"   +{self._ring_cr} cr", True, rc_col)
+            surface.blit(rs, (16, 16))
+
         # ── Player ship (rotated by angle) ──────────────────────────────
         px5  = int(self._ship_screen_x)
         py5  = int(self._ship_screen_y)
@@ -924,6 +1002,7 @@ class DeliverySequence:
                     or self._dock_idle_t >= 3.0)
         if perfect:
             self._land_score = 2
+            self._land_grade = "SILK"          # I.5.2
             self._dock_bonus_cr = 500
             self._j_hit = True
             self._burn_done = True
@@ -931,6 +1010,7 @@ class DeliverySequence:
             bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_LAND_SMOOTH))
         elif rough:
             self._land_score = 0
+            self._land_grade = "ROUGH"
             self._dock_bonus_cr = -200
             self._j_hit = False
             self._burn_done = False
@@ -939,9 +1019,11 @@ class DeliverySequence:
             bus.emit(EVT_BAX_SPEAK, line=random.choice(_BAX_LAND_ROUGH))
         else:
             self._land_score = 1
+            self._land_grade = "FIRM"
             self._dock_bonus_cr = 0
             self._j_hit = True
             self._burn_done = False
+        self._grade_stamp_t = 0.0              # animates in on Beat 3
         self._t     = 0.0
         self._phase = self.PHASE_BEAT3
 
@@ -1024,6 +1106,7 @@ class DeliverySequence:
 
     def _update_beat3(self, dt: float):
         self._clamp_anim_t += dt
+        self._grade_stamp_t += dt      # I.5.2 — landing-grade plate animation
 
         # G.1 — Gary dock line fires at ~0.6s (clamps engaging)
         if self._clamp_anim_t >= 0.6 and not self._gary_line_fired:
@@ -1349,6 +1432,41 @@ class DeliverySequence:
                             else (220, 80, 60))
         surface.blit(ph_lbl, (ph_x, ph_y - 8))
 
+    _GRADE_STYLE = {
+        "SILK":  ((120, 255, 180), (0, 60, 30),  "LANDING: SILK"),
+        "FIRM":  ((255, 210, 90),  (60, 40, 0),  "LANDING: FIRM"),
+        "ROUGH": ((255, 110, 90),  (60, 10, 10), "LANDING: ROUGH"),
+    }
+
+    def _draw_landing_grade_stamp(self, surface: pygame.Surface, W: int, H: int):
+        """I.5.2 — SILK / FIRM / ROUGH plate stamps in over the dock."""
+        st = self._grade_stamp_t
+        if st < 0.2:
+            return
+        fg, bg, label = self._GRADE_STYLE.get(
+            self._land_grade, self._GRADE_STYLE["FIRM"])
+        # Stamp scales down onto the frame (over-shoot settle)
+        k = min(1.0, (st - 0.2) / 0.25)
+        scale = 1.6 - 0.6 * k if k < 1.0 else 1.0
+        f = get_font(int(30 * scale), bold=True)
+        txt = f.render(label, True, fg)
+        cx, cy = W // 2, int(H * 0.30)
+        pad = 14
+        plate = pygame.Rect(cx - txt.get_width() // 2 - pad,
+                            cy - txt.get_height() // 2 - pad // 2,
+                            txt.get_width() + pad * 2,
+                            txt.get_height() + pad)
+        box = pygame.Surface(plate.size, pygame.SRCALPHA)
+        box.fill((*bg, 210))
+        surface.blit(box, plate.topleft)
+        pygame.draw.rect(surface, fg, plate, 3)
+        surface.blit(txt, (cx - txt.get_width() // 2, cy - txt.get_height() // 2))
+        if self._dock_bonus_cr:
+            fb = get_font(15, bold=True)
+            sign = "+" if self._dock_bonus_cr > 0 else ""
+            bs = fb.render(f"{sign}{self._dock_bonus_cr} cr", True, fg)
+            surface.blit(bs, (cx - bs.get_width() // 2, plate.bottom + 6))
+
     def _draw_beat3(self, surface: pygame.Surface, W: int, H: int):
         """Beat 3: dock-clamp cutscene + fade to corridor."""
         t    = self._clamp_anim_t
@@ -1358,6 +1476,7 @@ class DeliverySequence:
         # Gary at the receiving window). Drawn over the chapter-specific
         # bay dressing so every chapter still reads as its own station.
         _draw_union_404_overlay(surface, W, H, t, self.chapter)
+        self._draw_landing_grade_stamp(surface, W, H)
         f    = get_font(14)
         fsm2 = get_font(12)
         cx   = W // 2
@@ -1534,6 +1653,8 @@ class DeliverySequence:
         # Add dock bonus (from corridor credits_earned too)
         run_credits  = getattr(self._run, "credits_earned", 0)
         self._bonus += run_credits + max(0, self._dock_bonus_cr)
+        # I.5.1 — approach-ring credits fold into the payout
+        self._bonus += getattr(self, "_ring_cr", 0)
         if self._dock_bonus_cr < 0:
             self._fee_cut += abs(self._dock_bonus_cr)
         net_reduction = self._bonus - self._fee_cut
@@ -1565,7 +1686,12 @@ class DeliverySequence:
         self.meta.save()
 
     def _draw_result(self, surface: pygame.Surface, W: int, H: int):
+        """I.5.3 — RESULT card rebuilt in the corridor's DKC tally style:
+        rows stamp in on a schedule, the payout counts up, the balance
+        lands last. Reveal is driven by elapsed = _RESULT_HOLD - _result_t
+        so it stays in lockstep with the phase timer (and any skip)."""
         t = pygame.time.get_ticks() / 1000.0
+        elapsed = _RESULT_HOLD - self._result_t
         surface.fill((2, 6, 4))
 
         # Background scanlines
@@ -1574,8 +1700,7 @@ class DeliverySequence:
             pygame.draw.line(sl, (0, 0, 0, 25), (0, y), (W, y))
         surface.blit(sl, (0, 0))
 
-        # Panel
-        pw, ph = 540, 320
+        pw, ph = 560, 340
         px_l = W // 2 - pw // 2
         py_t = H // 2 - ph // 2
         pygame.draw.rect(surface, (6, 14, 8),  (px_l, py_t, pw, ph))
@@ -1583,73 +1708,81 @@ class DeliverySequence:
         pygame.draw.rect(surface, (0, 80, 35),
                          (px_l + 4, py_t + 4, pw - 8, ph - 8), 1)
 
-        # Stars row
-        stars = self._run_stars
-        star_label = ["☆☆☆  POOR DELIVERY", "★☆☆  ACCEPTABLE", "★★☆  GOOD RUN", "★★★  FLAWLESS"][stars]
-        star_col   = [(80, 80, 80), (220, 60, 60), (255, 180, 0), (0, 220, 100)][stars]
-
         fh  = get_font(22, bold=True)
         fmd = get_font(16)
         fsm = get_font(13)
 
+        # Title stamp (immediate)
+        stars = self._run_stars
+        star_label = ["☆☆☆  POOR DELIVERY", "★☆☆  ACCEPTABLE",
+                      "★★☆  GOOD RUN", "★★★  FLAWLESS"][stars]
+        star_col   = [(80, 80, 80), (220, 60, 60), (255, 180, 0),
+                      (0, 220, 100)][stars]
         hs = fh.render(star_label, True, star_col)
-        surface.blit(hs, (W // 2 - hs.get_width() // 2, py_t + 24))
+        surface.blit(hs, (W // 2 - hs.get_width() // 2, py_t + 22))
         pygame.draw.line(surface, (0, 100, 50),
-                         (px_l + 20, py_t + 58), (px_l + pw - 20, py_t + 58), 1)
+                         (px_l + 20, py_t + 56), (px_l + pw - 20, py_t + 56), 1)
 
-        # Stats
-        dock_score_lbl  = ["MISSED ALL", "PARTIAL", "PERFECT"][min(2, self._approach_score)]
-        dock_score_col  = [(180, 60, 60), (200, 160, 0), (0, 200, 90)][min(2, self._approach_score)]
-        dock_bonus_lbl  = f"+{self._dock_bonus_cr} cr" if self._dock_bonus_cr >= 0 \
-                          else f"{self._dock_bonus_cr} cr"
-        dock_bonus_col  = (0, 220, 100) if self._dock_bonus_cr > 0 else \
-                          (200, 160, 0) if self._dock_bonus_cr == 0 else (220, 60, 60)
+        grade_col = self._GRADE_STYLE.get(
+            self._land_grade, self._GRADE_STYLE["FIRM"])[0]
         rows = [
-            ("BEAT 1  NOSE ALIGN",
-             ["MISSED", "OK", "LOCKED"][self._approach_score],
-             [(180, 60, 60), (200, 160, 0), (0, 200, 90)][self._approach_score]),
-            ("BEAT 2  DOCKING",
-             f"J:{'HIT' if self._j_hit else 'MISS'}  BURN:{'HIT' if self._burn_done else 'MISS'}  {dock_bonus_lbl}",
-             dock_bonus_col),
-            ("DELIVERY RUN",
-             f"{self._run_stars} ★  ·  run complete",
+            (0.5, "APPROACH RINGS",
+             f"{self._rings_hit}/{self._rings_total}   +{self._ring_cr} cr",
+             (0, 220, 120) if self._rings_hit == self._rings_total
+             else (200, 170, 90)),
+            (0.9, "LANDING",
+             self._land_grade, grade_col),
+            (1.3, "CORRIDOR",
+             f"{self._run_stars} ★  ·  cleared",
              (0, 190, 80) if self._run_stars == 3 else
              (200, 160, 0) if self._run_stars == 2 else (180, 60, 60)),
-            ("CARGO INTEGRITY",
+            (1.7, "CARGO INTEGRITY",
              f"{int(self._cargo_pct * 100)}%  ·  payout scaled",
              (0, 220, 100) if self._cargo_pct >= 0.9 else
              (255, 180, 0) if self._cargo_pct >= 0.7 else (220, 60, 60)),
         ]
 
-        y = py_t + 72
-        for label, val, vcol in rows:
-            ls = fmd.render(label, True, (80, 120, 80))
-            vs = fmd.render(val,   True, vcol)
-            surface.blit(ls, (px_l + 24, y))
-            surface.blit(vs, (px_l + pw - 24 - vs.get_width(), y))
+        y = py_t + 70
+        for reveal_at, label, val, vcol in rows:
+            if elapsed >= reveal_at:
+                ls = fmd.render(label, True, (80, 120, 80))
+                vs = fmd.render(val,   True, vcol)
+                surface.blit(ls, (px_l + 24, y))
+                surface.blit(vs, (px_l + pw - 24 - vs.get_width(), y))
+                # a tick sound as each row stamps in
+                if reveal_at <= elapsed < reveal_at + 0.05:
+                    bus.emit(EVT_DOCK_PERFECT)
             y += 28
 
         pygame.draw.line(surface, (0, 100, 50),
                          (px_l + 20, y + 4), (px_l + pw - 20, y + 4), 1)
         y += 14
 
-        # Payout line
-        if self._bonus > 0:
-            bs = fmd.render(f"DELIVERY BONUS   +{self._bonus:,} cr  OFF DEBT",
+        # Payout — counts up from 0 over ~0.9s once the rows are in
+        pay_at = 2.2
+        if elapsed >= pay_at and self._bonus > 0:
+            frac = min(1.0, (elapsed - pay_at) / 0.9)
+            shown = int(self._bonus * frac)
+            bs = fmd.render(f"DELIVERY PAYOUT   +{shown:,} cr  OFF DEBT",
                             True, (0, 220, 100))
             surface.blit(bs, (W // 2 - bs.get_width() // 2, y))
-            y += 28
-        if self._fee_cut > 0:
-            fs2 = fmd.render(f"LATE FEE   +{self._fee_cut:,} cr  ADDED TO DEBT",
+        y += 28
+        if elapsed >= pay_at + 0.4 and self._fee_cut > 0:
+            fs2 = fmd.render(f"DOCK FEES   +{self._fee_cut:,} cr  ADDED TO DEBT",
                              True, (220, 60, 60))
             surface.blit(fs2, (W // 2 - fs2.get_width() // 2, y))
-            y += 28
+        y += 28
 
-        # New debt total
-        ds = fh.render(f"BALANCE   {self.meta.debt:,} cr", True, (200, 140, 0))
-        surface.blit(ds, (W // 2 - ds.get_width() // 2, y + 6))
+        # Balance lands last with a stamp
+        bal_at = 3.4
+        if elapsed >= bal_at:
+            k = min(1.0, (elapsed - bal_at) / 0.2)
+            bf = get_font(int(26 - 4 * (1 - k)), bold=True)
+            ds = bf.render(f"BALANCE   {self.meta.debt:,} cr", True, (200, 140, 0))
+            surface.blit(ds, (W // 2 - ds.get_width() // 2, y + 4))
 
         # Continue prompt
         pulse = 0.5 + 0.5 * math.sin(t * 3.0)
-        cs = fsm.render("continuing…", True, (int(40 * pulse), int(100 * pulse), int(50 * pulse)))
-        surface.blit(cs, (W // 2 - cs.get_width() // 2, py_t + ph - 26))
+        cs = fsm.render("continuing…", True,
+                        (int(40 * pulse), int(100 * pulse), int(50 * pulse)))
+        surface.blit(cs, (W // 2 - cs.get_width() // 2, py_t + ph - 24))
