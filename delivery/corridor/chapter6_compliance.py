@@ -305,8 +305,27 @@ def build() -> Corridor:
         name       = "ESCAPE  //  BLAST DOOR CLOSING",
     )
 
+    # Delivery v2 I.3b — parity pass + the campaign's one chase room.
+    # Nova Soma's ledger floor: polite, fluorescent, closing in.
+    from delivery.corridor.rooms_v2 import (conveyor_gallery, crate_warren,
+                                            lift_shaft, chase_sweep)
+    processing = conveyor_gallery(
+        _PAL_R1, "PROCESSING FLOOR",
+        bax_enter_line="Processing floor. The belts move paper. And evidence. And us.")
+    lockup = crate_warren(
+        _PAL_R2, "EVIDENCE LOCKUP",
+        secret_lore="Evidence tag, case closed: one harmonica, "
+                    "confiscated. Owner: 'G. Pruitt.' Gary, you dark horse.",
+        bax_enter_line="Evidence lockup. Everything they took. In boxes. Labelled.")
+    atrium = lift_shaft(
+        _PAL_R2, "ATRIUM LIFTS",
+        bax_enter_line="Atrium lifts. Glass everywhere. Wave at compliance, they log it.")
+    sweep = chase_sweep(
+        _PAL_R3, "COMPLIANCE SWEEP", speed=150.0,
+        bax_enter_line="SWEEP PROTOCOL. The building is HERDING us. GO GO GO.")
+
     return Corridor(
         chapter          = 6,
-        rooms            = [room1, room2, room3],
+        rooms            = [room1, processing, room2, lockup, atrium, sweep, room3],
         cargo_silhouette = "drive",
     )

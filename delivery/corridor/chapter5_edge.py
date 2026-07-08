@@ -267,8 +267,31 @@ def build() -> Corridor:
         name       = "CHEN'S OFFICE",
     )
 
+    # Delivery v2 I.3b — parity pass: The Edge was the leanest corridor;
+    # four new rooms in the warm, hand-built Remnants register.
+    from delivery.corridor.rooms_v2 import (spring_yard, crate_warren,
+                                            lift_shaft, pipe_junction)
+    greenhouse = spring_yard(
+        _PAL_R1, "THE GREENHOUSE",
+        secret_lore="Seed packets in a coffee tin. Hand-labelled: "
+                    "'FOR AFTER. There is an after.'",
+        bax_enter_line="A greenhouse. On a station. These people GROW things. I love them.")
+    hold = crate_warren(
+        _PAL_R2, "SUPPLY HOLD",
+        secret_lore="Ration crate, false bottom: children's drawings of "
+                    "ships. All of them are leaving Nova Soma.",
+        bax_enter_line="Supply hold. Everything's mended twice and labelled by hand.")
+    tower = lift_shaft(
+        _PAL_R2, "WATER TOWER",
+        bax_enter_line="Water tower. The lifts run on counterweights. Bax approves of honest machinery.")
+    reclaim = pipe_junction(
+        _PAL_R3, "RECLAIM DUCTS",
+        secret_lore="Stencilled inside the duct: 'BUILT BY THE FIRST "
+                    "HUNDRED.' Names beneath, worn smooth by hands.",
+        bax_enter_line="Reclaim ducts. Nothing wasted out here. Not even shortcuts.")
+
     return Corridor(
         chapter          = 5,
-        rooms            = [room1, room2, room3],
+        rooms            = [room1, greenhouse, room2, hold, tower, reclaim, room3],
         cargo_silhouette = "drive",
     )

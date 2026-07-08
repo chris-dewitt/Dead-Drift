@@ -1,7 +1,7 @@
 # THE DELIVERY V2 PUSH
 
 **Started:** July 6 2026
-**Status:** I.1 + I.2 + I.3a (systems) shipped (`[~]` pending play-verify) — I.3b (rooms) next
+**Status:** I.1–I.3 shipped (`[~]` pending play-verify) — I.4 (16-bit graphics) next
 **Scope:** Open-ended (no time cap)
 **North star for all agents:** this document supersedes `ALIVENESS_PUSH.md` (completed July 2026) for active work.
 
@@ -153,7 +153,7 @@ instinctively? 75%/40% star thresholds fair for how you actually play?
 
 ## Phase I.3 — Levels (length, variety, set pieces)
 
-### I.3.1 6–8 rooms per chapter — [ ]
+### I.3.1 6–8 rooms per chapter — [~]
 Target 2–3 min clear (full-clear with secrets ~4 min). Extend existing
 chapters with new rooms rather than rebuilding — current rooms keep their
 identity; boss rooms stay the finale. Checkpoints every 2–3 rooms.
@@ -189,6 +189,22 @@ ch1 room 2 (spring to catwalk, hardhat ?-block, chip arc, crate).
 18 new tests in tests/test_corridor_levels_i3.py; suite 339 passed.
 I.3.1 room expansion + ch5/6 parity + the actual ch6 chase room are
 I.3b — the content pass.
+
+**I.3b ship note (July 8):** the content pass landed. All six chapters
+are now 6–7 rooms via parameterized recipes in
+`delivery/corridor/rooms_v2.py` (spring_yard, conveyor_gallery,
+crate_warren, lift_shaft, pipe_junction, chase_sweep) themed per
+chapter and slotted between the original rooms and each boss finale.
+Ch5/ch6 got the parity boost (7 rooms each); ch6's COMPLIANCE SWEEP is
+the campaign's one auto-scroll room, penultimate slot. Two real bugs
+fixed en route: ch3's A.6 one-way walls spanned floor-to-ceiling and
+soft-locked the chapter (now waist-high, full-jump hops them), and
+walls no longer zero momentum on contact (you run in place and pop
+over mid-jump instead of dying flat). A scripted sprint+full-jump bot
+traverses every chapter end-to-end in CI (27–42s bot time → 2–3 min
+human pace). 11 new tests in tests/test_corridor_content_i3b.py;
+suite 350 passed. Play-check: room variety pacing, chase room panic
+level, pipe-skip tradeoff, lore-secret hit rate.
 
 ---
 
