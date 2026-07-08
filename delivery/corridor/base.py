@@ -21,6 +21,8 @@ from delivery.corridor.elements import (
     BossRoomTrigger, SporeZone, QuantumDoor,
     SteamVent, Tripwire, SecurityBeam,
     LoreRoom, NPCShortcut,
+    Spring, ConveyorBelt, BreakableBlock, QuestionBlock,
+    PowerUp, WarpPipe, TimedLift,
 )
 from delivery.corridor.mutators import get_corridor_mutator, CorridorMutator
 from core.event_bus import (bus, EVT_BAX_SPEAK, EVT_DELIVERY_DONE,
@@ -30,7 +32,10 @@ from core.event_bus import (bus, EVT_BAX_SPEAK, EVT_DELIVERY_DONE,
                             EVT_CORRIDOR_BOSS_ROOM, EVT_CORRIDOR_EXIT,
                             EVT_CORRIDOR_LAND, EVT_CORRIDOR_SKID,
                             EVT_CORRIDOR_SPRINT, EVT_CORRIDOR_CHIP,
-                            EVT_CORRIDOR_TALLY, EVT_CORRIDOR_STAR)
+                            EVT_CORRIDOR_TALLY, EVT_CORRIDOR_STAR,
+                            EVT_CORRIDOR_SPRING, EVT_CORRIDOR_BREAK,
+                            EVT_CORRIDOR_QBLOCK, EVT_CORRIDOR_PIPE,
+                            EVT_CORRIDOR_POWERUP, EVT_CORRIDOR_POWERDOWN)
 
 # ── Movement feel — Delivery v2 I.1 tunables ────────────────────────────────
 # These constants ARE the corridor's game feel. Tune here, nowhere else.
@@ -62,6 +67,15 @@ CHIP_CHAIN_MAX     = 5       # chain multiplier cap (×1..×5)
 PUNCTUALITY_BONUS  = 1500    # credits for beating total par (never affects stars)
 STAR3_CHIP_PCT     = 0.75    # chip collection needed for 3★ (with ≤1 hit)
 STAR2_CHIP_PCT     = 0.40    # chip collection needed for 2★
+
+# ── Levels — Delivery v2 I.3 tunables ───────────────────────────────────────
+POWERUP_DURATION   = {"magboots": 12.0, "stimsoles": 10.0}  # hardhat: until hit
+MAGBOOT_RADIUS     = 96.0    # px — chips inside drift toward the courier
+MAGBOOT_PULL       = 260.0   # px/s chip drift speed
+STIM_SPEED_MULT    = 1.25    # stimsoles speed cap multiplier
+STIM_JUMP_MULT     = 1.12    # stimsoles jump velocity multiplier
+LONG_RUN_MAX_HITS  = 5       # hit budget for corridors of 6+ rooms (I.3.5)
+CHASE_CRUSH_T      = 0.45    # s pinned on the chase wall before it costs a hit
 
 STAR_3_TIME = 18.0
 STAR_2_TIME = 28.0
@@ -250,7 +264,8 @@ class Room:
                  star2_t: float = STAR_2_TIME,
                  bax_enter_line: str = "",
                  bax_boss_line: str = "",
-                 name: str = ""):
+                 name: str = "",
+                 auto_scroll: float = 0.0):
         self.length        = length
         self.palette       = palette
         self.elements      = elements
@@ -262,6 +277,9 @@ class Room:
         self.bax_enter_line = bax_enter_line
         self.bax_boss_line  = bax_boss_line
         self.name           = name
+        # Delivery v2 I.3.4 — px/s the camera sweeps on its own. >0 makes
+        # this a chase room: the left edge pushes, being pinned costs a hit.
+        self.auto_scroll    = auto_scroll
 
 
 # ---------------------------------------------------------------------------
@@ -377,6 +395,15 @@ class Corridor:
         self._bax_graded   = False
         self.meta = None              # attached by make_corridor (I.2.5)
 
+        # Delivery v2 I.3 — power-ups, chase camera, hit budget
+        self._power_kind: str | None = None
+        self._power_t    = 0.0        # remaining (hardhat ignores this)
+        self._ground_el  = None       # element we grounded on this frame
+        self._cut_exempt = False      # rising from a spring, not a jump
+        self._chase_cam  = 0.0        # auto-scroll camera x (chase rooms)
+        self._chase_crush_t = 0.0     # time pinned against the chase wall
+        self.max_hits = LONG_RUN_MAX_HITS if len(rooms) >= 6 else MAX_HITS
+
         # Ambient run Bax commentary timer
         self._run_speak_t = 10.0   # fire first corridor-run line after 10s
         self._result_t  = 0.0
@@ -423,7 +450,23 @@ class Corridor:
                 self._jump_buf_t = JUMP_BUFFER
                 self._try_jump()
         elif event.key in (pygame.K_s, pygame.K_DOWN):
-            pass  # descend on ladder handled by held-key
+            # I.3.2 — standing on a warp pipe? DOWN takes it.
+            room = self.rooms[self._room_idx]
+            for el in room.elements:
+                if isinstance(el, WarpPipe) and el.can_enter(
+                        self._px, self._py, self._grounded):
+                    self._spawn_dust(self._px, self._py + PLAYER_H, n=6,
+                                     spread=50.0, color=(80, 210, 110))
+                    self._px  = el.exit_x
+                    self._py  = float(FLOOR_Y - PLAYER_H)
+                    self._pvx = 0.0
+                    self._pvy = 0.0
+                    self._cam_x = self._px - _PLAYER_X_FIXED
+                    self._spawn_dust(self._px, self._py + PLAYER_H, n=6,
+                                     spread=50.0, color=(80, 210, 110))
+                    bus.emit(EVT_CORRIDOR_PIPE)
+                    break
+            # (ladder descend stays a held-key behaviour)
         elif event.key in (pygame.K_e, pygame.K_RETURN):
             # Aliveness G.7 — try to activate any nearby NPCShortcut
             room = self.rooms[self._room_idx]
@@ -482,6 +525,23 @@ class Corridor:
                 fl[1] -= 34.0 * dt
                 fl[3] -= dt
             self._floaters = [fl for fl in self._floaters if fl[3] > 0]
+
+        # Delivery v2 I.3.3 — power-up lifecycle + Mag-Boots chip magnet
+        if self._power_kind in POWERUP_DURATION:
+            self._power_t -= dt
+            if self._power_t <= 0:
+                self._end_power("expired")
+        if self._power_kind == "magboots":
+            cur_room = self.rooms[self._room_idx]
+            for el in self._visible_elements(cur_room):
+                if isinstance(el, Collectible) and not el._collected:
+                    dx = self._px - el.x
+                    dy = (self._py + PLAYER_H / 2) - el.y
+                    d2 = dx * dx + dy * dy
+                    if d2 < MAGBOOT_RADIUS * MAGBOOT_RADIUS and d2 > 1.0:
+                        d = d2 ** 0.5
+                        el.x += (dx / d) * MAGBOOT_PULL * dt
+                        el.y += (dy / d) * MAGBOOT_PULL * dt
         self._run_speak_t  -= dt
         if self._run_speak_t <= 0:
             self._run_speak_t = 12.0
@@ -591,6 +651,8 @@ class Corridor:
                 top = WALK_SPEED + (SPRINT_SPEED - WALK_SPEED) * self._sprint_charge
             else:
                 top = WALK_SPEED * RETREAT_FACTOR
+            if self._power_kind == "stimsoles":
+                top *= STIM_SPEED_MULT      # I.3.3
             target_vx = axis * top
 
             # Skid: reversing against real speed on the ground
@@ -622,8 +684,9 @@ class Corridor:
             if abs(self._pvx) > 0.01:
                 proposed = self._px + self._pvx * dt
                 # Aliveness A.6 — OneWayWall still constrains movement;
-                # a blocked wall also kills momentum.
-                if self._blocked_by_oneway(proposed, self._pvx, room):
+                # a blocked wall also kills momentum. I.3.2 adds solid
+                # pipes and breakable crates (sprint shatters them).
+                if self._blocked_by_walls(proposed, self._pvx, room):
                     self._pvx = 0.0
                 else:
                     # Can retreat only back to the camera left edge
@@ -640,18 +703,32 @@ class Corridor:
             # ── Delivery v2 I.1.2 — jump-feel gravity ────────────────────
             g = GRAVITY
             if self._pvy < 0:
-                if not self._jump_held:
+                # Jump-cut only applies to actual jumps: spring launches
+                # (I.3.2) rise at full power regardless of the jump key.
+                if not self._jump_held and not self._cut_exempt:
                     g *= JUMP_CUT_MULT      # early release cuts the jump
             else:
                 g *= FALL_GRAV_MULT         # falls read heavier than rises
+                self._cut_exempt = False
             self._pvy += g * dt
             self._py  += self._pvy * dt
 
             impact_vy    = self._pvy
             was_airborne = not self._grounded
 
+            # I.3.2 — ?-blocks bonk from below while rising
+            if self._pvy < 0:
+                for el in self._visible_elements(room):
+                    if isinstance(el, QuestionBlock):
+                        got = el.try_bump(self._px, self._py, self._pvy)
+                        if got:
+                            self._pvy = 90.0          # head bounce-down
+                            self._pop_qblock(el, got, room)
+                            break
+
             # Platform collision (floor first)
-            self._grounded = False
+            self._grounded  = False
+            self._ground_el = None
             if self._py >= FLOOR_Y - PLAYER_H:
                 self._py      = float(FLOOR_Y - PLAYER_H)
                 self._pvy     = 0.0
@@ -660,6 +737,19 @@ class Corridor:
                 self._py  = float(CEIL_Y + 2)
                 self._pvy = max(0.0, self._pvy)
 
+            # I.3.2 — springs launch before anything grounds you
+            if self._pvy >= 0:
+                for el in self._visible_elements(room):
+                    if isinstance(el, Spring) and el.try_bounce(
+                            self._px, self._py, self._pvy):
+                        self._py  = el.y - PLAYER_H
+                        self._pvy = Spring.LAUNCH_VY
+                        self._cut_exempt = True
+                        self._jump_stretch_t = 0.12
+                        self._spawn_dust(self._px, el.y, n=5, spread=70.0)
+                        bus.emit(EVT_CORRIDOR_SPRING)
+                        break
+
             # Platform elements
             for el in self._visible_elements(room):
                 if isinstance(el, (Platform, CollapsingPlatform)):
@@ -667,13 +757,29 @@ class Corridor:
                         self._py      = el.y - PLAYER_H
                         self._pvy     = 0.0
                         self._grounded = True
+                        self._ground_el = el
                         if isinstance(el, CollapsingPlatform):
                             el.step_on()
-                elif isinstance(el, MovingPlatform):
+                elif isinstance(el, (MovingPlatform, TimedLift)):
                     if el.collides_top(self._px, self._py, self._pvy):
                         self._py      = el.y - PLAYER_H
                         self._pvy     = 0.0
                         self._grounded = True
+                        self._ground_el = el
+                elif isinstance(el, WarpPipe):
+                    if el.collides_top(self._px, self._py, self._pvy):
+                        self._py      = el.y_top - PLAYER_H
+                        self._pvy     = 0.0
+                        self._grounded = True
+                        self._ground_el = el
+
+            # I.3.2 — conveyor belts drag whoever stands on them
+            if isinstance(self._ground_el, ConveyorBelt):
+                drifted = self._px + self._ground_el.drift * dt
+                if not self._blocked_by_walls(drifted, self._ground_el.drift,
+                                              room):
+                    min_x = self._cam_x + _PLAYER_X_FIXED * 0.5
+                    self._px = max(min_x, drifted)
 
             # ── Delivery v2 I.1.2 — landing, coyote, buffered jump ───────
             if self._grounded:
@@ -690,8 +796,27 @@ class Corridor:
             else:
                 self._coyote_t = max(0.0, self._coyote_t - dt)
 
-        # Camera
-        self._cam_x = self._px - _PLAYER_X_FIXED
+        # Camera — chase rooms sweep on their own (I.3.4)
+        if room.auto_scroll > 0 and not self._done:
+            self._chase_cam += room.auto_scroll * dt
+            self._cam_x = max(self._px - _PLAYER_X_FIXED, self._chase_cam)
+            # Can't outrun the sweep's right edge
+            max_px = self._cam_x + CORRIDOR_W - 60
+            if self._px > max_px:
+                self._px = max_px
+            # Pinned against the sweep wall = crushed
+            wall_x = self._cam_x + 10
+            if self._px < wall_x:
+                self._px = wall_x
+                self._chase_crush_t += dt
+                if self._chase_crush_t >= CHASE_CRUSH_T and self._stun_t <= 0:
+                    self._chase_crush_t = 0.0
+                    self._take_hit()
+                    self._px = wall_x + 70.0   # shoved clear
+            else:
+                self._chase_crush_t = 0.0
+        else:
+            self._cam_x = self._px - _PLAYER_X_FIXED
 
         # Update elements
         for el in room.elements:
@@ -946,6 +1071,10 @@ class Corridor:
                         bus.emit(EVT_BAX_SPEAK, line=lore[:60])
                         # Epic 8.3 — persist for Bax's Records, Tab 4.
                         bus.emit(EVT_LORE_FOUND, text=lore, chapter=self.chapter)
+            elif isinstance(el, PowerUp):
+                kind = el.try_collect(self._px, self._py)
+                if kind:
+                    self._grant_power(kind)
 
     def _blocked_by_oneway(self, proposed_px: float, vx: float, room: Room) -> bool:
         """Aliveness A.6 — true if a `OneWayWall` element would block the
@@ -957,6 +1086,29 @@ class Corridor:
             if isinstance(el, OneWayWall):
                 if el.blocks(proposed_px, self._py, vx):
                     return True
+        return False
+
+    def _blocked_by_walls(self, proposed_px: float, vx: float, room: Room) -> bool:
+        """I.3.2 — combined wall check: one-way walls, solid pipes, and
+        breakable crates. Sprint speed shatters crates instead of stopping."""
+        if self._blocked_by_oneway(proposed_px, vx, room):
+            return True
+        for el in self._visible_elements(room):
+            if isinstance(el, BreakableBlock) and el.blocks(proposed_px, self._py):
+                if el.try_break(vx):
+                    self._spawn_dust(el.x, el.y_top + el.H // 2, n=10,
+                                     spread=140.0, color=(200, 150, 80))
+                    # Crates scatter chips forward — they join the room live
+                    for i in range(el.chips):
+                        room.elements.append(Collectible(
+                            el.x + 34 + i * 30, FLOOR_Y - 18, value=200))
+                        self._collectibles_total += 1
+                        self._room_chip_total[self._room_idx] += 1
+                    bus.emit(EVT_CORRIDOR_BREAK)
+                    continue        # shattered — no block
+                return True
+            if isinstance(el, WarpPipe) and el.blocks(proposed_px, self._py):
+                return True
         return False
 
     def _check_npc_encounters(self, room: Room):
@@ -982,6 +1134,12 @@ class Corridor:
                 if el.check_pass(self._px):
                     self._cp_px = self._px
                     self._cp_py = self._py
+                    # I.3.5 — checkpoints patch one hit on the way past
+                    if self._hits > 0:
+                        self._hits -= 1
+                        self._floaters.append(
+                            [self._px, self._py - 18, "HIT PATCHED", 1.0,
+                             (0, 220, 120)])
 
     def _check_boss_triggers(self, room: Room):
         for el in self._visible_elements(room):
@@ -1015,12 +1173,48 @@ class Corridor:
             return
         if not (self._grounded or self._coyote_t > 0):
             return
-        self._pvy        = JUMP_VY
+        jump_vy = JUMP_VY
+        if self._power_kind == "stimsoles":
+            jump_vy *= STIM_JUMP_MULT
+        self._pvy        = jump_vy
         self._grounded   = False
         self._coyote_t   = 0.0
         self._jump_buf_t = 0.0
         self._jump_stretch_t = 0.10
         bus.emit(EVT_CORRIDOR_JUMP)
+
+    def _pop_qblock(self, block: QuestionBlock, contains: str,
+                    room: Room) -> None:
+        """I.3.2 — spawn a bonked ?-block's contents above it."""
+        self._spawn_dust(block.x, block.y, n=5, spread=60.0,
+                         color=(255, 215, 80))
+        bus.emit(EVT_CORRIDOR_QBLOCK, contains=contains)
+        if contains == "chips":
+            for i in range(block.n_chips):
+                off = (i - (block.n_chips - 1) / 2.0) * 26.0
+                room.elements.append(Collectible(
+                    block.x + off, block.y - 22, value=200))
+            self._collectibles_total += block.n_chips
+            self._room_chip_total[self._room_idx] += block.n_chips
+        elif contains in PowerUp.KINDS:
+            room.elements.append(PowerUp(block.x, block.y - 26, contains))
+
+    def _grant_power(self, kind: str) -> None:
+        """I.3.3 — pick up a power-up (replaces any current one)."""
+        self._power_kind = kind
+        self._power_t    = POWERUP_DURATION.get(kind, 0.0)
+        label = {"magboots": "MAG-BOOTS!", "hardhat": "HARDHAT!",
+                 "stimsoles": "STIM SOLES!"}.get(kind, kind.upper())
+        self._floaters.append(
+            [self._px, self._py - 18, label, 1.1, (140, 220, 255)])
+        bus.emit(EVT_CORRIDOR_POWERUP, kind=kind)
+
+    def _end_power(self, reason: str = "expired") -> None:
+        if self._power_kind is None:
+            return
+        self._power_kind = None
+        self._power_t    = 0.0
+        bus.emit(EVT_CORRIDOR_POWERDOWN, reason=reason)
 
     def _spawn_dust(self, x: float, y: float, n: int = 4,
                     spread: float = 60.0,
@@ -1036,6 +1230,15 @@ class Corridor:
             ])
 
     def _take_hit(self):
+        # I.3.3 — a hardhat eats the hit Mario-style: lose the hat, not
+        # the hit count. Brief stun still applies so it reads.
+        if self._power_kind == "hardhat":
+            self._end_power("spent")
+            self._stun_t = 0.6
+            self._floaters.append(
+                [self._px, self._py - 18, "HARDHAT SPENT", 0.9,
+                 (255, 205, 40)])
+            return
         self._hits    += 1
         self._stun_t   = 1.2
         from core.event_bus import EVT_DELIVERY_HIT
@@ -1074,6 +1277,8 @@ class Corridor:
         self._py          = float(FLOOR_Y - PLAYER_H)
         self._pvy         = 0.0
         self._cam_x       = 0.0
+        self._chase_cam   = 0.0      # I.3.4 — chase camera restarts per room
+        self._chase_crush_t = 0.0
         self._active_path = None
         self._cp_px       = 60.0
         self._cp_py       = float(FLOOR_Y - PLAYER_H)
@@ -1115,7 +1320,7 @@ class Corridor:
         pct   = (self._collectibles_found / total) if total else 1.0
         if pct >= STAR3_CHIP_PCT and self._hits <= 1:
             self._stars = 3
-        elif pct >= STAR2_CHIP_PCT and self._hits <= MAX_HITS:
+        elif pct >= STAR2_CHIP_PCT and self._hits <= self.max_hits:
             self._stars = 2
         else:
             self._stars = 1
@@ -1526,6 +1731,15 @@ class Corridor:
             surf.blit(chip_s, (228, 4))
         cr_s  = fsm.render(f"+{self._credits} cr", True, (200, 160, 0))
         surf.blit(cr_s, (CORRIDOR_W - cr_s.get_width() - 6, 4))
+
+        # I.3.3 — active power-up chip in the corner
+        if self._power_kind is not None and not self._done:
+            label = {"magboots": "MAG-BOOTS", "hardhat": "HARDHAT",
+                     "stimsoles": "STIM SOLES"}[self._power_kind]
+            if self._power_kind != "hardhat":
+                label += f"  {max(0.0, self._power_t):.0f}s"
+            pw_s = fsm.render(label, True, (140, 220, 255))
+            surf.blit(pw_s, (6, 20))
 
         # I.2.3 — chain meter: multiplier + draining window bar
         if self._chain >= 2 and self._chain_t > 0 and not self._done:
