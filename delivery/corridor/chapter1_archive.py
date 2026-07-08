@@ -21,6 +21,7 @@ from delivery.corridor.base import Room, Corridor, STAR_3_TIME, STAR_2_TIME
 
 # Palette — warm oranges/reds/dark brutalist
 _PAL_R1 = {
+    "tile_style":  "brick",   # I.4.1 chapter tile vocabulary
     "bg":            (12,  6,  14),
     "grid":          (40, 20,  50),
     "ceiling_fill":  (30, 12,  40),
@@ -45,6 +46,7 @@ _PAL_R1 = {
     "drip":          (255, 140,  60),
 }
 _PAL_R2 = {
+    "tile_style":  "brick",   # I.4.1 chapter tile vocabulary
     "bg":            (8,  4,  8),
     "grid":          (22, 10, 18),
     "ceiling_fill":  (20,  8, 16),
@@ -57,6 +59,7 @@ _PAL_R2 = {
     "light":         (180, 60, 160),
 }
 _PAL_R3 = {
+    "tile_style":  "brick",   # I.4.1 chapter tile vocabulary
     "bg":            (12,  6,  4),
     "grid":          (28, 14, 10),
     "ceiling_fill":  (24, 12,  8),

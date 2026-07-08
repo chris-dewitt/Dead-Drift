@@ -20,6 +20,7 @@ from delivery.corridor.elements import (
 from delivery.corridor.base import Room, Corridor
 
 _PAL_R1 = {
+    "tile_style":  "fungus",   # I.4.1 chapter tile vocabulary
     "bg":            (4, 6, 12),
     "grid":          (10, 14, 28),
     "ceiling_fill":  (8, 10, 20),
@@ -44,6 +45,7 @@ _PAL_R1 = {
     "drip":          (120, 200, 255),
 }
 _PAL_R2 = {
+    "tile_style":  "fungus",   # I.4.1 chapter tile vocabulary
     "bg":            (2, 6, 8),
     "grid":          (8, 18, 14),
     "ceiling_fill":  (4, 12, 10),
@@ -56,6 +58,7 @@ _PAL_R2 = {
     "light":         (80, 200, 100),
 }
 _PAL_R3 = {
+    "tile_style":  "fungus",   # I.4.1 chapter tile vocabulary
     "bg":            (4, 10, 6),
     "grid":          (14, 28, 16),
     "ceiling_fill":  (8, 18, 10),

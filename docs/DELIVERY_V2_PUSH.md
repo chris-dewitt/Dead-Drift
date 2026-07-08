@@ -1,7 +1,7 @@
 # THE DELIVERY V2 PUSH
 
 **Started:** July 6 2026
-**Status:** I.1–I.3 shipped (`[~]` pending play-verify) — I.4 (16-bit graphics) next
+**Status:** I.1–I.4 shipped (`[~]` pending play-verify) — I.5 (chain juice) next
 **Scope:** Open-ended (no time cap)
 **North star for all agents:** this is the only active push doc. The Aliveness push (A–H) completed July 2026; prior roadmaps were removed — see `docs/archive/README.md`.
 
@@ -210,27 +210,43 @@ level, pipe-skip tradeoff, lore-secret hit rate.
 
 ## Phase I.4 — 16-bit pastiche (graphics)
 
-### I.4.1 Tile vocabulary — [ ]
+### I.4.1 Tile vocabulary — [~]
 Extend `draw_mario_brick_platform` into a per-chapter tile set: brick,
 girder, glass, fungus shelf, filing cabinet, chrome. Chunky black outlines,
 2-tone dither gradients, fat highlights. All procedural.
 
-### I.4.2 Parallax upgrade — [ ]
+### I.4.2 Parallax upgrade — [~]
 3 → 4 layers with per-chapter skyline silhouettes and animated mid-layer
 props (fans, signage, drips, passing trams).
 
-### I.4.3 Sprite sheet feel — [ ]
+### I.4.3 Sprite sheet feel — [~]
 Courier: 4-frame run cycle + the I.1.3 poses. Boss actors and corridor NPCs
 get idle bob + blink so nothing stands statue-still.
 
-### I.4.4 Period HUD & transitions — [ ]
+### I.4.4 Period HUD & transitions — [~]
 Chunky counters (chips, chain, hits-as-helmets), room name plate on entry,
 iris-wipe between rooms. Everything drawn on the 400×360 canvas so the
 upscale keeps it honest.
 
-### I.4.5 Palette discipline — [ ]
+### I.4.5 Palette discipline — [~]
 Per-room palettes capped ~16 visible colors for the era look. Light audit
 script; skip the tooling if it turns fiddly (risk gate).
+
+**I.4 ship note (July 8):** renderer/tiles.py carries the six-style
+tile vocabulary (brick/fungus/cabinet/chrome/girder/glass — one per
+chapter, keyed by the palette's `tile_style`; unknown styles fall back
+to brick). Platforms, moving platforms, and lifts all draw through it:
+chunky 2px outlines, checkerboard dither, fat top highlight. Default
+bg gained a deep skyline silhouette layer (0.08× parallax, lit
+windows) and rotating wall-fan props. Room transitions are now a hard
+iris wipe centred on the courier. HUD is a boxed period strip with the
+hit budget as gold helmets that scar out when spent. Honest scope
+notes: I.4.3's courier poses/cadence shipped back in I.1 (this phase
+verified NPC/boss set pieces already animate); I.4.5 is manual
+discipline via the tile system's fixed tone ramps — the audit script
+was skipped per the risk gate. 6 new tests; suite 356 passed.
+Screenshots of all six chapter styles sent to Chris for the visual
+play-verify.
 
 ---
 

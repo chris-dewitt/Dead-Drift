@@ -25,6 +25,7 @@ from delivery.corridor.base import Room, Corridor
 
 # Palette — warm amber/red, hand-built feel. The opposite of corporate.
 _PAL_R1 = {
+    "tile_style":  "girder",   # I.4.1 chapter tile vocabulary
     "bg":            (10,  8,  6),
     "grid":          (28, 22, 16),
     "ceiling_fill":  (24, 18, 12),
@@ -42,6 +43,7 @@ _PAL_R1 = {
     "branding":      (90,  60,  30),
 }
 _PAL_R2 = {
+    "tile_style":  "girder",   # I.4.1 chapter tile vocabulary
     "bg":            (8,  10, 12),
     "grid":          (18, 24, 28),
     "ceiling_fill":  (14, 18, 22),
@@ -53,6 +55,7 @@ _PAL_R2 = {
     "light":         (140, 200, 240),
 }
 _PAL_R3 = {
+    "tile_style":  "girder",   # I.4.1 chapter tile vocabulary
     "bg":            (12, 10,  8),
     "grid":          (28, 22, 18),
     "ceiling_fill":  (22, 16, 14),
