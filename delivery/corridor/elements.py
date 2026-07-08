@@ -8,6 +8,7 @@ import random
 import pygame
 
 from renderer.sci_fi_ui import draw_mario_brick_platform
+from renderer.tiles import draw_tile_platform
 from core.text import get_font
 
 CORRIDOR_W = 400
@@ -59,10 +60,10 @@ class Platform(Element):
                 and py + PLAYER_H <= self.y + self.h + 14)
 
     def draw(self, surf, camera_x, t, palette):
+        # I.4.1 — chapter tile style (brick/girder/glass/fungus/cabinet/
+        # chrome) comes from the room palette.
         sx = int(self.x - camera_x)
-        brick = palette.get("brick", palette.get("platform", (140, 70, 20)))
-        hi = palette.get("brick_hi", palette.get("platform_hi", (220, 140, 40)))
-        draw_mario_brick_platform(surf, sx, int(self.y), self.w, self.h, brick, hi, t)
+        draw_tile_platform(surf, sx, int(self.y), self.w, self.h, palette, t)
 
 
 class MovingPlatform(Element):
@@ -98,7 +99,8 @@ class MovingPlatform(Element):
         sx = int(self.x - camera_x)
         brick = palette.get("moving_platform", (60, 100, 180))
         hi = palette.get("moving_platform_hi", (120, 200, 255))
-        draw_mario_brick_platform(surf, sx, int(self.y), self.W, self.H, brick, hi, t)
+        draw_tile_platform(surf, sx, int(self.y), self.W, self.H, palette, t,
+                           base=brick, hi=hi)
         ax = sx + (14 if self._dir > 0 else -14)
         pygame.draw.polygon(surf, (255, 255, 200),
                             [(ax - 5 * self._dir, int(self.y) + 2),
@@ -1623,8 +1625,8 @@ class TimedLift(Element):
         sx = int(self.x - camera_x)
         brick = palette.get("lift", (90, 90, 140))
         hi    = palette.get("lift_hi", (170, 170, 230))
-        draw_mario_brick_platform(surf, sx, int(self.y), self.W, self.H,
-                                  brick, hi, t)
+        draw_tile_platform(surf, sx, int(self.y), self.W, self.H, palette, t,
+                           base=brick, hi=hi)
         # guide rail
         pygame.draw.line(surf, (50, 50, 70),
                          (sx, int(self._y_top) - 4), (sx, int(self._y_bot) + 12), 1)

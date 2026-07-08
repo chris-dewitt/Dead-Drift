@@ -19,6 +19,7 @@ from delivery.corridor.elements import (
 from delivery.corridor.base import Room, Corridor
 
 _PAL_R1 = {
+    "tile_style":  "chrome",   # I.4.1 chapter tile vocabulary
     "bg":            (6, 4, 8),
     "grid":          (16, 10, 20),
     "ceiling_fill":  (12, 8, 18),
@@ -43,6 +44,7 @@ _PAL_R1 = {
     "drip":          (255, 200,  90),
 }
 _PAL_R2 = {
+    "tile_style":  "chrome",   # I.4.1 chapter tile vocabulary
     "bg":            (8, 6, 10),
     "grid":          (20, 14, 24),
     "ceiling_fill":  (14, 10, 18),
@@ -54,6 +56,7 @@ _PAL_R2 = {
     "light":         (200, 160, 60),
 }
 _PAL_R3 = {
+    "tile_style":  "chrome",   # I.4.1 chapter tile vocabulary
     "bg":            (10, 6, 12),
     "grid":          (24, 14, 28),
     "ceiling_fill":  (16, 10, 20),

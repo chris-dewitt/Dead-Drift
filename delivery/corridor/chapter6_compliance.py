@@ -25,6 +25,7 @@ from delivery.corridor.base import Room, Corridor
 
 # Palette — clinical white/chrome with cold cyan accents. The opposite of ch5.
 _PAL_R1 = {  # Elevator
+    "tile_style":  "glass",   # I.4.1 chapter tile vocabulary
     "bg":            (16, 20, 26),
     "grid":          (40, 50, 60),
     "ceiling_fill":  (28, 36, 44),
@@ -43,6 +44,7 @@ _PAL_R1 = {  # Elevator
     "glass":         (90, 130, 170),
 }
 _PAL_R2 = {  # Server room
+    "tile_style":  "glass",   # I.4.1 chapter tile vocabulary
     "bg":            (6,  8, 14),
     "grid":          (14, 18, 28),
     "ceiling_fill":  (10, 14, 22),
@@ -55,6 +57,7 @@ _PAL_R2 = {  # Server room
     "tower":         (16,  22,  36),
 }
 _PAL_R3 = {  # Escape — red emergency lighting
+    "tile_style":  "glass",   # I.4.1 chapter tile vocabulary
     "bg":            (20,  4,  4),
     "grid":          (50, 14, 14),
     "ceiling_fill":  (40, 10, 10),

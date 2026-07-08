@@ -930,14 +930,22 @@ class Corridor:
         if self._done:
             self._draw_result(surf)
 
-        # Black wipe
+        # Room transition — I.4.4 iris wipe centred on the courier.
+        # The black closes to (or opens from) a circle on the player,
+        # 1993-style; captions still fade with the wipe.
         if self._wipe_t > 0:
             alpha = int(255 * (1.0 - self._wipe_t / 0.5)) \
                     if self._wipe_dir == 1 else int(255 * (self._wipe_t / 0.5))
             alpha = max(0, min(255, alpha))
+            hole_r = int((1.0 - alpha / 255.0) * 470)
             ov = pygame.Surface((CORRIDOR_W, CORRIDOR_H))
             ov.fill((0, 0, 0))
-            ov.set_alpha(alpha)
+            if hole_r > 2:
+                ov.set_colorkey((255, 0, 255))
+                pygame.draw.circle(
+                    ov, (255, 0, 255),
+                    (_PLAYER_X_FIXED, int(self._py) + PLAYER_H // 2),
+                    hole_r)
             surf.blit(ov, (0, 0))
             # Caption — visible as screen fades back in (dir=1); fades with overlay
             if self._transition_caption and alpha > 0:
@@ -1414,6 +1422,25 @@ class Corridor:
             pygame.draw.rect(surf, wall_col, (px, CEIL_Y, panel_w - 2, FLOOR_Y - CEIL_Y))
             pygame.draw.line(surf, seam_col, (px, CEIL_Y), (px, FLOOR_Y), 1)
 
+        # ── I.4.2 Layer 0.5: deep skyline silhouettes (slowest parallax) ──────
+        # Structures glimpsed through/behind the wall panelling — the
+        # station has depth beyond this corridor.
+        deep = pal.get("deep_struct", (26, 30, 36))
+        sky_period = 130
+        sky_off = int(self._cam_x * 0.08) % sky_period
+        for i, bx in enumerate(range(-sky_off, CORRIDOR_W + sky_period,
+                                     sky_period)):
+            bh = 46 + ((bx + int(self._cam_x * 0.08)) * 7 // sky_period) % 64
+            pygame.draw.rect(surf, deep, (bx, FLOOR_Y - bh, 38, bh))
+            pygame.draw.rect(
+                surf, tuple(int(c * 0.7) for c in deep),
+                (bx, FLOOR_Y - bh, 38, bh), 1)
+            if i % 2 == 0:
+                lit = tuple(min(255, c + 46) for c in deep)
+                for wy in range(FLOOR_Y - bh + 8, FLOOR_Y - 8, 14):
+                    pygame.draw.rect(surf, lit, (bx + 8, wy, 3, 3))
+                    pygame.draw.rect(surf, lit, (bx + 24, wy, 3, 3))
+
         # ── Layer 1: mid-wall pipes and conduit strips (medium parallax) ──────
         pipe_off = int(self._cam_x * 0.35) % 200
         for px in range(-pipe_off, CORRIDOR_W + 200, 200):
@@ -1428,6 +1455,24 @@ class Corridor:
             blink_on = int(t * 2.0 + px * 0.005) % 2 == 0
             if blink_on:
                 pygame.draw.circle(surf, (0, 200, 100), (px, CEIL_Y + 22), 3)
+
+        # ── I.4.2 wall fans — rotating vent props on the conduit line ────────
+        fan_period = 260
+        fan_off = int(self._cam_x * 0.35) % fan_period
+        for fx in range(-fan_off + 100, CORRIDOR_W + fan_period, fan_period):
+            fy = CEIL_Y + 36
+            r  = 9
+            pygame.draw.circle(surf, (16, 20, 22), (fx, fy), r + 3)
+            pygame.draw.circle(surf, pal.get("pipe_ring", (0, 120, 60)),
+                               (fx, fy), r + 3, 1)
+            ang = t * 2.6 + fx * 0.05
+            blade = pal.get("cable", (70, 80, 80))
+            for k in range(2):
+                a = ang + k * (math.pi / 2)
+                dx, dy = math.cos(a) * r, math.sin(a) * r
+                pygame.draw.line(surf, blade,
+                                 (fx - dx, fy - dy), (fx + dx, fy + dy), 2)
+            pygame.draw.circle(surf, blade, (fx, fy), 2)
 
         # ── Layer 2: floor warning stripes (fast parallax — moves with camera) ─
         stripe_off = int(self._cam_x * 0.7) % 60
@@ -1720,17 +1765,30 @@ class Corridor:
     def _draw_hud(self, surf, t, room):
         f    = get_font(13)
         fsm  = get_font(10)
+        # I.4.4 — chunky boxed HUD strip, period style
+        pal = room.palette
+        pygame.draw.rect(surf, (8, 10, 8), (0, 0, CORRIDOR_W, 17))
+        pygame.draw.line(surf, pal.get("ceiling_line", (40, 70, 40)),
+                         (0, 17), (CORRIDOR_W, 17), 1)
         # I.2.1 — time no longer rates the run, so it no longer glares red.
-        surf.blit(f.render(f"TIME  {self._elapsed:>5.1f}s", True,
-                           (120, 150, 120)), (6, 4))
-        h_col = (220, 60, 60) if self._hits > 0 else (0, 180, 80)
-        surf.blit(f.render(f"HITS  {self._hits}", True, h_col), (140, 4))
+        surf.blit(f.render(f"TIME {self._elapsed:>5.1f}", True,
+                           (120, 150, 120)), (6, 2))
+        # I.4.4 — hit budget as helmets: remaining light up, spent scar out
+        for i in range(self.max_hits):
+            hx = 122 + i * 13
+            alive = i < (self.max_hits - self._hits)
+            col = (255, 205, 40) if alive else (58, 50, 30)
+            pygame.draw.rect(surf, col, (hx + 2, 3, 7, 5))
+            pygame.draw.ellipse(surf, col, (hx, 7, 11, 5))
+            if not alive:
+                pygame.draw.line(surf, (16, 14, 10),
+                                 (hx, 11), (hx + 10, 3), 1)
         # Chip count — the number the run is now about
         if self._collectibles_total > 0:
             chip_s = f.render(
                 f"CHIPS {self._collectibles_found}/{self._collectibles_total}",
                 True, (255, 210, 60))
-            surf.blit(chip_s, (228, 4))
+            surf.blit(chip_s, (206, 2))
         cr_s  = fsm.render(f"+{self._credits} cr", True, (200, 160, 0))
         surf.blit(cr_s, (CORRIDOR_W - cr_s.get_width() - 6, 4))
 
