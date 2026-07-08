@@ -609,8 +609,28 @@ def build(meta=None) -> Corridor:
         name       = "THE BACK ROOM",
     )
 
+    # Delivery v2 I.3b — three new rooms between the corridor and the
+    # back room, all in the record-shop register.
+    from delivery.corridor.rooms_v2 import (spring_yard, crate_warren,
+                                            pipe_junction)
+    stacks = spring_yard(
+        _PAL_R1, "THE STACKS",
+        secret_lore="Shelf label, faded: 'K.M. — personal. DO NOT PULP.' "
+                    "Kenji's own pressings, hidden in plain sight.",
+        bax_enter_line="Record stacks. Don't sneeze, some of these are load-bearing.")
+    pressing = crate_warren(
+        _PAL_R2, "PRESSING PLANT",
+        secret_lore="A test pressing, unlabeled. The runout groove reads: "
+                    "'FOR THE ARCHIVE — IF THEY EVER LET IT OPEN.'",
+        bax_enter_line="Pressing plant. Mind the crates. Or don't — they break.")
+    ducts = pipe_junction(
+        _PAL_R2, "SERVICE DUCTS",
+        secret_lore="Chalk arrow inside the duct and one word: 'MARROW.' "
+                    "She's been running these longer than anyone.",
+        bax_enter_line="Service ducts. Pipes go somewhere. Probably.")
+
     return Corridor(
         chapter          = 1,
-        rooms            = [room1, room2, room3],
+        rooms            = [room1, stacks, room2, pressing, ducts, room3],
         cargo_silhouette = "archive",
     )

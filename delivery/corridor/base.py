@@ -684,10 +684,12 @@ class Corridor:
             if abs(self._pvx) > 0.01:
                 proposed = self._px + self._pvx * dt
                 # Aliveness A.6 — OneWayWall still constrains movement;
-                # a blocked wall also kills momentum. I.3.2 adds solid
-                # pipes and breakable crates (sprint shatters them).
+                # I.3.2 adds solid pipes and breakable crates (sprint
+                # shatters them). A blocked wall holds position but KEEPS
+                # momentum — you run in place against it and pop over the
+                # top mid-jump, instead of dying flat on contact.
                 if self._blocked_by_walls(proposed, self._pvx, room):
-                    self._pvx = 0.0
+                    pass
                 else:
                     # Can retreat only back to the camera left edge
                     min_x = self._cam_x + _PLAYER_X_FIXED * 0.5

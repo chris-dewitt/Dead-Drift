@@ -426,8 +426,24 @@ def build() -> Corridor:
         name       = "PENTHOUSE SUITE",
     )
 
+    # Delivery v2 I.3b — three new rooms of hotel back-of-house between
+    # the staff entrance and the penthouse.
+    from delivery.corridor.rooms_v2 import (lift_shaft, conveyor_gallery,
+                                            spring_yard)
+    service = lift_shaft(
+        _PAL_R1, "SERVICE ELEVATORS",
+        bax_enter_line="Service lifts. Guests never see this side. Neither should we.")
+    luggage = conveyor_gallery(
+        _PAL_R2, "LUGGAGE HANDLING",
+        bax_enter_line="Luggage belts. Try not to end up in a suite you can't afford.")
+    laundry = spring_yard(
+        _PAL_R2, "LAUNDRY CHUTES",
+        secret_lore="A guest ledger page in a pillowcase: room 4707, "
+                    "paid in full, name redacted by hand. Twice.",
+        bax_enter_line="Laundry room. Everything bounces. EVERYTHING.")
+
     return Corridor(
         chapter          = 4,
-        rooms            = [room1, room2, room3],
+        rooms            = [room1, service, room2, luggage, laundry, room3],
         cargo_silhouette = "vip",
     )

@@ -628,9 +628,13 @@ def build() -> Corridor:
     # ── Room 1: INTAKE FLOOR ─────────────────────────────────────────────
     r1_elms = [
         # OneWayWalls forcing zigzag through cubicles
-        OneWayWall(220, CEIL_Y + 20, FLOOR_Y, blocks_right=True),
-        OneWayWall(420, CEIL_Y + 20, FLOOR_Y, blocks_right=False),
-        OneWayWall(620, CEIL_Y + 20, FLOOR_Y, blocks_right=True),
+        # Delivery v2 I.3b fix: these spanned floor-to-ceiling since A.6,
+        # which made the room impossible to cross (no jump could clear
+        # them — a pre-existing soft-lock). Cubicle partitions are
+        # waist-high: a FULL jump hops them, a tap-jump doesn't.
+        OneWayWall(220, FLOOR_Y - 90, FLOOR_Y, blocks_right=True),
+        OneWayWall(420, FLOOR_Y - 90, FLOOR_Y, blocks_right=False),
+        OneWayWall(620, FLOOR_Y - 90, FLOOR_Y, blocks_right=True),
         # 3 mandatory clerks
         NPCEncounter(
             300, "MARGARET",
@@ -756,8 +760,29 @@ def build() -> Corridor:
         name       = "EXECUTIVE PROCESSING",
     )
 
+    # Delivery v2 I.3b — four new rooms; the bureaucracy's flagship
+    # corridor earns the longest crawl. Pneumatic tubes at last.
+    from delivery.corridor.rooms_v2 import (conveyor_gallery, pipe_junction,
+                                            crate_warren, lift_shaft)
+    doc_line = conveyor_gallery(
+        _PAL_R1, "DOCUMENT LINE B",
+        bax_enter_line="Document line. The belts file faster than the clerks.")
+    tubes = pipe_junction(
+        _PAL_R2, "PNEUMATIC TUBES",
+        secret_lore="Misrouted canister, twenty years old. Inside: one "
+                    "form, stamped APPROVED. Addressee: unknown.",
+        bax_enter_line="Pneumatic tubes. Big enough for a courier. That's not an invitation. ...It's an invitation.")
+    archive = crate_warren(
+        _PAL_R2, "DEEP ARCHIVE",
+        secret_lore="A box of forms marked VOID. Every one is a debt "
+                    "forgiveness order. None were ever sent.",
+        bax_enter_line="Deep archive. If it's boxed down here, someone wanted it forgotten.")
+    tower = lift_shaft(
+        _PAL_R3, "FILING TOWER",
+        bax_enter_line="Filing tower. The lifts obey a schedule no one's ever seen.")
+
     return Corridor(
         chapter          = 3,
-        rooms            = [room1, room2, room3],
+        rooms            = [room1, doc_line, room2, tubes, archive, tower, room3],
         cargo_silhouette = "forms",
     )

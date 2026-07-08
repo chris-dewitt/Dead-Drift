@@ -498,8 +498,24 @@ def build() -> Corridor:
         name       = "RECEIVING LAB",
     )
 
+    # Delivery v2 I.3b — three new rooms in the lab's growth-industrial
+    # register between decontamination and the receiving lab.
+    from delivery.corridor.rooms_v2 import (conveyor_gallery, lift_shaft,
+                                            spring_yard)
+    sorting = conveyor_gallery(
+        _PAL_R1, "SPORE SORTING LINE",
+        bax_enter_line="Sorting line's live. Belts don't care which way you're goin'.")
+    towers = lift_shaft(
+        _PAL_R2, "GROW TOWER 9",
+        bax_enter_line="Grow towers. Lifts are on lab time, not yours.")
+    nets = spring_yard(
+        _PAL_R2, "MYCELIUM NETS",
+        secret_lore="Petri dish taped under the net frame, labelled in "
+                    "marker: 'CONTROL GROUP. DO NOT DOSE. —R.'",
+        bax_enter_line="Nets are springy. The fungus did that. Try not to think about it.")
+
     return Corridor(
         chapter          = 2,
-        rooms            = [room1, room2, room3],
+        rooms            = [room1, sorting, room2, towers, nets, room3],
         cargo_silhouette = "shroom",
     )
