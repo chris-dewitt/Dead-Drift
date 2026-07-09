@@ -4,9 +4,10 @@ Read this first. Do **not** use deleted or git-archived docs as current spec.
 
 | Doc | Use for |
 |-----|---------|
-| **[docs/DELIVERY_V2_PUSH.md](docs/DELIVERY_V2_PUSH.md)** | **North star** — corridor/delivery overhaul (I.4 next) |
+| **[docs/TERMINAL_V2_PUSH.md](docs/TERMINAL_V2_PUSH.md)** | **North star** — terminal overhaul execution plan (J.1 Money next) |
+| [docs/MakeTheTerminalFunAgain.md](docs/MakeTheTerminalFunAgain.md) | **Locked spec** — terminal economy, coding exploits, NPC parity (the *what*) |
+| [docs/DELIVERY_V2_PUSH.md](docs/DELIVERY_V2_PUSH.md) | Previous push — corridor/delivery overhaul (complete July 8 2026) |
 | **[docs/Issues.md](docs/Issues.md)** | **Locked spec** — combat, checkpoints, EncryptedDrive, paperwork |
-| **[docs/MakeTheTerminalFunAgain.md](docs/MakeTheTerminalFunAgain.md)** | **Locked spec** — terminal economy, coding exploits, NPC parity |
 | [README.md](README.md) | Player quick start, controls, feature overview |
 | [WORKING_ON.md](WORKING_ON.md) | File-claim coordination before editing subsystems |
 | [docs/BAX_VOICE.md](docs/BAX_VOICE.md) | Bax line bank + tone guide |
