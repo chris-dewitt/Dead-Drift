@@ -1,7 +1,7 @@
 # THE TERMINAL V2 PUSH — "Make The Terminal Fun Again"
 
 **Started:** July 9 2026
-**Status:** Planned — Phase J.1 (Money) next
+**Status:** J.1 (Money) shipped `[~]` — J.2 (Systems) next
 **Scope:** Open-ended (no time cap)
 **Locked spec:** [`MakeTheTerminalFunAgain.md`](MakeTheTerminalFunAgain.md) — the *what*. This doc is the *how*: phasing, resolved implementer decisions, checkboxes.
 **North star for all agents:** this supersedes `DELIVERY_V2_PUSH.md` (complete July 8 2026) for active work.
@@ -96,31 +96,31 @@ The corridor/flight systems are untouched by this push; all work is in
 The foundation. The merge gate requires payment rules to pass before any
 NPC's systems path ships, so this lands first.
 
-### J.1.1 Payout retune — [ ]
+### J.1.1 Payout retune — [~]
 `_close_terminal`: EXPLOIT **9000 → 5000**; RELEASE stays **2500**. Kill the
 hardcoded banner (`terminal.py:616`) — show the actual payout or a neutral
 "TRANSACTION REROUTED" with no fixed number (spec T-7).
 
-### J.1.2 Dual-ledger paid paths — [ ]
+### J.1.2 Dual-ledger paid paths — [~]
 Kress intel + contraband and all bribes deduct run credits **and** add the
 same amount to meta debt ("the tab"). Route through one shared helper so the
 table in the spec is enforced in one place, not per-NPC. Mira paid repair
 (≥700cr) stays **run-credits-only** (off-books medic).
 
-### J.1.3 Insufficient-funds counter-offer — [ ]
+### J.1.3 Insufficient-funds counter-offer — [~]
 Paid path with `sector_credits < price`: **−1 patience**, an NPC counter-offer
 line ("Got {credits}; I need {price}. Work something else."), **no** silent
 success, **no** free intel. Don't impound on first broke offer unless patience
 already spent.
 
-### J.1.4 Hull/stim grep + wire — [ ]
+### J.1.4 Hull/stim grep + wire — [~]
 `grep` `terminal/npcs/*.py` for `hull|repair|patch|heal|stim|integrity`;
 every promising line either calls code or gets rewritten. Locked: Mira
 `repair(45)` + verify 700cr deduct; Kress contraband hull → `ship.repair(25)`
 + dual ledger; **Kress stims → +1 harmonica heal charge** (decision #3). Attach
 the grep-checklist table to the PR.
 
-### J.1.5 Economy tests — [ ]
+### J.1.5 Economy tests — [~]
 `test_terminal_economy_*` (EXPLOIT +5000, RELEASE +2500, broke = −patience +
 counter-offer), `test_kress_intel_charges` (credits down + debt up),
 `test_kress_contraband_hull` (repair 25 + stim charge), `test_mira_repair_charges`.

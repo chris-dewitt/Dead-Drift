@@ -613,7 +613,7 @@ _OUTCOME_LABEL = {
 _OUTCOME_DETAIL = {
     NPCOutcome.RELEASE: "CHANNEL CLOSED - PROCEED",
     NPCOutcome.IMPOUND: "TERMINAL TERMINATED - BARGE INBOUND",
-    NPCOutcome.EXPLOIT: "TRANSACTION REROUTED - 9,000 CR",
+    NPCOutcome.EXPLOIT: "TRANSACTION REROUTED",
     "abort":            "STATIC BURST - DAMAGE APPLIED",
 }
 
@@ -641,8 +641,10 @@ class Terminal:
 
     def __init__(self, npc: BaseNPC,
                  blocked_paths: frozenset[str] = frozenset(),
-                 vocabulary_vault=None):
+                 vocabulary_vault=None,
+                 econ=None):
         self.npc      = npc
+        self._econ    = econ    # J.1 TerminalEconomy — applies priced txns
         self._history: list[tuple[str, str]] = []
         self._input   = ""
         self._done    = False
@@ -778,10 +780,45 @@ class Terminal:
             self._exploit_flash = pygame.time.get_ticks() / 1000.0
 
         self._push(self.npc.name.upper(), response)
+
+        # J.1 — apply any priced transaction the NPC staged this turn. The NPC
+        # only stages when the player can afford it, so this just moves the
+        # numbers and prints an honest ledger line under the NPC's response.
+        self._apply_pending_transaction()
+
         self._outcome = outcome
 
         if outcome != NPCOutcome.CONTINUE:
             self._finish(outcome)
+
+    _EFFECT_NOTE = {
+        "repair25": "hull +25",
+        "repair45": "hull +45",
+        "stim":     "harmonica charge +1",
+    }
+
+    def _apply_pending_transaction(self) -> None:
+        """J.1 — move real numbers for an NPC-staged priced line and print an
+        honest ledger receipt. No-op if there's no econ adapter or no txn."""
+        txn = self.npc.take_pending_transaction() if hasattr(
+            self.npc, "take_pending_transaction") else None
+        if not txn or self._econ is None:
+            return
+        amount = txn["amount"]
+        if not self._econ.charge(amount, dual_ledger=txn["dual_ledger"],
+                                 label=txn["label"]):
+            return   # affordability was checked upstream; be safe if it wasn't
+        self._econ.apply_effect(txn.get("effect"))
+        # Keep the NPC's view of the wallet current for any later purchase.
+        if hasattr(self.npc, "_ctx") and isinstance(self.npc._ctx, dict):
+            self.npc._ctx["credits"] = self._econ.credits()
+        parts = [f"−{amount:,} cr"]
+        if txn["dual_ledger"]:
+            parts.append(f"+{amount:,} debt")
+        note = self._EFFECT_NOTE.get(txn.get("effect"))
+        if note:
+            parts.append(note)
+        self._push("LEDGER", "[ " + "  ·  ".join(parts) + " ]")
 
     def _finish(self, outcome: str) -> None:
         self._done = True
@@ -1119,19 +1156,18 @@ class Terminal:
         blocks: list[tuple[str, bool, bool, bool, bool, list[str]]] = []
         for i, (speaker, text) in enumerate(self._history):
             disp_text   = text[:int(self._tw_chars)] if i == self._tw_pos else text
-            is_npc      = speaker not in ("YOU", "SYSTEM", "ANALYSIS", "MUTTER")
+            is_npc      = speaker not in ("YOU", "SYSTEM", "ANALYSIS", "MUTTER", "LEDGER")
             is_sys      = speaker == "SYSTEM"
             is_analysis = speaker == "ANALYSIS"
             is_mutter   = speaker == "MUTTER"
-            wc = wrap_cols_sm if (is_analysis or is_mutter) else wrap_cols
+            is_ledger   = speaker == "LEDGER"
+            wc = wrap_cols_sm if (is_analysis or is_mutter or is_ledger) else wrap_cols
             blocks.append((speaker, is_npc, is_sys, is_analysis, is_mutter,
                            self._wrap(disp_text, wc)))
 
         def _block_h(bl: tuple) -> int:
-            _, _, is_sys, is_analysis, is_mutter, wrapped = bl
-            if is_analysis:
-                return len(wrapped) * lh_sm + GAP // 2
-            if is_mutter:
+            spk, _, is_sys, is_analysis, is_mutter, wrapped = bl
+            if is_analysis or is_mutter or spk == "LEDGER":
                 return len(wrapped) * lh_sm + GAP // 2
             return (0 if is_sys else lh) + len(wrapped) * lh + GAP
 
@@ -1151,7 +1187,16 @@ class Terminal:
             if y >= DIAG_Y1:
                 break
 
-            if is_analysis:
+            if speaker == "LEDGER":
+                # J.1 — honest money receipt, money-green, compact
+                for line in wrapped:
+                    surface.blit(
+                        font_sm.render(f"  $ {line}", True, (0, 200, 120)),
+                        (dl_x + 4, y))
+                    y += lh_sm
+                y += GAP // 2
+
+            elif is_analysis:
                 for line in wrapped:
                     surface.blit(
                         font_sm.render(f"  ⊙ {line}", True, (0, 165, 155)),
