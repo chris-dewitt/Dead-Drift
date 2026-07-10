@@ -68,7 +68,7 @@ class Bowen(BaseNPC):
         ])
 
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
-        text = parsed.text.lower()
+        text = parsed.raw.lower()
 
         if any(k in text for k in _COMPLY_KEYWORDS):
             self._comply_turns += 1

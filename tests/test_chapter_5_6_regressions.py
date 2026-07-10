@@ -74,3 +74,18 @@ def test_encrypted_drive_final_terminal_is_chapter_aware():
     rm._current_chapter = lambda: 6
     RunManager._open_jump_terminal(rm)
     assert opened[-1] == "bowen"
+
+
+def test_chapter_five_and_six_climax_npcs_accept_normal_input():
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    chen = make_npc("chen")
+    outcome, _ = chen.respond("what does it do")
+    assert outcome == NPCOutcome.CONTINUE
+    assert chen._current_path == "QUESTION"
+
+    bowen = make_npc("bowen")
+    outcome, _ = bowen.respond("no way")
+    assert outcome == NPCOutcome.CONTINUE
+    assert bowen._current_path == "REFUSE"

@@ -58,7 +58,7 @@ class Chen(BaseNPC):
         ])
 
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
-        text = parsed.text.lower()
+        text = parsed.raw.lower()
 
         if any(k in text for k in _RESPECT_KEYWORDS):
             self._respect_turns += 1
