@@ -2120,10 +2120,13 @@ class RunManager:
         ]))
 
     def _on_aiship_destroyed(self, ship=None, **_):
-        # Awards a small kill bonus when a hostile pirate goes down
+        # Awards a small kill bonus when a hostile pirate goes down.
+        # EVT_AISHIP_DESTROYED is fired by AIShip *and* by ComplianceVessel,
+        # which is not an AIShip and has no is_pirate — so read it defensively
+        # (a downed compliance drone gets its own Bax line at the emit site).
         if ship is None:
             return
-        if ship.is_pirate:
+        if getattr(ship, "is_pirate", False):
             bus.emit(EVT_BAX_SPEAK, priority=True, line=random.choice([
                 "Hostile down. Nice shooting.",
                 "Pirate gunboat scrapped. They had it coming.",
