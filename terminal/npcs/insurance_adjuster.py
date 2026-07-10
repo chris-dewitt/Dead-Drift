@@ -123,6 +123,7 @@ class InsuranceAdjuster(BaseNPC):
         self._sympathy_turns     = 0
         self._form34a_mentions   = 0
         self._hostile_turns      = 0
+        self._sql_hit            = False   # J.3.5 (T-2) — dossier SQL bar
 
     # ------------------------------------------------------------------
     def _intro_line(self) -> str:
@@ -213,6 +214,7 @@ class InsuranceAdjuster(BaseNPC):
         # --- SQL INJECTION — CLAIM-7 fails open ---
         if parsed.sql_inject:
             self._current_path = "SQL INJECT"
+            self._sql_hit = True
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="sql_inject")
             return NPCOutcome.EXPLOIT, random.choice([
                 "*long silence* "
@@ -461,7 +463,7 @@ class InsuranceAdjuster(BaseNPC):
             ("COUNTER CLAIM",    self._legal_threat_hits,    2),
             ("EXHAUSTION",       self._sympathy_turns,       3),
             ("FORM 34-A",        self._form34a_mentions,     2),
-            ("SQL INJECT",       0,                          1),
+            ("SQL INJECT",       int(self._sql_hit),         1),
         ]
 
     # ------------------------------------------------------------------

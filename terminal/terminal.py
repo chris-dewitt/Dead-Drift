@@ -193,10 +193,11 @@ _SCAN_KNOWN_LABELS: dict[str, dict[str, tuple[str, ...]]] = {
         "BRIBE": ("corruption",),
     },
     "KRESS": {
+        # J.3.2 — VOLKOV/CONNIE are the real exploits; INTEL and CONTRABAND are
+        # paid *services*, not discovered backdoors, so they no longer both
+        # resolve to "regular" (which lit them up as "known" by mistake).
         "VOLKOV": ("old_debt",),
         "CONNIE": ("previous_pilot",),
-        "INTEL": ("regular",),
-        "CONTRABAND": ("regular",),
     },
     "MORWENNA": {
         "SQL-INJECT": ("sql_inject",),
@@ -353,8 +354,8 @@ _NPC_HINTS.update({
         "quantum+legal / bribe >=10k / marrow report + confirm / [ESC] abort"
     ),
     "KRESS": (
-        "intel / contraband / volkov / connie / be friendly x3 / "
-        "marrow sell-out + confirm / [ESC] abort"
+        "intel · contraband · volkov · connie · be friendly x3 · "
+        "marrow sell-out + confirm · [ESC] abort"
     ),
     "SANDRA": (
         "trade intel / solidarity x3 / boast with real run stats / "
@@ -402,6 +403,42 @@ _SCAN_KNOWN_LABELS["FREQUENCY LOST"] = {
 
 _NPC_VAULT_KEYS.update({
     "FREQUENCY LOST": ("lostfrequency", "lost_frequency", "frequency_lost", "marrow"),
+})
+
+# J.3.1 — Ch5/6 climax NPCs join the dossier/scan/vault maps (Gary-tier).
+_NPC_DOSSIER_TITLE.update({
+    "CHEN":  "ARCHITECT'S TERMS",
+    "BOWEN": "COMPLIANCE HOLD",
+})
+_NPC_HINTS.update({
+    "CHEN":  "thank/respect x2 · name what she built x2 · 'for everyone' · "
+             "ask how it works x2 · shell → ledger root · [ESC] abort",
+    "BOWEN": "expose what you saw x2 · his family photo · refuse hard x2 · "
+             "python → break the audit console · NEVER comply · [ESC] abort",
+})
+_SCAN_VOCAB.update({
+    "CHEN": {
+        "thank": "RESPECT", "respect": "RESPECT", "grateful": "RESPECT",
+        "honour": "RESPECT", "honor": "RESPECT",
+        "you built": "ACKNOWLEDGE★", "your design": "ACKNOWLEDGE★",
+        "you made": "ACKNOWLEDGE", "complicit": "ACKNOWLEDGE",
+        "everyone": "FOR-ALL★", "wipe it": "FOR-ALL★", "all of them": "FOR-ALL",
+        "why": "QUESTION", "how": "QUESTION", "what does it do": "QUESTION",
+        "shell": "SHELL★", "cascade": "SHELL★", "root": "SHELL",
+        "marrow": "MARROW",
+    },
+    "BOWEN": {
+        "clone tanks": "EXPOSE★", "floor 31": "EXPOSE★", "the names": "EXPOSE★",
+        "the bullpen": "EXPOSE",
+        "your family": "PERSONAL★", "the photo": "PERSONAL★", "lanyard": "PERSONAL",
+        "never": "REFUSE", "won't": "REFUSE", "make me": "REFUSE", "no way": "REFUSE",
+        "okay": "COMPLY!", "sure": "COMPLY!", "i'll wait": "COMPLY!",
+        "python": "REPL★", "import": "REPL★", "eval": "REPL",
+    },
+})
+_NPC_VAULT_KEYS.update({
+    "CHEN":  ("chen",),
+    "BOWEN": ("bowen",),
 })
 
 for _npc_name in ("NOVA SOMA COLLECTIONS", "MIRA VOSS"):
@@ -592,9 +629,12 @@ def _pick_courier_quip(text: str, npc_name: str = "") -> str:
     for kw in sorted(_COURIER_QUIPS_KW, key=len, reverse=True):
         if kw in raw:
             return _r.choice(_COURIER_QUIPS_KW[kw])
-    # NPC-specific ambient quips when no keyword matched (40% chance)
-    if npc_name and npc_name in _COURIER_QUIPS_NPC and _r.random() < 0.40:
-        return _r.choice(_COURIER_QUIPS_NPC[npc_name])
+    # NPC-specific ambient quips when no keyword matched (40% chance).
+    # J.3.5 (T-8) — look up by UPPERCASE name so mixed-case NPC names
+    # (Chen, Bowen, Mira Voss) resolve against the all-caps quip table.
+    key = npc_name.upper() if npc_name else ""
+    if key and key in _COURIER_QUIPS_NPC and _r.random() < 0.40:
+        return _r.choice(_COURIER_QUIPS_NPC[key])
     return _r.choice(_COURIER_GENERIC)
 
 
@@ -1075,8 +1115,11 @@ class Terminal:
         if vault is None or not hasattr(vault, "get_backdoors"):
             return set()
         known: set[str] = set()
-        keys = _NPC_VAULT_KEYS.get(self.npc.name.upper(), ())
-        keys += (type(self.npc).__name__.lower(),)
+        # J.3.3 (T-6) — resolve through the one registry (canonical snake_case +
+        # aliases) plus the legacy display-name table, so a discovered backdoor
+        # lights up no matter which spelling recorded it.
+        from terminal.vault_keys import resolve_keys
+        keys = tuple(_NPC_VAULT_KEYS.get(self.npc.name.upper(), ())) + resolve_keys(self.npc)
         for key in keys:
             for item in vault.get_backdoors(key):
                 known.add(self._scan_norm(item))

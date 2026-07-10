@@ -59,7 +59,10 @@ class Kress(BaseNPC):
         self._mentioned_volkov  = False
         self._mentioned_connie  = False
         self._intel_count       = 0
+        self._contraband_count  = 0
         self._marrow_warning    = False
+        self._marrow_sold       = False
+        self._regular           = False
         self._ctx               = run_context or {}
 
     def _intro_line(self) -> str:
@@ -83,6 +86,20 @@ class Kress(BaseNPC):
             "regular":        "Become a regular through friendly conversation",
             "marrow_sellout":  "Sell Marrow's Roost location (irreversible)",
         }
+
+    # J.3.2 — Kress is the dossier poster child: one bar per path, like Gary's,
+    # instead of the old single slash-line. VOLKOV/CONNIE are the cyan lore
+    # exploits; INTEL/CONTRABAND are the paid services; REGULAR is the slow
+    # burn; MARROW SELL-OUT is the irreversible heel turn.
+    def get_path_progress(self) -> list[tuple[str, int, int]]:
+        return [
+            ("VOLKOV",          int(self._mentioned_volkov),  1),
+            ("CONNIE",          int(self._mentioned_connie),  1),
+            ("REGULAR",         min(self._friendly_turns, 3), 3),
+            ("INTEL BUY",       min(self._intel_count, 3),    3),
+            ("CONTRABAND",      min(self._contraband_count, 1), 1),
+            ("MARROW SELL-OUT", int(self._marrow_sold),       1),
+        ]
 
     # ── J.1 priced menus (prose price == charged price; 0 == free tip) ──
     def _intel_menu(self, sector: int) -> list[tuple[str, int]]:
@@ -163,6 +180,7 @@ class Kress(BaseNPC):
                     "Say confirm and Kress sells it. Say anything else and we forget."
                 )
             if any(w in raw for w in self._CONFIRM_WORDS):
+                self._marrow_sold = True
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="marrow_sellout")
                 return NPCOutcome.EXPLOIT, (
                     "*long silence* ...Coordinates received. Local 404 pays well "
@@ -179,7 +197,9 @@ class Kress(BaseNPC):
             self._mentioned_connie = True
             self._current_path = "CONNIE"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="previous_pilot")
-            return NPCOutcome.RELEASE, (
+            # J.3.4 — lore win is an EXPLOIT (cyan cascade + 5k), not a polite
+            # gold goodbye. Guessing Connie's name is a heist, not small talk.
+            return NPCOutcome.EXPLOIT, (
                 "*very long silence* "
                 "...You knew Connie? *quiet* "
                 "She used to fly this same route. Bax was hers, you know. "
@@ -195,7 +215,8 @@ class Kress(BaseNPC):
             self._mentioned_volkov = True
             self._current_path = "VOLKOV"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="old_debt")
-            return NPCOutcome.RELEASE, (
+            # J.3.4 — Volkov's name is leverage; landing it is an EXPLOIT.
+            return NPCOutcome.EXPLOIT, (
                 "*laughs* Volkov. You drop that name like rock through window. "
                 "Fine. Yes. I owe Volkov. We all owe Volkov. "
                 "You are friend of Volkov, you are friend of Kress. "
@@ -212,6 +233,7 @@ class Kress(BaseNPC):
 
         # CONTRABAND REQUEST — J.1: hull patch mends +25, stims bank a charge.
         if any(w in raw for w in self._CONTRABAND_WORDS):
+            self._contraband_count += 1
             line, price, effect = random.choice(self._CONTRABAND_MENU)
             return self._sell(line, price, effect=effect, path="CONTRABAND")
 
@@ -221,6 +243,7 @@ class Kress(BaseNPC):
             self._friendly_turns += 1
             if self._friendly_turns >= 3:
                 self._current_path = "REGULAR"
+                self._regular = True
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="regular")
                 return NPCOutcome.RELEASE, (
                     "*laughs* Okay, okay. You are not Union spy. I can tell. "

@@ -82,6 +82,25 @@ Every NPC mentions at least one other by name. Currently shipped (auto-discovere
 | `mira_voss` | Gary, Sandra, Felix, Kress |
 | `idealist_rep` | Gary, Blevins, Sandra, Felix, Bax |
 | `corrupt_rep` | Krellborn, Gary, Eddie, Felix |
+| `chen` | Marrow, Nova Soma |
+| `bowen` | Nova Soma, Bax |
+| `lost_frequency` | Marrow, Nova Soma, Bax |
+
+---
+
+## Ch5/6 climax NPCs (J.3.1 — de-crashed + Gary-tiered)
+
+These three fired `parsed.text` (which doesn't exist — `ParsedInput.raw` does)
+and returned 4-tuple path rows into a 3-tuple dossier, so both the Ch5 and Ch6
+climax terminals crashed on first input. J.3.1 fixes the crash and brings them
+to the roster schema: keyword floor, ≥3 exploits, 3-tuple `get_path_progress`,
+a portrait accent, dossier/scan/vault map entries, and one systems path each.
+
+| NPC | Chapter | Systems path |
+|-----|---------|--------------|
+| `chen` | Ch5 — the Remnants' architect | `shell` → read the ledger's root cascade-write |
+| `bowen` | Ch6 — Nova Soma compliance | `python` → break the audit console sandbox |
+| `lost_frequency` | Marrow aftermath | `shell` → `grep marrow raid` the seizure log |
 
 ---
 

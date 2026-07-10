@@ -68,7 +68,7 @@ class Bowen(BaseNPC):
         ])
 
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
-        text = parsed.text.lower()
+        text = parsed.raw.lower()
 
         if any(k in text for k in _COMPLY_KEYWORDS):
             self._comply_turns += 1
@@ -127,6 +127,8 @@ class Bowen(BaseNPC):
             "I'm not sure I follow. Could you clarify?",
             "Take your time. I'm here.",
             "I'm just trying to do my job. Help me help you.",
+            "Your companion — the Bax unit — it can't route you out of this one. "
+            "I've already flagged the channel. Let's just talk.",
         ])
 
     def exploits(self) -> dict[str, str]:
@@ -134,12 +136,25 @@ class Bowen(BaseNPC):
             "EXPOSE":   "Name what you saw on the way down — he cracks",
             "PERSONAL": "Mention his family photo — the mask drops",
             "REFUSE":   "Refuse to comply, hard — he gives up",
+            "audit_repl": "Type `python` into his audit console; break the sandbox",
         }
 
-    def get_path_progress(self) -> list[tuple[str, str, int, int]]:
+    # J.3.1 — Bowen keeps you "on the line" through a compliance audit console.
+    # It's a Python prompt. Any real break-out (import os / __class__ / eval)
+    # dumps you out of his procedure before Security arrives.
+    def repl_session(self):
+        if getattr(self, "_repl", None) is None:
+            from terminal.repl_session import ReplSession
+            self._repl = ReplSession(
+                exploit_key="audit_repl",
+                motd="NOVA SOMA COMPLIANCE AUDIT CONSOLE — please hold for the Assistant Director.")
+        return self._repl
+
+    def get_path_progress(self) -> list[tuple[str, int, int]]:
         return [
-            ("EXPOSE",   "the names · the bullpen · clone tanks", self._expose_turns,   2),
-            ("PERSONAL", "your family · the photo · your kids",   self._personal_hits,  1),
-            ("REFUSE",   "no · never · won't · no way",           self._refuse_turns,   2),
-            ("COMPLY",   "okay · sure · fine — DON'T",            self._comply_turns,   1),
+            ("EXPOSE",     self._expose_turns,   2),
+            ("PERSONAL",   self._personal_hits,  1),
+            ("REFUSE",     self._refuse_turns,   2),
+            ("COMPLY",     self._comply_turns,   1),
+            ("AUDIT REPL", int(getattr(self, "_systems_hit", False)), 1),
         ]

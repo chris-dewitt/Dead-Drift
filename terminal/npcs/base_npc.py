@@ -178,7 +178,8 @@ class BaseNPC(ABC):
         vault = getattr(self, "_vault", None)
         if vault is not None and hasattr(vault, "record"):
             try:
-                vault.record(type(self).__name__.lower(), exploit_key.upper())
+                from terminal.vault_keys import canonical_key
+                vault.record(canonical_key(self), exploit_key.upper())
             except Exception:
                 pass
         return path

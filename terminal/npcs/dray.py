@@ -106,7 +106,9 @@ class Dray(BaseNPC):
 
         if any(w in raw for w in _SNITCH_KEYWORDS):
             self._patience = 0
-            bus.emit(EVT_NLP_EXPLOIT, npc="dray", exploit_key="snitched")
+            # J.3.5 (T-5) — snitching gets YOU towed; it is a trap, not a player
+            # exploit. Don't file it in Records as a discovered vulnerability.
+            self._current_path = "SNITCH"
             return NPCOutcome.IMPOUND, random.choice([
                 "*flat* Hm. Thought you were a courier. "
                 "My mistake. "
