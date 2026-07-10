@@ -1,7 +1,7 @@
 # THE TERMINAL V2 PUSH — "Make The Terminal Fun Again"
 
 **Started:** July 9 2026
-**Status:** J.2 (Systems) shipped `[~]` — J.3 (Parity) next
+**Status:** J.3 (Parity) shipped `[~]` — push complete (T-1/T-3/T-4 are noted follow-ups)
 **Scope:** Open-ended (no time cap)
 **Locked spec:** [`MakeTheTerminalFunAgain.md`](MakeTheTerminalFunAgain.md) — the *what*. This doc is the *how*: phasing, resolved implementer decisions, checkboxes.
 **North star for all agents:** this supersedes `DELIVERY_V2_PUSH.md` (complete July 8 2026) for active work.
@@ -174,39 +174,44 @@ gate: no systems path ships on a crashing NPC).
 
 ## Phase J.3 — PARITY (Stream 3: contracts, Kress, Ch5/6, bugs)
 
-### J.3.1 Fix the Ch5/6 crash + Gary-tier Chen/Bowen/Lost Frequency — [ ]
+### J.3.1 Fix the Ch5/6 crash + Gary-tier Chen/Bowen/Lost Frequency — [~]
 `parsed.text` → `parsed.raw` in Chen/Bowen. Bring all three to Gary-tier:
 portrait, scan vocab, dossier title, `get_path_progress()` 3-tuples,
 `exploits()` ≥3, one systems path each (Chen shell, Bowen REPL, Lost Frequency
 `grep marrow raid` shell). Add them to `test_npc_schema_b1.py` (T-10).
 
-### J.3.2 Kress parity (poster child) — [ ]
+### J.3.2 Kress parity (poster child) — [~]
 `get_path_progress()` rows for every path (VOLKOV, CONNIE, INTEL, CONTRABAND,
 REGULAR×3, MARROW SELL-OUT). Fix hint fallback delimiter (`/` → ` · `). Fix
 scan known-labels (INTEL vs CONTRABAND, not both → "regular"). Lore paths →
 EXPLOIT + 5k + cyan cascade (not gold RELEASE). Dossier reads like Gary's.
 
-### J.3.3 Vault-key registry — [ ]
+### J.3.3 Vault-key registry — [~]
 One `_NPC_VAULT_KEYS` registry resolving `type(npc).__name__` ↔ Records
 snake_case (T-6). Every `EVT_NLP_EXPLOIT` uses a stable key the
 Records/Vulnerability tab resolves (C10).
 
-### J.3.4 Lore-wins-are-EXPLOIT sweep — [ ]
+### J.3.4 Lore-wins-are-EXPLOIT sweep — [~]
 All former "lore RELEASE" paths (Kress Connie/Volkov, Gary hidden, dispatcher
 Marrow betrayal, etc.) → `NPCOutcome.EXPLOIT`: cyan cascade, +5000,
 `EVT_NLP_EXPLOIT`. Banner shows dynamic amount.
 
-### J.3.5 Dossier / contract bug close — [ ]
-T-1 dossier scroll/compress >5–7 rows · T-2 Morwenna SQL bar tracks `_sql_hit`
-· T-3 Edmund `filibuster` (implement or remove) · T-4 Felix `rapport` bar ·
-T-5 Dray `snitched` (add or stop emitting) · T-8 MUTTER quips uppercase
-lookup · T-9 schema doc/test. Show **all** win paths on bars (hidden paths
-were bugs). Path hardening **per-NPC only**.
+### J.3.5 Dossier / contract bug close — [~]
+**Done:** T-2 Morwenna SQL bar tracks `_sql_hit` (was hardcoded 0) · T-5 Dray
+`snitched` no longer emits `EVT_NLP_EXPLOIT` (it tows YOU — a trap, not an
+exploit) · T-8 MUTTER quip lookup upper-cases the name (Chen/Bowen resolve) ·
+T-9 schema doc/test extended with chen/bowen/lost_frequency.
+**Deferred follow-ups:** T-1 dossier scroll/compress for >7 rows (a visual
+change for play-verify) and its dependent T-4 Felix `rapport` bar (a 9th row
+that clips without T-1) · T-3 Edmund `filibuster` (implement or remove).
 
-### J.3.6 Contract tests (roster parametrized) — [ ]
-`test_npc_contract_*` over the full roster: C1 progress 3-tuples, C2 exploits
-reachable, C3 portrait, C6 uppercase quip lookup, C7 ≥1 systems path, C9 no
-`parsed.text`, C10 vault key resolves. `test_kress_dossier_rows` non-empty.
+### J.3.6 Contract tests (roster parametrized) — [~]
+`test_npc_contract_j3` over all 19 NPCs: C1 progress 3-tuples, C2 exploits
+reachable, C3 portrait renders, C6 quip lookup, C9 no `parsed.text`, C10 vault
+key resolves + first-input survival sweep. C7 is scoped to the **curated
+systems NPCs** (TK-9/Toll/Chen/Lost Frequency shell, Nova Soma/Bowen REPL)
+exposing a working session; the broad "every NPC answers SQL" layer of
+decision #7 is a noted follow-up. 139 assertions.
 
 ---
 
