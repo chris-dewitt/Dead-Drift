@@ -178,3 +178,24 @@ def test_breach_with_encrypted_drive_adds_compliance_drone(monkeypatch):
     assert calls.get("chase") is True
     assert made.get("spawned") is True
     assert len(rm._compliance_vessels) == 1
+
+
+# ── discoverability: the terminal announces the systems path up front ────────
+
+def test_systems_npc_announces_shell_on_open():
+    t = Terminal(_tk9(), econ=None); t.activate()
+    sys_lines = [txt for spk, txt in t._history if spk == "SYSTEM"]
+    assert any("shell" in s for s in sys_lines), "TK-9 should advertise its shell"
+
+
+def test_repl_npc_announces_python_on_open():
+    t = Terminal(_nova(), econ=None); t.activate()
+    sys_lines = [txt for spk, txt in t._history if spk == "SYSTEM"]
+    assert any("python" in s for s in sys_lines), "Nova Soma should advertise its REPL"
+
+
+def test_non_systems_npc_stays_quiet_on_open():
+    from terminal.npcs.gary import Gary
+    t = Terminal(Gary(run_context={}), econ=None); t.activate()
+    sys_lines = [txt for spk, txt in t._history if spk == "SYSTEM"]
+    assert not any(("shell" in s or "python" in s) for s in sys_lines)
