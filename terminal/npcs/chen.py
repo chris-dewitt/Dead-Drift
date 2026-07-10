@@ -58,7 +58,7 @@ class Chen(BaseNPC):
         ])
 
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
-        text = parsed.text.lower()
+        text = parsed.raw.lower()
 
         if any(k in text for k in _RESPECT_KEYWORDS):
             self._respect_turns += 1
@@ -131,12 +131,38 @@ class Chen(BaseNPC):
             "ACKNOWLEDGE":     "Name what she built — she releases under the weight",
             "FOR EVERYONE":    "Frame the goal as universal — she signs off fast",
             "QUESTION":        "Ask how the virus works — she'll teach you, then send you",
+            "ledger_shell":    "Type `shell`; read the ledger's own root cascade-write",
         }
 
-    def get_path_progress(self) -> list[tuple[str, str, int, int]]:
+    # J.3.1 — Chen wrote the ledger; she'll let you read its source. The shell
+    # exposes the cascade-write she described out loud — finding it yourself is
+    # the architect's blessing (she respects a courier who reads the code).
+    def shell_session(self):
+        if getattr(self, "_shell", None) is None:
+            from terminal.shell_session import ShellSession
+            self._shell = ShellSession(
+                host="ledger-root", user="remnant",
+                motd="GALACTIC DEBT LEDGER // source mirror (Chen's copy)",
+                files={
+                    "/README": "I wrote every line of this. — C.\n"
+                               "The door is where it always was: root level.",
+                    "/ledger/schema.sql": "TABLE debt (entry_id, holder, balance, sector)\n"
+                               "-- fifteen years. every courier. every clone.",
+                    "/ledger/notes/marrow.txt": "Marrow routes the cipher. Trust the static.",
+                    "/ledger/root/cascade_write.rs": "// zeroes balance ACROSS THE WHOLE TABLE.\n"
+                               "// not a delete. a field wipe. galactic.\n"
+                               "// hold the line ninety seconds. — C.",
+                },
+                loot={"/ledger/root/cascade_write.rs": "ledger_shell"},
+                denied=set(),
+            )
+        return self._shell
+
+    def get_path_progress(self) -> list[tuple[str, int, int]]:
         return [
-            ("RESPECT",      "thank · honour · grateful",            self._respect_turns, 2),
-            ("ACKNOWLEDGE",  "you built · your design · complicit",  self._guilt_turns,   2),
-            ("FOR EVERYONE", "everyone · all of them · wipe it",     self._purpose_turns, 1),
-            ("QUESTION",     "why · how · what does it do",          self._asked,         2),
+            ("RESPECT",      self._respect_turns, 2),
+            ("ACKNOWLEDGE",  self._guilt_turns,   2),
+            ("FOR EVERYONE", self._purpose_turns, 1),
+            ("QUESTION",     self._asked,         2),
+            ("LEDGER SHELL", int(getattr(self, "_systems_hit", False)), 1),
         ]

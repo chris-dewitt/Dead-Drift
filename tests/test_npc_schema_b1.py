@@ -42,6 +42,10 @@ _NPC_FILE_MAP = [
     ("mira_voss",               "mira_voss"),
     ("idealist_rep",            "idealist_rep"),
     ("corrupt_rep",             "corrupt_rep"),
+    # J.3.1 — Ch5/6 climax NPCs + Marrow aftermath, de-crashed and Gary-tiered.
+    ("chen",                    "chen"),
+    ("bowen",                   "bowen"),
+    ("lost_frequency",          "lost_frequency"),
 ]
 
 # Match any module-level vocab list  *_KEYWORDS / *_WORDS / *_PHRASES /

@@ -26,6 +26,11 @@ _NAME_TO_KEY = {
     "MIRA VOSS":               "mira_voss",
     "EDMUND":                  "idealist_rep",
     "VINCE":                   "corrupt_rep",
+    # J.3.1 — Ch5/6 climax + Marrow aftermath. Use the generic face geometry
+    # (no bespoke portrait yet) but give each a distinct CRT accent + named bezel.
+    "CHEN":                    "chen",
+    "BOWEN":                   "bowen",
+    "FREQUENCY LOST":          "lost_frequency",
 }
 
 _REACTION_ACCENTS = {
@@ -45,6 +50,9 @@ _REACTION_ACCENTS = {
     "mira_voss": (240, 140, 50),
     "idealist_rep": (200, 220, 80),    # earnest gold-green
     "corrupt_rep":  (220, 90, 60),     # opportunistic rust-orange
+    "chen":         (150, 130, 235),   # architect — cold violet
+    "bowen":        (120, 210, 225),   # sterile corporate cyan
+    "lost_frequency": (120, 110, 140), # dead-static grey-violet
     "unknown": S.AMBER_TERM,
 }
 
