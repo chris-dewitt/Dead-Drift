@@ -603,18 +603,21 @@ _OUTCOME_COLOR = {
     NPCOutcome.IMPOUND: (215, 38, 38),
     NPCOutcome.EXPLOIT: (0, 210, 255),
     "abort":            (255, 140, 0),
+    "breach":           (255, 70, 70),
 }
 _OUTCOME_LABEL = {
     NPCOutcome.RELEASE: "NEGOTIATION SUCCESSFUL — VESSEL RELEASED",
     NPCOutcome.IMPOUND: "IMPOUND AUTHORIZED — DO NOT RESIST",
     NPCOutcome.EXPLOIT: "EXPLOIT CONFIRMED — SYSTEM COMPROMISED",
     "abort":            "CONNECTION SEVERED — HULL INTEGRITY PENALTY",
+    "breach":           "SILENT ALARM TRIPPED — BARGE DISPATCHED",
 }
 _OUTCOME_DETAIL = {
     NPCOutcome.RELEASE: "CHANNEL CLOSED - PROCEED",
     NPCOutcome.IMPOUND: "TERMINAL TERMINATED - BARGE INBOUND",
     NPCOutcome.EXPLOIT: "TRANSACTION REROUTED",
     "abort":            "STATIC BURST - DAMAGE APPLIED",
+    "breach":           "INTRUSION LOGGED - PURSUIT INBOUND",
 }
 
 _OUTCOME_BAX_LINE = {
@@ -622,6 +625,7 @@ _OUTCOME_BAX_LINE = {
     NPCOutcome.EXPLOIT: "BAX: Got 'em. I felt that one in the accounting stack.",
     NPCOutcome.IMPOUND: "BAX: Bad chord. They're hot now. Hands back on the stick.",
     "abort":            "BAX: You cut the line. Dramatic, yes. Expensive, also yes.",
+    "breach":           "BAX: Third strike. Alarm's screaming and a barge just went hot. STICK. NOW.",
 }
 
 
@@ -652,6 +656,15 @@ class Terminal:
         self._blocked_paths   = blocked_paths
         self._hardened_once   = False   # block fires at most once per terminal
         self._vault           = vocabulary_vault or getattr(npc, "_vault", None)
+
+        # J.2 — persistent shell / REPL mode + security ladder. `_mode` is
+        # None | "shell" | "repl"; while set, input routes to `_session`
+        # instead of the NPC. `_hack_fails` counts failed intrusions this
+        # terminal (SQL bounced off a non-vulnerable NPC, sudo/rm in a shell);
+        # the 3rd trips the alarm and aborts to flight.
+        self._mode: str | None = None
+        self._session = None
+        self._hack_fails = 0
 
         self._cursor_visible = True
         self._cursor_timer   = 0.0
@@ -730,11 +743,23 @@ class Terminal:
 
     def _submit(self):
         player_text = self._input.strip()
+        self._input = ""
+
+        # J.2 — persistent shell/REPL mode: input goes to the session, not the NPC.
+        if self._mode:
+            self._run_session_line(player_text)
+            return
+
         self._push("YOU", player_text)
+
+        # J.2 — typed `shell`/`sh`/`python`/`>>>` flips into a persistent mode
+        # (only if this NPC actually exposes one).
+        if self._try_enter_mode(player_text):
+            return
+
         # Courier inner-monologue mutter — meta-commentary on what they just typed
         npc_name = getattr(self.npc, "name", "")
         self._push("MUTTER", _pick_courier_quip(player_text, npc_name))
-        self._input = ""
 
         disp_before = self.npc.disposition
         outcome, response = self.npc.respond(player_text)
@@ -788,8 +813,113 @@ class Terminal:
 
         self._outcome = outcome
 
+        # J.2.4 — a real injection string that bounced off a non-vulnerable NPC
+        # is a failed hack. The 3rd trips the alarm and aborts to flight.
+        parsed = self.npc.last_parsed
+        if (parsed is not None and parsed.sql_inject
+                and outcome not in (NPCOutcome.EXPLOIT, NPCOutcome.RELEASE)):
+            if self._register_hack_fail():
+                return   # breach fired — terminal is already finishing
+
         if outcome != NPCOutcome.CONTINUE:
             self._finish(outcome)
+
+    # ------------------------------------------------------------------
+    # J.2 — shell / REPL persistent mode + security ladder
+    def _try_enter_mode(self, text: str) -> bool:
+        """If `text` is a mode-entry command, flip into that mode (or report
+        there's no such system here). Returns True if it consumed the input."""
+        low = text.lower().strip().lstrip("/")
+        if low in ("shell", "sh", "bash", "terminal"):
+            sess = self._npc_session("shell_session")
+            if sess is not None:
+                self._enter_mode("shell", sess)
+            else:
+                self._push("SYSTEM", "no shell on this channel — this contact "
+                           "isn't a system you can drop into.")
+            return True
+        if low in ("python", "python3", "py", "repl", ">>>"):
+            sess = self._npc_session("repl_session")
+            if sess is not None:
+                self._enter_mode("repl", sess)
+            else:
+                self._push("SYSTEM", "no interpreter on this channel.")
+            return True
+        return False
+
+    def _npc_session(self, attr: str):
+        fn = getattr(self.npc, attr, None)
+        if not callable(fn):
+            return None
+        try:
+            return fn()
+        except Exception:
+            return None
+
+    def _enter_mode(self, kind: str, session) -> None:
+        self._mode = kind
+        self._session = session
+        for line in session.banner():
+            self._push(kind.upper(), line)
+
+    def _exit_mode(self) -> None:
+        self._mode = None
+        self._session = None
+        self._push("SYSTEM", "[dropped back to comms]")
+
+    def _run_session_line(self, text: str) -> None:
+        kind = self._mode.upper()
+        self._push(kind, f"{self._session.prompt}{text}")
+        result = self._session.execute(text)
+        for line in result.output:
+            if line == "\x0c":      # `clear` marker — skip, don't print
+                continue
+            self._push(kind, line)
+        if result.exit:
+            self._exit_mode()
+            return
+        if result.exploit:
+            self._session_exploit(result.exploit_key)
+            return
+        if result.alarm:
+            self._register_hack_fail()
+
+    def _session_exploit(self, exploit_key: str) -> None:
+        """A shell/REPL break-in landed — route it through the EXPLOIT payout."""
+        kind = (self._mode or "").upper()
+        if hasattr(self.npc, "register_systems_exploit"):
+            self.npc.register_systems_exploit(kind, exploit_key)
+        else:
+            self.npc._current_path = f"{kind} EXPLOIT"
+        self._mode = None
+        self._session = None
+        self._exploit_flash = pygame.time.get_ticks() / 1000.0
+        self._outcome = NPCOutcome.EXPLOIT
+        self._finish(NPCOutcome.EXPLOIT)
+
+    _HACK_SNARK = [
+        "// intrusion attempt logged. that's one.",
+        "// second flag on your session. the system is watching now.",
+    ]
+
+    def _register_hack_fail(self) -> bool:
+        """Count a failed hack. Returns True if the 3rd one tripped the alarm
+        (the terminal is now finishing on a `breach`)."""
+        self._hack_fails += 1
+        if self._hack_fails >= 3:
+            self._trigger_security_breach()
+            return True
+        self._push("SYSTEM", self._HACK_SNARK[self._hack_fails - 1])
+        return False
+
+    def _trigger_security_breach(self) -> None:
+        if self._mode:
+            self._mode = None
+            self._session = None
+        self._push("SYSTEM", "⚠⚠ INTRUSION THRESHOLD EXCEEDED — SILENT ALARM TRIPPED ⚠⚠")
+        bus.emit(EVT_BAX_SPEAK, line=_OUTCOME_BAX_LINE["breach"])
+        self._outcome = "breach"
+        self._finish("breach")
 
     _EFFECT_NOTE = {
         "repair25": "hull +25",
@@ -982,7 +1112,8 @@ class Terminal:
             new_n  = int(self._tw_chars)
             # Emit a voice blip every 3 newly revealed characters (NPC lines only)
             if (new_n > prev_n and new_n % 3 == 0
-                    and speaker not in ("YOU", "SYSTEM", "ANALYSIS", "MUTTER")):
+                    and speaker not in ("YOU", "SYSTEM", "ANALYSIS", "MUTTER",
+                                        "SHELL", "REPL", "LEDGER")):
                 bus.emit(EVT_VOICE_CHAR, speaker=speaker)
 
     # ------------------------------------------------------------------
@@ -1156,18 +1287,20 @@ class Terminal:
         blocks: list[tuple[str, bool, bool, bool, bool, list[str]]] = []
         for i, (speaker, text) in enumerate(self._history):
             disp_text   = text[:int(self._tw_chars)] if i == self._tw_pos else text
-            is_npc      = speaker not in ("YOU", "SYSTEM", "ANALYSIS", "MUTTER", "LEDGER")
+            is_npc      = speaker not in ("YOU", "SYSTEM", "ANALYSIS", "MUTTER",
+                                          "LEDGER", "SHELL", "REPL")
             is_sys      = speaker == "SYSTEM"
             is_analysis = speaker == "ANALYSIS"
             is_mutter   = speaker == "MUTTER"
             is_ledger   = speaker == "LEDGER"
-            wc = wrap_cols_sm if (is_analysis or is_mutter or is_ledger) else wrap_cols
+            is_session  = speaker in ("SHELL", "REPL")
+            wc = wrap_cols_sm if (is_analysis or is_mutter or is_ledger or is_session) else wrap_cols
             blocks.append((speaker, is_npc, is_sys, is_analysis, is_mutter,
                            self._wrap(disp_text, wc)))
 
         def _block_h(bl: tuple) -> int:
             spk, _, is_sys, is_analysis, is_mutter, wrapped = bl
-            if is_analysis or is_mutter or spk == "LEDGER":
+            if is_analysis or is_mutter or spk in ("LEDGER", "SHELL", "REPL"):
                 return len(wrapped) * lh_sm + GAP // 2
             return (0 if is_sys else lh) + len(wrapped) * lh + GAP
 
@@ -1193,6 +1326,16 @@ class Terminal:
                     surface.blit(
                         font_sm.render(f"  $ {line}", True, (0, 200, 120)),
                         (dl_x + 4, y))
+                    y += lh_sm
+                y += GAP // 2
+
+            elif speaker in ("SHELL", "REPL"):
+                # J.2 — shell / REPL I/O, monospace-feel terminal green (shell)
+                # or interpreter cyan (repl).
+                col = (120, 230, 140) if speaker == "SHELL" else (130, 205, 255)
+                for line in wrapped:
+                    surface.blit(font_sm.render(f"  {line}", True, col),
+                                 (dl_x + 4, y))
                     y += lh_sm
                 y += GAP // 2
 
@@ -1284,9 +1427,17 @@ class Terminal:
         if self._input:
             pygame.draw.rect(surface, (0, 200, 85), inp_rect, 1)
         cursor = "█" if self._cursor_visible else " "
-        surface.blit(
-            font.render(f"  INJECT // {self._input}{cursor}", True, (0, 236, 94)),
-            (M + 8 + shake_dx, inp_y + 6 + shake_dy))
+        # J.2 — the prompt visibly changes in shell/REPL mode (real prompt state).
+        if self._mode and self._session is not None:
+            prompt_col = (120, 230, 140) if self._mode == "shell" else (130, 205, 255)
+            surface.blit(
+                font.render(f"  {self._session.prompt}{self._input}{cursor}",
+                            True, prompt_col),
+                (M + 8 + shake_dx, inp_y + 6 + shake_dy))
+        else:
+            surface.blit(
+                font.render(f"  INJECT // {self._input}{cursor}", True, (0, 236, 94)),
+                (M + 8 + shake_dx, inp_y + 6 + shake_dy))
 
         # ── Live keyword scan strip ──────────────────────────────────
         scan_y = inp_y + 38
@@ -1334,8 +1485,15 @@ class Terminal:
 
         # ── Active path hint + turn counter ─────────────────────────
         hint_y = scan_y + lh_sm + 3
-        hint   = self._build_hint()
-        surface.blit(font_sm.render(hint, True, (72, 130, 82)), (M, hint_y))
+        if self._mode:
+            # J.2 — visible mode indicator: which mode, how to leave.
+            label = "SHELL MODE" if self._mode == "shell" else "PYTHON REPL"
+            mcol  = (120, 230, 140) if self._mode == "shell" else (130, 205, 255)
+            hint  = f"● {label} — type `exit` to return to comms"
+            surface.blit(font_sm.render(hint, True, mcol), (M, hint_y))
+        else:
+            hint = self._build_hint()
+            surface.blit(font_sm.render(hint, True, (72, 130, 82)), (M, hint_y))
         turn_s = font_sm.render(f"TURN {self.npc._turn}", True, (68, 110, 68))
         surface.blit(turn_s, (W - M - turn_s.get_width(), hint_y))
 

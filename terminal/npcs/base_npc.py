@@ -151,6 +151,38 @@ class BaseNPC(ABC):
         counter-offer). Never lets patience go negative."""
         self._patience = max(0, self._patience - int(n))
 
+    # ------------------------------------------------------------------
+    # J.2 — coding-exploit hooks. Curated NPCs override shell_session /
+    # repl_session to expose a real systems path (a fake shell or a Python
+    # REPL); everyone else returns None, so typing `shell`/`python` at them
+    # just reports "no system on this channel." The Terminal drives the
+    # session and calls register_systems_exploit() when the player lands the
+    # break-in, so the win flows through the normal EXPLOIT payout.
+    def shell_session(self):
+        return None
+
+    def repl_session(self):
+        return None
+
+    def register_systems_exploit(self, kind: str, exploit_key: str) -> str:
+        """Mark a shell/REPL break-in: set the winning path, emit the exploit
+        event, best-effort vault record. Returns the dossier path label."""
+        path = f"{kind} EXPLOIT"
+        self._current_path = path
+        self._systems_hit = True
+        try:
+            from core.event_bus import bus, EVT_NLP_EXPLOIT
+            bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key=exploit_key)
+        except Exception:
+            pass
+        vault = getattr(self, "_vault", None)
+        if vault is not None and hasattr(vault, "record"):
+            try:
+                vault.record(type(self).__name__.lower(), exploit_key.upper())
+            except Exception:
+                pass
+        return path
+
     def _with_cargo_dialogue(self, line: str) -> str:
         """Append one cargo-aware flavor line per encounter when context allows."""
         if getattr(self, "_cargo_dialogue_used", False):

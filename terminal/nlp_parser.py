@@ -128,8 +128,35 @@ _INTENT_PATTERNS: list[tuple[str, list[str]]] = [
                        "purpose", "void", "entropy", "existence"]),
 ]
 
+# J.2.1 — SQL / code-injection signatures. Each entry is a recognisable
+# injection SHAPE, not a bare keyword: "union" only counts before SELECT
+# (players legitimately complain about the Union), tautologies only with an
+# "=", SQL comments only right after a quote. That precision matters because
+# TK-9 and Morwenna fire an EXPLOIT on any truthy sql_inject — a false match
+# would hand players a free win. The leading boundary class also lets a quote
+# or ";" that begins an injection ("; DROP TABLE", "admin'--") count as a
+# boundary without a separate stacked-query branch.
+_SQL_SIGNATURES = [
+    r"DROP\s+TABLE",
+    r"TRUNCATE(?:\s+TABLE)?",
+    r"DELETE\s+FROM",
+    r"INSERT\s+INTO",
+    r"UPDATE\s+\w+\s+SET",
+    r"SELECT\s+\*",                                   # SELECT * (star is unambiguous)
+    r"SELECT\s+\w+(?:\s*,\s*\w+)*\s+FROM\b",          # SELECT col[,col] FROM …
+    r"UNION(?:\s+ALL)?\s+SELECT\b",                   # UNION [ALL] SELECT
+    r"(?:OR|AND)\s+['\"]?\w+['\"]?\s*=\s*['\"]?\w+['\"]?",  # OR 1=1 / AND 'a'='a'
+    r"'\s*OR\s*'",                                    # ' OR '  auth-bypass
+    r"'\s*=\s*'",                                     # '='
+    r"['\"]\s*(?:--|#)",                              # quote then SQL comment (admin'--)
+    r"\bEXEC\s*\(",                                   # EXEC(
+]
+# Zero-width left boundary: start-of-string, or after whitespace/delimiter, or a
+# word char glued to a quote (so `admin'--` and `x' OR 1=1` count while `for`
+# and `power` never leak an embedded "or").
+_SQL_BOUNDARY = r"(?:^|(?<=[\s(`'\";])|(?<=\w)(?=['\"]))"
 _SQL_PATTERN = re.compile(
-    r"(?:^|\b)(DROP\s+TABLE|SELECT\s+[\*\w]|DELETE\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|TRUNCATE)(?=[\s;.,)]|$).*",
+    _SQL_BOUNDARY + r"(" + "|".join(_SQL_SIGNATURES) + r")[^\n]*",
     re.IGNORECASE,
 )
 
@@ -207,7 +234,11 @@ class NLPParser:
 
     def _extract_sql(self, text: str) -> str | None:
         m = _SQL_PATTERN.search(text)
-        return m.group(0).strip() if m else None
+        if not m:
+            return None
+        # Return from the signature (group 1) onward so the ANALYSIS line shows
+        # the injection, not the leading boundary char.
+        return text[m.start(1):m.end()].strip() or None
 
     # ------------------------------------------------------------------
     def is_hostile(self, parsed: ParsedInput) -> bool:

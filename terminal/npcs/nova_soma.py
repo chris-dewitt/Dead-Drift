@@ -296,6 +296,7 @@ class NovaSomaCollections(BaseNPC):
     def get_path_progress(self) -> list[tuple[str, int, int]]:
         return [
             ("SQL EXPLOIT", int(self._sql_hit),         1),
+            ("REPL BREAK-IN", int(getattr(self, "_systems_hit", False)), 1),
             ("PARADOX",     int(self._paradox_hit),     1),
             ("POLICY",      min(self._policy_cites, 2), 2),
             ("HARDSHIP",    int(self._hardship_used),   1),
@@ -304,7 +305,18 @@ class NovaSomaCollections(BaseNPC):
     def exploits(self) -> dict[str, str]:
         return {
             "sql_injection":     "Drop tables / OR 1=1 / SELECT * — bot crashes, defaults to handled",
+            "repl_injection":    "Type `python`, then `import os` / eval() — sandbox has no walls",
             "paradox_loop":      "'This statement is false' / 'I have already paid' — survey-logic loop",
             "policy_citation":   "Cite any policy or form code 2× — auto-routes to compliant",
             "hardship_clause":   "Invoke wellness/hardship/mental-health → 30-day pause",
         }
+
+    # J.2.3 — the wellness bot ships a "friendly" Python sandbox with no walls.
+    # Any real exploit shape (import, eval, __class__, os.system) breaks out.
+    def repl_session(self):
+        if getattr(self, "_repl", None) is None:
+            from terminal.repl_session import ReplSession
+            self._repl = ReplSession(
+                exploit_key="repl_injection",
+                motd="NOVA SOMA WELLNESS SANDBOX v3.1 — please be kind to the interpreter :)")
+        return self._repl

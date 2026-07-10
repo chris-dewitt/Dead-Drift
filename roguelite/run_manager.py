@@ -1338,6 +1338,40 @@ class RunManager:
                 barge.on_terminal_outcome("impound")
             return
 
+        # J.2.4 — security ladder: the 3rd failed hack tripped the silent alarm.
+        # The barge IS the punishment (no extra impound hull penalty). Dump the
+        # player back into flight to face an immediate chase; do NOT advance the
+        # sector. Carrying the EncryptedDrive pulls a Compliance drone too (cap).
+        if outcome == "breach":
+            self._active_terminal = None
+            self._pending_advance = False
+            self._spawn_barge(immediate_chase=True)
+            cargo = getattr(self._ship, "cargo", None) if self._ship is not None else None
+            if cargo is not None and type(cargo).__name__ == "EncryptedDrive":
+                cap = 1 if self._current_chapter() <= 5 else 2
+                if len(self._compliance_vessels) < cap:
+                    from antagonists.compliance_vessel import ComplianceVessel
+                    side = random.choice(("left", "right", "top", "bottom"))
+                    if side == "left":
+                        x, y = -60.0, random.uniform(80, S.FLIGHT_H - 80)
+                    elif side == "right":
+                        x, y = S.SCREEN_W + 60.0, random.uniform(80, S.FLIGHT_H - 80)
+                    elif side == "top":
+                        x, y = random.uniform(80, S.SCREEN_W - 80), -60.0
+                    else:
+                        x, y = random.uniform(80, S.SCREEN_W - 80), S.FLIGHT_H + 60.0
+                    self._compliance_vessels.append(ComplianceVessel(x, y, self))
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "Alarm's live and a barge just lit its engines. That's on us. FLY.",
+                "Third strike. They logged the intrusion and sent the repo. Hands on the stick.",
+                "You poked the system one time too many. Barge inbound. MOVE.",
+            ]))
+            if self._intercepting_barge is not None:
+                barge = self._intercepting_barge
+                self._intercepting_barge = None
+                barge.on_terminal_outcome("impound")
+            return
+
         # Deduct any bribe the player paid
         npc = self._active_terminal.npc if self._active_terminal else None
         bribe_paid = npc.bribe_cost() if npc else 0
