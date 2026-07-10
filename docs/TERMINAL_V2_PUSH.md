@@ -1,7 +1,7 @@
 # THE TERMINAL V2 PUSH — "Make The Terminal Fun Again"
 
 **Started:** July 9 2026
-**Status:** J.1 (Money) shipped `[~]` — J.2 (Systems) next
+**Status:** J.2 (Systems) shipped `[~]` — J.3 (Parity) next
 **Scope:** Open-ended (no time cap)
 **Locked spec:** [`MakeTheTerminalFunAgain.md`](MakeTheTerminalFunAgain.md) — the *what*. This doc is the *how*: phasing, resolved implementer decisions, checkboxes.
 **North star for all agents:** this supersedes `DELIVERY_V2_PUSH.md` (complete July 8 2026) for active work.
@@ -129,31 +129,46 @@ counter-offer), `test_kress_intel_charges` (credits down + debt up),
 
 ## Phase J.2 — SYSTEMS (Stream 2: the coding-exploit framework)
 
-### J.2.1 SQL regex expansion — [ ]
+### J.2.1 SQL regex expansion — [~]
 Materially expand `_SQL_PATTERN`: `OR 1=1`, `--`/`#` comments, `' UNION
 SELECT`, `'='`, tautologies, stacked queries. Still pattern-based, not an
-engine. Real injection strings match; `test_sql_parser_*` pins them.
+engine. Real injection strings match; `test_sql_parser_j2` pins them (14 real
+injections match, 13 innocent lines don't; TK-9/Morwenna exploit-on-injection
+but not on a Union complaint). Zero-width boundary catches `admin'--` while
+`for`/`power` never leak an embedded "or".
 
-### J.2.2 Shell mode (persistent, visible) — [ ]
-A reusable `ShellSession` (whitelist parser, no OS shell): `ls`, `cat`,
-`grep`, `cd` (fake dirs), `whoami`, `pwd`, `sudo` (fail/easter-egg). Per-NPC
-hand-authored filesystem; files reveal exploit hints. Typed `shell`/`sh`
-flips the terminal into the mode with a changed prompt + visible hint + `exit`
-(decision #2). `test_shell_whitelist_*`: only allowed commands return output.
+### J.2.2 Shell mode (persistent, visible) — [~]
+Reusable `ShellSession` (whitelist parser, no OS shell): `ls`, `cat`, `grep`,
+`cd` (fake dirs), `whoami`, `pwd`, `help`; `sudo`/`rm`/`kill`/`chmod`/denied →
+alarm. Per-NPC hand-authored filesystem; reading the loot file is the exploit.
+Typed `shell`/`sh` flips the terminal into the mode with a changed prompt +
+visible hint + `exit` (decision #2). Wired: **TK-9** (compliance FS with a
+`/etc/compliance.conf → key` discovery loop) and the **Toll gate**.
+`test_shell_whitelist_j2`: only allowed commands return output.
 
-### J.2.3 Python REPL mode — [ ]
-A reusable `ReplSession`: `>>>` prompt via typed `python`/`>>>`. `ast.parse`
-for real syntax (real `SyntaxError`), safe-arithmetic eval for harmless
-expressions, AST walk for exploit shapes (`import os`, `__class__`, `eval`,
-`os.system`, pickle) → EXPLOIT for the designated NPC (decision #5). Bowen +
-Nova Soma are the heroes (decision #6). `test_repl_exploit_*`: real Python
-triggers EXPLOIT; garbage gets a real syntax error.
+### J.2.3 Python REPL mode — [~]
+Reusable `ReplSession`: `>>>` prompt via typed `python`/`>>>`. `ast.parse` for
+real syntax (real `SyntaxError`), a hand-rolled arithmetic evaluator for
+harmless expressions (**no `eval`/`exec` anywhere — a test AST-walks the module
+to prove it**), AST walk for exploit shapes (`import os`, `__class__`, `eval`,
+`os.system`, pickle) → EXPLOIT (decision #5). DoS-guarded (`2**9999` →
+Overflow). **Nova Soma** is the wired hero (decision #6); **Bowen** gets it in
+J.3 once de-crashed. `test_repl_exploit_j2`: real Python triggers EXPLOIT;
+garbage gets a real syntax error.
 
-### J.2.4 Security ladder + alarm — [ ]
-Per-session fail counter (resets each open). 1–2 = NPC snark + CONTINUE. 3rd =
-alarm (5s audio + HUD flash + Bax) + `_spawn_barge(immediate_chase=True)` (+
-Compliance drone if EncryptedDrive) + **abort to flight** (decision #4).
-`test_systems_security_*`: 3rd fail spawns barge (+ compliance if drive).
+### J.2.4 Security ladder + alarm — [~]
+Per-terminal fail counter (resets each open). A real injection that bounced off
+a non-vulnerable NPC, or `sudo`/`rm` in a shell, is a failed hack. 1–2 = snark;
+3rd = silent alarm + Bax + new `breach` outcome →
+`_spawn_barge(immediate_chase=True)` (+ Compliance drone if EncryptedDrive,
+cap-respecting) + **abort to flight, no sector advance** (decision #4). Landing
+the exploit never counts as a fail. `test_systems_security_j2`: 3rd fail →
+breach → run_manager chase + drone.
+
+**Note on shell/REPL heroes:** J.2 wires the framework to NPCs that currently
+work (TK-9/Toll shell, Nova Soma REPL). Chen/Bowen crash on first input until
+J.3.1 fixes `parsed.text`→`.raw`; their shell/REPL paths land there (spec merge
+gate: no systems path ships on a crashing NPC).
 
 ---
 
