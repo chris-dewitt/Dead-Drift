@@ -30,6 +30,11 @@ class BaseNPC(ABC):
         self._log: list[tuple[str, str]] = []   # (speaker, text)
         self.last_parsed: ParsedInput | None = None
         self._current_path: str = ""            # set by subclass during _evaluate
+        # J.1 — a priced line stages a transaction here; the Terminal applies
+        # it against the run wallet after respond(). Only ever set when the
+        # NPC has already confirmed the player can afford it (via _ctx credits),
+        # so the Terminal never has to second-guess affordability.
+        self._pending_txn: dict | None = None
 
     # ------------------------------------------------------------------
     @abstractmethod
@@ -120,6 +125,31 @@ class BaseNPC(ABC):
     def bribe_cost(self) -> int:
         """Credits the player owes for a successful bribe. Override in subclasses."""
         return 0
+
+    # ------------------------------------------------------------------
+    # J.1 — priced transactions (the terminal stops lying about money)
+    def _credits(self) -> int:
+        """Player's spendable run credits, injected into _ctx each turn."""
+        return int(getattr(self, "_ctx", {}).get("credits", 0))
+
+    def stage_transaction(self, amount: int, *, dual_ledger: bool = True,
+                          effect: str | None = None,
+                          label: str = "TERMINAL") -> None:
+        """Record a charge the Terminal will apply after respond(). Call this
+        only once you've confirmed affordability (see `_credits`)."""
+        self._pending_txn = {
+            "amount": int(amount), "dual_ledger": bool(dual_ledger),
+            "effect": effect, "label": label,
+        }
+
+    def take_pending_transaction(self) -> dict | None:
+        txn, self._pending_txn = self._pending_txn, None
+        return txn
+
+    def penalize_patience(self, n: int = 1) -> None:
+        """Spend patience outside the normal per-turn tick (e.g. a broke
+        counter-offer). Never lets patience go negative."""
+        self._patience = max(0, self._patience - int(n))
 
     def _with_cargo_dialogue(self, line: str) -> str:
         """Append one cargo-aware flavor line per encounter when context allows."""

@@ -975,6 +975,9 @@ class RunManager:
     # ------------------------------------------------------------------
     def _build_run_context(self) -> dict:
         ctx: dict = {"sector_index":    self._sector_index,
+                     # J.1 — spendable run credits, so NPCs can honestly
+                     # decide sale-vs-counter-offer on priced paths.
+                     "credits":         getattr(self, "_sector_credits", 0),
                      "run_credits":     self._run_debt_reduced,
                      "run_snaps":       self._run_snaps,
                      "run_slingshots":  self._run_slingshots,
@@ -1033,9 +1036,41 @@ class RunManager:
             npc,
             blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset(),
             vocabulary_vault=getattr(self, "_vault", None),
+            econ=self._make_terminal_economy(),
         )
         self._install_terminal(terminal)
         return terminal
+
+    def _make_terminal_economy(self):
+        """J.1 — a wallet/ship adapter so NPC-priced lines move real numbers.
+        Deducting run credits also shaves the sector's recovered-debt tally so
+        the HUD and the payout stay consistent (same pattern as bribes)."""
+        from terminal.economy import TerminalEconomy
+
+        def _deduct(amount: int) -> None:
+            self._sector_credits   = max(0, self._sector_credits - amount)
+            self._run_debt_reduced = max(0, self._run_debt_reduced - amount)
+
+        def _repair(amount: float) -> None:
+            if self._ship is not None:
+                self._ship.repair(amount)
+
+        return TerminalEconomy(
+            get_credits=lambda: self._sector_credits,
+            deduct_credits=_deduct,
+            add_debt=lambda amt, label: self.meta.add_debt(amt, source=label),
+            repair=_repair,
+            grant_harmonica=self.grant_harmonica_charge,
+        )
+
+    def grant_harmonica_charge(self) -> None:
+        """J.1.4 — Kress stims bank an extra harmonica heal. The critical-hull
+        blues lick (Aliveness F.4) now mends +5 more hull next time it fires."""
+        self._harm_heal_total = float(getattr(self, "_harm_heal_total", 5.0)) + 5.0
+        bus.emit(EVT_BAX_SPEAK, line=random.choice([
+            "Stims banked. Next time I pick up the harmonica, she mends deeper.",
+            "That's a spare heal in the tank. Don't make me use it.",
+        ]))
 
     # ------------------------------------------------------------------
     def _install_terminal(self, terminal: Terminal) -> None:
@@ -1337,9 +1372,11 @@ class RunManager:
         elif outcome == "impound":
             self._last_winning_path = ""  # reset on loss
 
-        # Grant debt reduction based on how the negotiation went
+        # Grant debt reduction based on how the negotiation went.
+        # J.1 — locked payouts: EXPLOIT 5,000 (was 9,000), RELEASE 2,500.
+        from terminal.economy import EXPLOIT_PAYOUT, RELEASE_PAYOUT
         if outcome == "exploit":
-            bonus = 9000
+            bonus = EXPLOIT_PAYOUT
             self.meta.pay_off(bonus, source="EXPLOIT")
             self._run_debt_reduced += bonus
             self._sector_credits   += bonus
@@ -1350,7 +1387,7 @@ class RunManager:
             ]))
         elif outcome == "release" and bribe_paid == 0:
             # Only give the full release bonus when no bribe was needed
-            bonus = 2500
+            bonus = RELEASE_PAYOUT
             self.meta.pay_off(bonus, source="NEGOTIATION")
             self._run_debt_reduced += bonus
             self._sector_credits   += bonus
@@ -1855,6 +1892,7 @@ class RunManager:
             npc,
             blocked_paths=frozenset({self._last_winning_path}) if self._last_winning_path else frozenset(),
             vocabulary_vault=getattr(self, "_vault", None),
+            econ=self._make_terminal_economy(),
         )
         self._install_terminal(terminal)
 

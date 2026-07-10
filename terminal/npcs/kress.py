@@ -2,6 +2,7 @@ from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
+from terminal.economy import EFFECT_REPAIR_25, EFFECT_STIM
 from core.event_bus import bus, EVT_NLP_EXPLOIT, EVT_BAX_SPEAK
 
 
@@ -83,6 +84,67 @@ class Kress(BaseNPC):
             "marrow_sellout":  "Sell Marrow's Roost location (irreversible)",
         }
 
+    # ── J.1 priced menus (prose price == charged price; 0 == free tip) ──
+    def _intel_menu(self, sector: int) -> list[tuple[str, int]]:
+        seize_sector = min(sector + 1, 9) + 1
+        return [
+            ("Next sector: Local 404 patrol is light. Dispatcher is on lunch. "
+             "Two thousand credits, on your tab. Already done. Drive safe.", 2000),
+            ("I am hearing chatter. Repo barge in your area has bad torch — "
+             "module unbolt cooldown is doubled. Free tip, this one. "
+             "Because you asked nicely. Now go.", 0),
+            ("Sector ahead has gravity well shifting position every 40 seconds. "
+             "Union does not have this on charts yet. Now you do. "
+             "Twelve hundred credits. Tab. *click*", 1200),
+            ("Gary is two sectors behind you. Big, tired, mentions quotas. "
+             "Avoid Sector boundary. One thousand eight hundred credits. Tab.", 1800),
+            ("Scanner sweep scheduled in four minutes. Union passive ping — "
+             "they look for mass signature, not heat. Kill thrust, drift. "
+             "They will pass right over you. Free advice. You are welcome.", 0),
+            ("There is debris corridor between here and next jump. Not on any "
+             "chart. Do not go through the middle. Go around. "
+             "Three thousand credits. This one is worth it.", 3000),
+            ("Claims division is filing paperwork to seize any cargo in Sector "
+             f"{seize_sector}. Something about form 34-A. Nobody knows what "
+             "form 34-A is. They are still filing it. Fifteen hundred. Tab.", 1500),
+            ("Barge dispatcher is rotating assignments. The one headed your way "
+             "is new — first week. They hesitate before CLAMP state. "
+             "Use this. Twenty-five hundred credits. On tab. Go.", 2500),
+            ("There is a fuel cache at the boundary. Old miner's stash, off every "
+             "map. He owes me favour. It is yours now. Two thousand. Tab. *click*", 2000),
+            ("Union comms are quiet today. That is bad sign — they coordinate on "
+             "secure channel I cannot hear. Be careful. This one is free. "
+             "Because I am worried.", 0),
+        ]
+
+    _CONTRABAND_MENU = [
+        ("Jammer package, twenty-second barge comm blackout. "
+         "Five thousand. On tab. Already in your fuel mix. *click*", 5000, None),
+        ("Hull patch, salvaged from Volkov's last job. Eight thousand, but it is "
+         "good steel and I weld it in now. Tab is bigger. So is your hull. Goodbye.",
+         8000, EFFECT_REPAIR_25),
+        ("Stims for your droid. Bax will be... let us say 'enthusiastic'. "
+         "Three thousand. He will not thank you, but the next bad chord, he mends "
+         "deeper. *click*", 3000, EFFECT_STIM),
+    ]
+
+    def _sell(self, line: str, price: int, *, effect, path: str) -> tuple[str, str]:
+        """J.1 — a priced Kress line. Free tips just release. Priced lines charge
+        both ledgers when affordable; when broke, a counter-offer (the CONTINUE
+        already costs the normal −1 patience upstream)."""
+        self._current_path = path
+        if price <= 0:
+            return NPCOutcome.RELEASE, line
+        if self._credits() >= price:
+            self.stage_transaction(price, dual_ledger=True, effect=effect,
+                                   label=f"KRESS {path}")
+            return NPCOutcome.RELEASE, line
+        return NPCOutcome.CONTINUE, (
+            f"*static* You have {self._credits():,} on you. This is {price:,}. "
+            "Kress is not charity, my friend. Bring credits, or bring me something "
+            "else to sell. Talk again when your account is less embarrassing."
+        )
+
     # ------------------------------------------------------------------
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         raw = parsed.raw.lower()
@@ -141,58 +203,17 @@ class Kress(BaseNPC):
                 "Just do not tell him I said his name on open channel. *click*"
             )
 
-        # INTEL REQUEST
+        # INTEL REQUEST — J.1: priced tips charge both ledgers ("the tab").
         if any(w in raw for w in self._INTEL_KEYWORDS):
             self._intel_count += 1
             sector = self._ctx.get("sector_index", 0)
-            return NPCOutcome.RELEASE, random.choice([
-                "Next sector: Local 404 patrol is light. Dispatcher is on lunch. "
-                "Two thousand credits, on your tab. Already done. Drive safe.",
-                "I am hearing chatter. Repo barge in your area has bad torch — "
-                "module unbolt cooldown is doubled. Free tip, this one. "
-                "Because you asked nicely. Now go.",
-                "Sector ahead has gravity well shifting position every 40 seconds. "
-                "Union does not have this on charts yet. Now you do. "
-                "Twelve hundred credits. Tab. *click*",
-                "Gary is two sectors behind you. Big, tired, mentions quotas. "
-                "You probably know Gary. He is not fast but he is persistent. "
-                "Avoid Sector boundary. One thousand eight hundred credits. Tab.",
-                "Scanner sweep scheduled in four minutes. Union passive ping — "
-                "they are looking for mass signature, not heat. "
-                "Kill thrust, drift. They will pass right over you. Free advice. "
-                "You are welcome.",
-                "There is debris corridor between here and next jump. "
-                "Not on any chart I have found. Natural formation, possibly old station. "
-                "Do not go through the middle. Go around. "
-                "Three thousand credits. This one is worth it.",
-                "Claims division is filing paperwork to seize any cargo in Sector "
-                f"{min(sector + 1, 9) + 1}. Something about form 34-A. "
-                "I do not know what form 34-A is. Neither does anyone I have asked. "
-                "They are still filing it. Fifteen hundred credits. Tab.",
-                "Barge dispatcher is rotating assignments. The one headed your way "
-                "is new — first week. They will hesitate before engaging CLAMP state. "
-                "Use this. Twenty-five hundred credits. On tab. Go.",
-                "There is a fuel cache at the boundary. Old miner's stash. "
-                "Not on any map because the miner did not want it on any map. "
-                "He owes me favour. It is yours now. Two thousand. Tab. *click*",
-                "Union comms are quiet today. That is bad sign, not good sign. "
-                "Quiet means they are coordinating on secure channel. "
-                "I cannot hear secure channel. I only know it exists. "
-                "Be careful. This one is free. Because I am worried.",
-            ])
+            line, price = random.choice(self._intel_menu(sector))
+            return self._sell(line, price, effect=None, path="INTEL")
 
-        # CONTRABAND REQUEST
+        # CONTRABAND REQUEST — J.1: hull patch mends +25, stims bank a charge.
         if any(w in raw for w in self._CONTRABAND_WORDS):
-            return NPCOutcome.RELEASE, random.choice([
-                "Jammer package, twenty-second barge comm blackout. "
-                "Five thousand. On tab. Already in your fuel mix. *click*",
-                "Hull patch, salvaged from Volkov's last job. "
-                "Eight thousand, but it is good steel. I throw it in. "
-                "Tab is bigger now. So is your hull. Goodbye.",
-                "Stims for your droid. Bax will be... let us say 'enthusiastic' "
-                "for next ten minutes. Three thousand. "
-                "He will not thank you. *click*",
-            ])
+            line, price, effect = random.choice(self._CONTRABAND_MENU)
+            return self._sell(line, price, effect=effect, path="CONTRABAND")
 
         # FRIENDLY — wear into regular status
         compound = parsed.sentiment.get("compound", 0.0)

@@ -149,25 +149,36 @@ class MiraVoss(BaseNPC):
                 "*evaluating*  Keep talking.  Convince me you've held a torch.",
             ])
 
-        # Credits — ≥700 → solid patch
+        # Credits — offer ≥700 → solid patch. J.1: off-books medic, so this
+        # deducts run credits ONLY (no meta debt). Charged at the fixed 700
+        # price; the patch is Mira's own repair(45). Broke → counter-offer.
         if parsed.amount is not None and parsed.amount >= _PAY_AMOUNT:
+            if self._credits() < _PAY_AMOUNT:
+                return NPCOutcome.CONTINUE, (
+                    f"*stops welding*  You SAID {parsed.amount}.  Your account "
+                    f"says {self._credits()}.  I don't do IOUs, courier — the "
+                    "tab's for Kress, not for me.  Come back with the cash, or "
+                    "trade me intel or cargo.  I'm busy."
+                )
             self._paid = True
             self._current_path = "PAID"
+            self.stage_transaction(_PAY_AMOUNT, dual_ledger=False, effect=None,
+                                   label="MIRA REPAIR")
             bus.emit(EVT_NLP_EXPLOIT, npc="mira_voss", exploit_key="paid_repair")
             if self._vault:
                 self._vault.record("mira_voss", "PAID_REPAIR")
             self._do_repair()
             return NPCOutcome.RELEASE, random.choice([
-                f"{parsed.amount} credits.  Done.  Patch sealed, "
+                f"{_PAY_AMOUNT} credits.  Done.  Patch sealed, "
                 "pressure back to nominal.  Pleasure doing business.  "
                 "Don't fly into anything for the next ten minutes — "
                 "the bond's still curing.",
 
                 f"Cash.  My favourite language.  "
                 f"Hull's patched, weld's good.  "
-                f"{parsed.amount} cr in the box.  Off you go.",
+                f"{_PAY_AMOUNT} cr in the box.  Off you go.",
 
-                f"Right then.  {parsed.amount} cr accepted.  "
+                f"Right then.  {_PAY_AMOUNT} cr accepted.  "
                 "Drone's already on the hull.  Done in twenty seconds.  "
                 "*welding sound*  ...Done.  Stay sharp out there.",
             ])
