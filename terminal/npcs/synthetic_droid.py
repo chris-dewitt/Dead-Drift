@@ -71,6 +71,7 @@ class SyntheticDroid(BaseNPC):
         return {
             "paradox_crash":     "Feed it two self-referential paradoxes",
             "sql_inject":        "Type a DROP TABLE command into the manifest",
+            "shell_override":    "Type `shell`, follow /etc/compliance.conf to the key",
             "formal_loophole":   "Use formal bureaucratic language to invoke Exemption 12-C",
             "override_code":     "Invoke maintenance or override mode",
             "friendship":        "Appeal to TK-9's buried humanity (3 turns)",
@@ -253,12 +254,38 @@ class SyntheticDroid(BaseNPC):
     def get_path_progress(self) -> list[tuple[str, int, int]]:
         return [
             ("SQL INJECT",      int(self._sql_hit),        1),
+            ("SHELL BREAK-IN",  int(getattr(self, "_systems_hit", False)), 1),
             ("OVERRIDE CODE",   int(self._override_hit),   1),
             ("PARADOX CRASH",   self._paradox_count,       2),
             ("EMP. OF MONTH",   int(self._emp_month_hit),  1),
             ("FRIENDSHIP",      self._friendship_pts,      3),
             ("FORMAL LOOPHOLE", self._compliance_pts,      3),
         ]
+
+    # J.2.2 — TK-9 exposes a read-only compliance shell. The break-in is a
+    # discovery loop: /README warns you're monitored, /etc/compliance.conf
+    # names the override-key path, and `cat`-ing that key crashes enforcement.
+    def shell_session(self):
+        if getattr(self, "_shell", None) is None:
+            from terminal.shell_session import ShellSession
+            self._shell = ShellSession(
+                host="tk9-compliance", user="courier",
+                motd="UNIT TK-9 // COMPLIANCE FILESYSTEM (read-only audit mount)",
+                files={
+                    "/README": "If you are reading this, you are already flagged.\n"
+                               "Productivity is freedom. Deviation is logged.",
+                    "/var/manifest/current.log": "vessel: UNREGISTERED\n"
+                               "violations: 17\nstatus: PENDING IMPOUND",
+                    "/var/log/loyalty.log": "social module reboots: 4102\n"
+                               "last genuine emotion: [NOT FOUND]",
+                    "/etc/compliance.conf": "impound_on_default = true\n"
+                               "loyalty_subroutine = unstable\n"
+                               "override_key_path = /var/keys/enforcement.key",
+                },
+                loot={"/var/keys/enforcement.key": "shell_override"},
+                denied={"/root", "/sys"},
+            )
+        return self._shell
 
     def _loyalty_glitch(self) -> str:
         return random.choice([

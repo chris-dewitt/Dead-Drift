@@ -290,6 +290,7 @@ class TollAuthority(BaseNPC):
             ("PAPERWORK",   min(self._paperwork_turns, 1), 1),
             ("UNION GRIPE", min(self._union_turns, 2), 2),
             ("LOW BRIBE",   min(self._low_bribe_tries, 1), 1),
+            ("GATE SHELL",  int(getattr(self, "_systems_hit", False)), 1),
         ]
 
     def exploits(self) -> dict[str, str]:
@@ -298,4 +299,27 @@ class TollAuthority(BaseNPC):
             "PAPERWORK_EXPLOIT": "Mention forms/permits/IDs — 50% wave-through",
             "LOW_BRIBE":         "Offer 500/1000 — 40% secret acceptance",
             "UNION_SYMPATHY":    "Gripe about Local 404 — he hates them too",
+            "gate_shell":        "Type `shell`; the gate barrier control is world-writable",
         }
+
+    # J.2.2 — the toll gate runs an ancient control box. Drop into `shell`,
+    # find the barrier controller, read its passphrase file → gate opens itself.
+    def shell_session(self):
+        if getattr(self, "_shell", None) is None:
+            from terminal.shell_session import ShellSession
+            self._shell = ShellSession(
+                host="gate7-ctrl", user="transit",
+                motd="GATE 7 BARRIER CONTROL — Local 404 Transit Authority (legacy)",
+                files={
+                    "/README.txt": "DO NOT TOUCH THE BARRIER CONTROLLER.\n"
+                                   "— Management (who has never been to Gate 7)",
+                    "/var/gate/status": "barrier: DOWN\ntoll_due: 1500\n"
+                                        "override: see controller/",
+                    "/var/gate/controller/config.ini": "mode = manual\n"
+                                        "passphrase_file = controller/open.key",
+                    "/etc/shift.log": "Nobody has updated this firmware since the merger.",
+                },
+                loot={"/var/gate/controller/open.key": "gate_shell"},
+                denied={"/root"},
+            )
+        return self._shell
