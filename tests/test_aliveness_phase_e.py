@@ -63,7 +63,9 @@ def test_gary_and_sandra_share_history_path():
     assert out == NPCOutcome.CONTINUE
     assert "partner" in first.lower() or "sandra" in first.lower()
     out, line = gary.respond("Tell me what happened with Sandra")
-    assert out == NPCOutcome.RELEASE
+    # J.3.4 — the hidden Sandra history is now a lore EXPLOIT (cyan + 5k),
+    # not a polite RELEASE. Prising open Gary's file is a heist.
+    assert out == NPCOutcome.EXPLOIT
     assert "partner" in line.lower() or "meridian" in line.lower()
 
     sandra = make_npc("sandra", run_context={})

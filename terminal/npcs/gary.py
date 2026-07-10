@@ -430,7 +430,9 @@ class Gary(BaseNPC):
             self.disposition   += 2
             if self._sandra_turns >= 2:
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="gary_sandra_history")
-                return NPCOutcome.RELEASE, random.choice([
+                # J.3.4 — the hidden Sandra history is a lore heist, not a polite
+                # goodbye: cyan cascade + 5k, the feel of prising open his file.
+                return NPCOutcome.EXPLOIT, random.choice([
                     "*long silence* ...Sandra was my partner before she was the gold standard. "
                     "Meridian route went bad. I froze on the tow; she carried the report, "
                     "saved my badge, and got turned into the example. "
