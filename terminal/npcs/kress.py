@@ -51,7 +51,7 @@ class Kress(BaseNPC):
         "marrow", "roost", "pirate radio", "broadcast location",
         "broadcast coordinates", "sell out marrow", "give up marrow",
     ]
-    _CONFIRM_WORDS = ["confirm", "confirmed", "do it", "sell", "trade", "give it"]
+    _CONFIRM_PHRASES = ("sell it", "trade it", "give it")
 
     def __init__(self, run_context: dict | None = None):
         super().__init__("KRESS", patience=8)
@@ -179,7 +179,7 @@ class Kress(BaseNPC):
                     "That is expensive information. Also ugly information. "
                     "Say confirm and Kress sells it. Say anything else and we forget."
                 )
-            if any(w in raw for w in self._CONFIRM_WORDS):
+            if self._explicit_confirmation(raw, self._CONFIRM_PHRASES):
                 self._marrow_sold = True
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="marrow_sellout")
                 return NPCOutcome.EXPLOIT, (
