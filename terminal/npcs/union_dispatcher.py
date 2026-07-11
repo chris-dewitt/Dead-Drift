@@ -51,7 +51,7 @@ class UnionDispatcher(BaseNPC):
         "marrow", "roost", "pirate radio", "broadcast location",
         "broadcast coordinates", "unlicensed relay",
     ]
-    _CONFIRM_WORDS = ["confirm", "confirmed", "do it", "submit", "file it", "report it"]
+    _CONFIRM_PHRASES = ("submit", "file it", "report it")
 
     def __init__(self, vocabulary_vault=None, run_context: dict | None = None):
         super().__init__("DISPATCHER", patience=9)
@@ -122,7 +122,7 @@ class UnionDispatcher(BaseNPC):
                     "This generates Form 88-R, irreversible enforcement referral. "
                     "Say confirm if you wish me to file it."
                 )
-            if any(w in raw for w in self._CONFIRM_WORDS):
+            if self._explicit_confirmation(raw, self._CONFIRM_PHRASES):
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="marrow_betrayal")
                 return NPCOutcome.EXPLOIT, (
                     "Referral filed. Local 404 raid packet generated. "
