@@ -28,14 +28,21 @@ _STATE_DEAD      = "dead"
 class ComplianceVessel:
     """Fast ram-only pursuer. Quiet, lethal, corporate."""
 
-    DETECT_RANGE   = 1200.0      # always knows where you are
+    # Tuning — dialed back July 2026. They used to home from infinite range at
+    # near-player top speed (260 vs MAX_VELOCITY 280, so you couldn't shake
+    # them) and ram for 28. Now: lighter rams, a top speed you can pull away
+    # from at full throttle, and a real detect range so a committed sprint
+    # breaks their lock. Still lethal if you sit still — just not a death
+    # sentence the moment they spawn.
+    DETECT_RANGE   = 1050.0      # beyond this the hard lock softens (they lag)
     RAM_RANGE      = 60.0
     BREAK_OFF      = 220.0
-    SPEED_CRUISE   = 110.0
-    SPEED_RAM      = 220.0
-    RAM_DAMAGE     = 28.0
+    SPEED_CRUISE   = 100.0
+    SPEED_RAM      = 200.0
+    RAM_DAMAGE     = 20.0
     HULL_HITS      = 2
     STUN_DURATION  = 5.0
+    MAX_SPEED      = 225.0       # < player MAX_VELOCITY (280): outrunnable
 
     def __init__(self, x: float, y: float, run_manager):
         self.body_pos    = Vec2(x, y)
@@ -84,21 +91,25 @@ class ComplianceVessel:
 
             if self.state == _STATE_INTERCEPT:
                 speed = self.SPEED_CRUISE
-                self.vel.x += dir_x * speed * dt * 1.8
-                self.vel.y += dir_y * speed * dt * 1.8
+                # Beyond detect range the lock softens — a full-throttle player
+                # can open the gap and shake them instead of being homed forever.
+                accel = 1.6 if dist <= self.DETECT_RANGE else 0.55
+                self.vel.x += dir_x * speed * dt * accel
+                self.vel.y += dir_y * speed * dt * accel
                 if dist < self.RAM_RANGE * 2.0:
                     self.state = _STATE_RAM
                     self._state_t = 0.0
 
             elif self.state == _STATE_RAM:
                 speed = self.SPEED_RAM
-                self.vel.x += dir_x * speed * dt * 3.0
-                self.vel.y += dir_y * speed * dt * 3.0
+                self.vel.x += dir_x * speed * dt * 2.4
+                self.vel.y += dir_y * speed * dt * 2.4
                 if dist < self.RAM_RANGE:
                     ship.take_damage(self.RAM_DAMAGE, source="compliance_ram")
-                    # Bounce off and switch to regroup
-                    self.vel.x = -dir_x * 240.0
-                    self.vel.y = -dir_y * 240.0
+                    # Peel off (gentler than before, so they don't fling clear
+                    # past detect range) and regroup for a tighter re-engage.
+                    self.vel.x = -dir_x * 150.0
+                    self.vel.y = -dir_y * 150.0
                     self.state = _STATE_REGROUP
                     self._state_t = 0.0
                 if self._state_t > 4.0 and dist > self.BREAK_OFF:
@@ -106,16 +117,19 @@ class ComplianceVessel:
                     self._state_t = 0.0
 
             elif self.state == _STATE_REGROUP:
-                # Drift outward, then re-intercept
-                if self._state_t > 3.5:
+                # Coast outward briefly, then re-intercept. Long enough to give
+                # you a breather between rams, short enough that they stay a
+                # persistent pest rather than burst-and-vanish.
+                if self._state_t > 3.6:
                     self.state = _STATE_INTERCEPT
                     self._state_t = 0.0
 
-        # Soft velocity cap
+        # Soft velocity cap — kept below the player's MAX_VELOCITY (280) so a
+        # committed sprint actually opens distance.
         sp = math.hypot(self.vel.x, self.vel.y)
-        if sp > 260.0:
-            self.vel.x = self.vel.x / sp * 260.0
-            self.vel.y = self.vel.y / sp * 260.0
+        if sp > self.MAX_SPEED:
+            self.vel.x = self.vel.x / sp * self.MAX_SPEED
+            self.vel.y = self.vel.y / sp * self.MAX_SPEED
         self.body_pos.x += self.vel.x * dt
         self.body_pos.y += self.vel.y * dt
         if abs(self.vel.x) + abs(self.vel.y) > 1.0:

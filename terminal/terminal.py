@@ -35,15 +35,15 @@ _NPC_DOSSIER_TITLE = {
 
 _NPC_HINTS = {
     "GARY":                  "deal×2 · bribe ≥3k · sympathy×2 · blevins · overtime+article7 · [ESC] abort",
-    "TK-9":                  "paradox×2 · drop table · statute×3 · override · friendship×3 · emp.month · [ESC] abort",
+    "TK-9":                  "paradox×2 · drop table · statute×3 · override · friendship×3 · emp.month · » type `shell` · [ESC] abort",
     "DISPATCHER":            "coffee/break/tired · forms×3 · say '42' · grievance×3 · quantum+legal · bribe ≥10k · [ESC] abort",
     "KRESS":                 "intel · contraband · volkov · connie · be friendly×3 · [ESC] abort",
     "MORWENNA":              "union negligence×3 · force majeure · counter-claim×2 · sympathy×3 · form 34-A×2 · [ESC] abort",
-    "TOLL AUTHORITY":        "pay ≥1500 · forms/permits/id · union/local404 · offer 500-1000 (40%) · [ESC] abort",
+    "TOLL AUTHORITY":        "pay ≥1500 · forms/permits/id · union/local404 · offer 500-1000 (40%) · » type `shell` · [ESC] abort",
     "RELAY-7 FELIX":         "offer manifest/contents · pay ≥800cr · bond over debt/clone · ask about his 'plan'×3 · [ESC] abort",
     "INSPECTOR HOLT":        "'standard freight'/'general goods' · cite any cargo code · article 9 (50%) · vague×3 · pay ≥600cr · [ESC] abort",
     "DRAY":                  "gripe×3 (debt/barges/nova soma) · offer intel · pay ≥500 · DO NOT sound corporate · [ESC] abort",
-    "NOVA SOMA COLLECTIONS": "drop table / OR 1=1 · paradox · cite policy×2 · hardship/wellness · NEVER curse · [ESC] abort",
+    "NOVA SOMA COLLECTIONS": "drop table / OR 1=1 · paradox · cite policy×2 · hardship/wellness · » type `python` · NEVER curse · [ESC] abort",
     "MIRA VOSS":             "pay ≥700 · offer patrol/barge intel · share cargo · 3× tech terms (weld/graphene/vac-seal) · [ESC] abort",
 }
 
@@ -361,7 +361,7 @@ _NPC_HINTS.update({
         "trade intel / solidarity x3 / boast with real run stats / "
         "confession / apology x3 / gary history x2 / [ESC] abort"
     ),
-    "FREQUENCY LOST": "static / roost / marrow / seizure notice / [ESC] abort",
+    "FREQUENCY LOST": "static · roost · marrow · seizure notice · » type `shell` (grep marrow) · [ESC] abort",
 })
 
 _SCAN_VOCAB["GARY"].update({
@@ -412,9 +412,9 @@ _NPC_DOSSIER_TITLE.update({
 })
 _NPC_HINTS.update({
     "CHEN":  "thank/respect x2 · name what she built x2 · 'for everyone' · "
-             "ask how it works x2 · shell → ledger root · [ESC] abort",
+             "ask how it works x2 · » type `shell` (ledger root) · [ESC] abort",
     "BOWEN": "expose what you saw x2 · his family photo · refuse hard x2 · "
-             "python → break the audit console · NEVER comply · [ESC] abort",
+             "» type `python` (audit console) · NEVER comply · [ESC] abort",
 })
 _SCAN_VOCAB.update({
     "CHEN": {
@@ -745,6 +745,18 @@ class Terminal:
         self._activated = True
         bus.emit(EVT_TERMINAL_OPEN, npc=self.npc)
         self._push(self.npc.name.upper(), self.npc.intro())
+        self._announce_systems_mode()
+
+    def _announce_systems_mode(self) -> None:
+        """J.2/J.3 discoverability — if this channel exposes a shell/REPL, say so
+        once, up front, so players know the coding path exists (not just buried
+        in the dossier)."""
+        if self._npc_session("shell_session") is not None:
+            self._push("SYSTEM", "a command line is exposed on this channel — "
+                                 "type `shell` to drop in (`exit` to leave)")
+        elif self._npc_session("repl_session") is not None:
+            self._push("SYSTEM", "an interpreter is exposed on this channel — "
+                                 "type `python` to drop in (`exit` to leave)")
 
     # ------------------------------------------------------------------
     def _get_font(self) -> pygame.font.Font:
