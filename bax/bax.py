@@ -1008,7 +1008,14 @@ class Bax(Subscriber):
         self.speak(f"They've torched the {module.name}! {status}")
 
     def _on_exploit_found(self, npc, exploit_key, **_):
-        npc_key = npc if isinstance(npc, str) else type(npc).__name__.lower()
+        if isinstance(npc, str):
+            npc_key = npc
+        else:
+            try:
+                from terminal.vault_keys import canonical_key
+                npc_key = canonical_key(npc)
+            except Exception:
+                npc_key = type(npc).__name__.lower()
         self.vault.add_backdoor(npc_key, exploit_key)
         # Epic 11.3 — note exploit use in run context
         ctx = getattr(self, "_run_bax_context", None)

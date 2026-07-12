@@ -45,6 +45,7 @@ _CMPOPS = {
     ast.Eq: operator.eq, ast.NotEq: operator.ne, ast.Lt: operator.lt,
     ast.LtE: operator.le, ast.Gt: operator.gt, ast.GtE: operator.ge,
 }
+_MAX_REPEAT_ITEMS = 10_000
 
 
 class _Unsafe(Exception):
@@ -139,7 +140,10 @@ class ReplSession:
         if isinstance(node, ast.BinOp) and type(node.op) in _BINOPS:
             left, right = self._safe_eval(node.left), self._safe_eval(node.right)
             self._guard(node.op, left, right)
-            return _BINOPS[type(node.op)](left, right)
+            try:
+                return _BINOPS[type(node.op)](left, right)
+            except TypeError:
+                raise _Unsafe
         if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARYOPS:
             return _UNARYOPS[type(node.op)](self._safe_eval(node.operand))
         if isinstance(node, ast.BoolOp):
@@ -163,10 +167,20 @@ class ReplSession:
 
     @staticmethod
     def _guard(op, left, right) -> None:
-        """Refuse cheap DoS: giant exponents / huge shifts."""
+        """Refuse cheap DoS: giant exponents / huge literal repeats."""
         if isinstance(op, ast.Pow):
             try:
                 if abs(right) > 128 or abs(left) > 10_000:
                     raise OverflowError
             except TypeError:
                 raise _Unsafe
+        if isinstance(op, ast.Mult):
+            ReplSession._guard_repeat(left, right)
+            ReplSession._guard_repeat(right, left)
+
+    @staticmethod
+    def _guard_repeat(seq, count) -> None:
+        if not isinstance(seq, (str, list, tuple)) or not isinstance(count, int):
+            return
+        if len(seq) * abs(count) > _MAX_REPEAT_ITEMS:
+            raise OverflowError
