@@ -50,11 +50,15 @@ def canonical_key(npc) -> str:
     return camel_to_snake(type(npc).__name__)
 
 
-def resolve_keys(npc) -> tuple[str, ...]:
-    """Canonical key first, then any historical aliases (deduped)."""
-    canon = canonical_key(npc)
-    out = [canon]
-    for a in _ALIASES.get(canon, ()):
+def aliases_for_key(key: str) -> tuple[str, ...]:
+    """Canonical key first, then historical aliases for an already-known key."""
+    out = [key]
+    for a in _ALIASES.get(key, ()):
         if a not in out:
             out.append(a)
     return tuple(out)
+
+
+def resolve_keys(npc) -> tuple[str, ...]:
+    """Canonical key first, then any historical aliases (deduped)."""
+    return aliases_for_key(canonical_key(npc))
