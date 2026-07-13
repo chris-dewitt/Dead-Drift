@@ -128,6 +128,43 @@ def test_records_screen_handles_empty_state():
             assert screen.get_at((cx, cy))[:3] != (0, 0, 0)
 
 
+def test_records_vulnerability_db_reads_historical_aliases():
+    from renderer.records_screen import _backdoors_for
+
+    vault = _vault_with(None, backdoors={
+        "syntheticdroid": ["SQL_INJECTION"],
+        "tk9": ["SHELL_BREAK"],
+    })
+
+    assert _backdoors_for(vault, "synthetic_droid") == [
+        "SQL_INJECTION",
+        "SHELL_BREAK",
+    ]
+
+
+def test_bax_exploit_event_uses_canonical_vault_key():
+    from bax.bax import Bax
+    from terminal.npcs.synthetic_droid import SyntheticDroid
+
+    recorded = {}
+
+    class CaptureVault:
+        def add_backdoor(self, npc_key, exploit_key):
+            recorded.setdefault(npc_key, []).append(exploit_key)
+
+    bax = Bax.__new__(Bax)
+    bax.vault = CaptureVault()
+    bax._run_bax_context = None
+    bax._run_style_bribe = 0
+    bax._run_style_exploit = 0
+    bax.speak = lambda *_args, **_kwargs: None
+
+    bax._on_exploit_found(SyntheticDroid(run_context={}), "sql_injection")
+
+    assert recorded == {"synthetic_droid": ["sql_injection"]}
+    assert bax._run_style_exploit == 1
+
+
 def test_records_max_scroll_clamps_per_tab():
     from renderer.records_screen import max_scroll, tab_count
 
