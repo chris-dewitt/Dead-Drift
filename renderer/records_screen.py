@@ -22,6 +22,7 @@ import pygame
 
 from config import settings as S
 from core.text import get_font
+from terminal.vault_keys import aliases_for_key
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +46,9 @@ _NPC_LABEL: tuple[tuple[str, str], ...] = (
     ("mira_voss",             "MIRA VOSS"),
     ("idealist_rep",          "EDMUND (IDEALIST)"),
     ("corrupt_rep",           "VINCE (CORRUPT)"),
+    ("chen",                  "CHEN"),
+    ("bowen",                 "BOWEN"),
+    ("lost_frequency",        "LOST FREQUENCY"),
 )
 
 
@@ -330,6 +334,22 @@ def _fmt_seconds(s) -> str:
 # Tab 3 — VULNERABILITY DATABASE
 # ---------------------------------------------------------------------------
 
+def _backdoors_for(vault, npc_key: str) -> list[str]:
+    if vault is None or not hasattr(vault, "get_backdoors"):
+        return []
+    backdoors: list[str] = []
+    seen: set[str] = set()
+    try:
+        for key in aliases_for_key(npc_key):
+            for item in vault.get_backdoors(key):
+                if item not in seen:
+                    seen.add(item)
+                    backdoors.append(item)
+    except Exception:
+        return []
+    return backdoors
+
+
 def _draw_vuln_db(surf, x, y, w, h, *, vault, scroll):
     fh   = get_font(12, bold=True)
     fb   = get_font(11)
@@ -346,13 +366,7 @@ def _draw_vuln_db(surf, x, y, w, h, *, vault, scroll):
 
     rows: list[tuple[str, list[str]]] = []
     for npc_key, label in _NPC_LABEL:
-        backdoors: list[str] = []
-        if vault is not None and hasattr(vault, "get_backdoors"):
-            try:
-                backdoors = list(vault.get_backdoors(npc_key))
-            except Exception:
-                backdoors = []
-        rows.append((label, backdoors))
+        rows.append((label, _backdoors_for(vault, npc_key)))
 
     line_h = 18
     visible = max(1, (h - 50) // line_h)
