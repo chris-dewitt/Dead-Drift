@@ -138,7 +138,7 @@ class NovaSomaCollections(BaseNPC):
             ])
 
         # SQL injection — the bot's customer-lookup query crashes; defaults to "handled"
-        if any(w in raw for w in _SQL_INJECT_KEYWORDS):
+        if parsed.sql_inject or any(w in raw for w in _SQL_INJECT_KEYWORDS):
             self._sql_hit = True
             self._current_path = "SQL EXPLOIT"
             bus.emit(EVT_NLP_EXPLOIT, npc="nova_soma_collections",
