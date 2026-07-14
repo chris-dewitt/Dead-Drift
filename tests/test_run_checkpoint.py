@@ -70,6 +70,32 @@ def test_checkpoint_roundtrip(mini_game, tmp_path):
     )
 
 
+def test_checkpoint_preserves_replayed_chapter_identity(mini_game, monkeypatch):
+    """A chapter-5 dossier replay must not become chapter 6 after CONTINUE."""
+    from cargo.encrypted_drive import EncryptedDrive
+
+    rm = mini_game.run_mgr
+    rm.meta._data["chapters_completed"] = [1, 2, 3, 4, 5]
+    rm.set_chapter_override(5)
+    mini_game.ship.cargo = EncryptedDrive()
+    rm._sector_index = S.SECTORS_PER_RUN - 1
+    data = build_checkpoint(mini_game)
+
+    # Model relaunch: a fresh manager has no carousel override and derives
+    # chapter 6 from the completed-chapter list.
+    rm.set_chapter_override(None)
+    assert rm._current_chapter() == 6
+
+    assert restore_checkpoint(mini_game, data) is True
+    assert rm._current_chapter() == 5
+
+    opened = {}
+    monkeypatch.setattr(rm, "open_terminal",
+                        lambda npc_type, **_: opened.setdefault("npc", npc_type))
+    rm._open_jump_terminal()
+    assert opened["npc"] == "chen"
+
+
 def test_checkpoint_roundtrips_chapter_six_drive_and_pursuit_state(mini_game):
     from antagonists.compliance_vessel import ComplianceVessel
     from cargo.encrypted_drive import EncryptedDrive

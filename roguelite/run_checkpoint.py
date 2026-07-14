@@ -578,6 +578,16 @@ def restore_checkpoint(game, data: dict) -> bool:
     rm = game.run_mgr
     ship = game.ship
     rm._run_seed = int(data.get("run_seed", 0))
+    # The dossier can replay an already-completed chapter. A fresh RunManager
+    # derives its chapter from meta progression, so restoring only the sector
+    # state would silently switch a chapter-5 replay to chapter 6. Pin the
+    # resumed run to the resolved chapter saved by build_checkpoint().
+    saved_chapter = data.get("chapter")
+    if saved_chapter is not None:
+        try:
+            rm.set_chapter_override(int(saved_chapter))
+        except (TypeError, ValueError):
+            pass
 
     rmd = data.get("run_mgr", {})
     rm._sector_index = int(rmd.get("sector_index", 0))
