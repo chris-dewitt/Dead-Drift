@@ -113,6 +113,22 @@ def test_three_sql_bounces_trip_the_alarm():
     assert t.is_done and t.outcome == "breach"
 
 
+@pytest.mark.parametrize("injection", [
+    "admin'--",
+    "SELECT username FROM accounts",
+    "UPDATE debts SET balance=0",
+])
+def test_nova_accepts_every_parser_valid_sql_shape(injection):
+    npc = _nova()
+    t = Terminal(npc, econ=None); t.activate()
+
+    _drive(t, injection)
+
+    assert t.is_done and t.outcome == NPCOutcome.RELEASE
+    assert npc._sql_hit is True
+    assert t._hack_fails == 0
+
+
 def test_shell_sudo_spam_trips_the_alarm():
     t = Terminal(_tk9(), econ=None); t.activate()
     _drive(t, "shell")
