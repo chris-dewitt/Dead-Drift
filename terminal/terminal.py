@@ -689,6 +689,7 @@ class Terminal:
                  econ=None):
         self.npc      = npc
         self._econ    = econ    # J.1 TerminalEconomy — applies priced txns
+        self._transaction_applied = False
         self._history: list[tuple[str, str]] = []
         self._input   = ""
         self._done    = False
@@ -990,6 +991,7 @@ class Terminal:
         if not self._econ.charge(amount, dual_ledger=txn["dual_ledger"],
                                  label=txn["label"]):
             return   # affordability was checked upstream; be safe if it wasn't
+        self._transaction_applied = True
         self._econ.apply_effect(txn.get("effect"))
         # Keep the NPC's view of the wallet current for any later purchase.
         if hasattr(self.npc, "_ctx") and isinstance(self.npc._ctx, dict):
@@ -1925,6 +1927,11 @@ class Terminal:
     @property
     def outcome(self) -> str:
         return self._outcome
+
+    @property
+    def transaction_applied(self) -> bool:
+        """Whether this terminal charged a staged purchase successfully."""
+        return self._transaction_applied
 
     @property
     def winning_path(self) -> str:
