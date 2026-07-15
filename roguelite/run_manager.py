@@ -1373,7 +1373,11 @@ class RunManager:
             return
 
         # Deduct any bribe the player paid
-        npc = self._active_terminal.npc if self._active_terminal else None
+        terminal = self._active_terminal
+        npc = terminal.npc if terminal else None
+        transaction_applied = bool(
+            getattr(terminal, "transaction_applied", False)
+        )
         bribe_paid = npc.bribe_cost() if npc else 0
         if bribe_paid > 0:
             self.meta.add_debt(bribe_paid, source="BRIBE PAID")
@@ -1419,8 +1423,9 @@ class RunManager:
                 f"Their firewall had the structural integrity of wet paper. {bonus:,} back.",
                 f"You just robbed a repo man digitally. {bonus:,} off. I'm proud.",
             ]))
-        elif outcome == "release" and bribe_paid == 0:
-            # Only give the full release bonus when no bribe was needed
+        elif (outcome == "release" and bribe_paid == 0
+              and not transaction_applied):
+            # Purchases and bribes are service closes, not negotiation wins.
             bonus = RELEASE_PAYOUT
             self.meta.pay_off(bonus, source="NEGOTIATION")
             self._run_debt_reduced += bonus

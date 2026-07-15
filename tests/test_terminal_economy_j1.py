@@ -11,6 +11,7 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import random
+import types
 import pygame
 import pytest
 
@@ -193,8 +194,52 @@ def test_terminal_applies_transaction_and_prints_ledger(monkeypatch):
     assert state["cr"] == 6000        # −3000
     assert state["debt"] == 3000      # +3000 (dual ledger)
     assert state["harm"] == 10.0      # +1 harmonica charge
+    assert term.transaction_applied is True
     ledger = [t for spk, t in term._history if spk == "LEDGER"]
     assert ledger and "3,000 cr" in ledger[0] and "harmonica" in ledger[0]
+
+
+@pytest.mark.parametrize(
+    ("transaction_applied", "expected_credits", "expected_payoffs"),
+    [
+        (True, 4300, []),
+        (False, 6800, [(2500, "NEGOTIATION")]),
+    ],
+)
+def test_paid_service_release_does_not_receive_negotiation_payout(
+        transaction_applied, expected_credits, expected_payoffs):
+    from roguelite.run_manager import RunManager
+
+    class Meta:
+        def __init__(self):
+            self.payoffs = []
+
+        def pay_off(self, amount, source):
+            self.payoffs.append((amount, source))
+
+    npc = types.SimpleNamespace(
+        name="MIRA VOSS",
+        _current_path="PAID",
+        bribe_cost=lambda: 0,
+    )
+    rm = RunManager.__new__(RunManager)
+    rm._ship = None
+    rm._intercepting_barge = None
+    rm._active_terminal = types.SimpleNamespace(
+        npc=npc,
+        transaction_applied=transaction_applied,
+    )
+    rm._pending_advance = False
+    rm._last_winning_path = ""
+    rm._sector_credits = 4300
+    rm._run_debt_reduced = 0
+    rm.meta = Meta()
+    rm._apply_phase_e_terminal_consequence = lambda *args: None
+
+    rm.on_terminal_complete(NPCOutcome.RELEASE)
+
+    assert rm._sector_credits == expected_credits
+    assert rm.meta.payoffs == expected_payoffs
 
 
 def test_terminal_without_econ_never_crashes():
@@ -203,3 +248,4 @@ def test_terminal_without_econ_never_crashes():
     k.stage_transaction(2000, dual_ledger=True, label="X")
     term = Terminal(k, econ=None)      # no adapter injected
     term._apply_pending_transaction()  # must be a safe no-op
+    assert term.transaction_applied is False
