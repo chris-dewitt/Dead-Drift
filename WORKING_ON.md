@@ -11,7 +11,7 @@ After committing your work, remove your row.
 
 | Subsystem | Branch | Claimed by | Timestamp |
 |-----------|--------|------------|-----------|
-| terminal / run_manager | cursor/critical-bug-investigation-342d | critical-bug-automation | 2026-07-15 11:20 UTC |
+| *(none)* | | | |
 
 ---
 
