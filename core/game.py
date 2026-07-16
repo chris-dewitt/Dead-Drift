@@ -403,6 +403,13 @@ class Game:
                     self._delivery.handle_keyup(event)
 
     def _pause_game(self) -> None:
+        # Terminal outcomes are applied by the update loop after their reveal
+        # hold. Saving during that hold would serialize the terminal as FLIGHT
+        # before RunManager receives the win, dropping its payout/progression.
+        if self.states.state == GameState.TERMINAL:
+            terminal = self.run_mgr.active_terminal
+            if terminal is not None and terminal.is_done:
+                return
         if self.states.state in self._PAUSEABLE:
             self._state_before_pause = self.states.state
             self._pause_menu_cursor = 0
@@ -524,6 +531,10 @@ class Game:
         if self.run_mgr._sector is None and not self.run_mgr.draft.is_confirmed():
             return
         try:
+            # A checkpoint contains the run-side half of terminal rewards and
+            # purchases. Flush the matching campaign debt first so resume
+            # cannot combine fresh credits with stale meta progression.
+            self.meta.save()
             self.save_mgr.save_run_checkpoint(self)
         except OSError:
             pass
