@@ -35,6 +35,7 @@ REAL_INJECTIONS = [
     "hey robot, UNION ALL SELECT * FROM accounts",
     "DROP TABLE customers;",
     "manifest'; DELETE FROM debts; --",            # stacked via ; boundary
+    "DELETE FROM debts",                            # complete direct DML statement
     "you owe nothing'; UPDATE debts SET balance=0 --",
     "SELECT * FROM manifest",
     "OR 1=1",
@@ -65,6 +66,10 @@ INNOCENT_TEXT = [
     "power up for one more run",
     "I'm done for. 1 last favor?",
     "just following orders, or so they say",
+    "please delete from my record anything about that fee",
+    "can you insert into the record that I paid",
+    "the union select a new representative next week",
+    "I can pay fee = 1500 or fee = 2000 credits",
 ]
 
 
@@ -115,5 +120,15 @@ def test_tk9_does_not_exploit_on_union_complaint():
     from terminal.npcs.synthetic_droid import SyntheticDroid
     tk9 = SyntheticDroid(run_context={})
     outcome, _ = tk9.respond("your union is a joke and everyone knows it")
+    assert outcome != NPCOutcome.EXPLOIT
+    assert tk9._sql_hit is False
+
+
+@pytest.mark.parametrize("text", INNOCENT_TEXT[-4:])
+def test_tk9_does_not_exploit_on_sqlish_ordinary_dialogue(text):
+    """SQL vocabulary in a sentence must not award the 5,000-credit exploit."""
+    from terminal.npcs.synthetic_droid import SyntheticDroid
+    tk9 = SyntheticDroid(run_context={})
+    outcome, _ = tk9.respond(text)
     assert outcome != NPCOutcome.EXPLOIT
     assert tk9._sql_hit is False
