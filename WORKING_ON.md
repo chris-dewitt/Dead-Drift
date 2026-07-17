@@ -11,7 +11,7 @@ After committing your work, remove your row.
 
 | Subsystem | Branch | Claimed by | Timestamp |
 |-----------|--------|------------|-----------|
-| *(none)* | | | |
+| terminal | cursor/critical-bug-investigation-f39c | critical-bug automation | 2026-07-17 11:00 UTC |
 
 ---
 
