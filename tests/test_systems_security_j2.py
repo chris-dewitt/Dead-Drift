@@ -155,6 +155,16 @@ def test_breach_spawns_immediate_chase_and_holds_sector():
     assert rm._active_terminal is None
 
 
+def test_abort_disarms_jump_advance():
+    rm, calls = _bare_rm()
+
+    rm.on_terminal_complete("abort")
+
+    assert "advanced" not in calls
+    assert rm._pending_advance is False
+    assert rm._active_terminal is None
+
+
 def test_breach_with_encrypted_drive_adds_compliance_drone(monkeypatch):
     from roguelite import run_manager as rmod
 

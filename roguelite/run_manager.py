@@ -1324,6 +1324,9 @@ class RunManager:
 
         # ESC abort: static burst deals hull damage, no reward
         if outcome == "abort":
+            # A jump terminal arms sector advancement before it opens. Aborting
+            # must disarm it so a later, unrelated comm cannot consume the flag.
+            self._pending_advance = False
             if self._ship is not None:
                 self._ship.take_damage(20, source="terminal_abort")
             bus.emit(EVT_BAX_SPEAK, line=random.choice([
