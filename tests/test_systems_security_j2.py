@@ -155,6 +155,51 @@ def test_breach_spawns_immediate_chase_and_holds_sector():
     assert rm._active_terminal is None
 
 
+def test_jump_impound_holds_sector():
+    """IMPOUND at a jump/climax terminal must not clear the sector.
+
+    Repro: open Bowen's Ch6 jump terminal, type 'okay' (COMPLY → IMPOUND).
+    Before the fix, `_pending_advance` still called `_advance_sector()`, which
+    on the final sector emitted EVT_RUN_END(success=True) and started delivery.
+    """
+    rm, calls = _bare_rm()
+    rm._last_winning_path = "whatever"
+    rm.on_terminal_complete("impound")
+    assert "advanced" not in calls
+    assert rm._pending_advance is False
+    assert rm._active_terminal is None
+    assert rm._last_winning_path == ""
+
+
+def test_jump_release_still_advances_sector():
+    """Winning a jump terminal must still clear the sector."""
+    rm, calls = _bare_rm()
+    rm.meta = types.SimpleNamespace(pay_off=lambda *a, **k: None)
+    rm._run_debt_reduced = 0
+    rm._sector_credits = 0
+    rm.on_terminal_complete("release")
+    assert calls.get("advanced") is True
+    assert rm._pending_advance is False
+
+
+def test_jump_exploit_still_advances_sector():
+    rm, calls = _bare_rm()
+    rm.meta = types.SimpleNamespace(pay_off=lambda *a, **k: None)
+    rm._run_debt_reduced = 0
+    rm._sector_credits = 0
+    rm.on_terminal_complete("exploit")
+    assert calls.get("advanced") is True
+    assert rm._pending_advance is False
+
+
+def test_bowen_comply_is_impound_not_a_win():
+    """Saying 'okay' to Bowen is IMPOUND — the losing path, not a climax win."""
+    from terminal.npcs.bowen import Bowen
+    npc = Bowen(run_context={})
+    outcome, _ = npc.respond("okay")
+    assert outcome == NPCOutcome.IMPOUND
+
+
 def test_breach_with_encrypted_drive_adds_compliance_drone(monkeypatch):
     from roguelite import run_manager as rmod
 

@@ -1439,7 +1439,13 @@ class RunManager:
             return
         if self._pending_advance:
             self._pending_advance = False
-            self._advance_sector()
+            # Jump terminals arm sector advance before they open. Only a
+            # successful negotiation (RELEASE / EXPLOIT) clears the gate —
+            # IMPOUND is a loss ("ship towed") and must dump the player back
+            # into flight, same rule as breach. Otherwise complying with
+            # Bowen at the Ch6 climax would complete the run.
+            if outcome in ("exploit", "release"):
+                self._advance_sector()
 
     def _apply_phase_e_terminal_consequence(self, npc, outcome: str, path: str) -> None:
         if npc is None or outcome not in ("release", "exploit"):
