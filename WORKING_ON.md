@@ -11,7 +11,7 @@ After committing your work, remove your row.
 
 | Subsystem | Branch | Claimed by | Timestamp |
 |-----------|--------|------------|-----------|
-| run_manager | cursor/critical-bug-investigation-b9d6 | critical-bug-automation | 2026-07-24 11:10 |
+| *(none)* | | | |
 
 ---
 
