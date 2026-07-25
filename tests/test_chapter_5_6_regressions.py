@@ -54,6 +54,71 @@ def test_interstitial_advances_after_chapter_four_and_ends_after_six():
     assert game._interstitial_campaign_end is True
 
 
+def test_interstitial_chains_dossier_replay_after_full_campaign_clear():
+    """Issues I-11 — a prior full clear must not force campaign-end on
+    every later delivery. Dossier Ch2 → interstitial for Ch2→3."""
+    from core.game import Game
+    from core.state_manager import GameState
+
+    seen = []
+    game = Game.__new__(Game)
+    game._goto = lambda state: seen.append(state)
+    game._delivery_chapter = 2
+    game.meta = SimpleNamespace(
+        chapters_completed=[1, 2, 3, 4, 5, 6],
+        campaign_cleared_at_least_once=True,
+    )
+
+    Game._enter_interstitial(game)
+
+    assert seen[-1] == GameState.INTERSTITIAL
+    assert game._interstitial_completed == 2
+    assert game._interstitial_next == 3
+    assert game._interstitial_campaign_end is False
+
+
+def test_exit_interstitial_advances_dossier_override_and_clears_on_campaign_end():
+    """Issues I-10/I-11 — dossier override advances on chain, clears on end."""
+    from core.game import Game
+    from core.state_manager import GameState
+
+    seen = []
+    started = []
+    overrides = []
+
+    game = Game.__new__(Game)
+    game._goto = lambda state: seen.append(state)
+    game.ship = object()
+    game._run_just_completed = False
+    game._interstitial_next = 4
+    game._interstitial_campaign_end = False
+    game.run_mgr = SimpleNamespace(
+        _chapter_override=3,
+        set_chapter_override=lambda ch: overrides.append(ch),
+        start_run=lambda ship: started.append(ship),
+    )
+
+    Game._exit_interstitial(game)
+
+    assert overrides == [4]
+    assert started == [game.ship]
+    assert seen[-1] == GameState.LOADOUT_DRAFT
+    assert game._run_just_completed is False
+
+    game._interstitial_campaign_end = True
+    game._run_just_completed = False
+    overrides.clear()
+    started.clear()
+    seen.clear()
+
+    Game._exit_interstitial(game)
+
+    assert overrides == [None]
+    assert started == []
+    assert seen[-1] == GameState.MAIN_MENU
+    assert game._run_just_completed is True
+
+
 def test_encrypted_drive_final_terminal_is_chapter_aware():
     from cargo.encrypted_drive import EncryptedDrive
     from config import settings as S
