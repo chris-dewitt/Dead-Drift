@@ -1788,7 +1788,11 @@ class Game:
         # Mark delivery complete in meta_progression handled by DeliverySequence._compute_result
         completed = self._delivery_chapter
         next_ch = completed + 1
-        campaign_end = next_ch > 6 or self.meta.campaign_cleared_at_least_once
+        # Issues I-11 — campaign-end is about THIS delivery finishing Ch6,
+        # not about whether the save has ever cleared the campaign. Using
+        # campaign_cleared_at_least_once here made every post-clear dossier
+        # replay dump the player to the main menu as "campaign complete".
+        campaign_end = next_ch > 6
         self._interstitial_completed     = completed
         self._interstitial_next          = next_ch
         self._interstitial_campaign_end  = campaign_end
@@ -1797,10 +1801,19 @@ class Game:
 
     def _exit_interstitial(self):
         if self._interstitial_campaign_end:
+            # Issues I-10 — dossier carousel overrides must not stick after
+            # a finished campaign run, or CONTINUE/new runs keep replaying.
+            self.run_mgr.set_chapter_override(None)
             self._run_just_completed = True
             self._goto(GameState.MAIN_MENU)
         else:
-            # Auto-advance into next chapter's loadout draft
+            # Auto-advance into next chapter's loadout draft.
+            # Dossier replays keep an explicit override; advance it to the
+            # next chapter so Ch2→Ch3 chaining works even after a full clear
+            # (natural progression alone would snap back to Ch6).
+            override = getattr(self.run_mgr, "_chapter_override", None)
+            if override is not None:
+                self.run_mgr.set_chapter_override(self._interstitial_next)
             self.run_mgr.start_run(self.ship)
             self._run_just_completed = False
             self._goto(GameState.LOADOUT_DRAFT)
