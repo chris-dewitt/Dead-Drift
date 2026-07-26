@@ -74,12 +74,19 @@ def extract_credit_amount(text: str) -> int | None:
         for word, val in _WORD_NUMS.items():
             if re.search(rf"\b{re.escape(word)}\b", lower):
                 return val * 100
-    # 'five thousand' / 'twenty grand' style
+    # 'five thousand' / 'twenty grand' style.
+    # Bare "five"/"ten" only become thousands with money context — otherwise
+    # time phrases ("give me ten seconds", "five minutes") falsely charge
+    # thousands of credits at the Toll gate and other amount-gated NPCs.
+    _money_ctx = re.search(
+        r"\b(credits?|cr|pay|paid|paying|bribe|offer|transfer|fee|toll|cash)\b",
+        lower,
+    )
     for word, val in _WORD_NUMS.items():
         if re.search(rf"\b{re.escape(word)}\b", lower):
             if "thousand" in lower or "grand" in lower or "k" in lower:
                 return val * 1000
-            if val >= 5:
+            if val >= 5 and _money_ctx:
                 return val * 1000
     return None
 
