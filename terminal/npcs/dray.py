@@ -78,6 +78,7 @@ class Dray(BaseNPC):
         self._gripe_count       = 0
         self._traded            = False
         self._paid              = False
+        self._bribe_paid        = 0
         self._corpo_flags       = 0
         self._marrow_dropped    = False
         self._ghost_given       = False
@@ -174,6 +175,7 @@ class Dray(BaseNPC):
 
         if parsed.amount is not None and parsed.amount >= _BRIBE_AMOUNT:
             self._paid = True
+            self._bribe_paid = int(parsed.amount)
             # Playtest fix: dossier label uses the standardised
             # `BRIBE [X cr]` format instead of past-tense "BRIBED".
             self._current_path = f"BRIBE [{parsed.amount} cr]"
@@ -356,6 +358,10 @@ class Dray(BaseNPC):
             "If you ever see Marrow's frequency, write it down. I lost mine in a fire. "
             "Long story. Bad one. *pause* Anyway. Your route.",
         ])
+
+    def bribe_cost(self) -> int:
+        # J.1 — labeled BRIBE paths must actually charge via RunManager.
+        return int(self._bribe_paid) if self._paid else 0
 
     def get_path_progress(self) -> list[tuple[str, int, int]]:
         return [

@@ -678,6 +678,10 @@ class NervousFence(BaseNPC):
             "But I have HEART. Make an offer.",
         ])
 
+    def bribe_cost(self) -> int:
+        # J.1 — labeled BRIBE paths must actually charge via RunManager.
+        return int(self._bribe_paid) if self._paid else 0
+
     # ------------------------------------------------------------------
     def get_path_progress(self) -> list[tuple[str, int, int]]:
         return [

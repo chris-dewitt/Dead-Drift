@@ -52,10 +52,19 @@ _PAY_AMOUNT_HINTS = (
 )
 
 
+_PAY_VOCAB = (
+    "credit", "credits", "cr", "pay", "paid", "paying", "toll", "fee",
+    "transfer", "offer", "bribe", "cash",
+)
+
+
 def _offers_full_toll(parsed: ParsedInput, text_l: str) -> bool:
-    """True when player clearly offers the posted toll (not bare 'pay' in random words)."""
-    if parsed.amount is not None and parsed.amount >= _TOLL_COST:
-        return True
+    """True when player clearly offers the posted toll (not bare 'pay' in random words).
+
+    Amount alone is not enough — parser credit extraction can latch onto
+    time-words ("ten seconds" → 10000) and ordinary dialogue must never
+    clear the gate or inflate meta debt.
+    """
     if any(p in text_l for p in _PAY_PHRASES):
         if parsed.amount is None or parsed.amount >= _TOLL_COST:
             return True
@@ -63,6 +72,12 @@ def _offers_full_toll(parsed: ParsedInput, text_l: str) -> bool:
         if parsed.amount is None or parsed.amount >= _TOLL_COST:
             return True
     if parsed.intent == "bribe" and parsed.amount is not None and parsed.amount >= _TOLL_COST:
+        return True
+    if (
+        parsed.amount is not None
+        and parsed.amount >= _TOLL_COST
+        and any(w in text_l for w in _PAY_VOCAB)
+    ):
         return True
     return False
 

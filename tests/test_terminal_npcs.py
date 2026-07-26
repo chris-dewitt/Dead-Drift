@@ -70,6 +70,65 @@ def test_toll_pay_requires_amount_not_bare_pay():
     assert t2.bribe_cost() == 1500
 
 
+def test_extract_credit_ignores_time_phrases():
+    """Bare number-words in time dialogue must not become thousands of credits."""
+    from terminal.nlp_parser import extract_credit_amount
+
+    assert extract_credit_amount("give me ten seconds") is None
+    assert extract_credit_amount("wait five minutes") is None
+    assert extract_credit_amount("tell me about your five year plan") is None
+    # Money context still maps shorthand / explicit thousands.
+    assert extract_credit_amount("pay five") == 5000
+    assert extract_credit_amount("ten thousand credits") == 10000
+    assert extract_credit_amount("fifteen hundred credits") == 1500
+
+
+def test_toll_time_phrases_do_not_charge_or_release():
+    """Ordinary stall dialogue must not clear Gate Seven or inflate meta debt."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for phrase in (
+        "give me ten seconds",
+        "wait five minutes",
+        "hang on ten seconds please",
+    ):
+        t = make_npc("toll_authority")
+        o, _ = t.respond(phrase)
+        assert o == NPCOutcome.CONTINUE, phrase
+        assert not t._paid, phrase
+        assert t.bribe_cost() == 0, phrase
+
+    # Explicit payment still works.
+    paid = make_npc("toll_authority")
+    o, _ = paid.respond("transferring 1500 credits for the toll")
+    assert o == NPCOutcome.RELEASE
+    assert paid._paid
+    assert paid.bribe_cost() == 1500
+
+
+def test_felix_and_dray_bribes_report_cost():
+    """Labeled BRIBE releases must expose bribe_cost so RunManager can charge."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    felix = make_npc("nervous_fence")
+    o, _ = felix.respond("800 credits")
+    assert o == NPCOutcome.RELEASE
+    assert felix.bribe_cost() == 800
+
+    # Distraction path ("five year plan") is not a bribe.
+    felix2 = make_npc("nervous_fence")
+    o2, _ = felix2.respond("tell me about your five year plan")
+    assert o2 != NPCOutcome.RELEASE or felix2.bribe_cost() == 0
+    assert not getattr(felix2, "_paid", False)
+
+    dray = make_npc("dray")
+    o3, _ = dray.respond("500 credits")
+    assert o3 == NPCOutcome.RELEASE
+    assert dray.bribe_cost() == 500
+
+
 def test_toll_path_progress():
     from terminal.npc_logic import make_npc
 
