@@ -11,7 +11,7 @@ After committing your work, remove your row.
 
 | Subsystem | Branch | Claimed by | Timestamp |
 |-----------|--------|------------|-----------|
-| `terminal` / `npcs` (toll, felix, dray, nlp_parser) | cursor/critical-bug-investigation-f8a7 | critical-bug-automation | 2026-07-26 11:06 |
+| *(none)* | | | |
 
 ---
 
