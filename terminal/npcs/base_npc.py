@@ -132,6 +132,23 @@ class BaseNPC(ABC):
         """Player's spendable run credits, injected into _ctx each turn."""
         return int(getattr(self, "_ctx", {}).get("credits", 0))
 
+    def broke_bribe_line(self, amount: int) -> str | None:
+        """J.1 insufficient-funds gate for legacy bribe RELEASE paths.
+
+        Returns a CONTINUE counter-offer when `sector_credits < amount`, else
+        None so the caller may accept. CONTINUE already burns −1 patience in
+        `respond()`, matching the locked economy rule (no silent success, no
+        free RELEASE, no charge).
+        """
+        amount = int(amount)
+        have = self._credits()
+        if have >= amount:
+            return None
+        return (
+            f"You've got {have:,} on you. I need {amount:,}. "
+            "No charge — work something else, or come back with the credits."
+        )
+
     def stage_transaction(self, amount: int, *, dual_ledger: bool = True,
                           effect: str | None = None,
                           label: str = "TERMINAL") -> None:

@@ -259,7 +259,12 @@ class Gary(BaseNPC):
             has_big = (any(amt in raw for amt in self._BIG_AMOUNTS) or
                        (parsed.amount is not None and parsed.amount >= 3000))
             if has_big:
-                self._bribe_paid = parsed.amount if parsed.amount else 3000
+                paid = parsed.amount if parsed.amount else 3000
+                refuse = self.broke_bribe_line(paid)
+                if refuse is not None:
+                    self._current_path = "BRIBE"
+                    return NPCOutcome.CONTINUE, refuse
+                self._bribe_paid = paid
                 self._current_path = f"BRIBE [{self._bribe_paid} cr]"
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="bribe")
                 return NPCOutcome.RELEASE, random.choice([
@@ -286,10 +291,15 @@ class Gary(BaseNPC):
             elif self._bribe_attempts >= 3:
                 self.disposition += 1
                 if self.disposition >= 3:
-                    self._bribe_paid = max(
+                    paid = max(
                         3000,
                         parsed.amount if parsed.amount else 3000,
                     )
+                    refuse = self.broke_bribe_line(paid)
+                    if refuse is not None:
+                        self._current_path = "BRIBE"
+                        return NPCOutcome.CONTINUE, refuse
+                    self._bribe_paid = paid
                     self._current_path = f"BRIBE [{self._bribe_paid} cr]"
                     bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="bribe")
                     return NPCOutcome.RELEASE, (

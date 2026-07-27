@@ -69,7 +69,7 @@ def test_meeting_floor_releases_npc():
     from terminal.npc_logic import make_npc
     from terminal.npcs.base_npc import NPCOutcome
 
-    felix = make_npc("nervous_fence", run_context={})
+    felix = make_npc("nervous_fence", run_context={"credits": 5000})
     out, _line = felix.respond("Take 1000 credits and clear my route.")
     assert out == NPCOutcome.RELEASE
 
@@ -81,7 +81,7 @@ def test_low_bribe_keeps_dossier_label_generic_until_amount_clears_floor():
     pygame.font.init()
     from terminal.npc_logic import make_npc
 
-    holt = make_npc("cargo_inspector", run_context={})
+    holt = make_npc("cargo_inspector", run_context={"credits": 5000})
     holt.respond("I can offer 200 credits.")
     assert holt._current_path == "BRIBE"
     # Floor met  label switches to the standardised paid label.

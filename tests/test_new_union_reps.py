@@ -48,7 +48,7 @@ def test_idealist_bribe_attempts_eventually_impound():
 def test_corrupt_releases_on_small_bribe():
     from terminal.npc_logic import make_npc
     from terminal.npcs.base_npc import NPCOutcome
-    rep = make_npc("corrupt_rep")
+    rep = make_npc("corrupt_rep", run_context={"credits": 5000})
     out, _line = rep.respond("here's 2000 credits, take it and look the other way")
     assert out == NPCOutcome.RELEASE
 
@@ -78,7 +78,7 @@ def test_corrupt_big_bribe_takes_cargo_too():
     """Offering >=8000 cr triggers the SHAKEDOWN flag — still released."""
     from terminal.npc_logic import make_npc
     from terminal.npcs.base_npc import NPCOutcome
-    rep = make_npc("corrupt_rep")
+    rep = make_npc("corrupt_rep", run_context={"credits": 20000})
     out, _ = rep.respond("here's 10000 credits, just let me through")
     assert out == NPCOutcome.RELEASE
     assert rep._was_shakedown is True

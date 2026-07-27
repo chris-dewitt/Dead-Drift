@@ -78,10 +78,14 @@ class Dray(BaseNPC):
         self._gripe_count       = 0
         self._traded            = False
         self._paid              = False
+        self._bribe_paid        = 0
         self._corpo_flags       = 0
         self._marrow_dropped    = False
         self._ghost_given       = False
         self._solidarity_shown  = False
+
+    def bribe_cost(self) -> int:
+        return self._bribe_paid
 
     def _intro_line(self) -> str:
         return random.choice([
@@ -173,7 +177,12 @@ class Dray(BaseNPC):
             ])
 
         if parsed.amount is not None and parsed.amount >= _BRIBE_AMOUNT:
+            refuse = self.broke_bribe_line(parsed.amount)
+            if refuse is not None:
+                self._current_path = "BRIBE"
+                return NPCOutcome.CONTINUE, refuse
             self._paid = True
+            self._bribe_paid = parsed.amount
             # Playtest fix: dossier label uses the standardised
             # `BRIBE [X cr]` format instead of past-tense "BRIBED".
             self._current_path = f"BRIBE [{parsed.amount} cr]"

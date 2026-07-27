@@ -131,6 +131,9 @@ class NervousFence(BaseNPC):
         self._spooked       = False
         self._soft_hostile  = 0
 
+    def bribe_cost(self) -> int:
+        return self._bribe_paid
+
     # ------------------------------------------------------------------
     def _intro_line(self) -> str:
         run_snaps     = self._ctx.get("run_snaps", 0)
@@ -274,6 +277,10 @@ class NervousFence(BaseNPC):
             ])
 
         if parsed.amount is not None and parsed.amount >= _CREDIT_AMOUNT:
+            refuse = self.broke_bribe_line(parsed.amount)
+            if refuse is not None:
+                self._current_path = "BRIBE"
+                return NPCOutcome.CONTINUE, refuse
             self._paid = True
             self._bribe_paid = parsed.amount
             # Aliveness B.1 — standardised dossier label

@@ -159,6 +159,10 @@ class CorruptRep(BaseNPC):
             if amount >= 8000:
                 # SHAKEDOWN — too much money on the table; he takes some
                 # cargo too. The player still RELEASES but pays extra.
+                refuse = self.broke_bribe_line(amount)
+                if refuse is not None:
+                    self._current_path = "BRIBE"
+                    return NPCOutcome.CONTINUE, refuse
                 self._was_shakedown = True
                 self._bribe_paid    = amount
                 # Mark dossier with the shakedown so the player can see
@@ -178,6 +182,10 @@ class CorruptRep(BaseNPC):
                     "I'm takin' the bribe AND a souvenir. Off you go.",
                 ])
             if amount >= 1500:
+                refuse = self.broke_bribe_line(amount)
+                if refuse is not None:
+                    self._current_path = "BRIBE"
+                    return NPCOutcome.CONTINUE, refuse
                 self._bribe_paid = amount
                 self._current_path = f"BRIBE [{amount} cr]"
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="small_bribe")
