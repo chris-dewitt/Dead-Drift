@@ -203,3 +203,41 @@ def test_terminal_without_econ_never_crashes():
     k.stage_transaction(2000, dual_ledger=True, label="X")
     term = Terminal(k, econ=None)      # no adapter injected
     term._apply_pending_transaction()  # must be a safe no-op
+
+
+# ── Legacy bribe paths must refuse when broke (J.1 insufficient funds) ──────
+
+def _legacy_bribe_cases(credits: int):
+    from terminal.npcs.gary import Gary
+    from terminal.npcs.cargo_inspector import CargoInspector
+    from terminal.npcs.union_dispatcher import UnionDispatcher
+    from terminal.npcs.corrupt_rep import CorruptRep
+    from terminal.npcs.nervous_fence import NervousFence
+    from terminal.npcs.toll_authority import TollAuthority
+    from terminal.npcs.dray import Dray
+    return [
+        (Gary(run_context={"credits": credits}), "bribe 3000 credits", 3000),
+        (CargoInspector(run_context={"credits": credits}), "I will pay 600 credits", 600),
+        (UnionDispatcher(run_context={"credits": credits}), "bribe 10000 credits", 10000),
+        (CorruptRep(run_context={"credits": credits}), "bribe 1500 credits", 1500),
+        (NervousFence(run_context={"credits": credits}), "I will pay 800 credits", 800),
+        (TollAuthority(run_context={"credits": credits}), "I will pay 1500 credits", 1500),
+        (Dray(run_context={"credits": credits}), "I will pay 500 credits", 500),
+    ]
+
+
+def test_broke_legacy_bribes_continue_not_release():
+    """With 0 run credits, naming a bribe amount must not silently RELEASE
+    and schedule a debt charge — J.1 insufficient-funds rule."""
+    for npc, line, amount in _legacy_bribe_cases(0):
+        out, resp = npc.respond(line)
+        assert out == NPCOutcome.CONTINUE, f"{npc.name} released while broke"
+        assert npc.bribe_cost() == 0, f"{npc.name} staged a bribe while broke"
+        assert str(amount) in resp.replace(",", "") or f"{amount:,}" in resp
+
+
+def test_funded_legacy_bribes_still_release_and_charge():
+    for npc, line, amount in _legacy_bribe_cases(50_000):
+        out, resp = npc.respond(line)
+        assert out == NPCOutcome.RELEASE, f"{npc.name} refused a funded bribe"
+        assert npc.bribe_cost() == amount, f"{npc.name} bribe_cost mismatch"

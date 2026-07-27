@@ -198,6 +198,10 @@ class UnionDispatcher(BaseNPC):
             if (any(amt in raw for amt in self._BIG_BRIBES) or
                     (parsed.amount is not None and parsed.amount >= 10000)):
                 paid = parsed.amount if parsed.amount else 10000
+                refuse = self.broke_bribe_line(paid)
+                if refuse is not None:
+                    self._current_path = "BRIBE"
+                    return NPCOutcome.CONTINUE, refuse
                 self._bribe_paid = paid
                 self._current_path = f"BRIBE [{paid} cr]"
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="corruption")

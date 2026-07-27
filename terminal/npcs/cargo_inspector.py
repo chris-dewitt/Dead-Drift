@@ -210,6 +210,10 @@ class CargoInspector(BaseNPC):
             ])
 
         if parsed.amount is not None and parsed.amount >= _BRIBE_AMOUNT:
+            refuse = self.broke_bribe_line(parsed.amount)
+            if refuse is not None:
+                self._current_path = "BRIBE"
+                return NPCOutcome.CONTINUE, refuse
             self._bribed = True
             self._bribe_paid = parsed.amount
             # Aliveness B.1 — standardised dossier label. Holt files it

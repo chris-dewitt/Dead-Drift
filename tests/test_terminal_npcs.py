@@ -64,7 +64,7 @@ def test_toll_pay_requires_amount_not_bare_pay():
     assert o == NPCOutcome.CONTINUE
     assert not t._paid
 
-    t2 = make_npc("toll_authority")
+    t2 = make_npc("toll_authority", run_context={"credits": 5000})
     o2, _ = t2.respond("I will pay fifteen hundred credits")
     assert o2 == NPCOutcome.RELEASE
     assert t2.bribe_cost() == 1500

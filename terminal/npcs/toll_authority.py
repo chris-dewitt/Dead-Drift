@@ -82,6 +82,7 @@ class TollAuthority(BaseNPC):
         self._barge_called    = False
         self._bribe_paid      = 0
         self._union_released  = False
+        self._broke_bribe_line = None
 
     def _intro_line(self) -> str:
         return random.choice([
@@ -128,11 +129,17 @@ class TollAuthority(BaseNPC):
             return NPCOutcome.CONTINUE
 
         if _offers_full_toll(parsed, text_l):
-            self.disposition += 4
-            self._paid = True
-            self._bribe_paid = (
+            paid = (
                 parsed.amount if parsed.amount and parsed.amount >= _TOLL_COST else _TOLL_COST
             )
+            refuse = self.broke_bribe_line(paid)
+            if refuse is not None:
+                self._current_path = "BRIBE"
+                self._broke_bribe_line = refuse
+                return NPCOutcome.CONTINUE
+            self.disposition += 4
+            self._paid = True
+            self._bribe_paid = paid
             # Aliveness B.1 — standardised dossier label exposing the
             # amount paid so the player sees the price in the chip strip.
             self._current_path = f"BRIBE [{self._bribe_paid} cr]"
@@ -147,9 +154,15 @@ class TollAuthority(BaseNPC):
             self.disposition += 1
             self._low_bribed = True
             if random.random() < 0.4:
-                self._bribe_paid = (
+                paid = (
                     parsed.amount if parsed.amount and 0 < parsed.amount < _TOLL_COST else 750
                 )
+                refuse = self.broke_bribe_line(paid)
+                if refuse is not None:
+                    self._current_path = "BRIBE"
+                    self._broke_bribe_line = refuse
+                    return NPCOutcome.CONTINUE
+                self._bribe_paid = paid
                 self._current_path = f"BRIBE [{self._bribe_paid} cr]"
                 if self._vault:
                     self._vault.record("toll_authority", "LOW_BRIBE")
@@ -176,6 +189,7 @@ class TollAuthority(BaseNPC):
         return NPCOutcome.CONTINUE
 
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
+        self._broke_bribe_line = None
         outcome = self._decide_outcome(parsed)
 
         if outcome == NPCOutcome.IMPOUND:
@@ -236,6 +250,9 @@ class TollAuthority(BaseNPC):
                 "Go. Before the supervisor sees the logs.",
                 "Finally. Someone who gets it. Gate's open. You didn't pay. We never spoke.",
             ]))
+
+        if self._broke_bribe_line:
+            return (NPCOutcome.CONTINUE, self._broke_bribe_line)
 
         if self._paperwork_turns > 0:
             return (NPCOutcome.CONTINUE, random.choice([

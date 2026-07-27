@@ -814,6 +814,12 @@ class Terminal:
         self._push("MUTTER", _pick_courier_quip(player_text, npc_name))
 
         disp_before = self.npc.disposition
+        # Keep the NPC wallet view live before priced/bribe checks so a mid-
+        # session Kress/Mira charge can't leave a stale affordability snapshot.
+        if (self._econ is not None and hasattr(self.npc, "_ctx")
+                and isinstance(self.npc._ctx, dict)):
+            self.npc._ctx["credits"] = self._econ.credits()
+
         outcome, response = self.npc.respond(player_text)
         disp_after  = self.npc.disposition
 
