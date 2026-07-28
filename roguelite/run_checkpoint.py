@@ -512,6 +512,30 @@ def build_checkpoint(game) -> dict:
     if state_name == "TERMINAL":
         state_name = "DELIVERY" if getattr(game, "_delivery_pending", False) else "FLIGHT"
 
+    delivery_chapter = int(getattr(game, "_delivery_chapter", rm._current_chapter()))
+    interstitial_completed = getattr(game, "_interstitial_completed", 1)
+    interstitial_next = getattr(game, "_interstitial_next", 2)
+    interstitial_campaign_end = bool(getattr(game, "_interstitial_campaign_end", False))
+    interstitial_t = float(getattr(game, "_interstitial_t", 0.0))
+
+    # RESULT already mutated meta (pay_off / complete_chapter). A DELIVERY
+    # checkpoint restores a fresh DeliverySequence from approach, so pause-
+    # save on the RESULT card would duplicate the payout on resume. Promote
+    # to INTERSTITIAL — the same destination the RESULT timer reaches.
+    delivery = getattr(game, "_delivery", None)
+    if (state_name == "DELIVERY"
+            and delivery is not None
+            and getattr(delivery, "_result_applied", False)):
+        state_name = "INTERSTITIAL"
+        interstitial_completed = delivery_chapter
+        interstitial_next = delivery_chapter + 1
+        # Match Game._enter_interstitial (Issues I-11 campaign-end fix is separate).
+        interstitial_campaign_end = (
+            interstitial_next > 6
+            or bool(getattr(rm.meta, "campaign_cleared_at_least_once", False))
+        )
+        interstitial_t = 11.0
+
     return {
         "version": CHECKPOINT_VERSION,
         "game_state": state_name,
@@ -559,14 +583,14 @@ def build_checkpoint(game) -> dict:
         "ship": _ship_to_dict(ship),
         "frame_name": getattr(rm, "_frame_name", ""),
         "game_flow": {
-            "delivery_chapter": getattr(game, "_delivery_chapter", rm._current_chapter()),
+            "delivery_chapter": delivery_chapter,
             "delivery_pending": bool(getattr(game, "_delivery_pending", False)),
             "delivery_delay_t": float(getattr(game, "_delivery_delay_t", 0.0)),
             "terminal_win_hold_t": float(getattr(game, "_terminal_win_hold_t", 0.0)),
-            "interstitial_completed": getattr(game, "_interstitial_completed", 1),
-            "interstitial_next": getattr(game, "_interstitial_next", 2),
-            "interstitial_campaign_end": bool(getattr(game, "_interstitial_campaign_end", False)),
-            "interstitial_t": float(getattr(game, "_interstitial_t", 0.0)),
+            "interstitial_completed": interstitial_completed,
+            "interstitial_next": interstitial_next,
+            "interstitial_campaign_end": interstitial_campaign_end,
+            "interstitial_t": interstitial_t,
         },
     }
 

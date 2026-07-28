@@ -555,6 +555,9 @@ class DeliverySequence:
         self._bonus    = 0
         self._fee_cut  = 0
         self._done     = False
+        # Guards against double-applying pay_off/complete_chapter when a
+        # RESULT-phase pause-save is restored as a fresh DeliverySequence.
+        self._result_applied = False
 
         # Approach stars track
         self._approach_score = 0   # 0=miss, 1=ok, 2=centred
@@ -1640,6 +1643,9 @@ class DeliverySequence:
 
     # ── Phase: Result ─────────────────────────────────────────────────────
     def _compute_result(self):
+        if self._result_applied:
+            return
+        self._result_applied = True
         stars = self._run_stars
         self._bonus   = _DELIVERY_BONUS.get(stars, 0)
         self._fee_cut = _DELIVERY_FEE_CUT.get(stars, 0)
