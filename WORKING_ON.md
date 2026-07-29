@@ -11,7 +11,7 @@ After committing your work, remove your row.
 
 | Subsystem | Branch | Claimed by | Timestamp |
 |-----------|--------|------------|-----------|
-| npcs/nova_soma | cursor/critical-bug-investigation-fbcc | critical-bug-automation | 2026-07-29 11:00 |
+| *(none)* | | | |
 
 ---
 
