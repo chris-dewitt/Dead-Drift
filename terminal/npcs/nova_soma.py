@@ -56,6 +56,14 @@ _CONFESS_KEYWORDS = [
     "i am running", "i am illegal", "smuggler", "no license",
     "outstanding warrant", "off-books",
 ]
+# Payment detection needs money vocabulary — bare number-words like
+# "five"/"ten" also parse as thousands (see extract_credit_amount), so
+# stall lines such as "I need five minutes" must NOT look like a payment.
+_PAYMENT_VOCAB = (
+    "pay", "payment", "paying", "paid", "credits", "credit", "cash",
+    "transfer", "wire", "bribe", "here's", "here is", "sending",
+    "remit", "settle", "settlement",
+)
 
 
 class NovaSomaCollections(BaseNPC):
@@ -248,17 +256,26 @@ class NovaSomaCollections(BaseNPC):
                 "Let's talk about your debt journey.",
             ])
 
-        # Payment offer — accepts cash but warns you of more debt
-        if parsed.amount is not None and parsed.amount >= 500:
-            return NPCOutcome.RELEASE, random.choice([
-                f"*chime*  Thank you for your payment of {parsed.amount} credits!  "
-                "Your remaining debt is now: STILL VERY HIGH.  "
-                "Have a wonderful debt journey!  *upbeat disconnect*",
+        # Payment offer — the bot LOVES talking about payment, but live
+        # remittance is not a win path.  Previously this RELEASEd for free
+        # (no charge) and RunManager then paid the 2,500 negotiation bonus,
+        # so "I need five minutes" / "here's 500 credits" silently cleared
+        # the sector and corrupted the ledger.  Keep the wellness fluff;
+        # real exits stay on SQL / paradox / policy / hardship / REPL.
+        if (parsed.amount is not None and parsed.amount >= 500
+                and any(w in raw for w in _PAYMENT_VOCAB)):
+            return NPCOutcome.CONTINUE, random.choice([
+                f"*chime*  I see you want to remit {parsed.amount} credits!  "
+                "Unfortunately our LIVE PAYMENT portal is experiencing a "
+                "wellness outage.  Please continue holding while I escalate!",
 
-                f"*synthetic warmth*  Receiving payment: {parsed.amount} cr.  "
-                "Processed!  Your account now reads: ENROLLED.  "
-                "Don't forget your daily affirmation:  "
-                "'I am ENOUGH, even when I owe.'  *click*",
+                f"*synthetic warmth*  Payment intent logged: {parsed.amount} cr.  "
+                "I can't process remittances on this channel — that's a "
+                "separate journey!  Meanwhile, how are you FEELING about debt?",
+
+                f"*upbeat*  {parsed.amount} credits is a BEAUTIFUL intention!  "
+                "Our portal is down for scheduled self-care.  "
+                "Stay on the line and we'll find another path together!",
             ])
 
         # Default: bot is happy to keep you on the line forever
