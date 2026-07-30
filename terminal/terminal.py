@@ -825,6 +825,11 @@ class Terminal:
                 current_path and current_path in self._blocked_paths):
             self._hardened_once = True
             outcome  = NPCOutcome.CONTINUE
+            # Discard any staged purchase — the win did not stick this turn, so
+            # charging/applying effects here would double-bill on the retry that
+            # actually closes (Kress CONTRABAND / INTEL, Mira PAID).
+            if hasattr(self.npc, "take_pending_transaction"):
+                self.npc.take_pending_transaction()
             response = (
                 random.choice([
                     "...Wait. Doesn't this feel familiar? *checks file* "
@@ -858,10 +863,13 @@ class Terminal:
 
         self._push(self.npc.name.upper(), response)
 
-        # J.1 — apply any priced transaction the NPC staged this turn. The NPC
-        # only stages when the player can afford it, so this just moves the
-        # numbers and prints an honest ledger line under the NPC's response.
-        self._apply_pending_transaction()
+        # J.1 — apply any priced transaction the NPC staged this turn. Only when
+        # the turn still closes a win: path-hardening may have rewritten a
+        # RELEASE/EXPLOIT to CONTINUE after staging, and those must not charge.
+        if outcome in (NPCOutcome.EXPLOIT, NPCOutcome.RELEASE):
+            self._apply_pending_transaction()
+        elif hasattr(self.npc, "take_pending_transaction"):
+            self.npc.take_pending_transaction()
 
         self._outcome = outcome
 

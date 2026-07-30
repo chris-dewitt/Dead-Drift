@@ -19,6 +19,7 @@ from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
+from terminal.economy import EFFECT_REPAIR_45
 from core.event_bus import bus, EVT_NLP_EXPLOIT, EVT_HULL_DAMAGE
 
 
@@ -162,12 +163,14 @@ class MiraVoss(BaseNPC):
                 )
             self._paid = True
             self._current_path = "PAID"
-            self.stage_transaction(_PAY_AMOUNT, dual_ledger=False, effect=None,
-                                   label="MIRA REPAIR")
+            # Stage the hull patch as the txn effect so path-hardening (which
+            # discards the pending txn on CONTINUE) cannot grant a free repair
+            # before the charge sticks on a real RELEASE.
+            self.stage_transaction(_PAY_AMOUNT, dual_ledger=False,
+                                   effect=EFFECT_REPAIR_45, label="MIRA REPAIR")
             bus.emit(EVT_NLP_EXPLOIT, npc="mira_voss", exploit_key="paid_repair")
             if self._vault:
                 self._vault.record("mira_voss", "PAID_REPAIR")
-            self._do_repair()
             return NPCOutcome.RELEASE, random.choice([
                 f"{_PAY_AMOUNT} credits.  Done.  Patch sealed, "
                 "pressure back to nominal.  Pleasure doing business.  "

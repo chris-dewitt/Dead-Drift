@@ -158,6 +158,7 @@ def test_mira_pay_charges_700_run_credits_only():
     txn = m.take_pending_transaction()
     assert txn["amount"] == 700
     assert txn["dual_ledger"] is False   # off-books medic, no meta debt
+    assert txn["effect"] == EFFECT_REPAIR_45  # repair rides the txn, not a free pre-charge
 
 
 def test_mira_broke_offer_gets_counter_not_free_patch():
@@ -195,6 +196,75 @@ def test_terminal_applies_transaction_and_prints_ledger(monkeypatch):
     assert state["harm"] == 10.0      # +1 harmonica charge
     ledger = [t for spk, t in term._history if spk == "LEDGER"]
     assert ledger and "3,000 cr" in ledger[0] and "harmonica" in ledger[0]
+
+
+def test_path_hardening_does_not_charge_before_the_win_sticks(monkeypatch):
+    """Same paid path across consecutive terminals must not double-bill.
+
+    Concrete trigger: win CONTRABAND once → next Kress terminal has that path
+    blocked. Buying stims again stages a charge, path-hardening rewrites the
+    RELEASE to CONTINUE, and the old code still applied the pending txn. Retry
+    then charged again on the real RELEASE — silent dual-ledger corruption.
+    """
+    from terminal.terminal import Terminal
+    econ, state = _econ(9000)
+    k = _kress(9000)
+    # Keep NPC wallet view in sync with econ so affordability checks stay honest.
+    k._ctx["credits"] = state["cr"]
+    term = Terminal(k, blocked_paths=frozenset({"CONTRABAND"}), econ=econ)
+    term.activate()
+
+    stim = next(e for e in k._CONTRABAND_MENU if e[2] == EFFECT_STIM)
+    real_choice = random.choice
+
+    def pick(seq):
+        if seq and isinstance(seq[0], tuple) and len(seq[0]) == 3:
+            return stim
+        return real_choice(seq)
+    monkeypatch.setattr(random, "choice", pick)
+
+    term._input = "sell me stims"
+    term._submit()
+    assert term.is_done is False
+    assert state["cr"] == 9000
+    assert state["debt"] == 0
+    assert state["harm"] == 5.0
+    assert k._pending_txn is None
+
+    # Second push breaks through hardening and charges exactly once.
+    k._ctx["credits"] = state["cr"]
+    term._input = "sell me stims"
+    term._submit()
+    assert term.is_done is True
+    assert term.outcome == NPCOutcome.RELEASE
+    assert state["cr"] == 6000
+    assert state["debt"] == 3000
+    assert state["harm"] == 10.0
+
+
+def test_mira_paid_hardening_does_not_grant_free_repair():
+    """Hardened Mira PAID must not patch hull before the charge sticks."""
+    from terminal.terminal import Terminal
+    econ, state = _econ(5000)
+    m = _mira(5000)
+    term = Terminal(m, blocked_paths=frozenset({"PAID"}), econ=econ)
+    term.activate()
+
+    term._input = "here's 700 credits for a patch"
+    term._submit()
+    assert term.is_done is False
+    assert state["cr"] == 5000
+    assert state["hull"] == 0.0
+    assert m._pending_txn is None
+
+    m._ctx["credits"] = state["cr"]
+    term._input = "here's 700 credits for a patch"
+    term._submit()
+    assert term.is_done is True
+    assert term.outcome == NPCOutcome.RELEASE
+    assert state["cr"] == 4300
+    assert state["hull"] == 45.0
+    assert state["debt"] == 0
 
 
 def test_terminal_without_econ_never_crashes():
