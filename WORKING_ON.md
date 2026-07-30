@@ -11,7 +11,7 @@ After committing your work, remove your row.
 
 | Subsystem | Branch | Claimed by | Timestamp |
 |-----------|--------|------------|-----------|
-| *(none)* | | | |
+| terminal / mira_voss | cursor/critical-bug-investigation-75d5 | critical-bug-automation | 2026-07-30 11:15 |
 
 ---
 
