@@ -324,11 +324,17 @@ def _barge_dict(b) -> dict:
 
 
 def _barge_from(d: dict, run_mgr):
-    from antagonists.repo_barge import RepoBarge
+    from antagonists.repo_barge import BargeState, RepoBarge
     b = RepoBarge(d["x"], d["y"], run_mgr)
     b.body.vel = Vec2(d["vx"], d["vy"])
     b.body.angle = float(d.get("angle", 0.0))
-    b.state = d.get("state", b.state)
+    state = d.get("state", b.state)
+    # Harpoon tether + mid-flight barge terminal are not checkpointed.
+    # Restoring TORCH/CLAMP without a tether used to keep torching modules
+    # at any distance; INTERCEPT without a terminal parked the barge forever.
+    if state in (BargeState.CLAMP, BargeState.TORCH, BargeState.INTERCEPT):
+        state = BargeState.PATROL
+    b.state = state
     b._hp = float(d.get("hp", 60.0))
     b.is_destroyed = bool(d.get("destroyed", False))
     b._retreat_t = float(d.get("retreat_t", 0.0))
