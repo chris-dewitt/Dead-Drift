@@ -150,6 +150,10 @@ class Game:
 
         # Death hold — brief black screen before DECANTING to let the explosion register
         self._death_hold_t: float = 0.0   # >0 = holding on death flash before transition
+        # Set when RESUME loads a checkpoint whose ship is already destroyed
+        # (Save & Quit during the death flash). Cleared when leaving DECANTING
+        # so we don't keep reopening a softlocked FLIGHT save.
+        self._decant_from_destroyed_checkpoint: bool = False
 
         # Bax hum trigger (§7.4) — once per run on first delivery success
         self._hum_played_this_run: bool = False
@@ -403,6 +407,10 @@ class Game:
                     self._delivery.handle_keyup(event)
 
     def _pause_game(self) -> None:
+        # Death flash owns the frame — pausing here would let Save & Quit
+        # persist a destroyed ship in FLIGHT with no path back to DECANTING.
+        if self._death_hold_t > 0:
+            return
         if self.states.state in self._PAUSEABLE:
             self._state_before_pause = self.states.state
             self._pause_menu_cursor = 0
@@ -531,6 +539,7 @@ class Game:
     def _continue_from_menu(self) -> None:
         self._bind_meta_from_active_slot()
         self._run_just_completed = False
+        self._decant_from_destroyed_checkpoint = False
         if self.save_mgr.has_run_checkpoint():
             if self.save_mgr.load_run_checkpoint(self):
                 from roguelite.run_checkpoint import load_checkpoint_file
@@ -540,6 +549,11 @@ class Game:
                     target = GameState[gs_name]
                 except KeyError:
                     target = GameState.FLIGHT
+                # Heal legacy softlock saves: destroyed ship left in FLIGHT
+                # (or any other non-DECANTING state) after death-flash Save & Quit.
+                if getattr(self.ship, "_destroyed", False):
+                    self._decant_from_destroyed_checkpoint = True
+                    target = GameState.DECANTING
                 if target == GameState.SHOP:
                     self._shop = ShopScreen(self.run_mgr, self.ship)
                 self._goto(target)
@@ -792,6 +806,12 @@ class Game:
         elif state == GameState.DECANTING:
             if event.key == pygame.K_RETURN:
                 self.meta.save()
+                # Destroyed-ship checkpoints must not remain as RESUME RUN —
+                # reloading them would bounce the player back into DECANTING
+                # forever. Natural death leaves the pre-death autosave alone.
+                if self._decant_from_destroyed_checkpoint:
+                    self.save_mgr.delete_run_checkpoint()
+                    self._decant_from_destroyed_checkpoint = False
                 self._menu_mode = "main"
                 self._goto(GameState.MAIN_MENU)
         elif state == GameState.INTERSTITIAL:
