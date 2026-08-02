@@ -2061,17 +2061,18 @@ class RunManager:
             return
         sling_r2 = S.SLINGSHOT_RANGE * S.SLINGSHOT_RANGE
         pos = self._ship.body.pos
-        for well in self._sector.gravity.wells:
+        # Index wells (not id()) so claimed bonuses survive checkpoint restore,
+        # which rebuilds GravityWell objects with new Python identities.
+        for idx, well in enumerate(self._sector.gravity.wells):
             if (well.pos - pos).length_sq() >= sling_r2:
                 continue
-            wid = id(well)
-            if self._orbit_well_id != wid:
-                self._orbit_well_id = wid
+            if self._orbit_well_id != idx:
+                self._orbit_well_id = idx
                 self._orbit_t = 0.0
             self._orbit_t += dt
             if (self._orbit_t >= S.ORBIT_BONUS_DURATION
-                    and wid not in self._orbit_bonus_claimed):
-                self._orbit_bonus_claimed.add(wid)
+                    and idx not in self._orbit_bonus_claimed):
+                self._orbit_bonus_claimed.add(idx)
                 bonus = int(SLINGSHOT_CREDIT_BONUS * S.ORBIT_BONUS_MULT)
                 self.meta.pay_off(bonus, source="ORBIT BONUS")
                 self._run_debt_reduced += bonus
