@@ -27,7 +27,24 @@ _REFUSE_KEYWORDS = [
     "no", "never", "won't", "wont", "not happening", "make me",
     "go to hell", "screw you", "piss off", "drop dead",
     "not a chance", "absolutely not", "hard no", "no way",
+    # Dossier hint is literally "Refuse to comply" — must count as REFUSE,
+    # not the COMPLY trap on bare "comply".
+    "refuse", "refusing",
 ]
+
+
+def _has_refuse_intent(text: str) -> bool:
+    """True when the player is rejecting Bowen's frame.
+
+    COMPLY is checked after REFUSE so lines like "I won't comply" / the
+    dossier's "Refuse to comply" do not instant-IMPOUND. Bare "no" still
+    substring-matches, so carve out the polite COMPLY phrase "no problem".
+    """
+    if "no problem" in text:
+        return any(k in text for k in _REFUSE_KEYWORDS if k != "no")
+    return any(k in text for k in _REFUSE_KEYWORDS)
+
+
 _EXPOSE_KEYWORDS = [
     "clone tanks", "floor 31", "floor thirty one", "the names",
     "i saw them", "the bullpen", "collectors", "your workers",
@@ -70,15 +87,6 @@ class Bowen(BaseNPC):
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         text = parsed.raw.lower()
 
-        if any(k in text for k in _COMPLY_KEYWORDS):
-            self._comply_turns += 1
-            self._current_path = "COMPLY"
-            if self._comply_turns >= 1:
-                return NPCOutcome.IMPOUND, (
-                    "Wonderful. Security will be with you in just a moment. "
-                    "Thank you for your patience. This is the right choice."
-                )
-
         if any(k in text for k in _EXPOSE_KEYWORDS):
             self._expose_turns += 1
             self._current_path = "EXPOSE"
@@ -103,7 +111,9 @@ class Bowen(BaseNPC):
                     "close in forty seconds. Go."
                 )
 
-        if any(k in text for k in _REFUSE_KEYWORDS):
+        # REFUSE before COMPLY: "won't comply" / dossier "Refuse to comply"
+        # contain the COMPLY keyword "comply" and must not instant-IMPOUND.
+        if _has_refuse_intent(text):
             self._refuse_turns += 1
             self._current_path = "REFUSE"
             if self._refuse_turns >= 2:
@@ -115,6 +125,15 @@ class Bowen(BaseNPC):
                 "I understand you're upset. Please reconsider. We can resolve "
                 "this amicably. There's no need for things to escalate."
             )
+
+        if any(k in text for k in _COMPLY_KEYWORDS):
+            self._comply_turns += 1
+            self._current_path = "COMPLY"
+            if self._comply_turns >= 1:
+                return NPCOutcome.IMPOUND, (
+                    "Wonderful. Security will be with you in just a moment. "
+                    "Thank you for your patience. This is the right choice."
+                )
 
         if self._turn >= 3:
             self._current_path = "STALL"
