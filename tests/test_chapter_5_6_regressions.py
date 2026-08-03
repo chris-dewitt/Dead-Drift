@@ -89,3 +89,40 @@ def test_chapter_five_and_six_climax_npcs_accept_normal_input():
     outcome, _ = bowen.respond("no way")
     assert outcome == NPCOutcome.CONTINUE
     assert bowen._current_path == "REFUSE"
+
+
+def test_bowen_refuse_to_comply_is_refuse_not_impound():
+    """Dossier hint 'Refuse to comply' must not hit the COMPLY IMPOUND trap."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    # Exact dossier phrasing and close variants — first hit is CONTINUE on REFUSE.
+    for phrase in (
+        "Refuse to comply",
+        "I refuse to comply",
+        "I won't comply",
+        "I will not comply",
+    ):
+        bowen = make_npc("bowen")
+        outcome, _ = bowen.respond(phrase)
+        assert outcome == NPCOutcome.CONTINUE, phrase
+        assert bowen._current_path == "REFUSE", phrase
+        assert bowen._comply_turns == 0, phrase
+
+    # Two hard refusals still RELEASE (the intended win).
+    bowen = make_npc("bowen")
+    assert bowen.respond("I refuse to comply")[0] == NPCOutcome.CONTINUE
+    outcome, _ = bowen.respond("absolutely not")
+    assert outcome == NPCOutcome.RELEASE
+    assert bowen._current_path == "REFUSE"
+
+    # Polite compliance phrases still IMPOUND immediately.
+    bowen = make_npc("bowen")
+    outcome, _ = bowen.respond("no problem")
+    assert outcome == NPCOutcome.IMPOUND
+    assert bowen._current_path == "COMPLY"
+
+    bowen = make_npc("bowen")
+    outcome, _ = bowen.respond("okay I'll wait")
+    assert outcome == NPCOutcome.IMPOUND
+    assert bowen._current_path == "COMPLY"
