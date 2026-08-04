@@ -13,6 +13,7 @@ Outcomes:
 """
 from __future__ import annotations
 import random
+import re
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
@@ -22,10 +23,18 @@ _TOLL_COST = 1500
 _LOW_BRIBE_KEYWORDS = [
     "five hundred", "500", "one thousand", "1000",
 ]
+# Matched as whole words only — bare "id"/"form"/"permit" as substrings
+# steal intended PAY lines ("I paid 1500", "valid payment") into free
+# PAPERWORK RELEASE, and also false-hit dialogue like "information".
 _PAPERWORK_KEYWORDS = [
-    "form", "paperwork", "documentation", "permit", "certificate",
-    "authorisation", "authorization", "id", "clearance", "waiver",
+    "form", "forms", "paperwork", "documentation", "permit", "permits",
+    "certificate", "authorisation", "authorization", "id", "ids",
+    "identification", "clearance", "waiver",
 ]
+_PAPERWORK_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(w) for w in _PAPERWORK_KEYWORDS) + r")\b",
+    re.IGNORECASE,
+)
 _UNION_GRIPE_WORDS = [
     "union", "local 404", "local404", "repo man", "repo", "them",
     "barge", "dispatcher", "collector", "those guys", "those people",
@@ -115,7 +124,7 @@ class TollAuthority(BaseNPC):
             self.disposition = -10
             return NPCOutcome.IMPOUND
 
-        if any(w in text_l for w in _PAPERWORK_KEYWORDS):
+        if _PAPERWORK_RE.search(text_l):
             self._current_path = "PAPERWORK"
             self._paperwork_turns += 1
             self.disposition += 1

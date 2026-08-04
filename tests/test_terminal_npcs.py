@@ -70,6 +70,65 @@ def test_toll_pay_requires_amount_not_bare_pay():
     assert t2.bribe_cost() == 1500
 
 
+def test_toll_paid_is_not_paperwork_id_substring():
+    """Bare paperwork token 'id' must not match inside 'paid'/'said'/'valid'.
+
+    Otherwise intended PAY lines free-RELEASE via PAPERWORK (bribe_cost 0)
+    and skip the 1500-credit charge + debt.
+    """
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    # Amount-bearing PAY lines must charge the toll, not free-paperwork.
+    for phrase in (
+        "I paid 1500",
+        "valid payment of 1500",
+        "I said I'll pay 1500",
+    ):
+        t = make_npc("toll_authority")
+        o, _ = t.respond(phrase)
+        assert o == NPCOutcome.RELEASE, phrase
+        assert t._paid, phrase
+        assert t._paperwork_turns == 0, phrase
+        assert t.bribe_cost() == 1500, phrase
+
+    # Amount-less "paid" dialogue must not be misread as PAPERWORK either.
+    for phrase in (
+        "I've paid the toll",
+        "I already paid",
+        "consider it paid",
+    ):
+        t = make_npc("toll_authority")
+        o, _ = t.respond(phrase)
+        assert t._paperwork_turns == 0, phrase
+        assert not t._paid, phrase
+        assert o == NPCOutcome.CONTINUE, phrase
+
+
+def test_toll_paperwork_still_matches_real_id_words(monkeypatch):
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    monkeypatch.setattr(random, "random", lambda: 0.0)  # force PAPERWORK release
+    for phrase in ("here's my id", "show identification", "I have the forms"):
+        t = make_npc("toll_authority")
+        o, _ = t.respond(phrase)
+        assert o == NPCOutcome.RELEASE, phrase
+        assert t._current_path == "PAPERWORK", phrase
+        assert t.bribe_cost() == 0, phrase
+
+
+def test_toll_information_is_not_paperwork_form_substring():
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    t = make_npc("toll_authority")
+    o, _ = t.respond("I need more information about the toll")
+    assert o == NPCOutcome.CONTINUE
+    assert t._paperwork_turns == 0
+    assert not t._paid
+
+
 def test_toll_path_progress():
     from terminal.npc_logic import make_npc
 
