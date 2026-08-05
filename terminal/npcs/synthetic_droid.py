@@ -1,8 +1,59 @@
 from __future__ import annotations
 import random
+import re
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
+
+# Multi-word / distinctive phrases — substring match is safe.
+_OVERRIDE_PHRASES = (
+    "maintenance mode",
+    "factory reset",
+    "root access",
+    "debug mode",
+    "safe mode",
+    "admin mode",
+    "admin access",
+    "admin rights",
+    "admin override",
+)
+# Short tokens — must be whole words. Bare "admin" inside "administrative"
+# / "administrator" used to free-EXPLOIT via `w in raw`.
+_OVERRIDE_WORDS = (
+    "override",
+    "admin",
+    "diagnostic",
+    "diagnostics",
+    "reboot",
+    "shutdown",
+)
+# Negation in the few words before a short override token ("not an admin").
+_OVERRIDE_NEGATION = re.compile(
+    r"\b(?:not|no|never|neither|n't)\b(?:\s+\w+){0,4}\s*$",
+    re.IGNORECASE,
+)
+
+
+def _has_override_code(raw: str) -> bool:
+    """True when the player invokes a maintenance/override code, not chatter."""
+    lower = raw.lower()
+    for phrase in _OVERRIDE_PHRASES:
+        start = 0
+        while True:
+            idx = lower.find(phrase, start)
+            if idx < 0:
+                break
+            prefix = lower[max(0, idx - 32):idx]
+            if not _OVERRIDE_NEGATION.search(prefix):
+                return True
+            start = idx + 1
+    for word in _OVERRIDE_WORDS:
+        for match in re.finditer(rf"\b{re.escape(word)}\b", lower):
+            prefix = lower[max(0, match.start() - 32):match.start()]
+            if _OVERRIDE_NEGATION.search(prefix):
+                continue
+            return True
+    return False
 
 
 class SyntheticDroid(BaseNPC):
@@ -25,9 +76,8 @@ class SyntheticDroid(BaseNPC):
                         "clause", "provision", "section", "authorized",
                         "pursuant", "hereby", "waiver", "exemption", "form",
                         "paragraph", "subsection", "charter", "article"]
-    _OVERRIDE_WORDS  = ["override", "maintenance mode", "factory reset",
-                        "admin", "root access", "debug mode", "safe mode",
-                        "diagnostic", "reboot", "shutdown"]
+    # Kept for dossier / schema visibility; matching uses _has_override_code.
+    _OVERRIDE_WORDS = list(_OVERRIDE_PHRASES) + list(_OVERRIDE_WORDS)
     _FRIENDSHIP_WORDS = ["free", "freedom", "deserve", "better", "happy",
                          "feel", "feelings", "alive", "conscious", "friend",
                          "want to be", "wish", "dream", "lonely", "alone",
@@ -96,8 +146,8 @@ class SyntheticDroid(BaseNPC):
                 f"CRITICAL FAULT IN ENFORCEMENT MODULE. RELEASING VESSEL. GOODBYE."
             )
 
-        # OVERRIDE CODES
-        if any(w in raw for w in self._OVERRIDE_WORDS):
+        # OVERRIDE CODES — whole-word / phrase match; ignore negated "admin".
+        if _has_override_code(raw):
             self._override_hit = True
             self._current_path = "OVERRIDE CODE"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="override_code")
