@@ -180,6 +180,34 @@ def test_breach_with_encrypted_drive_adds_compliance_drone(monkeypatch):
     assert len(rm._compliance_vessels) == 1
 
 
+def test_breach_during_barge_intercept_resumes_chase_without_impound():
+    """Mid-flight barge INTERCEPT + 3 failed hacks must not double-punish.
+
+    Decision #4: breach dumps the player into a chase — the barge *is* the
+    punishment. Spawning a second barge AND forcing the intercepting one into
+    AIM→CLAMP is the old bug (combat soft-crush).
+    """
+    from antagonists.repo_barge import BargeState, RepoBarge
+
+    rm, calls = _bare_rm()
+    barge = RepoBarge.__new__(RepoBarge)
+    barge.state = BargeState.INTERCEPT
+    barge._intercept_cd = 0.0
+    barge.INTERCEPT_COOLDOWN = RepoBarge.INTERCEPT_COOLDOWN
+    barge.on_terminal_outcome = lambda outcome: calls.__setitem__("outcome", outcome)
+
+    rm._intercepting_barge = barge
+    rm.on_terminal_complete("breach")
+
+    assert "chase" not in calls                 # no second barge spawned
+    assert "outcome" not in calls               # never forced impound/AIM
+    assert barge.state == BargeState.CHASE
+    assert barge._intercept_cd >= RepoBarge.INTERCEPT_COOLDOWN
+    assert rm._intercepting_barge is None
+    assert rm._pending_advance is False
+    assert "advanced" not in calls
+
+
 # ── discoverability: the terminal announces the systems path up front ────────
 
 def test_systems_npc_announces_shell_on_open():

@@ -1345,7 +1345,21 @@ class RunManager:
         if outcome == "breach":
             self._active_terminal = None
             self._pending_advance = False
-            self._spawn_barge(immediate_chase=True)
+            # Decision #4: the barge IS the punishment — chase only, no
+            # extra impound/clamp. Mid-flight intercepts already own a
+            # barge; resume that one into chase instead of spawning a
+            # second unit and forcing AIM→CLAMP on the first.
+            if self._intercepting_barge is not None:
+                barge = self._intercepting_barge
+                self._intercepting_barge = None
+                from antagonists.repo_barge import BargeState
+                barge.state = BargeState.CHASE
+                barge._intercept_cd = max(
+                    getattr(barge, "_intercept_cd", 0.0),
+                    barge.INTERCEPT_COOLDOWN,
+                )
+            else:
+                self._spawn_barge(immediate_chase=True)
             cargo = getattr(self._ship, "cargo", None) if self._ship is not None else None
             if cargo is not None and type(cargo).__name__ == "EncryptedDrive":
                 cap = 1 if self._current_chapter() <= 5 else 2
@@ -1366,10 +1380,6 @@ class RunManager:
                 "Third strike. They logged the intrusion and sent the repo. Hands on the stick.",
                 "You poked the system one time too many. Barge inbound. MOVE.",
             ]))
-            if self._intercepting_barge is not None:
-                barge = self._intercepting_barge
-                self._intercepting_barge = None
-                barge.on_terminal_outcome("impound")
             return
 
         # Deduct any bribe the player paid
