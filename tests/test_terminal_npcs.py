@@ -24,6 +24,42 @@ def test_extract_credit_skips_local_404():
     assert extract_credit_amount("pay 1500 credits") == 1500
 
 
+def test_extract_credit_comma_and_decimal_k():
+    """Comma groups and decimal-k must not silently under/over-parse."""
+    from terminal.nlp_parser import extract_credit_amount
+
+    assert extract_credit_amount("I will pay 1,500 credits") == 1500
+    assert extract_credit_amount("payment of 1,500 credits") == 1500
+    assert extract_credit_amount("transfer 2,500 credits") == 2500
+    assert extract_credit_amount("pay 10,000 credits") == 10000
+    assert extract_credit_amount("pay 1.5k credits") == 1500
+    assert extract_credit_amount("pay 12.5k credits") == 12500
+    assert extract_credit_amount("pay 5k credits") == 5000
+
+
+def test_toll_comma_amount_charges_full_toll():
+    """'1,500' must not fall into the 40% LOW_BRIBE (500cr) path."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    t = make_npc("toll_authority")
+    o, _ = t.respond("I will pay 1,500 credits")
+    assert o == NPCOutcome.RELEASE
+    assert t._paid
+    assert t.bribe_cost() == 1500
+
+
+def test_toll_decimal_k_charges_parsed_amount():
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    t = make_npc("toll_authority")
+    o, _ = t.respond("pay 1.5k credits")
+    assert o == NPCOutcome.RELEASE
+    assert t._paid
+    assert t.bribe_cost() == 1500
+
+
 def test_gary_sympathy_two_turns():
     from terminal.npc_logic import make_npc
     from terminal.npcs.base_npc import NPCOutcome
