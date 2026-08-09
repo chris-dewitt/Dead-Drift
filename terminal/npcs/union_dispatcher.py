@@ -31,9 +31,25 @@ class UnionDispatcher(BaseNPC):
                        "union rules", "arbitration", "injunction", "appeal"]
     _BRIBE_KEYWORDS = ["credits", "pay", "money", "bribe", "offer", "deal",
                        "cash", "transfer", "compensate", "buy"]
-    _BIG_BRIBES     = ["10k", "ten thousand", "20k", "twenty", "fifty", "50k",
-                       "hundred thousand", "a lot", "everything i have",
-                       "15k", "fifteen thousand", "25k", "30k", "thirty"]
+    # Bare number-words ("twenty"/"thirty"/"fifty") are NOT listed here —
+    # they substring-match ordinary dialogue ("deal for twenty minutes",
+    # "fifty percent") and, with extract_credit_amount's *1000 heuristic,
+    # were charging 20k–50k dual-ledger bribes. Explicit thousand/k forms
+    # stay; numeric floors still come from parsed.amount >= 10000 when the
+    # line also carries a money cue (see _AMOUNT_MONEY_CUES).
+    _BIG_BRIBES     = ["10k", "ten thousand", "20k", "twenty thousand",
+                       "50k", "fifty thousand", "hundred thousand",
+                       "a lot", "everything i have",
+                       "15k", "fifteen thousand", "25k", "30k",
+                       "thirty thousand"]
+    # Required alongside parsed.amount >= 10000 so time/percent chatter
+    # ("twenty minutes", "fifty percent") cannot satisfy the floor alone.
+    # "deal"/"offer"/"compensate" stay out — they are bribe *intent* words,
+    # not proof a credit figure was named.
+    _AMOUNT_MONEY_CUES = (
+        "credit", "cash", "money", "bribe", "pay", "transfer", "fund",
+        "thousand", "grand", "10k", "15k", "20k", "25k", "30k", "50k",
+    )
     _COFFEE_WORDS   = ["coffee", "lunch", "break", "tired", "hungry", "food",
                        "eat", "rest", "shift", "hours", "overtime", "exhausted",
                        "long day", "been here", "working late",
@@ -195,8 +211,14 @@ class UnionDispatcher(BaseNPC):
 
         # LARGE BRIBE — Aliveness B.1 standard dossier label.
         if any(w in raw for w in self._BRIBE_KEYWORDS):
-            if (any(amt in raw for amt in self._BIG_BRIBES) or
-                    (parsed.amount is not None and parsed.amount >= 10000)):
+            big_phrase = any(amt in raw for amt in self._BIG_BRIBES)
+            money_cue = any(c in raw for c in self._AMOUNT_MONEY_CUES)
+            big_amount = (
+                parsed.amount is not None
+                and parsed.amount >= 10000
+                and money_cue
+            )
+            if big_phrase or big_amount:
                 paid = parsed.amount if parsed.amount else 10000
                 self._bribe_paid = paid
                 self._current_path = f"BRIBE [{paid} cr]"
