@@ -2413,6 +2413,11 @@ class RunManager:
         self._kress_called_this_sector = False
         self._fuel_warned  = False
         self._barges.clear()
+        # Death/DECANT restarts the sector attempt — clear pursuit drones the
+        # same way barges are cleared. Leaving them alive parked them next to
+        # the center respawn and immediately re-rammed the fresh clone.
+        self._compliance_vessels.clear()
+        self._compliance_spawn_cd = 12.0
         self._spawn_queue.clear()
         self._sling_well_t.clear()
         self._well_hit_times.clear()
