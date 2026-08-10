@@ -118,12 +118,21 @@ class MetaProgression:
                      source=source)
 
     def add_debt(self, amount: int, source: str = ""):
-        """Increase debt (shop purchases re-add previously reduced credits)."""
+        """Increase debt (shop purchases re-add previously reduced credits).
+
+        Post-campaign (ledger_wiped): debt is gone forever — refuse new
+        charges so dock fees / bribes / shop / veteran fees cannot
+        resurrect an unpayable balance while pay_off banks income.
+        """
+        if self.ledger_wiped:
+            return
         self._data["debt"] += amount
         bus.emit(EVT_DEBT_UPDATE, delta=amount, total=self.debt,
                  source=source)
 
     def clear_debt_chunk(self, amount: int = 50000, source: str = ""):
+        if self.ledger_wiped:
+            return
         self._data["debt"] = max(0, self._data["debt"] - amount)
         bus.emit(EVT_DEBT_UPDATE, delta=-amount, total=self.debt,
                  source=source)
@@ -133,6 +142,11 @@ class MetaProgression:
             self._data["chapters_completed"].append(chapter)
             if len(self._data["chapters_completed"]) % 2 == 0:
                 self._data["bax_level"] += 1
+            # Ch6 climax wipes the ledger. Matches interstitial copy
+            # ("Debt gone") and pay_off's "zeroed ledger" contract —
+            # leftover balance must not linger as an unpayable ghost.
+            if int(chapter) == 6:
+                self._data["debt"] = 0
             self.save()
 
     def adjust_reputation(self, npc_id: str, delta: int):
@@ -330,6 +344,10 @@ class MetaProgression:
     # ------------------------------------------------------------------
     @property
     def debt(self) -> int:
+        # Post-wipe saves may still carry a pre-fix ghost balance in
+        # `_data["debt"]`; surface 0 so HUD / invoices match "Debt gone."
+        if self.ledger_wiped:
+            return 0
         return self._data["debt"]
 
     @property
@@ -346,7 +364,7 @@ class MetaProgression:
 
     @property
     def is_debt_cleared(self) -> bool:
-        return self._data["debt"] <= 0
+        return self.debt <= 0
 
     @property
     def bax_hums_heard(self) -> list[int]:
