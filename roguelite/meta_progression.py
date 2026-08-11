@@ -79,7 +79,14 @@ class MetaProgression:
 
     # ------------------------------------------------------------------
     def apply_death_penalty(self, sector_index: int = 0):
-        """Stepped tow fee: sectors 0-1 → 8k, 2-3 → 12k, 4+ → 16k."""
+        """Stepped tow fee: sectors 0-1 → 8k, 2-3 → 12k, 4+ → 16k.
+
+        Post-campaign (ledger_wiped): debt is gone forever — still spin
+        the clone (clone_count++) but refuse the charge. pay_off already
+        banks income instead of reducing debt after wipe, so mutating
+        `_data["debt"]` here would resurrect an unpayable balance.
+        Distinct from add_debt dock-fee / shop paths.
+        """
         if sector_index >= 4:
             tow_fee = 16000
         elif sector_index >= 2:
@@ -87,8 +94,11 @@ class MetaProgression:
         else:
             tow_fee = S.WRECKAGE_TOW_FEE  # 8000
         penalty = S.BASE_CLONE_DEBT + S.CLONE_FLUID_FEE + tow_fee
-        self._data["debt"]        += penalty
         self._data["clone_count"] += 1
+        if self.ledger_wiped:
+            self.save()
+            return
+        self._data["debt"] += penalty
         bus.emit(EVT_DEBT_UPDATE, delta=penalty, total=self.debt,
                  source="CLONE TANK")
         self.save()
