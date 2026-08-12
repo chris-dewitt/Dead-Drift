@@ -89,3 +89,77 @@ def test_chapter_five_and_six_climax_npcs_accept_normal_input():
     outcome, _ = bowen.respond("no way")
     assert outcome == NPCOutcome.CONTINUE
     assert bowen._current_path == "REFUSE"
+
+
+def test_bowen_refuse_to_comply_is_refuse_not_impound():
+    """Dossier hint 'Refuse to comply' must not hit the COMPLY IMPOUND trap."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for phrase in (
+        "Refuse to comply",
+        "I refuse to comply",
+        "I won't comply",
+        "I will not comply",
+    ):
+        bowen = make_npc("bowen")
+        outcome, _ = bowen.respond(phrase)
+        assert outcome == NPCOutcome.CONTINUE, phrase
+        assert bowen._current_path == "REFUSE", phrase
+        assert bowen._comply_turns == 0, phrase
+
+    bowen = make_npc("bowen")
+    assert bowen.respond("I refuse to comply")[0] == NPCOutcome.CONTINUE
+    outcome, _ = bowen.respond("absolutely not")
+    assert outcome == NPCOutcome.RELEASE
+    assert bowen._current_path == "REFUSE"
+
+    bowen = make_npc("bowen")
+    outcome, _ = bowen.respond("no problem")
+    assert outcome == NPCOutcome.IMPOUND
+    assert bowen._current_path == "COMPLY"
+
+    bowen = make_npc("bowen")
+    outcome, _ = bowen.respond("okay I'll wait")
+    assert outcome == NPCOutcome.IMPOUND
+    assert bowen._current_path == "COMPLY"
+
+
+def test_bowen_ordinary_dialogue_does_not_farm_refuse_or_comply():
+    """Substring farms must not clear or fail the Ch6 climax.
+
+    Bare 'no' inside not/know/now/noted used to count as REFUSE (two confused
+    lines → free RELEASE + payout). Bare 'sure'/'fine'/'remain'/'compliance'
+    used to instant-IMPOUND ordinary clarification.
+    """
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    bowen = make_npc("bowen")
+    assert bowen.respond("I do not know what you mean")[0] == NPCOutcome.CONTINUE
+    outcome, _ = bowen.respond("I still do not understand")
+    assert outcome == NPCOutcome.CONTINUE
+    assert bowen._refuse_turns == 0
+    assert bowen._current_path == ""
+
+    # Explicit bare "no" still starts REFUSE; second hard refuse still RELEASEs.
+    bowen = make_npc("bowen")
+    assert bowen.respond("no")[0] == NPCOutcome.CONTINUE
+    assert bowen._current_path == "REFUSE"
+    outcome, _ = bowen.respond("no way")
+    assert outcome == NPCOutcome.RELEASE
+
+    for phrase in (
+        "I'm not sure I follow",
+        "define the irregularity",
+        "I remain confused",
+        "what is the compliance matter",
+        "noted",
+        "nothing to report",
+        "now what",
+    ):
+        bowen = make_npc("bowen")
+        outcome, _ = bowen.respond(phrase)
+        assert outcome == NPCOutcome.CONTINUE, phrase
+        assert bowen._comply_turns == 0, phrase
+        assert bowen._refuse_turns == 0, phrase

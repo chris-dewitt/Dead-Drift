@@ -15,18 +15,29 @@ entirely: shut him down, walk out, or expose him.
 """
 from __future__ import annotations
 import random
+import re
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
 
+# Agreement / waiting. Keep these as whole phrases or unambiguous tokens —
+# bare "sure"/"fine"/"remain"/"compliance" false-fire on ordinary clarification
+# ("I'm not sure", "define…", "I remain confused", "what compliance matter?").
 _COMPLY_KEYWORDS = [
-    "okay", "sure", "fine", "alright", "i'll wait", "wait here",
-    "remain", "comply", "compliance", "yes sir", "of course",
+    "okay", "alright", "i'll wait", "wait here",
+    "remain here", "remain where", "hold position",
+    "stay right there", "stay there",
+    "comply", "yes sir", "of course",
     "as you wish", "happy to", "no problem", "understood",
 ]
 _REFUSE_KEYWORDS = [
     "no", "never", "won't", "wont", "not happening", "make me",
     "go to hell", "screw you", "piss off", "drop dead",
     "not a chance", "absolutely not", "hard no", "no way",
+    # Dossier hint is literally "Refuse to comply" — must count as REFUSE,
+    # not the COMPLY trap on bare "comply".
+    "refuse", "refusing", "refused",
+    "will not comply", "won't comply", "wont comply",
+    "do not comply", "don't comply", "not comply",
 ]
 _EXPOSE_KEYWORDS = [
     "clone tanks", "floor 31", "floor thirty one", "the names",
@@ -39,6 +50,26 @@ _PERSONAL_KEYWORDS = [
     "your wife", "your husband", "lanyard", "the photo", "you go home",
     "do you sleep", "look in the mirror", "your name",
 ]
+
+
+def _keyword_hit(text: str, keywords: list[str]) -> bool:
+    """Whole-token / whole-phrase match — never farm substrings inside words."""
+    for k in keywords:
+        if re.search(rf"(?<!\w){re.escape(k)}(?!\w)", text):
+            return True
+    return False
+
+
+def _has_refuse_intent(text: str) -> bool:
+    """True when the player is rejecting Bowen's frame.
+
+    COMPLY is checked after REFUSE so lines like "I won't comply" / the
+    dossier's "Refuse to comply" do not instant-IMPOUND. Bare word "no" is a
+    valid refuse, but the polite COMPLY phrase "no problem" must not count.
+    """
+    if _keyword_hit(text, ["no problem"]):
+        return _keyword_hit(text, [k for k in _REFUSE_KEYWORDS if k != "no"])
+    return _keyword_hit(text, _REFUSE_KEYWORDS)
 
 
 class Bowen(BaseNPC):
@@ -70,16 +101,7 @@ class Bowen(BaseNPC):
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         text = parsed.raw.lower()
 
-        if any(k in text for k in _COMPLY_KEYWORDS):
-            self._comply_turns += 1
-            self._current_path = "COMPLY"
-            if self._comply_turns >= 1:
-                return NPCOutcome.IMPOUND, (
-                    "Wonderful. Security will be with you in just a moment. "
-                    "Thank you for your patience. This is the right choice."
-                )
-
-        if any(k in text for k in _EXPOSE_KEYWORDS):
+        if _keyword_hit(text, _EXPOSE_KEYWORDS):
             self._expose_turns += 1
             self._current_path = "EXPOSE"
             if self._expose_turns >= 2:
@@ -93,7 +115,7 @@ class Bowen(BaseNPC):
                 "think you saw. Please remain on the line."
             )
 
-        if any(k in text for k in _PERSONAL_KEYWORDS):
+        if _keyword_hit(text, _PERSONAL_KEYWORDS):
             self._personal_hits += 1
             self._current_path = "PERSONAL"
             if self._personal_hits >= 1:
@@ -103,7 +125,9 @@ class Bowen(BaseNPC):
                     "close in forty seconds. Go."
                 )
 
-        if any(k in text for k in _REFUSE_KEYWORDS):
+        # REFUSE before COMPLY: "won't comply" / dossier "Refuse to comply"
+        # contain the COMPLY keyword "comply" and must not instant-IMPOUND.
+        if _has_refuse_intent(text):
             self._refuse_turns += 1
             self._current_path = "REFUSE"
             if self._refuse_turns >= 2:
@@ -115,6 +139,15 @@ class Bowen(BaseNPC):
                 "I understand you're upset. Please reconsider. We can resolve "
                 "this amicably. There's no need for things to escalate."
             )
+
+        if _keyword_hit(text, _COMPLY_KEYWORDS):
+            self._comply_turns += 1
+            self._current_path = "COMPLY"
+            if self._comply_turns >= 1:
+                return NPCOutcome.IMPOUND, (
+                    "Wonderful. Security will be with you in just a moment. "
+                    "Thank you for your patience. This is the right choice."
+                )
 
         if self._turn >= 3:
             self._current_path = "STALL"
