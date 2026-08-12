@@ -11,7 +11,7 @@ After committing your work, remove your row.
 
 | Subsystem | Branch | Claimed by | Timestamp |
 |-----------|--------|------------|-----------|
-| `npcs` (bowen) | cursor/critical-bug-investigation-8b62 | critical-bug-automation | 2026-08-12T11:30Z |
+| *(none)* | | | |
 
 ---
 
