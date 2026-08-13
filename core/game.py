@@ -992,14 +992,11 @@ class Game:
         elif event.key in (_pg.K_RETURN, _pg.K_SPACE):
             _, _, key = self._DIFF_OPTS[self._diff_cursor]
             self.meta.set_difficulty(key)
-            # Apply hull delta immediately on the ship
-            delta = self.meta.hull_start_delta()
-            if delta != 0 and self.ship is not None:
-                import config.settings as _S
-                self.ship.hull = max(1.0, min(
-                    _S.HULL_MAX + delta,
-                    self.ship.hull + delta,
-                ))
+            # Recompute the run hull ceiling from frame + difficulty and
+            # fill to it. Adding `delta` onto HULL_MAX used to strip the
+            # REINFORCED +20 bonus; CASUAL headroom is stacked on the frame.
+            if self.run_mgr is not None and self.ship is not None:
+                self.run_mgr.sync_hull_cap(self.ship, fill=True)
             self._goto(GameState.FLIGHT)
 
     def _render_difficulty_select(self) -> None:

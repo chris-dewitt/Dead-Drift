@@ -72,7 +72,8 @@ class _ShopItem:
 
     def apply(self, ship, run_mgr):
         if self.tag == "hull_patch":
-            ship.hull = min(S.HULL_MAX, ship.hull + 50.0)
+            cap = getattr(ship, "hull_max", S.HULL_MAX)
+            ship.hull = min(cap, ship.hull + 50.0)
         elif self.tag == "thrust_boost":
             from ship.modules.thruster import Thruster
             for mod in ship.chain.get_active("propulsion"):
@@ -89,7 +90,8 @@ class _ShopItem:
                 "Encrypted manifest. Their dispatch code is 'article 7'. Use it.",
             ]))
         elif self.tag == "repair_drone":
-            ship.hull = min(S.HULL_MAX, ship.hull + 110.0)
+            cap = getattr(ship, "hull_max", S.HULL_MAX)
+            ship.hull = min(cap, ship.hull + 110.0)
         elif self.tag == "cargo_stabilizer":
             if ship.cargo is not None:
                 ship.cargo.integrity = min(100.0, ship.cargo.integrity + 60.0)

@@ -297,6 +297,7 @@ class RunManager:
         self._last_stats: dict | None = None
         self._run_seed          = 0
         self._frame_name        = ""
+        self._frame_hull_bonus  = 0
 
         bus.subscribe(EVT_CANISTER_GRAB, self._on_canister_grab)
         bus.subscribe(EVT_TETHER_SNAP,   self._on_tether_snap)
@@ -400,6 +401,7 @@ class RunManager:
         self._maybe_emit_debt_trap_reveal()
         self._run_seed = secrets.randbelow(2 ** 31)
         self._frame_name = ""
+        self._frame_hull_bonus = 0
         self._sector_index = 0
         # Epic 8.4 — hardcore total run time tracker.
         self._run_total_time = 0.0
@@ -453,7 +455,8 @@ class RunManager:
         cargo  = self.draft.selected_cargo
         self._frame_name = frame.get("name", "")
 
-        ship.hull       = min(S.HULL_MAX, S.HULL_MAX + frame.get("hull_bonus", 0))
+        self._frame_hull_bonus = int(frame.get("hull_bonus", 0))
+        self.sync_hull_cap(ship, fill=True)
         ship.body.mass  = S.SHIP_MASS * frame.get("mass_mod", 1.0)
         ship.chain.install(module, 1)
         ship.cargo      = cargo
@@ -2170,6 +2173,34 @@ class RunManager:
         elif 1 <= chapter <= 6:
             self._chapter_override = int(chapter)
 
+    def hull_cap(self) -> float:
+        """Run hull ceiling: global max + frame bonus + difficulty delta.
+
+        `min(HULL_MAX, HULL_MAX + bonus)` used to discard every positive
+        frame bonus (REINFORCED +20 never applied) and made CASUAL heals
+        clamp *below* the ship's current hull.
+        """
+        bonus = int(getattr(self, "_frame_hull_bonus", 0) or 0)
+        delta = 0
+        meta = getattr(self, "meta", None)
+        if meta is not None and hasattr(meta, "hull_start_delta"):
+            delta = int(meta.hull_start_delta())
+        return max(1.0, S.HULL_MAX + bonus + delta)
+
+    def sync_hull_cap(self, ship, *, fill: bool = False) -> float:
+        """Write the run ceiling onto the ship. `fill` restores hull to cap
+        (launch / clone respawn). Resume paths never lower current hull."""
+        cap = self.hull_cap()
+        if ship is None:
+            return cap
+        if fill:
+            ship.hull_max = cap
+            ship.hull = cap
+        else:
+            current = float(getattr(ship, "hull", cap))
+            ship.hull_max = max(cap, current)
+        return float(getattr(ship, "hull_max", cap))
+
     # ------------------------------------------------------------------
     # Epic 11.1c — Harmonica heal session
     # ------------------------------------------------------------------
@@ -2205,8 +2236,10 @@ class RunManager:
                          line="Not now, mate — there's a barge near. "
                               "Get clear an' I'll play.")
                 return False
-        # Hull at full? Decline politely.
-        if getattr(self._ship, "hull", 0) >= S.HULL_MAX:
+        # Hull at full? Decline politely. Cap is the run ceiling
+        # (frame bonus + difficulty), not the global HULL_MAX — CASUAL
+        # and REINFORCED start above 200 and still need the harmonica.
+        if getattr(self._ship, "hull", 0) >= self.hull_cap():
             bus.emit(EVT_BAX_SPEAK,
                      line="Hull's pristine. Save it for when you actually need it, eh?")
             return False
@@ -2268,7 +2301,7 @@ class RunManager:
             self._harm_heal_total * progress)
         delta = target_total - self._harm_heal_paid
         if delta > 0:
-            ship.hull = min(S.HULL_MAX, ship.hull + delta)
+            ship.repair(delta)
             self._harm_heal_paid += delta
         if self._harm_session_t <= 0:
             ship.harm_session_active = False
@@ -2376,7 +2409,7 @@ class RunManager:
         from ship.gun import Gun
 
         ship._destroyed = False
-        ship.hull = S.HULL_MAX
+        self.sync_hull_cap(ship, fill=True)
         ship.body = RigidBody2D(S.SCREEN_W / 2, S.SCREEN_H / 2, mass=ship.body.mass)
         ship.body.angle = 270.0
         ship.body.vel = Vec2()

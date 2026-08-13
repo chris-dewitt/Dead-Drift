@@ -19,6 +19,11 @@ class PlayerShip:
     def __init__(self):
         self.body       = RigidBody2D(S.SCREEN_W / 2, S.SCREEN_H / 2, mass=S.SHIP_MASS)
         self.hull       = S.HULL_MAX
+        # Run ceiling: HULL_MAX ± frame bonus ± difficulty delta.
+        # Heals and respawn must clamp here, not to the global constant —
+        # otherwise REINFORCED's +20 is discarded and CASUAL heals can
+        # *lower* hull that is already above HULL_MAX.
+        self.hull_max   = S.HULL_MAX
         self.fuel       = S.FUEL_MAX
         self.chain      = SignalChain()
         self.gun        = Gun()
@@ -153,7 +158,8 @@ class PlayerShip:
             bus.emit(EVT_SHIP_DESTROYED, source=source)
 
     def repair(self, amount: float):
-        self.hull = min(S.HULL_MAX, self.hull + amount)
+        cap = getattr(self, "hull_max", S.HULL_MAX)
+        self.hull = min(cap, self.hull + amount)
 
     # ------------------------------------------------------------------
     @property
@@ -192,6 +198,7 @@ class PlayerShip:
     def reset(self):
         self.body              = RigidBody2D(S.SCREEN_W / 2, S.SCREEN_H / 2, mass=S.SHIP_MASS)
         self.hull              = S.HULL_MAX
+        self.hull_max          = S.HULL_MAX
         self.fuel              = S.FUEL_MAX
         self._destroyed        = False
         self._thrusting        = False
