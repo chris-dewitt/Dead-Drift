@@ -815,7 +815,16 @@ class RunManager:
                     triggered = wreck.hit_weak_point(bullet.pos)
                     if triggered:
                         bullet.lifetime = -1
-                        self._run_debt_reduced += 1200
+                        # Same dual-wallet payout as tether snaps / flight-event
+                        # salvage: HUD recovered AND spendable sector credits,
+                        # plus an actual meta pay_off. The old path only bumped
+                        # `_run_debt_reduced`, so the jackpot was phantom money
+                        # the shop could spend (add_debt) without ever reducing
+                        # the ledger.
+                        bonus = int(1200 * self.mutators.credit_pickup_multiplier())
+                        self.meta.pay_off(bonus, source="WRECK CACHE")
+                        self._run_debt_reduced += bonus
+                        self._sector_credits   += bonus
                         bus.emit(EVT_BAX_SPEAK, line=random.choice([
                             "Weak point cracked! Emergency cache is ours!",
                             "She gave up her secrets. Scrap manifest unlocked!",
