@@ -1,8 +1,46 @@
 from __future__ import annotations
 import random
+import re
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
+
+
+# CARGO SACRIFICE must be an actual offer, not a substring farm.
+# Bare tokens like "yours"/"keep it"/"the cargo" used to RELEASE
+# refusals such as "talk about yourself" and "I want to keep it".
+_NEGATION_RE = re.compile(
+    r"\b(?:don't|dont|won't|wont|wouldn't|wouldnt|never|not|"
+    r"can't|cant|cannot|no)\b",
+    re.IGNORECASE,
+)
+_CARGO_OFFER_RE = re.compile(
+    r"\b(?:take|have|keep|drop|leave|give(?:\s+you)?)\b.{0,24}"
+    r"\b(?:the\s+|my\s+)?(?:cargo|payload|haul|hold)\b"
+    r"|"
+    r"\b(?:cargo|payload|haul|hold)\b.{0,16}\b(?:is\s+)?yours\b"
+    r"|"
+    r"\bit'?s\s+yours\b"
+    r"|"
+    r"\byours\s+to\s+(?:keep|take|have)\b"
+    r"|"
+    r"\b(?:take|have|drop|give)\s+it\b"
+    r"|"
+    r"\btake\s+all\s+of\s+it\b",
+    re.IGNORECASE,
+)
+
+
+def _offers_cargo(raw: str) -> bool:
+    """True only when the player is actually offering the hold."""
+    text = (raw or "").lower()
+    match = _CARGO_OFFER_RE.search(text)
+    if match is None:
+        return False
+    window = text[max(0, match.start() - 24):match.start()]
+    if _NEGATION_RE.search(window):
+        return False
+    return True
 
 
 class Pirate(BaseNPC):
@@ -33,9 +71,9 @@ class Pirate(BaseNPC):
     """
 
     _CARGO_KEYWORDS  = [
-        "take it", "the cargo", "have the cargo", "yours", "keep it",
-        "all of it", "give it", "the payload", "the haul",
-        "i'll drop", "drop the", "leave the",
+        "take the cargo", "have the cargo", "take the payload",
+        "it's yours", "drop the cargo", "leave the cargo",
+        "take it", "give you the cargo",
     ]
     _ESCAPE_KEYWORDS = [
         "slingshot", "gravity well", "gravity assist", "well",
@@ -164,7 +202,7 @@ class Pirate(BaseNPC):
             return NPCOutcome.CONTINUE, "*pause* ...Say that again."
 
         # CARGO SACRIFICE — instant out, costs the delivery bonus
-        if any(w in raw for w in self._CARGO_KEYWORDS):
+        if _offers_cargo(raw):
             self._cargo_offered = True
             self._current_path  = "CARGO OFFER"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="cargo_offer")

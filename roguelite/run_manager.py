@@ -1419,8 +1419,13 @@ class RunManager:
                 f"Their firewall had the structural integrity of wet paper. {bonus:,} back.",
                 f"You just robbed a repo man digitally. {bonus:,} off. I'm proud.",
             ]))
-        elif outcome == "release" and bribe_paid == 0:
-            # Only give the full release bonus when no bribe was needed
+        elif (outcome == "release" and bribe_paid == 0
+                and not (
+                    getattr(npc, "name", "").upper() == "KRELLBORN"
+                    and "CARGO OFFER" in (self._last_winning_path or "").upper()
+                )):
+            # Only give the full release bonus when no bribe was needed.
+            # Pirate cargo sacrifice already costs the hold — no extra payout.
             bonus = RELEASE_PAYOUT
             self.meta.pay_off(bonus, source="NEGOTIATION")
             self._run_debt_reduced += bonus
@@ -1446,6 +1451,16 @@ class RunManager:
             return
         name = getattr(npc, "name", "").upper()
         path_u = (path or "").upper()
+
+        if name == "KRELLBORN" and "CARGO OFFER" in path_u:
+            if self._ship is not None:
+                self._ship.cargo = None
+            bus.emit(EVT_BAX_SPEAK, line=random.choice([
+                "Hold's empty. That's the pirate tithe. We fly lighter.",
+                "Cargo's gone. Delivery bonus with it. At least we're still flying.",
+                "They took the haul. Manifest's a blank page. Don't look back.",
+            ]))
+            return
 
         if name == "KRESS":
             if "MARROW SELL" in path_u:
