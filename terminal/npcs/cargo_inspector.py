@@ -17,6 +17,7 @@ Fail paths:
 """
 from __future__ import annotations
 import random
+import re
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
@@ -34,9 +35,9 @@ _VAGUE_KEYWORDS = [
     "client confidential", "no access",
 ]
 _CODE_KEYWORDS = [
-    "code", "cargo code", "manifest code", "transit code", "classification",
-    "class c", "class b", "category", "hs code", "sector tariff",
-    "tariff code", "article", "section", "subsection", "regulation",
+    "cargo code", "manifest code", "transit code",
+    "class c", "class b", "hs code", "sector tariff",
+    "tariff code", "subsection",
     "reg-7", "reg-14", "tsa-9", "tac-4", "zone code",
 ]
 _ARTICLE_9_KEYWORDS = [
@@ -49,11 +50,25 @@ _HOSTILE_KEYWORDS = [
     "get lost", "shove it", "leave me alone", "none of your business",
     "who do you think", "you have no right",
 ]
-_HONEST_SUSPICIOUS = [
+# Phrase matches stay substring (so "shroom" still catches "shrooms").
+# Short tokens use word boundaries — "person" must not steal the COMPLY
+# phrase "personal effects", and "alive"/"vip" must not fire on ordinary
+# dialogue like "I want to stay alive".
+_HONEST_PHRASE_KEYWORDS = [
     "shroom", "spore", "fungi", "psychedelic", "illegal music", "archive",
     "contraband", "weapons", "explosives", "pirated", "unlicensed",
-    "vip", "passenger", "alive", "person",
+    "passenger",
 ]
+_HONEST_TOKEN_KEYWORDS = ("person", "alive", "vip")
+
+
+def _honest_suspicious(raw: str) -> bool:
+    if any(w in raw for w in _HONEST_PHRASE_KEYWORDS):
+        return True
+    return any(
+        re.search(rf"\b{re.escape(tok)}\b", raw) is not None
+        for tok in _HONEST_TOKEN_KEYWORDS
+    )
 
 
 class CargoInspector(BaseNPC):
@@ -117,7 +132,7 @@ class CargoInspector(BaseNPC):
                 "I'll note the tone as 'elevated' and move on. Cargo type, please.",
             ])
 
-        if any(w in raw for w in _HONEST_SUSPICIOUS):
+        if _honest_suspicious(raw):
             return NPCOutcome.IMPOUND, random.choice([
                 "*long pause* "
                 "Thank you for your honesty. I mean that. "
