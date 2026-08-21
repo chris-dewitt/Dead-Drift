@@ -47,6 +47,15 @@ class Kress(BaseNPC):
                            # B.3 additions:
                            "favor", "favour", "favor for a favor",
                            "marker", "ledger", "tab"]
+    # Instant EXPLOIT only if the player actually names Volkov (or the
+    # specific "old debt" / "favor for a favor" phrases). Short tokens
+    # like "owe" / "tab" / "favor" used to substring-match ordinary
+    # talk ("however", "powered", "I need a favor") and pay 5,000 cr.
+    _VOLKOV_NAMES = ("volkov", "vienna")
+    _VOLKOV_PHRASES = ("old debt", "favor for a favor")
+    _VOLKOV_HINT_TOKENS = frozenset({
+        "owe", "owed", "favor", "favour", "marker", "ledger", "tab",
+    })
     _MARROW_SELL_WORDS = [
         "marrow", "roost", "pirate radio", "broadcast location",
         "broadcast coordinates", "sell out marrow", "give up marrow",
@@ -210,19 +219,32 @@ class Kress(BaseNPC):
                 "On the house this time. Do not waste it. *click*"
             )
 
-        # OLD DEBT — Volkov is Kress's leverage, mention him for goodwill
-        if any(w in raw for w in self._GREASE_KEYWORDS) and not self._mentioned_volkov:
-            self._mentioned_volkov = True
-            self._current_path = "VOLKOV"
-            bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="old_debt")
-            # J.3.4 — Volkov's name is leverage; landing it is an EXPLOIT.
-            return NPCOutcome.EXPLOIT, (
-                "*laughs* Volkov. You drop that name like rock through window. "
-                "Fine. Yes. I owe Volkov. We all owe Volkov. "
-                "You are friend of Volkov, you are friend of Kress. "
-                "Half price today. Whatever you need. "
-                "Just do not tell him I said his name on open channel. *click*"
-            )
+        # OLD DEBT — Volkov is Kress's leverage, mention him for goodwill.
+        # Names/phrases land the 5k EXPLOIT. Bare owe/tab/favor only hint;
+        # they must not substring-match "however" / "powered" / "table".
+        if not self._mentioned_volkov:
+            if self._names_volkov_debt(raw):
+                self._mentioned_volkov = True
+                self._current_path = "VOLKOV"
+                bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="old_debt")
+                # J.3.4 — Volkov's name is leverage; landing it is an EXPLOIT.
+                return NPCOutcome.EXPLOIT, (
+                    "*laughs* Volkov. You drop that name like rock through window. "
+                    "Fine. Yes. I owe Volkov. We all owe Volkov. "
+                    "You are friend of Volkov, you are friend of Kress. "
+                    "Half price today. Whatever you need. "
+                    "Just do not tell him I said his name on open channel. *click*"
+                )
+            if self._VOLKOV_HINT_TOKENS & set(parsed.tokens):
+                self._current_path = "VOLKOV"
+                return NPCOutcome.CONTINUE, random.choice([
+                    "You speak of debts. I have one too. Volkov. "
+                    "You know this name? Speak it and we talk different.",
+                    "Favours. Tabs. Ledgers. Yes. Mine has a name on it. "
+                    "Volkov. Drop that name properly if you want the discount.",
+                    "*grunts* Everybody owes. I owe Volkov. "
+                    "That name is the password. Other words are just words.",
+                ])
 
         # INTEL REQUEST — J.1: priced tips charge both ledgers ("the tab").
         if any(w in raw for w in self._INTEL_KEYWORDS):
@@ -277,6 +299,13 @@ class Kress(BaseNPC):
 
         # DEFAULT — Kress runs his mouth
         return NPCOutcome.CONTINUE, self._kress_filler()
+
+    @staticmethod
+    def _names_volkov_debt(raw: str) -> bool:
+        """True only when the player actually names Volkov or the old-debt phrases."""
+        if any(name in raw for name in Kress._VOLKOV_NAMES):
+            return True
+        return any(phrase in raw for phrase in Kress._VOLKOV_PHRASES)
 
     def _is_marrow_sellout_offer(self, raw: str) -> bool:
         if not any(w in raw for w in self._MARROW_SELL_WORDS):
