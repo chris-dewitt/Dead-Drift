@@ -78,6 +78,7 @@ class Dray(BaseNPC):
         self._gripe_count       = 0
         self._traded            = False
         self._paid              = False
+        self._bribe_paid        = 0
         self._corpo_flags       = 0
         self._marrow_dropped    = False
         self._ghost_given       = False
@@ -174,6 +175,10 @@ class Dray(BaseNPC):
 
         if parsed.amount is not None and parsed.amount >= _BRIBE_AMOUNT:
             self._paid = True
+            # J.1 — the run only deducts what `bribe_cost()` reports. Dray
+            # tracked that he'd been paid but never how much, so every bribe
+            # on this channel was free; he pockets the real figure now.
+            self._bribe_paid = int(parsed.amount)
             # Playtest fix: dossier label uses the standardised
             # `BRIBE [X cr]` format instead of past-tense "BRIBED".
             self._current_path = f"BRIBE [{parsed.amount} cr]"
@@ -357,11 +362,16 @@ class Dray(BaseNPC):
             "Long story. Bad one. *pause* Anyway. Your route.",
         ])
 
+    def bribe_cost(self) -> int:
+        return self._bribe_paid
+
     def get_path_progress(self) -> list[tuple[str, int, int]]:
+        bribe_label = (f"BRIBE [{self._bribe_paid} cr]" if self._bribe_paid > 0
+                       else f"BRIBE [{_BRIBE_AMOUNT}+ cr]")
         return [
             ("GRIPE",                   min(self._gripe_count, 3), 3),
             ("INTEL TRADE",             int(self._traded),         1),
-            (f"BRIBE [{_BRIBE_AMOUNT}+ cr]", int(self._paid),      1),
+            (bribe_label,               int(self._paid),           1),
             ("MARROW CONTACT",          int(self._marrow_dropped), 1),
             ("GHOST ROUTE",             int(self._ghost_given),    1),
             ("SOLIDARITY",              int(self._solidarity_shown), 1),
