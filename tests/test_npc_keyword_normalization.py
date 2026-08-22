@@ -99,6 +99,53 @@ def test_felix_gossip_keyword_arms_path_without_npc_name():
     assert "name" in line.lower() or "whom" in line.lower() or "rumour" in line.lower()
 
 
+def test_dispatcher_interest_is_not_a_coffee_break():
+    """Dispatcher's intro talks about compound interest. Substring 'rest'
+    inside 'interest' used to fire the one-turn COFFEE BREAK RELEASE."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    dispatcher = make_npc("union_dispatcher")
+    out, _ = dispatcher.respond("what's the compound interest on this")
+    assert out == NPCOutcome.CONTINUE
+    assert dispatcher._current_path != "COFFEE BREAK"
+    assert dispatcher._coffee_hit is False
+
+
+def test_dispatcher_create_is_not_a_coffee_break():
+    """'eat' must not substring-match ordinary verbs like 'create'."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    dispatcher = make_npc("union_dispatcher")
+    out, _ = dispatcher.respond("I didn't create this debt")
+    assert out == NPCOutcome.CONTINUE
+    assert dispatcher._current_path != "COFFEE BREAK"
+    assert dispatcher._coffee_hit is False
+
+
+def test_dispatcher_actual_coffee_break_still_releases():
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    dispatcher = make_npc("union_dispatcher")
+    out, _ = dispatcher.respond("you should take a coffee break")
+    assert out == NPCOutcome.RELEASE
+    assert dispatcher._current_path == "COFFEE BREAK"
+    assert dispatcher._coffee_hit is True
+
+
+def test_dispatcher_whole_word_rest_still_releases():
+    """Bare 'rest' / 'get some rest' is still the designed coffee path."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    dispatcher = make_npc("union_dispatcher")
+    out, _ = dispatcher.respond("you should get some rest")
+    assert out == NPCOutcome.RELEASE
+    assert dispatcher._current_path == "COFFEE BREAK"
+
+
 def test_pirate_extended_threat_keywords_land():
     """Playtest fix: more menacing phrasing should still register as a
     threat path, not bounce to filler."""

@@ -1,5 +1,6 @@
 from __future__ import annotations
 import random
+import re
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT, EVT_BAX_SPEAK
@@ -34,12 +35,23 @@ class UnionDispatcher(BaseNPC):
     _BIG_BRIBES     = ["10k", "ten thousand", "20k", "twenty", "fifty", "50k",
                        "hundred thousand", "a lot", "everything i have",
                        "15k", "fifteen thousand", "25k", "30k", "thirty"]
-    _COFFEE_WORDS   = ["coffee", "lunch", "break", "tired", "hungry", "food",
-                       "eat", "rest", "shift", "hours", "overtime", "exhausted",
-                       "long day", "been here", "working late",
-                       "tea", "water", "thirsty", "snack", "drink", "need a break",
-                       "take a break", "go home", "end of shift", "off the clock",
-                       "when do you eat", "have you eaten", "get some rest"]
+    # Longer / unique coffee-break cues stay substring so plurals and
+    # compounds still land ("coffees", "overtime").
+    _COFFEE_PHRASES = [
+        "coffee", "lunch", "tired", "hungry", "food",
+        "overtime", "exhausted",
+        "long day", "been here", "working late",
+        "thirsty", "snack", "drink", "need a break",
+        "take a break", "go home", "end of shift", "off the clock",
+        "when do you eat", "have you eaten", "get some rest",
+    ]
+    # Short tokens that substring-match unrelated words in Dispatcher's
+    # own intro and filler ("compound interest", "create", "team"):
+    #   rest ⊂ interest / arrest / restore
+    #   eat  ⊂ create / great / feature
+    #   break ⊂ breakfast / breakthrough
+    #   tea ⊂ team
+    _COFFEE_WORDS = ["rest", "eat", "break", "shift", "hours", "tea", "water"]
     _FORMS_WORDS    = ["forms", "paperwork", "backlog",
                        "bureaucracy", "procedure", "stack", "pile", "admin",
                        "in-tray", "intray", "in tray", "47 forms", "the forms",
@@ -136,7 +148,7 @@ class UnionDispatcher(BaseNPC):
             )
 
         # COFFEE BREAK — mandatory break clause
-        if any(w in raw for w in self._COFFEE_WORDS):
+        if self._mentions_coffee_break(raw):
             self._current_path = "COFFEE BREAK"
             self._coffee_hit   = True
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="coffee_break")
@@ -356,6 +368,14 @@ class UnionDispatcher(BaseNPC):
 
         # DEFAULT — the 47-forms-behind running gag
         return NPCOutcome.CONTINUE, self._dispatcher_filler()
+
+    def _mentions_coffee_break(self, raw: str) -> bool:
+        if any(w in raw for w in self._COFFEE_PHRASES):
+            return True
+        return any(
+            re.search(rf"\b{re.escape(tok)}\b", raw) is not None
+            for tok in self._COFFEE_WORDS
+        )
 
     def _is_marrow_betrayal(self, raw: str) -> bool:
         if not any(w in raw for w in self._MARROW_BETRAYAL_WORDS):
