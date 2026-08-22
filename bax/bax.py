@@ -138,12 +138,35 @@ _WELL_CLOSE = [
     "She's pulling us. Go WITH it — slingshot awaits.",
     "I've calculated the optimal swing-around angle. You probably won't use it. "
     "That's fine. I just like calculating.",
+    "That well's got a lovely gradient on it. I don't often say lovely. "
+    "Take the swing.",
+    "Free speed, that. The universe doesn't hand out much free. Take it.",
+    "Pilot number nine went round one of those the wrong way. "
+    "Anyway. Go the RIGHT way.",
+    "She wants to pull us in. Let her think she's winning, then leave.",
+    "Every gram of that pull is thrust we don't pay for. And we pay for everything else.",
+    "Curve's opening up on the starboard side. That's the one. "
+    "Go on. I'll hold on to something.",
 ]
 
 _HIGH_HULL = [
     "Hull's holding perfect. Don't get complacent.",
     "Clean run so far. Barge hasn't found us yet.",
     "Structural integrity at peak. Enjoy it while it lasts.",
+    "Not a scratch on her. I've checked twice. I'm checking again.",
+    "This is the bit of the run where I usually start worryin'. "
+    "Consider me started.",
+    "Plating's green across the board. That's a sentence I don't get to say often, "
+    "so I'm sayin' it.",
+    "You know what's nice? Nothing's on fire. Nothing at ALL is on fire.",
+    "Hull's immaculate, mate. Whatever you're doing, do more of the same "
+    "and less of the other thing.",
+    "Diagnostics clean. I ran them for something to do. I'm a bit bored. "
+    "Bored is GOOD.",
+    "Full integrity. Somewhere a Nova Soma actuary is very disappointed in us.",
+    "Not one alert on my board. Feels illegal. Feels great.",
+    "She's flying like she did off the yard. Don't tell her I said that, "
+    "she'll get ideas.",
 ]
 
 # Per-cargo idle commentary — drawn during flight when no urgent condition fires
@@ -214,6 +237,15 @@ _SECTOR_START_GENERIC = [
     "Sector loaded. I'll tell you if something's trying to kill us.",
     "Clean jump. New sector. Eyes open.",
     "Through the gate. Stay sharp.",
+    "Right — new sky, same job. Off we go.",
+    "Gate's behind us. Scanners are settlin'. Give me a second and I'll "
+    "tell you what's out there.",
+    "Fresh sector. Statistically this is where it gets interesting. "
+    "I hate statistics.",
+    "We're in. Nothing on the board yet, which means nothing on the board YET.",
+    "New sector logged. Nova Soma's already billed us for the jump. "
+    "Course they have.",
+    "Through. Deep breath — you, not me, I don't do those. Let's fly.",
 ]
 
 _SECTOR_START_CARGO: dict[str, list[str]] = {
@@ -255,6 +287,18 @@ _LOW_HULL = [
     "Hull's taken a pasting. One more hit and I'm using very strong language.",
     "I've seen worse. I don't want to talk about when I've seen worse.",
     "Structural alerts everywhere. Not alarming. Well. A bit alarming.",
+    "Plating's gone soft on the port side. Fly like it's soft. Because it is.",
+    "I'm turning off three of these alarms so you can hear yourself think. "
+    "They're still true. I've just muted them.",
+    "That's the sound a hull makes before it stops being a hull. "
+    "Let's not find out the rest of it.",
+    "Right. Slow hands from here. Slow hands and short breaths.",
+    "We're one bad rock off a very bad afternoon, mate.",
+    "I don't want to be dramatic. *pause* I'm going to be a little dramatic. "
+    "Please stop hitting things.",
+    "Sixteen years I've been bolted to dashboards, and hull noise still gets me. "
+    "Take her gently.",
+    "I'd like us both to see the next sector. Fly like you'd like that too.",
 ]
 
 # ── NEW LINE BANKS (Epic 7.2) ────────────────────────────────────────────────
@@ -304,6 +348,8 @@ _LINE_MODE: dict[str, str] = {
     "dock_perfect":           "manic_glee",
     "panic_under_10":         "dark_vulnerable",
     "low_hull":               "dark_vulnerable",
+    "close_call_terrifying":  "dark_vulnerable",
+    "close_call_aftermath":   "dark_vulnerable",
     "corridor_death":         "dark_vulnerable",
     "corridor_run":           "corridor_coach",
     "corridor_jump":          "corridor_coach",
@@ -532,9 +578,18 @@ _CARGO_FIRST_OPINION: dict[str, list[str]] = {
 _CLOSE_CALL_MILD = [
     "That went past. Good. That's a pass. Noted.",
     "Bit close, innit. But fine. We're fine.",
-    f"Near miss. I've logged it under 'close but not catastrophic'.",
+    "Near miss. I've logged it under 'close but not catastrophic'.",
     "I saw that. You saw that. We both know what that was. Moving on.",
     "That was about as comfortable as a Union audit. Which is to say: not very.",
+    "Missed us. Rude of it to try, mind.",
+    "Clean-ish. I'll take clean-ish.",
+    "Proximity alert had a little think and decided not to bother. Good lad.",
+    "That'll buff out. It didn't touch us, so there's nothing to buff. "
+    "I'm just sayin' it for the comfort.",
+    "Went by close enough to say hello. It didn't. Bit unfriendly.",
+    "Fine. That's fine. I'm noting the word 'fine' has a range and that was "
+    "the bottom of it.",
+    "Margin's shrinking, mate. Not shouting about it. Just mentioning.",
 ]
 _CLOSE_CALL_ALARMED = [
     "OI. OI OI OI. That was FORTY METRES OF HULL AWAY. Do NOT.",
@@ -544,11 +599,32 @@ _CLOSE_CALL_ALARMED = [
     "and that was NOT IN IT.",
     "You know what? I'm putting a formal note in the flight log. "
     "'Pilot is absolutely terrifying. Ongoing concern.'",
+    "NO. No no no. We do not do that. That is not a thing we do.",
+    "I felt that through the BOLTS, mate. Through the BOLTS.",
+    "Right, I'm rerouting power away from the bit of me that panics. "
+    "There isn't one. I checked. PLEASE be careful.",
+    "That's the closest thing I've had to a religious experience in sixteen years "
+    "and I did NOT enjoy it.",
+    "Proximity alarm's gone hoarse. That's not a thing alarms do. "
+    "It's doing it anyway.",
+    "MATE. I would like to formally register a scream. Consider it registered.",
+    "You've got the reflexes, I'll give you that. I'd just like fewer chances "
+    "to admire them.",
 ]
 _CLOSE_CALL_TERRIFYING = [
     "...",
     "...I need a moment.",
     "...alright. Fine. Fine. We're not dead. ...fine.",
+    "*long silence on the comm*",
+    "...I'm not going to say anything about that one.",
+    "...right. Still here. Both of us. ...right.",
+    "*static, then nothing*",
+    "...I've flown with seventeen pilots. That's the first time I've "
+    "shut my own audio off.",
+    "...give me a second, mate. Just a second.",
+    "...nope. Nope. Not processing that yet.",
+    "*very quietly* ...I thought that was it.",
+    "...we'll talk about that later. Or never. Never's good.",
 ]
 _CLOSE_CALL_AFTERMATH = [
     "…don't do that again.",
@@ -556,6 +632,17 @@ _CLOSE_CALL_AFTERMATH = [
     "I'd grow one just to have it fail.",
     "…I've taken seventeen seconds off my life expectancy. I don't have a life expectancy. "
     "That's how bad that was.",
+    "…I'm alright. I'd like it on record that I'm alright. I'm saying it "
+    "for me, not for you.",
+    "…just — a bit more room next time. That's all I'm asking for. Room.",
+    "…the seventh pilot did that. Once. *pause* Fly wide, yeah?",
+    "…I'd have missed you. Thought you should know that. Moving on.",
+    "…my hands were shaking. I don't have hands. Work THAT one out.",
+    "…right. Back to it. But that stays with me for a bit.",
+    "…I'm fine. I'm going to say 'I'm fine' twice so it takes. I'm fine.",
+    "…they decommissioned me for bein' too attached to pilots. "
+    "Moments like that, I see their point.",
+    "…let's just get to the gate, yeah? Nice and boring. Boring's underrated.",
 ]
 
 # ── F.5 Player-style feedback — fires when consistent patterns emerge ─────────
@@ -566,6 +653,12 @@ _PLAYER_STYLE_BRIBE = [
     "But they're starting to factor you into their budget.",
     "You know, other pilots try the sympathy angle. Or the exploit. "
     "You just... pay them to leave. It's efficient. It's not WRONG. Just... efficient.",
+    "Another one bought off. You've a talent for finding the number "
+    "that makes a person stop caring. That's a skill. It's a bleak one, mate.",
+    "Every terminal, out comes the wallet. Nova Soma built a galaxy where that "
+    "works. I keep waiting for you to be annoyed about it.",
+    "You pay, they fold, we fly. Clean. I'd only say — the tab's not "
+    "somewhere else, love. The tab's on us.",
 ]
 _PLAYER_STYLE_BRUTE = [
     "You know, some pilots talk their way out. You prefer to shoot. "
@@ -574,6 +667,12 @@ _PLAYER_STYLE_BRUTE = [
     "Is 'courier' even the right word at this point?",
     "Interesting that your first instinct is always the gun. "
     "Works out more than it should. The math on that is suspicious.",
+    "Another one in pieces. I've stopped writing 'evasive action' in the log. "
+    "I just write 'action' now.",
+    "Hostiles keep meetin' you and keep regrettin' it. I'm not going to "
+    "pretend I'm sad about it. I'm a bit thrilled about it, honestly.",
+    "You've got two settings, mate: fly, and fire. I've flown with pilots "
+    "who had one. Yours is livelier.",
 ]
 _PLAYER_STYLE_EXPLOIT = [
     "You always find the exploit. Every NPC, you find the one thing they don't "
@@ -582,6 +681,12 @@ _PLAYER_STYLE_EXPLOIT = [
     "I won't pretend that doesn't make me slightly nervous.",
     "They say information is power. You say information is a lever. "
     "For the record: you're right. Just making an observation.",
+    "Another one talked out of their own procedure. You listen properly, "
+    "that's the trick of it. Most people don't.",
+    "You keep finding the sentence they can't answer. I've started "
+    "collecting them. For study. Not for use. Mostly for study.",
+    "You go into those terminals and come out with what you wanted and "
+    "they come out having said something they'll think about tonight.",
 ]
 
 # ── F.7 Sector theme entry commentary — once per theme per run ────────────────
@@ -713,6 +818,16 @@ _CORRIDOR_UNEASE = [
     "I'm monitoring your position through the station mesh. Very novel. "
     "Very uncomfortable. Very Union infrastructure keeping tabs on us. "
     "Normal Tuesday.",
+    "Every surface in here belongs to someone who bills us. Including "
+    "the floor. Try not to think about the floor.",
+    "I keep reaching for the thrusters and finding legs. Your legs. "
+    "It's a lot, mate. I'm coping.",
+    "Corridors have corners. Space doesn't have corners. "
+    "I've been very happy about that for sixteen years.",
+    "If the mesh drops I go quiet for a bit. Don't read anything into it. "
+    "I'll be here. I'm always here.",
+    "You're the one down there and I'm the one that's nervous. "
+    "Bit backwards, that. Go on. I'll keep talking.",
 ]
 
 

@@ -247,3 +247,69 @@ def test_long_npc_names_do_not_overprint_the_relay_banner():
     assert fit_relay_banner(font, longest, left,
                             right - font.size(longest)[0] - 6) != \
         "LIVE COMM // NOVA SOMA RELAY 7-B"
+
+
+# ── Bax: the character the player hears most ────────────────────────────────
+
+def _bax_pools() -> dict[str, int]:
+    """Line-pool sizes read straight from the source (no ship needed)."""
+    import ast
+    tree = ast.parse(Path("bax/bax.py").read_text(encoding="utf-8"))
+    return {
+        node.targets[0].id: len(node.value.elts)
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.List)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id.isupper()
+    }
+
+
+# docs/BAX_VOICE.md specs 12 lines per context. These fire during flight and
+# close calls — the modes the player spends the most time in — so a short pool
+# is audible repetition from the one character who is always on the comm.
+BAX_FLIGHT_POOLS = [
+    "_IDLE", "_FAST", "_SLOW", "_WELL_CLOSE", "_HIGH_HULL", "_LOW_HULL",
+    "_SECTOR_START_GENERIC", "_PANIC_UNDER_10_HULL", "_SILENCE_BREAKER",
+    "_CLOSE_CALL_MILD", "_CLOSE_CALL_ALARMED", "_CLOSE_CALL_TERRIFYING",
+    "_CLOSE_CALL_AFTERMATH",
+]
+
+
+@pytest.mark.parametrize("pool", BAX_FLIGHT_POOLS)
+def test_bax_flight_pools_meet_the_voice_doc_floor(pool):
+    pools = _bax_pools()
+    assert pool in pools, f"{pool} is gone from bax/bax.py"
+    assert pools[pool] >= 12, (
+        f"{pool} has {pools[pool]} lines; docs/BAX_VOICE.md specs 12 per context")
+
+
+def test_no_bax_pool_is_shorter_than_six():
+    short = {k: v for k, v in _bax_pools().items() if v < 6}
+    assert not short, f"Bax line pools that will audibly repeat: {short}"
+
+
+def test_bax_lines_are_unique_within_their_pool():
+    import ast
+    tree = ast.parse(Path("bax/bax.py").read_text(encoding="utf-8"))
+    dupes = {}
+    for node in tree.body:
+        if not (isinstance(node, ast.Assign) and isinstance(node.value, ast.List)
+                and isinstance(node.targets[0], ast.Name)
+                and node.targets[0].id.isupper()):
+            continue
+        lines = [e.value for e in node.value.elts if isinstance(e, ast.Constant)]
+        if len(lines) != len(set(lines)):
+            dupes[node.targets[0].id] = len(lines) - len(set(lines))
+    assert not dupes, f"duplicate lines inside a pool: {dupes}"
+
+
+def test_bax_dark_pools_are_tagged_for_the_voice_filter():
+    """`_no_repeat_pick` looks the mode up by pool name; audio_manager colours
+    Bax's voice from it. His most vulnerable lines were playing in his
+    everyday voice because the pool names weren't registered."""
+    from bax.bax import _LINE_MODE
+    for key in ("low_hull", "panic_under_10", "corridor_death",
+                "close_call_terrifying", "close_call_aftermath"):
+        assert _LINE_MODE.get(key) == "dark_vulnerable", (
+            f"{key} is not tagged dark_vulnerable")
