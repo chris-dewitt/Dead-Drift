@@ -41,6 +41,7 @@ import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
+from terminal.npcs.keywords import hit
 
 _DEAL_KEYWORDS = [
     "manifest", "contents", "partial contents", "cargo list",
@@ -48,13 +49,20 @@ _DEAL_KEYWORDS = [
     "trade", "exchange", "deal", "swap", "offer you", "barter",
 ]
 _CREDIT_AMOUNT = 800
-_SYMPATHY_KEYWORDS = [
-    "debt", "clone", "owe", "broke", "same boat", "one of us",
-    "just trying", "trying to survive", "trying to get by",
-    "not that different", "we're the same", "understand",
-    "struggling", "system", "corpo", "corporation", "nova soma",
-    "behind on payments", "rent", "fees", "quota",
+# Split for word-boundary matching. As bare substrings "owe" lives inside
+# *power* and *however*, and "rent" inside *different*, *current* and
+# *parent* — so ordinary dialogue kept tripping Felix's sympathy path, which
+# releases outright half the time it fires.
+_SYMPATHY_PHRASES = [
+    "same boat", "one of us", "just trying", "trying to survive",
+    "trying to get by", "not that different", "we're the same",
+    "were the same", "behind on payments", "nova soma", "corporation",
+    "in the same hole", "you and me both",
 ]
+_SYMPATHY_WORDS = (
+    "debt", "debts", "clone", "clones", "owe", "owed", "broke",
+    "understand", "struggling", "system", "corpo", "rent", "fees", "quota",
+)
 _DISTRACT_KEYWORDS = [
     "plan", "plans", "legitimate", "real work", "business",
     "what do you do", "tell me about", "your operation",
@@ -435,7 +443,7 @@ class NervousFence(BaseNPC):
             ])
 
         # ------------ SYMPATHY ----------------------------------------
-        if any(w in raw for w in _SYMPATHY_KEYWORDS):
+        if hit(raw, _SYMPATHY_PHRASES, _SYMPATHY_WORDS):
             self._sympathy_t += 1
             self._current_path = "SYMPATHY"
             self.disposition += 2
@@ -679,6 +687,11 @@ class NervousFence(BaseNPC):
         ])
 
     # ------------------------------------------------------------------
+    def bribe_cost(self) -> int:
+        # J.1 — Felix already tracked the figure the player named; without
+        # this override the run deducted nothing and his cut was imaginary.
+        return self._bribe_paid
+
     def get_path_progress(self) -> list[tuple[str, int, int]]:
         return [
             ("CARGO DEAL",   int(self._deal_offered),         1),

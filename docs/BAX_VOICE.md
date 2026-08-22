@@ -23,6 +23,27 @@ BAX-7 (he goes by Bax) is a Mk.II Navigation/Morale Unit, decommissioned by Nova
 
 ---
 
+## Pool size floor (character pass, Aug 2026)
+
+Every context in this doc is now ported into `bax/bax.py`. The flight-side
+pools that predate the line bank were not held to the same standard and had
+run as low as three lines — `_HIGH_HULL`, `_CLOSE_CALL_TERRIFYING` and
+`_CLOSE_CALL_AFTERMATH` among them. `_no_repeat_pick` only remembers the last
+three picks, so a three-line pool is effectively random-with-repeats, from the
+one character who is always on the comm.
+
+All flight and close-call pools are now at 12; nothing in the file is under 6.
+Guarded by `tests/test_character_pass.py` (`test_bax_flight_pools_meet_the_voice_doc_floor`,
+`test_no_bax_pool_is_shorter_than_six`, `test_bax_lines_are_unique_within_their_pool`).
+
+`_LINE_MODE` also drives the voice filter in `audio_manager`. `close_call_terrifying`
+and `close_call_aftermath` were unregistered, so Bax's most vulnerable lines —
+the ones the tone rules above call *dark / vulnerable* — were playing in his
+everyday voice. Both are tagged now. **Any new pool in a non-standard register
+must be added to `_LINE_MODE` or it plays flat.**
+
+---
+
 ## Line bank — new contexts
 
 Each context below is tagged with mode and gets 12 lines. Port these into `bax.py` as new constant lists. Use `Bax`'s existing `_speak` plumbing — just add new event subscriptions and route the appropriate context. Implement the no-immediate-repeat rejection from Epic 7.5 across all of these.

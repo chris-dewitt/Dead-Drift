@@ -1,6 +1,7 @@
 from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import hit
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT, EVT_BAX_SPEAK
 
@@ -55,12 +56,18 @@ class UndergroundDJ(BaseNPC):
         "archive", "from the archive", "vinyl", "side a", "side b",
         "record", "recording", "bootleg", "master tape", "tape",
     ]
-    _GREETING_KEYWORDS = [
-        "marrow", "hello", "hey", "hi", "evening", "morning",
-        "what's up", "how are", "good to hear",
-        "roost", "radio", "broadcast", "tuned in", "you there",
-        "come in", "is anyone there", "greetings", "hey there",
+    # Split for word-boundary matching: the bare token "hi" is a substring of
+    # *this*, *nothing*, *him* and *his*, so on the old substring test almost
+    # every sentence a player typed opened with Marrow's greeting path.
+    _GREETING_PHRASES = [
+        "marrow", "hello", "what's up", "whats up", "how are", "good to hear",
+        "roost", "tuned in", "you there", "come in", "is anyone there",
+        "hey there", "good evening", "good morning", "long time",
     ]
+    _GREETING_WORDS = (
+        "hey", "hi", "hiya", "evening", "morning", "greetings",
+        "radio", "broadcast",
+    )
 
     def __init__(self, run_context: dict | None = None, **_):
         super().__init__("MARROW", patience=10)   # generous — he's a friend
@@ -223,7 +230,7 @@ class UndergroundDJ(BaseNPC):
             ])
 
         # POSITIVE GREETING
-        if any(w in raw for w in self._GREETING_KEYWORDS):
+        if hit(raw, self._GREETING_PHRASES, self._GREETING_WORDS):
             self.disposition += 2
             return NPCOutcome.CONTINUE, random.choice([
                 "Likewise, pilot. Glad we connected. "
