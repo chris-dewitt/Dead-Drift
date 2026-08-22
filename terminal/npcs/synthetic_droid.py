@@ -111,8 +111,10 @@ class SyntheticDroid(BaseNPC):
                 "HAVE A COMPLIANT DAY. BZZT."
             )
 
-        # PARADOX
-        if parsed.paradox:
+        # PARADOX — parser-detected self-reference, or the bare words the scan
+        # chip lights on ("paradox" / "contradiction" / "if this statement").
+        if parsed.paradox or any(
+                w in raw for w in ("paradox", "contradiction", "if this statement")):
             self._paradox_count += 1
             self._current_path   = "PARADOX CRASH"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="paradox_crash")

@@ -17,6 +17,7 @@ from terminal.nlp_parser import ParsedInput
 _HAIL_KEYWORDS = [
     "marrow", "roost", "radio", "broadcast", "hello", "come in",
     "you there", "anyone", "pirate radio", "the frequency", "signal",
+    "static",   # scan-chip sync (STATIC lights on the bare word)
 ]
 # Ways of grieving the channel — a courier paying respects.
 _MOURN_KEYWORDS = [

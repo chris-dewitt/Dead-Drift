@@ -32,12 +32,14 @@ _PARADOX_KEYWORDS = [
     "i am the system", "you owe me", "refund the debt to me",
     "satisfaction is mandatory", "i decline to consent",
     "this is not a debt", "the debt does not exist",
+    "paradox",   # scan-chip sync (PARADOX lights on the bare word)
 ]
 _POLICY_KEYWORDS = [
     "policy", "form", "code", "ref", "reference",
     "ns-401", "ns-7", "ns-9", "regulation 47", "section 12",
     "subsection", "clause 4b", "rider", "appendix",
     "case number", "ticket", "incident",
+    "section", "clause", "ns-",   # scan-chip sync (POLICY lights on these)
 ]
 _HARDSHIP_KEYWORDS = [
     "hardship", "financial hardship", "mental health", "wellness",
