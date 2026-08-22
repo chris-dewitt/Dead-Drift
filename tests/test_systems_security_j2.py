@@ -113,6 +113,14 @@ def test_three_sql_bounces_trip_the_alarm():
     assert t.is_done and t.outcome == "breach"
 
 
+def test_ordinary_counter_offer_is_not_a_failed_hack():
+    from terminal.npcs.gary import Gary
+    t = Terminal(Gary(run_context={}), econ=None); t.activate()
+    _drive(t, "I can pay fee = 1500 or fee = 2000 credits")
+    assert t._hack_fails == 0
+    assert t.outcome != "breach"
+
+
 def test_shell_sudo_spam_trips_the_alarm():
     t = Terminal(_tk9(), econ=None); t.activate()
     _drive(t, "shell")

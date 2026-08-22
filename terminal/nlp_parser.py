@@ -139,13 +139,22 @@ _INTENT_PATTERNS: list[tuple[str, list[str]]] = [
 _SQL_SIGNATURES = [
     r"DROP\s+TABLE",
     r"TRUNCATE(?:\s+TABLE)?",
-    r"DELETE\s+FROM",
-    r"INSERT\s+INTO",
+    # DML verbs need the rest of a statement.  Bare English such as
+    # "delete from my record" / "insert into the report" is normal terminal
+    # dialogue, and a false hit is either a free win or a security strike.
+    r"DELETE\s+FROM\s+\w+(?=\s*(?:WHERE\b|;|--|#|$))",
+    r"INSERT\s+INTO\s+\w+(?:\s*\([^)]*\))?\s+(?:VALUES|SELECT)\b",
     r"UPDATE\s+\w+\s+SET",
     r"SELECT\s+\*",                                   # SELECT * (star is unambiguous)
     r"SELECT\s+\w+(?:\s*,\s*\w+)*\s+FROM\b",          # SELECT col[,col] FROM …
-    r"UNION(?:\s+ALL)?\s+SELECT\b",                   # UNION [ALL] SELECT
-    r"(?:OR|AND)\s+['\"]?\w+['\"]?\s*=\s*['\"]?\w+['\"]?",  # OR 1=1 / AND 'a'='a'
+    # UNION must contain a SELECT list, not the English phrase "union select
+    # a new representative".
+    r"UNION(?:\s+ALL)?\s+SELECT(?:\s+\*|\s+\w+(?:\s*,\s*\w+)*\s+FROM\b)",
+    # Common tautologies only.  The broad old word=word shape treated ordinary
+    # counter-offers such as "1500 or fee = 2000" as intrusion attempts.
+    r"(?:OR|AND)\s+(?:(?P<sql_num>\d+)\s*=\s*(?P=sql_num)|"
+    r"'(?P<sql_sq>[^']+)'\s*=\s*'(?P=sql_sq)'|"
+    r"\"(?P<sql_dq>[^\"]+)\"\s*=\s*\"(?P=sql_dq)\")",
     r"'\s*OR\s*'",                                    # ' OR '  auth-bypass
     r"'\s*=\s*'",                                     # '='
     r"['\"]\s*(?:--|#)",                              # quote then SQL comment (admin'--)
