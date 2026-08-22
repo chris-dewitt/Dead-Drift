@@ -144,6 +144,51 @@ def test_kress_contraband_stims_wire_harmonica_charge():
     assert k.take_pending_transaction()["effect"] == EFFECT_STIM
 
 
+def test_kress_volkov_name_still_exploits():
+    """Designed path: naming Volkov is a 5k lore EXPLOIT."""
+    k = _kress(0)
+    out, line = k.respond("volkov sent me")
+    assert out == NPCOutcome.EXPLOIT
+    assert k._current_path == "VOLKOV"
+    assert k._mentioned_volkov is True
+    assert "volkov" in line.lower()
+
+
+def test_kress_old_debt_phrase_still_exploits():
+    k = _kress(0)
+    out, _ = k.respond("I know about the old debt")
+    assert out == NPCOutcome.EXPLOIT
+    assert k._mentioned_volkov is True
+
+
+def test_kress_owe_substring_does_not_farm_volkov_exploit():
+    """'owe' used to live inside however/powered/tower and pay 5,000 cr."""
+    for phrase in (
+        "however you can help",
+        "powered up and ready",
+        "tower of debt",
+        "I owe too much already",
+        "what's the tab",
+        "I need a favor",
+        "check the ledger",
+    ):
+        k = _kress(0)
+        out, line = k.respond(phrase)
+        assert out != NPCOutcome.EXPLOIT, phrase
+        assert k._mentioned_volkov is False, phrase
+        assert "rock through window" not in line.lower(), phrase
+
+
+def test_kress_favor_hint_then_volkov_still_exploits():
+    k = _kress(0)
+    out1, _ = k.respond("I need a favor")
+    assert out1 == NPCOutcome.CONTINUE
+    assert k._mentioned_volkov is False
+    out2, _ = k.respond("volkov")
+    assert out2 == NPCOutcome.EXPLOIT
+    assert k._mentioned_volkov is True
+
+
 # ── Mira paid repair (run-credits-only) ─────────────────────────────────────
 
 def _mira(credits):
