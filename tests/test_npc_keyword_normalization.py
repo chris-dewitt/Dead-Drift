@@ -99,6 +99,50 @@ def test_felix_gossip_keyword_arms_path_without_npc_name():
     assert "name" in line.lower() or "whom" in line.lower() or "rumour" in line.lower()
 
 
+def test_holt_personal_effects_is_compliant_not_impound():
+    """Documented COMPLY phrase 'personal effects' used to substring-match
+    HONEST token 'person' and IMPOUND instead of waving the player through."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    holt = make_npc("cargo_inspector")
+    out, _ = holt.respond("personal effects")
+    assert out == NPCOutcome.RELEASE
+    assert holt._current_path == "COMPLIANT"
+
+
+def test_holt_admitting_a_person_still_impounds():
+    """Whole-word 'person' must still catch an honest VIP admission."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    holt = make_npc("cargo_inspector")
+    out, _ = holt.respond("there's a person in the hold")
+    assert out == NPCOutcome.IMPOUND
+
+
+def test_holt_dont_know_the_code_is_not_a_citation():
+    """Holt's intro asks for classification codes. Ordinary 'I don't know
+    the code' must not fire the one-turn CODE CITATION RELEASE."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    holt = make_npc("cargo_inspector")
+    out, _ = holt.respond("I don't know the code")
+    assert out == NPCOutcome.CONTINUE
+    assert holt._current_path != "CODE CITATION"
+
+
+def test_holt_actual_cargo_code_still_releases():
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    holt = make_npc("cargo_inspector")
+    out, _ = holt.respond("cargo code class c, tariff code 0403")
+    assert out == NPCOutcome.RELEASE
+    assert holt._current_path == "CODE CITATION"
+
+
 def test_dispatcher_interest_is_not_a_coffee_break():
     """Dispatcher's intro talks about compound interest. Substring 'rest'
     inside 'interest' used to fire the one-turn COFFEE BREAK RELEASE."""
