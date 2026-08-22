@@ -297,6 +297,19 @@ class Kress(BaseNPC):
                 "Try again, nicely. Or do not.",
             ])
 
+        # MARROW mentioned, but no actual sell-offer — Kress goes cagey. Gives
+        # the MARROW! scan chip a real reaction instead of generic filler.
+        if any(w in raw for w in ("marrow", "roost", "pirate radio", "coordinates")):
+            self._current_path = "MARROW?"
+            return NPCOutcome.CONTINUE, random.choice([
+                "*channel hiss* ...Marrow. The Roost. Careful saying that name on "
+                "open band, friend. Why you ask — you have something to sell, or "
+                "you just talking?",
+                "*pause* You mention Marrow. The Roost pays me nothing, so I owe "
+                "them nothing. But I do not gossip for free. You offering the "
+                "location, or wasting my minutes?",
+            ])
+
         # DEFAULT — Kress runs his mouth
         return NPCOutcome.CONTINUE, self._kress_filler()
 

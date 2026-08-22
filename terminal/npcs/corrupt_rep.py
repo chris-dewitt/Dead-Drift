@@ -153,8 +153,11 @@ class CorruptRep(BaseNPC):
             ])
 
         # BRIBE PATH — branches small vs big. Aliveness B.1 standardised label.
+        # A bare number is an implicit offer to a corrupt rep (the BRIBE /
+        # SHAKEDOWN scan chips light on the amount alone), so a named amount
+        # opens the branch even without a "bribe"/"pay" word.
         if (any(w in raw for w in self._BRIBE_KEYWORDS) or
-                parsed.intent == "bribe"):
+                parsed.intent == "bribe" or parsed.amount is not None):
             amount = parsed.amount or 0
             if amount >= 8000:
                 # SHAKEDOWN — too much money on the table; he takes some

@@ -366,6 +366,20 @@ class UnionDispatcher(BaseNPC):
                 "I've noted it in Form 17-C. That's the Hostility Notation form.",
             ])
 
+        # MARROW mentioned, but not an actual report offer — the Dispatcher
+        # gets bureaucratically twitchy. Gives the MARROW! scan chip a real
+        # reaction instead of the generic 47-forms filler.
+        if any(w in raw for w in ("marrow", "roost", "pirate radio", "coordinates")):
+            self._current_path = "MARROW?"
+            return NPCOutcome.CONTINUE, random.choice([
+                "*keyboard stops* ...The unlicensed relay. That's an open "
+                "enforcement file, you know. If you have the broadcast location "
+                "to report, say so plainly. Otherwise I didn't hear it.",
+                "Marrow. *sighs* There's a Form 88-Unlicensed-Relay with that "
+                "name on it, sixteen months open. If you're filing coordinates, "
+                "say 'report' and 'confirm'. If not, we never discussed it.",
+            ])
+
         # DEFAULT — the 47-forms-behind running gag
         return NPCOutcome.CONTINUE, self._dispatcher_filler()
 

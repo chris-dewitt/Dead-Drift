@@ -198,7 +198,7 @@ def draw_carousel(
     fsm = get_font(11)
     sub_lines = [
         "Pick a card to dispatch your courier on a fresh run of that chapter.",
-        "↑ ↓ navigate fields    ←  →  cycle cards    ENTER deploy    H toggle HARDCORE    ESC back",
+        "↑ ↓ navigate fields    ←  →  cycle cards    ENTER deploy    X toggle HARDCORE    ESC back",
     ]
     for i, line in enumerate(sub_lines):
         ts = fsm.render(line, True, (140, 130, 100))
@@ -246,7 +246,7 @@ def draw_carousel(
             tag = f"HARDCORE ARMED — Ch.{chapter}: tighter timers, no shops, +1 barge per sector, 1 checkpoint."
             col = (255, 70, 70)
         else:
-            tag = f"HARDCORE available for Ch.{chapter}.   Press H to arm."
+            tag = f"HARDCORE available for Ch.{chapter}.   Press X to arm."
             col = (200, 140, 60)
         fs = fsm2.render(tag, True, col)
         screen.blit(fs, (cx - fs.get_width() // 2, S.SCREEN_H - 90))

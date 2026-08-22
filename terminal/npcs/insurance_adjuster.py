@@ -50,6 +50,8 @@ class InsuranceAdjuster(BaseNPC):
         "they came at me", "attacked my ship", "barge fault",
         "barge was at fault", "local 404 at fault", "union mistake",
         "they hit me first", "deployed without authorisation", "unauthorized action",
+        # scan-chip sync (UNION-NEG lights on these short words too)
+        "harpoon", "local 404",
     ]
 
     # --- FORCE MAJEURE keywords (two buckets, both must appear) ---
@@ -64,6 +66,8 @@ class InsuranceAdjuster(BaseNPC):
         "accidental", "couldn't avoid", "no way to avoid",
         "unavoidable collision", "natural obstacle", "space debris",
         "field hazard", "rock", "couldn't help", "natural cause",
+        # scan-chip sync (FORCE-MAJ lights on bare "gravitational")
+        "gravitational",
     ]
     _FORMAL_CLAIM_KEYWORDS = [
         "covered event", "force majeure", "environmental damage",
@@ -101,7 +105,8 @@ class InsuranceAdjuster(BaseNPC):
         "that's too much", "that's a lot to handle", "are you well",
         "you don't sound okay", "when did you last take a break",
         "do you ever get time off", "that's not fair to you",
-        # short-form natural variants
+        # short-form natural variants (EXHAUST chip lights on these too)
+        "tired", "how long",
         "you okay", "you alright", "hang in there", "you doing okay",
         "hope you're okay", "sounds like a lot", "that's so much work",
         "when do you sleep", "do you sleep", "you need rest",

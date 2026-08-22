@@ -121,7 +121,7 @@ _SCAN_VOCAB: dict[str, dict[str, str]] = {
     "INSPECTOR HOLT": {
         "standard freight": "COMPLY★", "general goods": "COMPLY★",
         "industrial": "COMPLY", "medical": "COMPLY", "personal effects": "COMPLY",
-        "cargo code": "CODE★", "classification": "CODE★", "reg-": "CODE",
+        "cargo code": "CODE★", "reg-": "CODE",
         "article 9": "PRIV★", "transit privacy": "PRIV★", "privacy": "PRIV",
         "various": "VAGUE", "assorted": "VAGUE", "don't know": "VAGUE",
         "sealed": "VAGUE", "classified": "VAGUE", "confidential": "VAGUE",
@@ -424,8 +424,9 @@ _SCAN_VOCAB.update({
         "you made": "ACKNOWLEDGE", "complicit": "ACKNOWLEDGE",
         "everyone": "FOR-ALL★", "wipe it": "FOR-ALL★", "all of them": "FOR-ALL",
         "why": "QUESTION", "how": "QUESTION", "what does it do": "QUESTION",
-        "shell": "SHELL★", "cascade": "SHELL★", "root": "SHELL",
-        "marrow": "MARROW",
+        # Only the mode-entry word lights in conversation; cascade/root/marrow
+        # do nothing until you're actually inside `shell`, so they don't chip.
+        "shell": "SHELL★",
     },
     "BOWEN": {
         "clone tanks": "EXPOSE★", "floor 31": "EXPOSE★", "the names": "EXPOSE★",
@@ -433,7 +434,8 @@ _SCAN_VOCAB.update({
         "your family": "PERSONAL★", "the photo": "PERSONAL★", "lanyard": "PERSONAL",
         "never": "REFUSE", "won't": "REFUSE", "make me": "REFUSE", "no way": "REFUSE",
         "okay": "COMPLY!", "sure": "COMPLY!", "i'll wait": "COMPLY!",
-        "python": "REPL★", "import": "REPL★", "eval": "REPL",
+        # Only the mode-entry word lights; import/eval matter inside the REPL.
+        "python": "REPL★",
     },
 })
 _NPC_VAULT_KEYS.update({
@@ -668,6 +670,13 @@ _OUTCOME_BAX_LINE = {
     "breach":           "BAX: Third strike. Alarm's screaming and a barge just went hot. STICK. NOW.",
 }
 
+# Whole-word payment/bribe tokens — when one appears with no amount named, the
+# terminal nudges the player to state a figure instead of stalling silently.
+_PAYMENT_WORDS = frozenset({
+    "pay", "paying", "credit", "credits", "fee", "fees",
+    "bribe", "cash", "grand", "money",
+})
+
 
 class Terminal:
     """
@@ -864,10 +873,20 @@ class Terminal:
         self._apply_pending_transaction()
 
         self._outcome = outcome
+        parsed = self.npc.last_parsed
+
+        # Audit fix — reaching for money without naming a figure used to fall
+        # to generic filler (the PAY/BRIBE scan chip lit, then "nothing
+        # happened"). Nudge the player to name an amount so the NPC can act.
+        _pay_toks = {t.strip(".,!?;:'\"$") for t in player_text.lower().split()}
+        if (outcome == NPCOutcome.CONTINUE
+                and not getattr(self.npc, "_current_path", "")
+                and parsed is not None and parsed.amount is None
+                and (_pay_toks & _PAYMENT_WORDS)):
+            self._push("SYSTEM", "name a figure — e.g. 'pay 1500' — so they can act on it")
 
         # J.2.4 — a real injection string that bounced off a non-vulnerable NPC
         # is a failed hack. The 3rd trips the alarm and aborts to flight.
-        parsed = self.npc.last_parsed
         if (parsed is not None and parsed.sql_inject
                 and outcome not in (NPCOutcome.EXPLOIT, NPCOutcome.RELEASE)):
             if self._register_hack_fail():

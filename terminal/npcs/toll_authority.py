@@ -30,6 +30,7 @@ _UNION_GRIPE_WORDS = [
     "union", "local 404", "local404", "repo man", "repo", "them",
     "barge", "dispatcher", "collector", "those guys", "those people",
     "federation", "organised labour", "strike", "grievance",
+    "quota",   # scan-chip sync (UNION-GRIPE lights on "quota")
     "hate the union", "corrupt", "thieves", "useless",
     "wouldn't help me", "left me hanging", "no backup",
     "they never", "always late", "never show up", "bureaucrats",

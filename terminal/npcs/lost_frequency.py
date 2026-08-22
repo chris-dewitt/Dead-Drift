@@ -27,7 +27,7 @@ _HAIL_PHRASES = [
     "marrow", "roost", "pirate radio", "the frequency", "come in",
     "you there", "anyone there", "is anyone", "hello", "hey", "still there",
     "can you hear", "do you copy", "check the band", "who's broadcasting",
-    "whos broadcasting",
+    "whos broadcasting", "anyone", "signal", "static",
 ]
 _HAIL_WORDS = ("radio", "broadcast", "signal", "band", "channel", "static")
 # Ways of grieving the channel — a courier paying respects.
