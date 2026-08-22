@@ -423,8 +423,10 @@ class Gary(BaseNPC):
                 "Right. Addin' that to the file. You're welcome.",
             ])
 
-        # SANDRA — hidden path, never shown in dossier
-        if "sandra" in raw:
+        # SANDRA — hidden path, never shown in dossier. Also opens on the
+        # breadcrumb words the SANDRA? scan chip lights on (her old route /
+        # her being Gary's partner), not just her name.
+        if any(w in raw for w in ("sandra", "meridian", "partner", "partners")):
             self._sandra_turns += 1
             self._current_path  = "SANDRA"
             self.disposition   += 2

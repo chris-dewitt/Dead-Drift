@@ -34,7 +34,7 @@ class Pirate(BaseNPC):
 
     _CARGO_KEYWORDS  = [
         "take it", "the cargo", "have the cargo", "yours", "keep it",
-        "all of it", "give it", "the payload", "the haul",
+        "all of it", "give it", "the payload", "payload", "the haul",
         "i'll drop", "drop the", "leave the",
     ]
     _ESCAPE_KEYWORDS = [

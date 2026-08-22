@@ -27,22 +27,28 @@ _COMPLY_KEYWORDS = [
     "medical supplies", "personal effects", "courier parcel",
     "transit goods", "bulk cargo", "sealed unit", "insulated container",
     "commercial package", "registered freight", "bonded cargo",
+    # scan-chip sync (COMPLY lights on the bare category words)
+    "industrial", "medical",
 ]
 _VAGUE_KEYWORDS = [
     "various", "misc", "assorted", "items", "stuff", "things",
     "couldn't say", "don't know", "not sure", "sealed by sender",
     "above my clearance", "classified", "need to know",
     "client confidential", "no access",
+    # scan-chip sync (VAGUE lights on bare "sealed"/"confidential")
+    "sealed", "confidential",
 ]
 _CODE_KEYWORDS = [
     "cargo code", "manifest code", "transit code",
     "class c", "class b", "hs code", "sector tariff",
     "tariff code", "subsection",
     "reg-7", "reg-14", "tsa-9", "tac-4", "zone code",
+    "reg-",   # scan-chip sync (CODE lights as you type a reg- code)
 ]
 _ARTICLE_9_KEYWORDS = [
     "article 9", "transit privacy", "privacy statute", "manifest privacy",
     "section 9", "clause 9", "right to privacy", "private transit",
+    "privacy",   # scan-chip sync (PRIV lights on the bare word)
 ]
 _BRIBE_AMOUNT = 600
 _HOSTILE_KEYWORDS = [
