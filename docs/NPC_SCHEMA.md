@@ -16,6 +16,7 @@ Every terminal NPC must meet:
 | **Bribe label** | If a bribe path exists, the dossier `_current_path` must read `BRIBE [<amount> cr]` once a credit amount is mentioned (mirrors `terminal/npcs/dray.py`) |
 | **Universal escape** | `fuck off` releases — handled in `BaseNPC.respond` (do not advertise) |
 | **Cross-references** | At least 1 line mentioning another character (Bax / Gary / Sandra / Felix / Marrow / Nova Soma) |
+| **Pickup-word matching** | Multi-word entries in `*_PHRASES`, matched by substring. Single tokens in `*_WORDS`, matched on word boundaries via `terminal/npcs/keywords.py`. Agreement words go through `affirmed_hit` so a negation doesn't read as consent. |
 
 ---
 
@@ -82,9 +83,9 @@ Every NPC mentions at least one other by name. Currently shipped (auto-discovere
 | `mira_voss` | Gary, Sandra, Felix, Kress |
 | `idealist_rep` | Gary, Blevins, Sandra, Felix, Bax |
 | `corrupt_rep` | Krellborn, Gary, Eddie, Felix |
-| `chen` | Marrow, Nova Soma |
-| `bowen` | Nova Soma, Bax |
-| `lost_frequency` | Marrow, Nova Soma, Bax |
+| `chen` | Marrow, Nova Soma, Gary, Sandra, Felix, Bax |
+| `bowen` | Nova Soma, Bax, Holt, Marrow |
+| `lost_frequency` | Marrow, Nova Soma, Bax, Felix, Sandra |
 
 ---
 
@@ -102,6 +103,30 @@ a portrait accent, dossier/scan/vault map entries, and one systems path each.
 | `bowen` | Ch6 — Nova Soma compliance | `python` → break the audit console sandbox |
 | `lost_frequency` | Marrow aftermath | `shell` → `grep marrow raid` the seizure log |
 
+### Character pass (Aug 2026) — brought to roster parity
+
+J.3.1 de-crashed these three but left them at a fraction of the roster's
+depth: one canned line per branch, no `EVT_NLP_EXPLOIT`, no vault record, no
+portrait geometry, and the generic `BaseNPC` escape line. All three now:
+
+* carry response variants on every branch (`random.choice`, ≥ 6 per file);
+* file wins through `EVT_NLP_EXPLOIT` **and** the vocabulary vault, so the
+  Records tab and Bax's backdoor list actually learn the paths;
+* answer the universal escape in character;
+* have bespoke portrait geometry and a scene backdrop — they had been
+  rendering on the `_unknown` "?" placeholder, so the two climax characters
+  of the game had no face.
+
+| NPC | Keywords | Cross-refs | Portrait |
+|-----|----------|------------|----------|
+| `chen` | 54 → 82 | 2 → 6 | Remnant dig: rebreather at the jaw, goggles pushed up, the ledger's source scrolling on a salvaged monitor |
+| `bowen` | 58 → 110 | 2 → 4 | Compliance floor: headset, lanyard photo, identical desks to the vanishing point, a smile that only goes flat at the bottom of the scale |
+| `lost_frequency` | 31 → 79 | 3 → 5 | No bust — an empty studio chair, a dead mic, VU meters pinned at zero. The portrait is the absence. |
+
+`lost_frequency` also gained a REQUEST path (call in one last dedication) and
+a REPRISAL path (name Local 404 out loud), and hailing now returns one beat of
+static before it lets you go.
+
 ---
 
 ## Bribe negotiation flow (B.8)
@@ -117,3 +142,9 @@ Reference implementations:
 * `gary` — three-attempt bribe with disposition-driven softening.
 * `dray` — single-shot, fast accept at 500+ cr.
 * `corrupt_rep` — small bribes accepted; large bribes trigger the SHAKEDOWN flag.
+
+**`bribe_cost()` is not optional.** `RunManager` deducts exactly what that
+method reports, so an NPC that accepts a credit bribe without overriding it is
+handing out a free win. `dray` and `nervous_fence` both did; both now report
+the figure the player actually named. Guarded by
+`tests/test_character_pass.py::test_every_bribeable_npc_overrides_bribe_cost`.

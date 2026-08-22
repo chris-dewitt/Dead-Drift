@@ -209,6 +209,23 @@ def _draw_reaction_overlay(surface: pygame.Surface, inner: pygame.Rect,
 # CRT bezel + signal overlay (universal hardware framing)
 # ---------------------------------------------------------------------------
 
+# The top strip prints the relay banner from the left and the NPC's callsign
+# from the right. A long callsign ("FREQUENCY LOST", "NOVA SOMA COLLECTIONS")
+# used to print straight through the banner, so step the banner down to a
+# shorter form until it fits — and drop it entirely if even the short one
+# won't.
+_RELAY_BANNERS = ("LIVE COMM // NOVA SOMA RELAY 7-B",
+                  "LIVE COMM // RELAY 7-B", "LIVE COMM")
+
+
+def fit_relay_banner(font, npc_name: str, left: int, callsign_x: int) -> str:
+    """Longest banner that clears the right-aligned callsign; "" if none does."""
+    for text in _RELAY_BANNERS:
+        if left + font.size(text)[0] + 6 <= callsign_x:
+            return text
+    return ""
+
+
 def _draw_crt_bezel(surface: pygame.Surface, rect: pygame.Rect,
                     npc_name: str, t: float, disposition: int) -> pygame.Rect:
     """Draws a chunky CRT bezel around `rect`, returns the inner usable area."""
@@ -258,12 +275,14 @@ def _draw_crt_bezel(surface: pygame.Surface, rect: pygame.Rect,
     dot_col = (230, 60, 30) if blink else (70, 20, 10)
     pygame.draw.circle(surface, dot_col,
                        (label_rect.left+8, label_rect.centery), 3)
-    lbl = font.render("LIVE COMM // NOVA SOMA RELAY 7-B", True, (190, 130, 24))
-    surface.blit(lbl, (label_rect.left+16,
-                       label_rect.centery - lbl.get_height()//2))
     cs = font.render(npc_name.upper(), True, (255, 180, 44))
-    surface.blit(cs, (label_rect.right - cs.get_width() - 6,
-                      label_rect.centery - cs.get_height()//2))
+    cs_x = label_rect.right - cs.get_width() - 6
+    banner = fit_relay_banner(font, npc_name, label_rect.left + 16, cs_x)
+    if banner:
+        lbl = font.render(banner, True, (190, 130, 24))
+        surface.blit(lbl, (label_rect.left+16,
+                           label_rect.centery - lbl.get_height()//2))
+    surface.blit(cs, (cs_x, label_rect.centery - cs.get_height()//2))
 
     # ── Bottom hardware strip — signal bars + timecode ──
     bot_h = 12
@@ -4028,3 +4047,632 @@ _DISPATCH["idealist_rep"]  = _idealist_rep
 _DISPATCH["corrupt_rep"]   = _corrupt_rep
 _BACKDROPS["idealist_rep"] = _backdrop_idealist_rep
 _BACKDROPS["corrupt_rep"]  = _backdrop_corrupt_rep
+
+
+# ---------------------------------------------------------------------------
+# J.3.1 follow-up — Chen, Bowen and the dead Roost frequency shipped on the
+# `_unknown` "?" placeholder, which meant the two climax characters of the
+# game had no face at all. Bespoke geometry + backdrops below.
+# ---------------------------------------------------------------------------
+
+def _backdrop_chen(surface, inner, t):
+    """Remnant dig: raw asteroid rock, cable runs, the ledger's own source
+    scrolling on a monitor she salvaged and never turned off."""
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
+
+    # Rock face — irregular strata, stable per-run seed so it doesn't crawl.
+    rng = random.Random(517)
+    surface.fill((16, 14, 22))
+    for band in range(7):
+        y = inner.top + band * 13
+        col = (18 + band % 3 * 4, 15 + band % 2 * 4, 26 + band % 3 * 5)
+        pts = [(inner.left, y)]
+        for x in range(inner.left, inner.right + 8, 11):
+            pts.append((x, y + rng.randint(-3, 3)))
+        pts += [(inner.right, y + 14), (inner.left, y + 14)]
+        pygame.draw.polygon(surface, col, pts)
+
+    # Cable runs stapled to the rock, sagging between anchors.
+    for row, base in enumerate((inner.top + 16, inner.top + 27)):
+        col = (44, 38, 62) if row == 0 else (36, 32, 52)
+        prev = (inner.left, base)
+        for x in range(inner.left + 14, inner.right + 14, 20):
+            mid = (prev[0] + x) // 2
+            pygame.draw.line(surface, col, prev, (mid, base + 4), 1)
+            pygame.draw.line(surface, col, (mid, base + 4), (x, base), 1)
+            pygame.draw.line(surface, (70, 60, 95), (x, base - 2), (x, base + 2), 1)
+            prev = (x, base)
+
+    # Salvaged monitor, left side — the ledger source, scrolling.
+    mon = pygame.Rect(inner.left + 5, inner.top + 34, 44, 42)
+    pygame.draw.rect(surface, (8, 8, 16), mon)
+    pygame.draw.rect(surface, (90, 78, 140), mon, 1)
+    scroll = int(t * 9) % 8
+    for i in range(6):
+        ly = mon.top + 4 + i * 6 - scroll
+        if not (mon.top + 2 <= ly <= mon.bottom - 5):
+            continue
+        w = 8 + ((i * 13 + int(t)) % 28)
+        dim = 150 if i % 3 else 205
+        pygame.draw.line(surface, (dim - 60, dim - 70, dim),
+                         (mon.left + 4, ly), (mon.left + 4 + w, ly), 1)
+    lbl = font6.render("LEDGER.SRC", True, (160, 140, 235))
+    surface.blit(lbl, (mon.left + 2, mon.bottom - 8))
+
+    # A work light on a stand, right side — the only warm thing down here.
+    lamp_x = inner.right - 20
+    pygame.draw.line(surface, (52, 46, 40), (lamp_x, inner.bottom - 4),
+                     (lamp_x, inner.top + 30), 2)
+    glow = pygame.Surface((34, 30), pygame.SRCALPHA)
+    flick = 150 + int(28 * math.sin(t * 5.3))
+    pygame.draw.ellipse(glow, (255, 226, 170, 26), glow.get_rect())
+    pygame.draw.circle(glow, (255, 236, 190, flick // 3), (17, 12), 5)
+    surface.blit(glow, (lamp_x - 17, inner.top + 22))
+
+    # Chalked equations on the rock — she still works the problem by hand.
+    for i, (dx, dy) in enumerate(((2, 12), (0, 22), (6, 32))):
+        chalk = font7.render(("Δ=0", "SUM(bal)", "root/")[i], True, (110, 100, 145))
+        surface.blit(chalk, (inner.left + 54 + dx, inner.top + dy))
+
+
+def _chen(surface, cx, cy, s, disposition, t):
+    """Chen: the architect, fifteen years under rock. Rebreather at her jaw,
+    safety goggles pushed up into grey-streaked hair, entirely unhurried."""
+    skin    = (206, 176, 150)
+    skin_d  = (118, 92, 74)
+    hair    = (46, 44, 52)
+    hair_gr = (152, 150, 162)     # the grey streak
+    coat    = (60, 55, 78)        # a dig coat gone the colour of the rock
+    coat_l  = (112, 104, 146)
+    mask    = (70, 74, 92)        # rebreather, hanging at the jaw
+    mask_l  = (128, 134, 162)
+    accent  = (150, 130, 235)
+
+    # Torso — heavy coat, collar up
+    torso_pts = [
+        (int(cx - 46 * s), int(cy + 82 * s)),
+        (int(cx + 46 * s), int(cy + 82 * s)),
+        (int(cx + 34 * s), int(cy + 20 * s)),
+        (int(cx - 34 * s), int(cy + 20 * s)),
+    ]
+    pygame.draw.polygon(surface, coat, torso_pts)
+    pygame.draw.polygon(surface, coat_l, torso_pts, 1)
+    # Collar wings
+    for side in (-1, 1):
+        pygame.draw.polygon(surface, coat_l, [
+            (int(cx + side * 34 * s), int(cy + 20 * s)),
+            (int(cx + side * 12 * s), int(cy + 26 * s)),
+            (int(cx + side * 20 * s), int(cy + 46 * s)),
+        ])
+    # Air line from the rebreather down into the coat
+    pygame.draw.line(surface, mask_l,
+                     (int(cx + 20 * s), int(cy + 14 * s)),
+                     (int(cx + 30 * s), int(cy + 48 * s)), max(1, int(2 * s)))
+
+    # Neck
+    pygame.draw.rect(surface, skin_d,
+                     (int(cx - 9 * s), int(cy + 10 * s),
+                      int(18 * s), int(14 * s)))
+
+    # Head — long, spare, tired
+    head_pts = [
+        (int(cx - 33 * s), int(cy - 16 * s)),
+        (int(cx - 27 * s), int(cy - 38 * s)),
+        (int(cx - 6 * s),  int(cy - 48 * s)),
+        (int(cx + 16 * s), int(cy - 45 * s)),
+        (int(cx + 29 * s), int(cy - 27 * s)),
+        (int(cx + 31 * s), int(cy - 4 * s)),
+        (int(cx + 24 * s), int(cy + 16 * s)),
+        (int(cx + 4 * s),  int(cy + 22 * s)),
+        (int(cx - 14 * s), int(cy + 18 * s)),
+        (int(cx - 30 * s), int(cy + 4 * s)),
+    ]
+    pygame.draw.polygon(surface, skin, head_pts)
+    pygame.draw.polygon(surface, skin_d, head_pts, 1)
+    # Work-light rim down her right side — the lamp in the backdrop is real
+    pygame.draw.lines(surface, (232, 208, 168), False, [
+        (int(cx + 29 * s), int(cy - 27 * s)),
+        (int(cx + 31 * s), int(cy - 4 * s)),
+        (int(cx + 24 * s), int(cy + 16 * s)),
+    ], 1)
+
+    # Hair — scraped back, one grey streak
+    hair_pts = [
+        (int(cx - 33 * s), int(cy - 16 * s)),
+        (int(cx - 27 * s), int(cy - 40 * s)),
+        (int(cx - 4 * s),  int(cy - 50 * s)),
+        (int(cx + 18 * s), int(cy - 47 * s)),
+        (int(cx + 30 * s), int(cy - 28 * s)),
+        (int(cx + 22 * s), int(cy - 26 * s)),
+        (int(cx - 2 * s),  int(cy - 34 * s)),
+        (int(cx - 24 * s), int(cy - 24 * s)),
+    ]
+    pygame.draw.polygon(surface, hair, hair_pts)
+    pygame.draw.polygon(surface, (26, 24, 32), hair_pts, 1)
+    pygame.draw.line(surface, hair_gr,
+                     (int(cx - 18 * s), int(cy - 42 * s)),
+                     (int(cx - 26 * s), int(cy - 20 * s)), max(1, int(2 * s)))
+
+    # Safety goggles pushed up into the hair — never taken off, never worn
+    gog = pygame.Rect(int(cx - 30 * s), int(cy - 46 * s), int(58 * s), int(11 * s))
+    pygame.draw.rect(surface, (36, 34, 46), gog)
+    pygame.draw.rect(surface, (96, 92, 128), gog, 1)
+    pygame.draw.line(surface, (120, 116, 150),
+                     (gog.left + int(6 * s), gog.centery),
+                     (gog.right - int(6 * s), gog.centery), 1)
+
+    # Rebreather, unclipped and hanging under the jaw
+    mask_pts = [
+        (int(cx - 6 * s),  int(cy + 12 * s)),
+        (int(cx + 20 * s), int(cy + 8 * s)),
+        (int(cx + 22 * s), int(cy + 22 * s)),
+        (int(cx - 4 * s),  int(cy + 26 * s)),
+    ]
+    pygame.draw.polygon(surface, mask, mask_pts)
+    pygame.draw.polygon(surface, mask_l, mask_pts, 1)
+    # Filter cartridge — breathes with a slow pulse
+    pulse = 0.5 + 0.5 * math.sin(t * 1.1)
+    pygame.draw.circle(surface, (52, 56, 74),
+                       (int(cx + 15 * s), int(cy + 17 * s)), max(2, int(5 * s)))
+    pygame.draw.circle(surface, (int(90 + 60 * pulse), 96, 140),
+                       (int(cx + 15 * s), int(cy + 17 * s)), max(2, int(5 * s)), 1)
+
+    # Eyes — steady. She has looked at worse than you.
+    eye_y = int(cy - 14 * s)
+    if disposition >= 3:
+        ecol = (216, 226, 250)
+    elif disposition <= -4:
+        ecol = (240, 214, 214)
+    else:
+        ecol = (206, 206, 222)
+    for ex_off in (-13, 13):
+        pygame.draw.ellipse(surface, ecol,
+                            pygame.Rect(int(cx + ex_off * s - int(7 * s)),
+                                        eye_y - int(4 * s),
+                                        int(14 * s), max(3, int(7 * s))))
+        pygame.draw.circle(surface, (58, 48, 92),
+                           (int(cx + ex_off * s), eye_y), max(2, int(3 * s)))
+    # Deep under-eye shadows — the fifteen years
+    for ex_off in (-13, 13):
+        pygame.draw.arc(surface, skin_d,
+                        pygame.Rect(int(cx + ex_off * s - int(8 * s)),
+                                    eye_y + int(1 * s), int(16 * s), int(9 * s)),
+                        math.pi, math.tau, 1)
+
+    # Brows — level. They tilt only a little, and never far.
+    tilt = max(-2.0, min(2.0, -disposition * 0.35))
+    for side, ex_off in ((-1, -13), (1, 13)):
+        pygame.draw.line(surface, hair,
+                         (int(cx + ex_off * s - int(8 * s)),
+                          int(cy - 24 * s + side * tilt * s)),
+                         (int(cx + ex_off * s + int(8 * s)),
+                          int(cy - 25 * s - side * tilt * s)), max(1, int(2 * s)))
+
+    # Nose
+    pygame.draw.line(surface, skin_d,
+                     (int(cx + 1 * s), int(cy - 6 * s)),
+                     (int(cx - 3 * s), int(cy + 5 * s)), 1)
+
+    # Mouth — a flat line that barely moves. Even pleased, it's only level.
+    mouth_y = int(cy + 9 * s)
+    if disposition >= 4:
+        pygame.draw.arc(surface, skin_d,
+                        pygame.Rect(int(cx - 9 * s), mouth_y - int(6 * s),
+                                    int(18 * s), int(10 * s)),
+                        math.pi, math.tau, 1)
+    else:
+        pygame.draw.line(surface, skin_d,
+                         (int(cx - 9 * s), mouth_y),
+                         (int(cx + 7 * s), mouth_y), 1)
+
+    # Rock dust on the shoulders of the coat
+    rng = random.Random(41)
+    for _ in range(9):
+        dx = int(cx + rng.uniform(-42, 42) * s)
+        dy = int(cy + rng.uniform(24, 44) * s)
+        pygame.draw.circle(surface, (96, 90, 112), (dx, dy), 1)
+
+    # Drive on a lanyard at her chest — the thing you came for
+    pygame.draw.line(surface, accent,
+                     (int(cx - 6 * s), int(cy + 30 * s)),
+                     (int(cx - 2 * s), int(cy + 52 * s)), 1)
+    drive = pygame.Rect(int(cx - 8 * s), int(cy + 52 * s), int(12 * s), int(8 * s))
+    pygame.draw.rect(surface, (30, 26, 44), drive)
+    pygame.draw.rect(surface, accent, drive, 1)
+
+
+def _backdrop_bowen(surface, inner, t):
+    """Nova Soma compliance floor: identical desks to the horizon, a board
+    counting days since the last incident, and very good carpet."""
+    font6 = get_font(6, bold=True)
+
+    # Flat institutional wall + ceiling grid
+    surface.fill((16, 26, 30))
+    pygame.draw.rect(surface, (20, 34, 38), (inner.left, inner.top, inner.width, 22))
+    for x in range(inner.left, inner.right, 16):
+        pygame.draw.line(surface, (28, 46, 52), (x, inner.top), (x, inner.top + 22), 1)
+    for y in range(inner.top, inner.top + 22, 7):
+        pygame.draw.line(surface, (28, 46, 52), (inner.left, y), (inner.right, y), 1)
+    # Ceiling panel lights — perfectly even, slightly too bright
+    for lx in range(inner.left + 10, inner.right, 30):
+        pygame.draw.rect(surface, (120, 190, 200), (lx, inner.top + 6, 14, 3))
+
+    # Rows of identical desks receding to a vanishing point
+    vp_x = inner.centerx
+    for row in range(4):
+        depth = 0.28 + row * 0.19
+        y = int(inner.top + 30 + row * 12)
+        half = int(inner.width * 0.12 + inner.width * 0.42 * depth)
+        col = (24 + row * 4, 40 + row * 7, 46 + row * 7)
+        pygame.draw.rect(surface, col, (vp_x - half, y, half * 2, 6))
+        pygame.draw.line(surface, (44 + row * 8, 78 + row * 10, 88 + row * 10),
+                         (vp_x - half, y), (vp_x + half, y), 1)
+        # A seated head at each desk, all facing the same way
+        step = max(14, half // 2)
+        for hx in range(vp_x - half + 6, vp_x + half - 4, step):
+            pygame.draw.circle(surface, (30 + row * 5, 52 + row * 6, 58 + row * 6),
+                               (hx, y - 4), max(2, 2 + row))
+        # One monitor per desk, all showing the same pale rectangle
+        for mx in range(vp_x - half + 6, vp_x + half - 4, step):
+            pygame.draw.rect(surface, (60, 108, 118), (mx - 2, y - 10, 5, 4))
+
+    # "DAYS SINCE LAST COMPLIANCE INCIDENT" board — resets while you watch
+    board = pygame.Rect(inner.right - 56, inner.top + 26, 50, 20)
+    pygame.draw.rect(surface, (10, 20, 24), board)
+    pygame.draw.rect(surface, (90, 170, 182), board, 1)
+    cap = font6.render("DAYS SINCE", True, (120, 200, 212))
+    surface.blit(cap, (board.left + 3, board.top + 2))
+    count = "000" if (t % 9.0) > 6.0 else "417"
+    num = get_font(9, bold=True).render(count, True, (150, 225, 235))
+    surface.blit(num, (board.centerx - num.get_width() // 2, board.top + 9))
+
+    # Carpet — the good kind, with a faint corporate chevron
+    carpet = pygame.Rect(inner.left, inner.bottom - 22, inner.width, 22)
+    pygame.draw.rect(surface, (22, 36, 40), carpet)
+    for cx0 in range(inner.left - 8, inner.right + 8, 18):
+        pygame.draw.lines(surface, (28, 46, 52), False,
+                          [(cx0, carpet.bottom - 4), (cx0 + 9, carpet.top + 4),
+                           (cx0 + 18, carpet.bottom - 4)], 1)
+
+    # A potted plant. Nobody waters it; it is plastic, so nobody has to.
+    px = inner.left + 16
+    pygame.draw.rect(surface, (40, 44, 46), (px - 5, inner.bottom - 20, 10, 10))
+    for ang in (-0.9, -0.3, 0.4, 1.0):
+        pygame.draw.line(surface, (36, 78, 54), (px, inner.bottom - 20),
+                         (px + int(math.sin(ang) * 11),
+                          inner.bottom - 20 - int(math.cos(ang) * 13)), 2)
+
+
+def _bowen(surface, cx, cy, s, disposition, t):
+    """Bowen: Assistant Director of Compliance. Pressed, symmetrical, kind.
+    The lanyard photo is the only asymmetric thing about him."""
+    skin   = (222, 196, 176)
+    skin_d = (140, 108, 92)
+    hair   = (72, 62, 54)
+    shirt  = (226, 232, 238)      # a very clean shirt
+    suit   = (36, 54, 62)
+    suit_l = (72, 108, 120)
+    accent = (120, 210, 225)
+
+    # Torso — suit jacket over shirt, lapels dead symmetrical
+    torso_pts = [
+        (int(cx - 48 * s), int(cy + 82 * s)),
+        (int(cx + 48 * s), int(cy + 82 * s)),
+        (int(cx + 34 * s), int(cy + 20 * s)),
+        (int(cx - 34 * s), int(cy + 20 * s)),
+    ]
+    pygame.draw.polygon(surface, suit, torso_pts)
+    pygame.draw.polygon(surface, suit_l, torso_pts, 1)
+    # Shirt V
+    pygame.draw.polygon(surface, shirt, [
+        (int(cx - 14 * s), int(cy + 20 * s)),
+        (int(cx + 14 * s), int(cy + 20 * s)),
+        (int(cx), int(cy + 60 * s)),
+    ])
+    # Lapels
+    for side in (-1, 1):
+        pygame.draw.polygon(surface, suit_l, [
+            (int(cx + side * 34 * s), int(cy + 22 * s)),
+            (int(cx + side * 13 * s), int(cy + 22 * s)),
+            (int(cx + side * 6 * s),  int(cy + 62 * s)),
+            (int(cx + side * 26 * s), int(cy + 50 * s)),
+        ])
+    # Tie — knotted exactly centre
+    pygame.draw.polygon(surface, (46, 92, 104), [
+        (int(cx - 5 * s), int(cy + 22 * s)),
+        (int(cx + 5 * s), int(cy + 22 * s)),
+        (int(cx + 3 * s), int(cy + 34 * s)),
+        (int(cx - 3 * s), int(cy + 34 * s)),
+    ])
+    pygame.draw.polygon(surface, (56, 108, 122), [
+        (int(cx - 4 * s), int(cy + 34 * s)),
+        (int(cx + 4 * s), int(cy + 34 * s)),
+        (int(cx), int(cy + 66 * s)),
+    ])
+
+    # Lanyard — two straps to a badge, and the photo clipped behind it
+    for side in (-1, 1):
+        pygame.draw.line(surface, (58, 118, 130),
+                         (int(cx + side * 16 * s), int(cy + 22 * s)),
+                         (int(cx + 6 * s), int(cy + 52 * s)), max(1, int(2 * s)))
+    badge = pygame.Rect(int(cx + 1 * s), int(cy + 52 * s), int(15 * s), int(11 * s))
+    pygame.draw.rect(surface, (232, 236, 240), badge)
+    pygame.draw.rect(surface, accent, badge, 1)
+    pygame.draw.line(surface, (110, 140, 150),
+                     (badge.left + 2, badge.top + 4), (badge.right - 3, badge.top + 4), 1)
+    pygame.draw.line(surface, (110, 140, 150),
+                     (badge.left + 2, badge.top + 7), (badge.right - 5, badge.top + 7), 1)
+    # The photo — smaller, tucked behind, a child-sized smudge of colour
+    photo = pygame.Rect(int(cx + 12 * s), int(cy + 56 * s), int(11 * s), int(9 * s))
+    pygame.draw.rect(surface, (238, 232, 214), photo)
+    pygame.draw.rect(surface, (150, 130, 96), photo, 1)
+    pygame.draw.circle(surface, (216, 168, 132),
+                       (photo.centerx, photo.centery - int(1 * s)), max(1, int(2 * s)))
+    pygame.draw.line(surface, (90, 130, 190),
+                     (photo.centerx, photo.centery + int(1 * s)),
+                     (photo.centerx, photo.bottom - 1), max(1, int(2 * s)))
+
+    # Neck + collar
+    pygame.draw.rect(surface, skin_d,
+                     (int(cx - 10 * s), int(cy + 8 * s), int(20 * s), int(16 * s)))
+    for side in (-1, 1):
+        pygame.draw.polygon(surface, shirt, [
+            (int(cx + side * 4 * s),  int(cy + 20 * s)),
+            (int(cx + side * 20 * s), int(cy + 22 * s)),
+            (int(cx + side * 8 * s),  int(cy + 34 * s)),
+        ])
+
+    # Head — soft oval, nothing sharp anywhere on him
+    head_pts = [
+        (int(cx - 31 * s), int(cy - 14 * s)),
+        (int(cx - 26 * s), int(cy - 36 * s)),
+        (int(cx - 8 * s),  int(cy - 46 * s)),
+        (int(cx + 10 * s), int(cy - 46 * s)),
+        (int(cx + 27 * s), int(cy - 34 * s)),
+        (int(cx + 31 * s), int(cy - 12 * s)),
+        (int(cx + 25 * s), int(cy + 10 * s)),
+        (int(cx + 6 * s),  int(cy + 20 * s)),
+        (int(cx - 8 * s),  int(cy + 20 * s)),
+        (int(cx - 26 * s), int(cy + 8 * s)),
+    ]
+    pygame.draw.polygon(surface, skin, head_pts)
+    pygame.draw.polygon(surface, skin_d, head_pts, 1)
+
+    # Hair — side parting, combed, one comb-line visible
+    hair_pts = [
+        (int(cx - 30 * s), int(cy - 16 * s)),
+        (int(cx - 25 * s), int(cy - 38 * s)),
+        (int(cx - 6 * s),  int(cy - 48 * s)),
+        (int(cx + 12 * s), int(cy - 48 * s)),
+        (int(cx + 28 * s), int(cy - 34 * s)),
+        (int(cx + 22 * s), int(cy - 30 * s)),
+        (int(cx - 2 * s),  int(cy - 38 * s)),
+        (int(cx - 20 * s), int(cy - 26 * s)),
+    ]
+    pygame.draw.polygon(surface, hair, hair_pts)
+    pygame.draw.polygon(surface, (50, 42, 36), hair_pts, 1)
+    pygame.draw.line(surface, (96, 84, 72),
+                     (int(cx + 6 * s), int(cy - 46 * s)),
+                     (int(cx + 20 * s), int(cy - 34 * s)), 1)
+
+    # Headset — he is always on a call, and it is always with you
+    pygame.draw.arc(surface, (46, 72, 82),
+                    pygame.Rect(int(cx - 32 * s), int(cy - 50 * s),
+                                int(64 * s), int(40 * s)),
+                    0.35, math.pi - 0.35, max(1, int(2 * s)))
+    pygame.draw.circle(surface, (52, 82, 94),
+                       (int(cx - 30 * s), int(cy - 20 * s)), max(2, int(5 * s)))
+    pygame.draw.line(surface, (52, 82, 94),
+                     (int(cx - 28 * s), int(cy - 16 * s)),
+                     (int(cx - 14 * s), int(cy + 6 * s)), max(1, int(2 * s)))
+    # Mic bead, live
+    live = 0.5 + 0.5 * math.sin(t * 4.0)
+    pygame.draw.circle(surface, (int(120 + 100 * live), 220, 230),
+                       (int(cx - 14 * s), int(cy + 6 * s)), max(1, int(2 * s)))
+
+    # Eyes — attentive, unblinking for long stretches, then a fast blink
+    blink = (t % 6.3) > 6.14
+    eye_y = int(cy - 12 * s)
+    ecol = (238, 244, 248) if disposition > -4 else (250, 226, 226)
+    for ex_off in (-12, 12):
+        if blink:
+            pygame.draw.line(surface, skin_d,
+                             (int(cx + ex_off * s - int(7 * s)), eye_y),
+                             (int(cx + ex_off * s + int(7 * s)), eye_y), 1)
+            continue
+        pygame.draw.ellipse(surface, ecol,
+                            pygame.Rect(int(cx + ex_off * s - int(7 * s)),
+                                        eye_y - int(4 * s),
+                                        int(14 * s), max(3, int(8 * s))))
+        pygame.draw.circle(surface, (44, 84, 96),
+                           (int(cx + ex_off * s), eye_y), max(2, int(3 * s)))
+        pygame.draw.circle(surface, (12, 20, 24),
+                           (int(cx + ex_off * s), eye_y), max(1, int(1 * s)))
+
+    # Brows — raised in mild, permanent concern. They do not come down.
+    for side, ex_off in ((-1, -12), (1, 12)):
+        pygame.draw.arc(surface, hair,
+                        pygame.Rect(int(cx + ex_off * s - int(9 * s)),
+                                    int(cy - 28 * s), int(18 * s), int(10 * s)),
+                        0.3, math.pi - 0.3, max(1, int(2 * s)))
+
+    # Nose
+    pygame.draw.line(surface, skin_d,
+                     (int(cx), int(cy - 4 * s)),
+                     (int(cx - 3 * s), int(cy + 6 * s)), 1)
+
+    # The smile. It is the same smile at every disposition; only at the very
+    # bottom of the scale does it finally go flat, and that is much worse.
+    mouth_y = int(cy + 12 * s)
+    if disposition <= -6:
+        pygame.draw.line(surface, skin_d,
+                         (int(cx - 11 * s), mouth_y),
+                         (int(cx + 11 * s), mouth_y), max(1, int(2 * s)))
+    else:
+        pygame.draw.arc(surface, skin_d,
+                        pygame.Rect(int(cx - 12 * s), mouth_y - int(9 * s),
+                                    int(24 * s), int(14 * s)),
+                        math.pi + 0.25, math.tau - 0.25, max(1, int(2 * s)))
+
+
+def _backdrop_lost_frequency(surface, inner, t):
+    """The Roost, after. Foam tiles, a dead ON AIR sign, and a seizure notice
+    taped over the window by somebody who did not care where it went."""
+    font6 = get_font(6, bold=True)
+    font7 = get_font(7)
+
+    surface.fill((14, 13, 18))
+    # Acoustic foam — the wedge pattern, unlit
+    for gy in range(inner.top, inner.bottom, 10):
+        for gx in range(inner.left, inner.right, 10):
+            shade = 20 + ((gx // 10 + gy // 10) % 2) * 6
+            pygame.draw.polygon(surface, (shade, shade - 1, shade + 4),
+                                [(gx, gy + 9), (gx + 5, gy), (gx + 10, gy + 9)])
+
+    # ON AIR sign, dark. It flickers once, a long way apart, and stays dark.
+    sign = pygame.Rect(inner.centerx - 26, inner.top + 6, 52, 13)
+    ghost = (t % 17.0) > 16.82
+    pygame.draw.rect(surface, (26, 18, 20) if not ghost else (74, 26, 30), sign)
+    pygame.draw.rect(surface, (60, 36, 40) if not ghost else (150, 60, 66), sign, 1)
+    lbl = font7.render("ON AIR", True, (72, 44, 48) if not ghost else (210, 110, 116))
+    surface.blit(lbl, (sign.centerx - lbl.get_width() // 2, sign.top + 2))
+
+    # Seizure notice taped over the booth window, slightly crooked
+    notice = pygame.Rect(inner.right - 46, inner.top + 26, 40, 30)
+    pygame.draw.rect(surface, (208, 204, 190), notice)
+    pygame.draw.rect(surface, (120, 116, 104), notice, 1)
+    for i in range(5):
+        pygame.draw.line(surface, (110, 106, 96),
+                         (notice.left + 4, notice.top + 8 + i * 4),
+                         (notice.right - (4 + (i * 5) % 12), notice.top + 8 + i * 4), 1)
+    seal = font6.render("404", True, (170, 50, 44))
+    surface.blit(seal, (notice.left + 4, notice.top + 2))
+    # Tape at the corners
+    for corner in (notice.topleft, notice.topright):
+        pygame.draw.line(surface, (190, 190, 170),
+                         (corner[0] - 3, corner[1] - 2), (corner[0] + 3, corner[1] + 3), 3)
+
+    # VU meters, pinned at zero and staying there
+    for i, mx in enumerate((inner.left + 8, inner.left + 30)):
+        meter = pygame.Rect(mx, inner.bottom - 30, 18, 12)
+        pygame.draw.rect(surface, (10, 12, 14), meter)
+        pygame.draw.rect(surface, (52, 48, 62), meter, 1)
+        pygame.draw.arc(surface, (44, 42, 54),
+                        pygame.Rect(meter.left + 2, meter.top + 3, 14, 14),
+                        0.3, math.pi - 0.3, 1)
+        pygame.draw.line(surface, (78, 72, 92),
+                         (meter.centerx, meter.bottom - 2),
+                         (meter.left + 3, meter.top + 5), 1)
+
+    # Turntable, still turning. Nothing is on it.
+    deck = (inner.centerx + 6, inner.bottom - 20)
+    pygame.draw.circle(surface, (24, 22, 30), deck, 13)
+    pygame.draw.circle(surface, (56, 50, 70), deck, 13, 1)
+    ang = t * 0.8
+    pygame.draw.line(surface, (44, 40, 56), deck,
+                     (deck[0] + int(math.cos(ang) * 9), deck[1] + int(math.sin(ang) * 9)), 1)
+    pygame.draw.circle(surface, (70, 62, 86), deck, 2)
+
+    # Dead-carrier snow, sparse — this room is not receiving anything
+    rng = random.Random(int(t * 6))
+    for _ in range(22):
+        sx = rng.randrange(inner.left, inner.right)
+        sy = rng.randrange(inner.top, inner.bottom)
+        pygame.draw.circle(surface, (58, 54, 72), (sx, sy), 1)
+
+
+def _lost_frequency(surface, cx, cy, s, disposition, t):
+    """No bust. The whole point of this slot is that nobody is in the chair —
+    so the portrait is the empty chair, the dead mic, and the flatline."""
+    chair   = (44, 40, 54)
+    chair_l = (86, 80, 108)
+    metal   = (72, 68, 90)
+    accent  = (120, 110, 140)
+
+    # Studio chair, swivelled away from the desk, drifting a few degrees
+    drift = math.sin(t * 0.35) * 3.0
+    seat_y = int(cy + 34 * s)
+    seat_pts = [
+        (int(cx - 30 * s + drift), seat_y),
+        (int(cx + 30 * s + drift), seat_y),
+        (int(cx + 24 * s + drift), int(seat_y + 12 * s)),
+        (int(cx - 24 * s + drift), int(seat_y + 12 * s)),
+    ]
+    pygame.draw.polygon(surface, chair, seat_pts)
+    pygame.draw.polygon(surface, chair_l, seat_pts, 1)
+    # Backrest — empty, at an angle, exactly as he left it
+    back_pts = [
+        (int(cx - 24 * s + drift * 1.4), int(cy - 26 * s)),
+        (int(cx + 22 * s + drift * 1.4), int(cy - 30 * s)),
+        (int(cx + 26 * s + drift), seat_y - int(2 * s)),
+        (int(cx - 26 * s + drift), seat_y - int(2 * s)),
+    ]
+    pygame.draw.polygon(surface, chair, back_pts)
+    pygame.draw.polygon(surface, chair_l, back_pts, 1)
+    # Column + star base
+    pygame.draw.line(surface, metal,
+                     (int(cx + drift), int(seat_y + 12 * s)),
+                     (int(cx), int(cy + 70 * s)), max(2, int(4 * s)))
+    for ang in (-2.5, -1.9, -0.6, 0.0, 0.9):
+        pygame.draw.line(surface, metal,
+                         (int(cx), int(cy + 70 * s)),
+                         (int(cx + math.cos(ang) * 26 * s),
+                          int(cy + 70 * s + abs(math.sin(ang)) * 8 * s)),
+                         max(1, int(3 * s)))
+
+    # Mic on its boom arm, swung in over the empty chair
+    boom_a = (int(cx + 52 * s), int(cy - 44 * s))
+    boom_b = (int(cx + 16 * s), int(cy - 34 * s))
+    mic_p  = (int(cx - 4 * s),  int(cy - 12 * s))
+    pygame.draw.line(surface, metal, boom_a, boom_b, max(1, int(3 * s)))
+    pygame.draw.line(surface, metal, boom_b, mic_p, max(1, int(3 * s)))
+    pygame.draw.circle(surface, (34, 32, 42), boom_b, max(2, int(3 * s)))
+    # The mic itself — grille lines, no light on it
+    mic = pygame.Rect(int(mic_p[0] - 7 * s), int(mic_p[1]), int(14 * s), int(20 * s))
+    pygame.draw.ellipse(surface, (38, 36, 48), mic)
+    pygame.draw.ellipse(surface, accent, mic, 1)
+    for i in range(3):
+        gy = mic.top + int((i + 1) * mic.height / 4)
+        pygame.draw.line(surface, (60, 56, 76), (mic.left + 2, gy), (mic.right - 2, gy), 1)
+    # Pop shield, hanging slightly askew
+    pygame.draw.ellipse(surface, (30, 28, 38),
+                        pygame.Rect(int(mic_p[0] - 20 * s), int(mic_p[1] - 2 * s),
+                                    int(14 * s), int(18 * s)), 1)
+
+    # Headphones on the desk edge where he put them down
+    hp = (int(cx - 34 * s), int(cy + 46 * s))
+    pygame.draw.arc(surface, metal,
+                    pygame.Rect(hp[0] - int(12 * s), hp[1] - int(8 * s),
+                                int(24 * s), int(16 * s)),
+                    0.2, math.pi - 0.2, max(1, int(2 * s)))
+    for side in (-1, 1):
+        pygame.draw.circle(surface, (52, 48, 64),
+                           (hp[0] + int(side * 11 * s), hp[1]), max(2, int(4 * s)))
+
+    # The flatline: a waveform readout with nothing in it but the carrier,
+    # and one dead-cat spike of the seizure loop every eleven seconds.
+    base_y = int(cy - 52 * s)
+    left_x = int(cx - 44 * s)
+    right_x = int(cx + 44 * s)
+    pygame.draw.line(surface, (36, 34, 46), (left_x, base_y), (right_x, base_y), 1)
+    loop_phase = t % 11.0
+    for px in range(left_x, right_x):
+        n = math.sin(px * 0.9 + t * 3.0) * 0.6
+        y = base_y + int(n)
+        pygame.draw.line(surface, (70, 64, 88), (px, y), (px, y + 1), 1)
+    if loop_phase < 0.5:
+        burst_w = int((0.5 - loop_phase) * 2 * (right_x - left_x))
+        rng = random.Random(int(t * 30))
+        for px in range(left_x, min(right_x, left_x + max(1, burst_w))):
+            h = rng.randint(1, max(2, int(9 * s)))
+            pygame.draw.line(surface, (150, 60, 66),
+                             (px, base_y - h), (px, base_y + h), 1)
+
+
+_DISPATCH["chen"]             = _chen
+_DISPATCH["bowen"]            = _bowen
+_DISPATCH["lost_frequency"]   = _lost_frequency
+_BACKDROPS["chen"]            = _backdrop_chen
+_BACKDROPS["bowen"]           = _backdrop_bowen
+_BACKDROPS["lost_frequency"]  = _backdrop_lost_frequency

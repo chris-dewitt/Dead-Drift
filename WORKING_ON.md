@@ -11,8 +11,7 @@ After committing your work, remove your row.
 
 | Subsystem | Branch | Claimed by | Timestamp |
 |-----------|--------|------------|-----------|
-| `npcs` (chen, bowen, lost_frequency, dray, nervous_fence, underground_dj) | claude/character-improvements-27sdy3 | character pass | 2026-08-22 |
-| `terminal` (npc_portraits) | claude/character-improvements-27sdy3 | character pass | 2026-08-22 |
+| *(none)* | | | |
 
 ---
 
