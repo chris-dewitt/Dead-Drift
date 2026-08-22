@@ -618,8 +618,10 @@ class Game:
                 self._dossier_cursor = (self._dossier_cursor + 1) % n
             elif event.key in (pygame.K_LEFT, pygame.K_a):
                 self._dossier_cursor = (self._dossier_cursor - 1) % n
-            elif event.key == pygame.K_h:
+            elif event.key == pygame.K_x:
                 # Toggle HARDCORE arming for the selected chapter (if unlocked).
+                # Rebound off H — H is reserved everywhere for the Bax
+                # harmonica-heal session (see flight handler below).
                 ch = card_chapter(self._dossier_cursor)
                 if self.meta.is_hardcore_unlocked(ch):
                     self.meta.set_hardcore_for_next_run(not self.meta.is_hardcore)
