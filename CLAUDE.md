@@ -14,6 +14,7 @@ Read this first. Do **not** use deleted or git-archived docs as current spec.
 | [docs/NPC_SCHEMA.md](docs/NPC_SCHEMA.md) | Terminal NPC keyword/bribe floors (enforced by tests) |
 | [docs/SOUNDTRACK_PLAN.md](docs/SOUNDTRACK_PLAN.md) | Audio design spec |
 | [docs/RECORDING_BRIEF.md](docs/RECORDING_BRIEF.md) | Stem recording shot list |
+| [docs/MOBILE_ANDROID.md](docs/MOBILE_ANDROID.md) | Android slice — landscape flight + corridor, Play wrap |
 
 Prior roadmaps (Improvement Plan, Aliveness push, corridor design notes, documentation status tracker, etc.) were **removed July 2026**. Git history has the old files. See [docs/archive/README.md](docs/archive/README.md).
 

@@ -689,7 +689,11 @@ class RunManager:
                 if self._ship.cargo.handle_key(event):
                     return
         if event.key == pygame.K_j and self._sector_timer >= self._sector_dur:
-            self._open_jump_terminal()
+            from mobile.mode import skip_terminals
+            if skip_terminals():
+                self._advance_sector()
+            else:
+                self._open_jump_terminal()
         elif event.key == pygame.K_k and not self._kress_called_this_sector:
             self._open_kress_terminal()
         elif event.key == pygame.K_e and self._aiship_hail_pending is not None:
@@ -1014,7 +1018,10 @@ class RunManager:
             ctx["bax_context"] = dict(self.bax_context)
         return ctx
 
-    def open_terminal(self, npc_type: str, **npc_kwargs) -> Terminal:
+    def open_terminal(self, npc_type: str, **npc_kwargs) -> Terminal | None:
+        from mobile.mode import skip_terminals
+        if skip_terminals():
+            return None
         # Don't use dict.setdefault here — its default arg is evaluated eagerly,
         # which would call _build_run_context() even when run_context is already
         # supplied by the caller (and would crash if the caller bypassed __init__,
@@ -1580,7 +1587,10 @@ class RunManager:
         # Shop stop — signal game.py to open the shop before next sector loads
         # Epic 12.1 — NO_SHOP mutator suppresses shop appearances entirely.
         # Epic 8.4 — HARDCORE also suppresses shops (no breathing room).
-        shops_allowed = self.mutators.shops_enabled() and not self.is_hardcore_run()
+        from mobile.mode import skip_shops
+        shops_allowed = (self.mutators.shops_enabled()
+                         and not self.is_hardcore_run()
+                         and not skip_shops())
         if completed_sector in S.SHOP_SECTORS and shops_allowed:
             self._shop_pending = True
             self.bax_context["shops_visited_this_chapter"] = (

@@ -14,5 +14,7 @@ pytest_tmp/
 assets/audio/
 assets/nltk_data/
 data/
+.buildozer/
+bin/
 *.sqlite3
 "data/bax_vocabulary.json" 

@@ -2682,7 +2682,8 @@ class VectorRenderer:
             pygame.draw.line(self.surface, jc, bp, tp, 2)
 
     def _draw_exhaust(self, ship, t: float, frame_name: str = ""):
-        keys      = pygame.key.get_pressed()
+        from mobile.virtual_input import get_pressed
+        keys      = get_pressed()
         thrusting = keys[pygame.K_UP] or keys[pygame.K_w]
         reversing = keys[pygame.K_DOWN] or keys[pygame.K_s]
         if not thrusting and not reversing:

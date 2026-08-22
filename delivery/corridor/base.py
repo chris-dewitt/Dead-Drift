@@ -555,7 +555,8 @@ class Corridor:
         if isinstance(self._mutator, TimePressureMutator) and self._mutator.is_expired():
             self._take_hit()
 
-        keys = pygame.key.get_pressed()
+        from mobile.virtual_input import get_pressed
+        keys = get_pressed()
         room = self.rooms[self._room_idx]
 
         climb_up = keys[pygame.K_UP] or keys[pygame.K_w]

@@ -179,6 +179,11 @@ class RepoBarge:
 
     def _open_comm(self):
         """Open a mid-flight comm terminal instead of immediately clamping."""
+        from mobile.mode import skip_terminals
+        if skip_terminals():
+            # Mobile slice has no terminals — keep the hunt going.
+            self._enter_aim()
+            return
         self.state = BargeState.INTERCEPT
         bus.emit(EVT_BARGE_INTERCEPT, barge=self)
         self.run_mgr.open_barge_terminal(self)
