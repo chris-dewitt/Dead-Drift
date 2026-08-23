@@ -16,7 +16,8 @@ Every terminal NPC must meet:
 | **Bribe label** | If a bribe path exists, the dossier `_current_path` must read `BRIBE [<amount> cr]` once a credit amount is mentioned (mirrors `terminal/npcs/dray.py`) |
 | **Universal escape** | `fuck off` releases — handled in `BaseNPC.respond` (do not advertise) |
 | **Cross-references** | At least 1 line mentioning another character (Bax / Gary / Sandra / Felix / Marrow / Nova Soma) |
-| **Pickup-word matching** | Multi-word entries in `*_PHRASES`, matched by substring. Single tokens in `*_WORDS`, matched on word boundaries via `terminal/npcs/keywords.py`. Agreement words go through `affirmed_hit` so a negation doesn't read as consent. |
+| **Pickup-word matching** | Multi-word entries in `*_PHRASES`, matched by substring. Single tokens in `*_WORDS`, matched on word boundaries via `terminal/npcs/keywords.py`. Agreement **words** go through `affirmed_hit` and agreement **phrases** through `affirmed_phrase_hit`, so a negation never reads as consent. |
+| **Advertised paths** | Every key in `exploits()` must be reachable: an earlier branch must not shadow a later one's pickups. A path advertised but unreachable is the NPC lying to the player. |
 
 ---
 
@@ -126,6 +127,39 @@ portrait geometry, and the generic `BaseNPC` escape line. All three now:
 `lost_frequency` also gained a REQUEST path (call in one last dedication) and
 a REPRISAL path (name Local 404 out loud), and hailing now returns one beat of
 static before it lets you go.
+
+---
+
+## Matcher rules (review follow-up, Aug 2026)
+
+Three findings on PR #124 — plus two the follow-up's own tests caught — were
+all one shape: *a pickup matched something the player did not mean.*
+
+1. **Negation applies to phrases, not just words.** `hit()` ignores negation,
+   so Bowen's surrender phrase `hold position` matched inside "No, I will
+   **not** hold position" and impounded a player for refusing — the same
+   false-compliance bug the character pass existed to fix, re-entering
+   through the phrase list. Agreement phrases now use `affirmed_phrase_hit`.
+   For a multi-word phrase the first word is the negation anchor.
+2. **Typographic apostrophes.** Every pickup word is written with `'`. Pasted
+   or autocorrected text carries `’`, which defeated both the word matcher
+   (`won’t` never matched the token `won't`) and the `n't` negation suffix,
+   so "that isn’t fine" read as consent. `keywords.normalize()` folds the
+   variants and runs at every entry point.
+3. **Branch order can shadow an advertised path.** `lost_frequency` listed
+   `request` in `exploits()` while `"one last"` and `"dedication"` sat in the
+   mourning list, which is tested first — so the advertised phrasing closed
+   out as DEDICATION and the path was unreachable. REQUEST is now tested
+   before MOURN and owns that idiom.
+4. **A path label must match its dossier row.** The rage branch filed exploit
+   key `reprisal` but set `_current_path = "AFTERMATH"`, lighting the wrong
+   chip on the strip.
+5. **Scan words belong in `*_WORDS`.** A merge duplicated `static` / `signal`
+   into `*_PHRASES`; the substring copy wins, and "ecstatic" hailed the dead
+   channel. Word boundaries are exactly what make a token that short safe.
+
+Guarded by `tests/test_character_pass.py`, including
+`test_every_advertised_exploit_key_is_a_reachable_path` for shape 3.
 
 ---
 
