@@ -26,7 +26,7 @@ import random
 
 from core.event_bus import bus, EVT_NLP_EXPLOIT
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
-from terminal.npcs.keywords import affirmed_hit, hit
+from terminal.npcs.keywords import affirmed_hit, affirmed_phrase_hit, hit
 from terminal.nlp_parser import ParsedInput
 
 # Unambiguous surrender — whole phrases, so no negation guard is needed.
@@ -130,9 +130,12 @@ class Bowen(BaseNPC):
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         text = parsed.raw.lower()
 
-        # Unambiguous surrender phrases first — "no problem" is agreement,
-        # not the refusal its bare "no" would otherwise match.
-        if hit(text, _COMPLY_PHRASES):
+        # Surrender phrases first — "no problem" is agreement, not the refusal
+        # its bare "no" would otherwise match. They still go through the
+        # negation guard: "I will not hold position" is a refusal that happens
+        # to contain a surrender phrase, and matching it bare impounded the
+        # player for refusing, which is the exact bug this NPC had before.
+        if affirmed_phrase_hit(text, _COMPLY_PHRASES):
             return self._comply()
 
         if hit(text, _EXPOSE_PHRASES, _EXPOSE_WORDS):

@@ -32,6 +32,19 @@ from functools import lru_cache
 from typing import Iterable, Sequence
 
 
+# Typographic apostrophes reach the parser from pasted text and from input
+# methods that autocorrect. Every pickup word in the roster is written with a
+# straight quote, so a curly one silently defeated both the word matcher
+# ("won’t" never matched the token "won't") and the negation guard
+# ("that isn’t fine" read as consent). Fold them together before matching.
+_SMART_QUOTES = str.maketrans({"’": "'", "‘": "'", "ʼ": "'", "´": "'"})
+
+
+def normalize(raw: str) -> str:
+    """Lowercase-preserving fold of the apostrophe variants onto `'`."""
+    return raw.translate(_SMART_QUOTES)
+
+
 @lru_cache(maxsize=512)
 def _word_re(token: str) -> re.Pattern[str]:
     """Whole-word matcher for one token, cached (evaluators re-scan every turn).
@@ -40,17 +53,19 @@ def _word_re(token: str) -> re.Pattern[str]:
     apostrophe (`won't`) or a hyphen (`tk-9`) — those break into two words, and
     the boundaries still land on the outer edges.
     """
-    return re.compile(rf"\b{re.escape(token)}\b")
+    return re.compile(rf"\b{re.escape(normalize(token))}\b")
 
 
 def word_hit(raw: str, tokens: Iterable[str]) -> bool:
     """True if any token appears in `raw` as a whole word."""
+    raw = normalize(raw)
     return any(_word_re(t).search(raw) is not None for t in tokens)
 
 
 def phrase_hit(raw: str, phrases: Iterable[str]) -> bool:
     """True if any phrase appears in `raw` as a substring."""
-    return any(p in raw for p in phrases)
+    raw = normalize(raw)
+    return any(normalize(p) in raw for p in phrases)
 
 
 def hit(raw: str, phrases: Iterable[str] = (),
@@ -100,10 +115,13 @@ def negated(raw: str, token: str, window: int = 3) -> bool:
     """True if a negator sits within `window` words before `token` in `raw`.
 
     Window rather than whole-sentence, so "no problem, I'll wait right here"
-    doesn't read as a negation of *wait* four words later.
+    doesn't read as a negation of *wait* four words later. For a multi-word
+    phrase the first word is the anchor: "not hold position" negates
+    *hold position*.
     """
+    raw = normalize(raw)
     words = _WORD_SPLIT.findall(raw)
-    target = token.split()[0]
+    target = normalize(token).split()[0]
     for i, w in enumerate(words):
         if w != target:
             continue
@@ -115,5 +133,19 @@ def negated(raw: str, token: str, window: int = 3) -> bool:
 
 def affirmed_hit(raw: str, tokens: Iterable[str], window: int = 3) -> bool:
     """Whole-word match on `tokens`, ignoring any hit that is negated."""
-    return any(_word_re(t).search(raw) is not None and not negated(raw, t, window)
+    norm = normalize(raw)
+    return any(_word_re(t).search(norm) is not None and not negated(raw, t, window)
                for t in tokens)
+
+
+def affirmed_phrase_hit(raw: str, phrases: Iterable[str],
+                        window: int = 3) -> bool:
+    """Substring match on `phrases`, ignoring any hit that is negated.
+
+    A surrender phrase is no more inherently unambiguous than a surrender
+    word: "hold position" is agreement, "I will not hold position" is the
+    opposite, and matching the phrase bare impounded the player for refusing.
+    """
+    norm = normalize(raw)
+    return any(normalize(p) in norm and not negated(raw, p, window)
+               for p in phrases)

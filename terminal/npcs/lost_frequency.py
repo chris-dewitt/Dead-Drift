@@ -27,24 +27,36 @@ _HAIL_PHRASES = [
     "marrow", "roost", "pirate radio", "the frequency", "come in",
     "you there", "anyone there", "is anyone", "hello", "hey", "still there",
     "can you hear", "do you copy", "check the band", "who's broadcasting",
-    "whos broadcasting", "anyone", "signal", "static",
+    "whos broadcasting",
 ]
-_HAIL_WORDS = ("radio", "broadcast", "signal", "band", "channel", "static")
+# Scan-chip sync: the strip lights STATIC / RADIO / SIGNAL on the bare word,
+# so those have to land here or the chip is a dead lead. They belong in the
+# word list, not the phrase list — word boundaries are what make it safe to
+# pick up a token this short ("static" hits, "ecstatic" doesn't).
+_HAIL_WORDS = ("radio", "broadcast", "signal", "band", "channel", "static",
+               "anyone")
 # Ways of grieving the channel — a courier paying respects.
 _MOURN_PHRASES = [
-    "goodbye", "sorry", "miss you", "thank you", "for marrow", "one last",
+    "goodbye", "sorry", "miss you", "thank you", "for marrow",
     "sign off", "farewell", "safe travels", "rest easy", "rest in",
     "he was", "he deserved", "i liked him", "he mattered", "godspeed",
     "see you around", "clear skies",
 ]
-_MOURN_WORDS = ("rest", "sorry", "goodbye", "farewell", "dedication")
+# "one last" and "dedication" used to live here, which shadowed the REQUEST
+# path they advertise: "one last song" closed out as DEDICATION and the
+# player never found the path the exploit list points them at. They belong
+# to the request idiom, so they moved there and REQUEST is tested first.
+_MOURN_WORDS = ("rest", "sorry", "goodbye", "farewell")
 # A last request called in to a station that can't play it.
 _DEDICATION_PHRASES = [
     "play it", "play something", "put it on", "request", "dedicate",
     "this one goes out", "spin it", "one more song", "last song",
     "b-side", "b side", "the slow one", "his set", "the old stuff",
+    "one last song", "one last track", "one last dedication",
+    "one last request", "one last tune",
 ]
-_DEDICATION_WORDS = ("song", "track", "record", "vinyl", "tune", "music")
+_DEDICATION_WORDS = ("song", "track", "record", "vinyl", "tune", "music",
+                     "dedication")
 # Rage at Local 404 for silencing him.
 _RAGE_PHRASES = [
     "local 404", "they killed", "asset recovery", "make them pay",
@@ -111,25 +123,6 @@ class LostFrequency(BaseNPC):
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         raw = parsed.raw.lower()
 
-        if hit(raw, _MOURN_PHRASES, _MOURN_WORDS):
-            self._mourned = True
-            self._win("dedication", "DEDICATION")
-            return NPCOutcome.RELEASE, random.choice([
-                "You say it to a channel nobody is allowed to use. "
-                "Bax keeps the comm open a second longer than she has to. "
-                "Then the gate logs the dead frequency as acknowledged and clears you.",
-
-                "*no answer, obviously* Bax logs the transmission anyway — "
-                "outgoing, unacknowledged, eleven seconds. She files it under "
-                "the Roost's old call sign instead of the seizure notice. "
-                "The gate clears you through.",
-
-                "Somewhere out past the belt a relay you'll never see repeats "
-                "your words once into empty sky, because that's what relays do "
-                "and nobody has told this one to stop. "
-                "The gate logs the dead channel as acknowledged and clears you.",
-            ])
-
         if hit(raw, _DEDICATION_PHRASES, _DEDICATION_WORDS):
             self._dedicated = True
             self._win("request", "REQUEST")
@@ -150,9 +143,30 @@ class LostFrequency(BaseNPC):
                 "The gate logs the dead channel as acknowledged and clears you.",
             ])
 
+        if hit(raw, _MOURN_PHRASES, _MOURN_WORDS):
+            self._mourned = True
+            self._win("dedication", "DEDICATION")
+            return NPCOutcome.RELEASE, random.choice([
+                "You say it to a channel nobody is allowed to use. "
+                "Bax keeps the comm open a second longer than she has to. "
+                "Then the gate logs the dead frequency as acknowledged and clears you.",
+
+                "*no answer, obviously* Bax logs the transmission anyway — "
+                "outgoing, unacknowledged, eleven seconds. She files it under "
+                "the Roost's old call sign instead of the seizure notice. "
+                "The gate clears you through.",
+
+                "Somewhere out past the belt a relay you'll never see repeats "
+                "your words once into empty sky, because that's what relays do "
+                "and nobody has told this one to stop. "
+                "The gate logs the dead channel as acknowledged and clears you.",
+            ])
+
         if hit(raw, _RAGE_PHRASES, _RAGE_WORDS):
             self._raged = True
-            self._win("reprisal", "AFTERMATH")
+            # The dossier has its own REPRISAL row; labelling this branch
+            # AFTERMATH lit the wrong chip for the path the player just found.
+            self._win("reprisal", "REPRISAL")
             return NPCOutcome.RELEASE, random.choice([
                 "Local 404 boilerplate answers instead of Marrow — flat, legal, final. "
                 "Nova Soma's name is in the fine print. Somewhere a courier writes it down. "

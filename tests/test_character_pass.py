@@ -313,3 +313,125 @@ def test_bax_dark_pools_are_tagged_for_the_voice_filter():
                 "close_call_terrifying", "close_call_aftermath"):
         assert _LINE_MODE.get(key) == "dark_vulnerable", (
             f"{key} is not tagged dark_vulnerable")
+
+
+# ── review follow-ups (Codex findings on #124) ──────────────────────────────
+# All three shipped in the character pass and were caught in review after it
+# merged. The first is the same false-compliance bug the pass existed to fix,
+# reintroduced through the phrase list rather than the word list.
+
+@pytest.mark.parametrize("line", [
+    "No, I will not hold position",
+    "no, I won't wait here",
+    "I'm not going to comply, and I won't hold position",
+    "I won't cooperate",
+    "not happening, I'm not waiting here",
+])
+def test_bowen_refusal_containing_a_surrender_phrase_is_still_a_refusal(line):
+    """`hit()` ignores negation, so a refusal that merely contains a surrender
+    phrase ("...not hold position") was read as consent and impounded."""
+    bowen = _npc("bowen")
+    outcome, _ = bowen.respond(line)
+    assert outcome != NPCOutcome.IMPOUND, f"Bowen impounded a refusal: {line!r}"
+    assert bowen._current_path != "COMPLY"
+
+
+@pytest.mark.parametrize("line", [
+    "okay, I'll wait right here", "no problem", "of course, hold position",
+    "sure", "fine, whatever you say", "understood, I'll hold",
+])
+def test_bowen_genuine_surrender_still_impounds(line):
+    """The negation guard must not cost him his whole trick."""
+    bowen = _npc("bowen")
+    outcome, _ = bowen.respond(line)
+    assert outcome == NPCOutcome.IMPOUND and bowen._current_path == "COMPLY"
+
+
+@pytest.mark.parametrize("straight,curly", [
+    ("that isn't fine", "that isn’t fine"),
+    ("I won't hold position", "I won’t hold position"),
+    ("I can't comply", "I can’t comply"),
+])
+def test_typographic_apostrophes_match_the_same_as_straight_ones(straight, curly):
+    """Pasted or autocorrected text carries `’`. Every pickup word is written
+    with `'`, so the curly form defeated both the word matcher and the
+    negation guard — "that isn’t fine" read as consent."""
+    a, b = _npc("bowen"), _npc("bowen")
+    assert a.respond(straight)[0] == b.respond(curly)[0]
+    assert a._current_path == b._current_path
+
+
+def test_keywords_normalize_apostrophe_variants():
+    from terminal.npcs.keywords import negated, word_hit
+    assert negated("that isn’t fine", "fine")
+    assert negated("that isn't fine", "fine")
+    assert word_hit("I won’t", ("won't",))
+    assert word_hit("I won't", ("won't",))
+
+
+@pytest.mark.parametrize("line", [
+    "one last song", "one last dedication", "one last track",
+    "play me one more song", "spin a track for him",
+])
+def test_lost_frequency_request_path_is_reachable(line):
+    """`exploits()` advertises REQUEST, but "one last"/"dedication" sat in the
+    mourning list, which is tested first — so the advertised phrasing closed
+    out as DEDICATION and the player never found the path."""
+    npc = _npc("lost_frequency")
+    npc.respond(line)
+    assert npc._current_path == "REQUEST", (
+        f"{line!r} landed on {npc._current_path} instead of the advertised REQUEST")
+
+
+@pytest.mark.parametrize("line", [
+    "goodbye, old man", "one last goodbye", "rest easy marrow",
+    "sorry, mate", "farewell",
+])
+def test_lost_frequency_mourning_still_lands(line):
+    npc = _npc("lost_frequency")
+    npc.respond(line)
+    assert npc._current_path == "DEDICATION"
+
+
+def test_every_advertised_exploit_key_is_a_reachable_path():
+    """Guard the general shape of the bug above: an NPC that advertises a path
+    in `exploits()` and then shadows it with an earlier branch is lying to the
+    player. Checked on the NPCs whose branch order this pass touched."""
+    reachable = {
+        "lost_frequency": {
+            "aftermath": ["marrow, come in", "you there?"],
+            "dedication": ["goodbye, old man"],
+            "request":    ["one last song"],
+            "reprisal":   ["local 404 bastards"],
+        },
+        "bowen": {
+            "expose":   ["I saw the clone tanks on floor 31",
+                         "the people in the vats have my face"],
+            "personal": ["who's in the photo on your lanyard"],
+            "refuse":   ["no", "not happening, I'm leaving"],
+        },
+    }
+    for key, paths in reachable.items():
+        advertised = set(_npc(key).exploits())
+        for exploit_key, lines in paths.items():
+            assert exploit_key in advertised, f"{key}: {exploit_key} not advertised"
+            npc = _npc(key)
+            for line in lines:
+                npc.respond(line)
+            assert npc._current_path.upper().startswith(exploit_key.upper()[:6]), (
+                f"{key}: advertised {exploit_key!r} but {lines!r} landed on "
+                f"{npc._current_path!r}")
+
+
+def test_scan_words_stay_in_the_word_list_not_the_phrase_list():
+    """Scan-chip sync needs short tokens like "static" to be pickups. They
+    belong in `*_WORDS` — a merge that duplicated them into `*_PHRASES` made
+    "ecstatic" hail the dead channel, which is the substring hazard the
+    matcher exists to prevent."""
+    hailed = _npc("lost_frequency")
+    hailed.respond("static on the band")
+    assert hailed._heard_static
+
+    not_hailed = _npc("lost_frequency")
+    not_hailed.respond("I am ecstatic about this")
+    assert not not_hailed._heard_static, "'ecstatic' matched the token 'static'"
