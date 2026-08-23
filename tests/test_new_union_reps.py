@@ -7,6 +7,7 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame
+import pytest
 
 
 def test_factory_builds_both_reps():
@@ -51,6 +52,41 @@ def test_corrupt_releases_on_small_bribe():
     rep = make_npc("corrupt_rep")
     out, _line = rep.respond("here's 2000 credits, take it and look the other way")
     assert out == NPCOutcome.RELEASE
+
+
+def test_corrupt_scan_chip_amount_still_bribes():
+    """The VINCE strip lights 1500 / 8000 with no verb — those must still land."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+    small = make_npc("corrupt_rep")
+    assert small.respond("1500")[0] == NPCOutcome.RELEASE
+    assert small.bribe_cost() == 1500
+    assert small._was_shakedown is False
+
+    big = make_npc("corrupt_rep")
+    assert big.respond("8000")[0] == NPCOutcome.RELEASE
+    assert big.bribe_cost() == 8000
+    assert big._was_shakedown is True
+
+
+@pytest.mark.parametrize("line", [
+    "give me five minutes",
+    "wait 1500 seconds",
+    "I've been flying 2000 hours",
+    "wait ten seconds",
+    "the sector is 3000 wide",
+])
+def test_corrupt_does_not_bribe_on_ordinary_numbers(line):
+    """Amount-only gate treated any parsed number as cash. 'five minutes'
+    parses as 5000 and 'ten seconds' as 10000 — one line RELEASEd a barge
+    intercept and billed the figure as a bribe."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+    rep = make_npc("corrupt_rep")
+    out, _ = rep.respond(line)
+    assert out == NPCOutcome.CONTINUE
+    assert rep.bribe_cost() == 0
+    assert not (rep._current_path or "").startswith("BRIBE")
 
 
 def test_corrupt_releases_on_threat_double_hit():

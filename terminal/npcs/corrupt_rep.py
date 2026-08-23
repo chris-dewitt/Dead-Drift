@@ -26,9 +26,25 @@ Win paths:
 """
 from __future__ import annotations
 import random
+import re
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
+
+# Scan chips light "1500" / "8000" as a bare figure. Accept those (and
+# "2k" / "1500 credits") as an implicit offer. Do NOT treat a number
+# buried in ordinary talk as a bribe — extract_credit_amount maps
+# "five minutes" → 5000 and "ten seconds" → 10000.
+_BARE_FIGURE = re.compile(
+    r"^\$?\d{1,7}(?:\.\d+)?\s*(?:k|cr|credits?|grand)?$",
+    re.IGNORECASE,
+)
+
+
+def _is_bare_figure(raw: str) -> bool:
+    text = raw.lower().strip().replace(",", "")
+    text = text.strip(".,!?;:'\"")
+    return bool(_BARE_FIGURE.fullmatch(text))
 
 
 class CorruptRep(BaseNPC):
@@ -153,11 +169,13 @@ class CorruptRep(BaseNPC):
             ])
 
         # BRIBE PATH — branches small vs big. Aliveness B.1 standardised label.
-        # A bare number is an implicit offer to a corrupt rep (the BRIBE /
-        # SHAKEDOWN scan chips light on the amount alone), so a named amount
-        # opens the branch even without a "bribe"/"pay" word.
-        if (any(w in raw for w in self._BRIBE_KEYWORDS) or
-                parsed.intent == "bribe" or parsed.amount is not None):
+        # A bare figure is an implicit offer (the BRIBE / SHAKEDOWN scan chips
+        # light "1500" / "8000" with no verb). A number buried in ordinary
+        # talk is not — "wait 1500 seconds" / "give me five minutes" used to
+        # RELEASE and charge thousands.
+        if (any(w in raw for w in self._BRIBE_KEYWORDS)
+                or parsed.intent == "bribe"
+                or _is_bare_figure(raw)):
             amount = parsed.amount or 0
             if amount >= 8000:
                 # SHAKEDOWN — too much money on the table; he takes some
