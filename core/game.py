@@ -70,6 +70,12 @@ class Game:
         # the bundled DejaVu Sans Mono with a +2pt size bump.
         install_font_patch()
         self.screen  = pygame.display.set_mode((S.SCREEN_W, S.SCREEN_H))
+        from mobile.display import attach_display
+        from mobile.mode import is_mobile
+        from mobile.overlay import TouchOverlay
+        self._display = attach_display(self.screen)
+        self.screen = self._display.surface
+        self._overlay = TouchOverlay() if is_mobile() else None
         pygame.display.set_caption(S.TITLE)
         self.clock   = pygame.time.Clock()
         self.running = True
@@ -106,7 +112,7 @@ class Game:
         # Load + apply persisted user settings (volume, fullscreen)
         settings_store.load()
         self.audio.set_master_volume(settings_store.get("master_volume"))
-        if settings_store.get("fullscreen"):
+        if settings_store.get("fullscreen") and self._overlay is None:
             pygame.display.toggle_fullscreen()
         self._settings_cursor: int = 0
 
@@ -393,14 +399,30 @@ class Game:
 
     # ------------------------------------------------------------------
     def _handle_events(self):
+        from mobile.virtual_input import drain_pulses
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+            elif event.type in (getattr(pygame, "WINDOWRESIZED", -10),
+                                getattr(pygame, "VIDEORESIZE", -11)):
+                try:
+                    surf = pygame.display.get_surface()
+                    if surf is not None:
+                        self._display.window = surf
+                    self._display.relayout()
+                except pygame.error:
+                    pass
             elif event.type == pygame.KEYDOWN:
                 self._route_keydown(event)
             elif event.type == pygame.KEYUP:
                 if self.states.state == GameState.DELIVERY and self._delivery:
                     self._delivery.handle_keyup(event)
+            elif self._overlay is not None:
+                self._overlay.handle_event(event, self._display, self)
+        if self._overlay is not None:
+            self._overlay.sync(self)
+            for key in drain_pulses():
+                self._route_keydown(pygame.event.Event(pygame.KEYDOWN, {"key": key}))
 
     def _pause_game(self) -> None:
         if self.states.state in self._PAUSEABLE:
@@ -670,7 +692,9 @@ class Game:
                                   pygame.K_RIGHT, pygame.K_a, pygame.K_d):
                     fs = not settings_store.get("fullscreen")
                     settings_store.set_value("fullscreen", fs)
-                    pygame.display.toggle_fullscreen()
+                    from mobile.mode import is_mobile
+                    if not is_mobile():
+                        pygame.display.toggle_fullscreen()
             return
 
         if self._menu_mode == "records":
@@ -1084,7 +1108,7 @@ class Game:
                 self.screen.blit(txt, (S.SCREEN_W // 2 - txt.get_width() // 2,
                                        S.SCREEN_H // 2 - 14))
             self.transition.draw(self.screen, self._dt)
-            pygame.display.flip()
+            self._present()
             return
 
         if state == GameState.FLIGHT:
@@ -1135,8 +1159,12 @@ class Game:
 
         # CRT power-down overlay (no-op when no transition is active)
         self.transition.draw(self.screen, self._dt)
+        if self._overlay is not None:
+            self._overlay.draw(self.screen)
+        self._present()
 
-        pygame.display.flip()
+    def _present(self) -> None:
+        self._display.present()
 
     def _render_sector_hud(self):
         font     = get_font(14)

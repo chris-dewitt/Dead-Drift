@@ -48,6 +48,13 @@ def get(key: str):
     return _data.get(key, _DEFAULTS.get(key))
 
 
+def set_path(path) -> None:
+    """Point the store at a writable file (Android app storage)."""
+    global _PATH, _data
+    _PATH = Path(path)
+    _data = {}
+
+
 def set_value(key: str, value) -> None:
     """Set and immediately persist a setting."""
     if not _data:

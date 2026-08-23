@@ -609,7 +609,8 @@ class DeliverySequence:
 
     # ── Phase: Approach (Beat 1 — nose alignment) ────────────────────────
     def _update_approach(self, dt: float):
-        keys = pygame.key.get_pressed()
+        from mobile.virtual_input import get_pressed
+        keys = get_pressed()
         # A/D rotate nose angle; W/S translate vertically for positioning
         if keys[pygame.K_a] or keys[pygame.K_LEFT]:
             self._ship_angle -= 80.0 * dt
@@ -1034,7 +1035,8 @@ class DeliverySequence:
 
         # Held-key input: W/UP increases target speed, S/DOWN decreases.
         # A/D nudge angle; auto-correct toward 0 if within ±20°.
-        keys = pygame.key.get_pressed()
+        from mobile.virtual_input import get_pressed
+        keys = get_pressed()
         if keys[pygame.K_w] or keys[pygame.K_UP]:
             self._dock_speed_target = min(1.0, self._dock_speed_target + 0.95 * dt)
         if keys[pygame.K_s] or keys[pygame.K_DOWN]:

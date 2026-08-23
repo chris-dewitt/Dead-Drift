@@ -62,7 +62,9 @@ class PlayerShip:
         self._wrap_screen()
 
     def _read_input(self, dt: float):
-        keys = pygame.key.get_pressed()
+        from mobile.virtual_input import get_analog, get_pressed
+        keys = get_pressed()
+        ax, ay = get_analog()
         self._thrusting = False
         inv = self.controls_inverted
         thrust_scale = self._external_thrust_scale
@@ -72,35 +74,44 @@ class PlayerShip:
         fwd   = keys[pygame.K_UP]    or keys[pygame.K_w]
         rev   = keys[pygame.K_DOWN]  or keys[pygame.K_s]
 
+        rot_keys = (-1.0 if left else 0.0) + (1.0 if right else 0.0)
+        fwd_amt = 1.0 if fwd else 0.0
+        rev_amt = 1.0 if rev else 0.0
+        rot_analog = ax
+        thrust_analog = ay
         if inv:
-            left, right, fwd, rev = right, left, rev, fwd
+            rot_keys = -rot_keys
+            fwd_amt, rev_amt = rev_amt, fwd_amt
+            rot_analog = -rot_analog
+            thrust_analog = -thrust_analog
+
+        rot = max(-1.0, min(1.0, rot_keys + rot_analog))
+        fwd_amt = max(fwd_amt, max(0.0, thrust_analog))
+        rev_amt = max(rev_amt, max(0.0, -thrust_analog))
 
         # Epic 11.1c: rotation locked during a harmonica session so the
         # ship drifts straight while Bax plays. Thrust still cancels the
         # session via the cancel-on-input check below in RunManager.
-        if not self.harm_session_active:
-            if left:
-                self.body.rotate(-S.ROTATION_SPEED * dt)
-            if right:
-                self.body.rotate(S.ROTATION_SPEED * dt)
+        if not self.harm_session_active and abs(rot) > 0.02:
+            self.body.rotate(S.ROTATION_SPEED * dt * rot)
 
         thrusters = self.chain.get_active("propulsion")
-        if fwd:
+        if fwd_amt > 0.02:
             self._thrusting = True
             fuel_scale = max(0.3, self.fuel / S.FUEL_MAX)
-            self.fuel = max(0.0, self.fuel - S.FUEL_DRAIN_FWD * dt)
+            self.fuel = max(0.0, self.fuel - S.FUEL_DRAIN_FWD * dt * fwd_amt)
             for t in thrusters:
                 if hasattr(t, "mark_firing"):
                     t.mark_firing()
-                self.body.apply_thrust(t.force * thrust_scale * fuel_scale)
+                self.body.apply_thrust(t.force * thrust_scale * fuel_scale * fwd_amt)
 
-        if rev:
+        if rev_amt > 0.02:
             fuel_scale = max(0.3, self.fuel / S.FUEL_MAX)
-            self.fuel = max(0.0, self.fuel - S.FUEL_DRAIN_REV * dt)
+            self.fuel = max(0.0, self.fuel - S.FUEL_DRAIN_REV * dt * rev_amt)
             for t in thrusters:
                 if hasattr(t, "mark_firing"):
                     t.mark_firing()
-                self.body.apply_thrust(-t.force * 0.6 * thrust_scale * fuel_scale)
+                self.body.apply_thrust(-t.force * 0.6 * thrust_scale * fuel_scale * rev_amt)
 
         if keys[pygame.K_SPACE]:
             rad = math.radians(self.body.angle)

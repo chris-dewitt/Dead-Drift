@@ -19,7 +19,11 @@ python play.py        # flight sandbox — no NLTK, boots fast
 python test_stage.py  # dev — jump to a specific screen/sector
 python audio_dev.py   # dev — tune procedural audio
 pytest tests/         # 350 regression tests
+DEAD_DRIFT_MOBILE=1 python main.py   # Android slice preview (touch HUD)
 ```
+
+**Android (Play Store slice):** landscape flight + delivery tunnels, no terminals.
+See [`docs/MOBILE_ANDROID.md`](docs/MOBILE_ANDROID.md). Build: `python tools/build_android.py`.
 
 **First launch:** `main.py` boots the menu instantly. Terminal NLP data loads on a background thread; if you open a terminal before it lands you'll see a brief `LINGUISTIC PROCESSOR INITIALISING — STAND BY` splash and the parser falls back to regex tokenisation. Sandbox flight without NLTK: `play.py`.
 
@@ -180,7 +184,7 @@ Spec → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLAN.md) · Recording stems
 - Python 3 + **pygame-ce** + **numpy** + **nltk** (VADER, tokenization)
 - All graphics: procedural `pygame.draw` — no sprite pipeline
 - Architecture: `core/game.py` state loop, global `EventBus`, `RunManager` sector lifecycle
-- Tests: `tests/` (350 tests — saves, checkpoints, corridor I.1–I.3b, terminal NPCs, voices)
+- Tests: `tests/` (saves, checkpoints, corridor I.1–I.3b, terminal NPCs, Android slice)
 
 ---
 
@@ -198,6 +202,7 @@ Spec → [`docs/SOUNDTRACK_PLAN.md`](docs/SOUNDTRACK_PLAN.md) · Recording stems
 | `docs/SOUNDTRACK_PLAN.md` | Audio design spec |
 | `docs/RECORDING_BRIEF.md` | Stem recording shot list |
 | `WORKING_ON.md` | Multi-agent file claims |
+| `docs/MOBILE_ANDROID.md` | Android slice — touch HUD, Play Store wrap |
 | `CLAUDE.md` | Agent pointer (rules for AI coders) |
 
 **Git identity:** Chris-dewitt / chnodewi@unc.edu
