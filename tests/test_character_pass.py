@@ -347,6 +347,46 @@ def test_bowen_genuine_surrender_still_impounds(line):
     assert outcome == NPCOutcome.IMPOUND and bowen._current_path == "COMPLY"
 
 
+@pytest.mark.parametrize("line", [
+    "of course not",
+    "Of course not.",
+    "I will do no such thing",
+    "whatever you say, I'm leaving",
+    "as you wish, I'm not staying",
+    "certainly not",
+    "yes I will not hold position",
+])
+def test_bowen_trailing_negation_and_mixed_refuse_is_not_comply(line):
+    """#127 only looked *before* the surrender phrase, so trailing `not`/`no`
+    and a walk-out after a courtesy phrase still impounded at the Ch6 climax.
+    'Could you remain where you are?' → 'Of course not.' was an instant loss."""
+    bowen = _npc("bowen")
+    outcome, _ = bowen.respond(line)
+    assert outcome != NPCOutcome.IMPOUND, f"Bowen impounded a refusal: {line!r}"
+    assert bowen._current_path != "COMPLY"
+
+
+def test_bowen_of_course_not_twice_is_the_refuse_path():
+    """The polite refusal idiom should count as REFUSE, not stall-out."""
+    bowen = _npc("bowen")
+    first, _ = bowen.respond("of course not")
+    assert first == NPCOutcome.CONTINUE and bowen._current_path == "REFUSE"
+    second, _ = bowen.respond("of course not")
+    assert second == NPCOutcome.RELEASE and bowen._current_path == "REFUSE"
+
+
+def test_affirmed_phrase_hit_rejects_trailing_negators():
+    from terminal.npcs.keywords import affirmed_phrase_hit, phrase_negated
+    phrases = ("of course", "will do", "hold position", "no problem")
+    assert affirmed_phrase_hit("of course, hold position", phrases)
+    assert not affirmed_phrase_hit("of course not", phrases)
+    assert not affirmed_phrase_hit("I will do no such thing", phrases)
+    assert not affirmed_phrase_hit("I will not hold position", phrases)
+    assert affirmed_phrase_hit("no problem", phrases)
+    assert phrase_negated("yes I will not hold position", phrases)
+    assert not phrase_negated("of course, hold position", phrases)
+
+
 @pytest.mark.parametrize("straight,curly", [
     ("that isn't fine", "that isn’t fine"),
     ("I won't hold position", "I won’t hold position"),
