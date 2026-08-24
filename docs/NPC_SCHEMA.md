@@ -139,8 +139,14 @@ all one shape: *a pickup matched something the player did not mean.*
    so Bowen's surrender phrase `hold position` matched inside "No, I will
    **not** hold position" and impounded a player for refusing — the same
    false-compliance bug the character pass existed to fix, re-entering
-   through the phrase list. Agreement phrases now use `affirmed_phrase_hit`.
-   For a multi-word phrase the first word is the negation anchor.
+   through the phrase list. Agreement phrases now use `affirmed_phrase_hit`,
+   which matches the phrase as a word span and treats a negator on **either**
+   side as refusal: prefix (`not hold position`) and trailing (`of course
+   not`, `will do no such thing`). Agreement words use `affirmed_hit` with a
+   one-word trailing window so `certainly not` is not consent. Remaining
+   surrender phrases are tested *after* REFUSE (except `no problem`, whose
+   bare `no` would otherwise steal the line) so "whatever you say, I'm
+   leaving" walks out instead of impounding.
 2. **Typographic apostrophes.** Every pickup word is written with `'`. Pasted
    or autocorrected text carries `’`, which defeated both the word matcher
    (`won’t` never matched the token `won't`) and the `n't` negation suffix,

@@ -26,12 +26,14 @@ import random
 
 from core.event_bus import bus, EVT_NLP_EXPLOIT
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
-from terminal.npcs.keywords import affirmed_hit, affirmed_phrase_hit, hit
+from terminal.npcs.keywords import (
+    affirmed_hit, affirmed_phrase_hit, hit, phrase_negated,
+)
 from terminal.nlp_parser import ParsedInput
 
-# Unambiguous surrender — whole phrases, so no negation guard is needed.
-# "no problem" has to be tested before the refusal words or its bare "no"
-# reads as defiance.
+# Surrender phrases. "no problem" has to be tested before the refusal words
+# or its bare "no" reads as defiance. The rest wait until after REFUSE so a
+# line like "whatever you say, I'm leaving" is a refusal, not consent.
 _COMPLY_PHRASES = [
     "i'll wait", "ill wait", "i will wait", "wait here", "hold position",
     "yes sir", "of course", "as you wish", "happy to", "no problem",
@@ -48,6 +50,7 @@ _COMPLY_WORDS = (
 _REFUSE_PHRASES = [
     "not happening", "make me", "go to hell", "screw you", "piss off",
     "drop dead", "not a chance", "absolutely not", "hard no", "no way",
+    "of course not", "certainly not",
     "i'm leaving", "im leaving", "i'm going", "im going", "get lost",
     "not staying", "not waiting", "you can't hold me", "you cant hold me",
     "try and stop me", "shut up",
@@ -130,12 +133,11 @@ class Bowen(BaseNPC):
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         text = parsed.raw.lower()
 
-        # Surrender phrases first — "no problem" is agreement, not the refusal
-        # its bare "no" would otherwise match. They still go through the
-        # negation guard: "I will not hold position" is a refusal that happens
-        # to contain a surrender phrase, and matching it bare impounded the
-        # player for refusing, which is the exact bug this NPC had before.
-        if affirmed_phrase_hit(text, _COMPLY_PHRASES):
+        # "no problem" is agreement, not the refusal its bare "no" would
+        # otherwise match. Everything else that looks like surrender waits
+        # until after REFUSE: "whatever you say, I'm leaving" used to
+        # impound because the surrender phrase sat in front of the walk-out.
+        if affirmed_phrase_hit(text, ("no problem",)):
             return self._comply()
 
         if hit(text, _EXPOSE_PHRASES, _EXPOSE_WORDS):
@@ -220,9 +222,16 @@ class Bowen(BaseNPC):
                 "hold position?",
             ])
 
+        # Remaining surrender phrases. Trailing "not" ("of course not") is
+        # negation, not consent — affirmed_phrase_hit watches both sides.
+        if affirmed_phrase_hit(text, _COMPLY_PHRASES):
+            return self._comply()
+
         # Agreement words last, and only when nobody negated them. "I'm not
-        # sure I understand" is not consent.
-        if affirmed_hit(text, _COMPLY_WORDS):
+        # sure I understand" is not consent. A leading "yes" also must not
+        # override "I will not hold position" on the same line.
+        if (affirmed_hit(text, _COMPLY_WORDS)
+                and not phrase_negated(text, _COMPLY_PHRASES)):
             return self._comply()
 
         if self._turn >= 3:

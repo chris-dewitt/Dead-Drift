@@ -111,13 +111,47 @@ _NEG_SUFFIX = re.compile(r"n['’]t\b")
 _WORD_SPLIT = re.compile(r"[a-z0-9']+")
 
 
+def _is_negator(word: str) -> bool:
+    return word in _NEGATORS or _NEG_SUFFIX.search(word) is not None
+
+
+def _words(raw: str) -> list[str]:
+    return _WORD_SPLIT.findall(normalize(raw))
+
+
+def _phrase_spans(words: Sequence[str], phrase: str) -> list[tuple[int, int]]:
+    """Start/end indices of `phrase` as consecutive words in `words`."""
+    pwords = _WORD_SPLIT.findall(normalize(phrase))
+    if not pwords:
+        return []
+    n = len(pwords)
+    return [(i, i + n) for i in range(len(words) - n + 1)
+            if list(words[i:i + n]) == pwords]
+
+
+def _span_negated(words: Sequence[str], start: int, end: int,
+                  before: int = 3, after: int = 2) -> bool:
+    """True if a negator sits just before or just after the span.
+
+    Prefix catches "I will not hold position". Suffix catches the trailing
+    idiom the prefix window cannot see: "of course not", "will do no such
+    thing". Words *inside* the span are not negators of the span — that's
+    how "no problem" stays agreement.
+    """
+    prefix = words[max(0, start - before):start]
+    suffix = words[end:end + after]
+    return any(_is_negator(w) for w in (*prefix, *suffix))
+
+
 def negated(raw: str, token: str, window: int = 3) -> bool:
     """True if a negator sits within `window` words before `token` in `raw`.
 
     Window rather than whole-sentence, so "no problem, I'll wait right here"
     doesn't read as a negation of *wait* four words later. For a multi-word
     phrase the first word is the anchor: "not hold position" negates
-    *hold position*.
+    *hold position*. Trailing-negation for agreement phrases lives on
+    `affirmed_phrase_hit` / `phrase_negated` instead — this helper stays
+    prefix-only so existing word-level tests keep their contract.
     """
     raw = normalize(raw)
     words = _WORD_SPLIT.findall(raw)
@@ -126,26 +160,60 @@ def negated(raw: str, token: str, window: int = 3) -> bool:
         if w != target:
             continue
         for prev in words[max(0, i - window):i]:
-            if prev in _NEGATORS or _NEG_SUFFIX.search(prev):
+            if _is_negator(prev):
                 return True
     return False
 
 
-def affirmed_hit(raw: str, tokens: Iterable[str], window: int = 3) -> bool:
-    """Whole-word match on `tokens`, ignoring any hit that is negated."""
-    norm = normalize(raw)
-    return any(_word_re(t).search(norm) is not None and not negated(raw, t, window)
-               for t in tokens)
+def affirmed_hit(raw: str, tokens: Iterable[str], window: int = 3,
+                 after: int = 1) -> bool:
+    """Whole-word match on `tokens`, ignoring any hit that is negated.
+
+    `after` is a one-word trailing window so "certainly not" is a refusal
+    rather than the agreement word *certainly*. Longer trailing windows
+    false-negative real surrender ("sure, that's not a problem").
+    """
+    words = _words(raw)
+    for t in tokens:
+        target = normalize(t)
+        if _word_re(t).search(normalize(raw)) is None:
+            continue
+        for i, w in enumerate(words):
+            if w != target:
+                continue
+            prefix = words[max(0, i - window):i]
+            suffix = words[i + 1:i + 1 + after]
+            if any(_is_negator(x) for x in (*prefix, *suffix)):
+                continue
+            return True
+    return False
+
+
+def phrase_negated(raw: str, phrases: Iterable[str],
+                   window: int = 3, after: int = 2) -> bool:
+    """True if any phrase appears as a word span with a nearby negator."""
+    words = _words(raw)
+    return any(
+        _span_negated(words, start, end, before=window, after=after)
+        for p in phrases
+        for start, end in _phrase_spans(words, p)
+    )
 
 
 def affirmed_phrase_hit(raw: str, phrases: Iterable[str],
-                        window: int = 3) -> bool:
-    """Substring match on `phrases`, ignoring any hit that is negated.
+                        window: int = 3, after: int = 2) -> bool:
+    """Word-span match on `phrases`, ignoring any hit that is negated.
 
     A surrender phrase is no more inherently unambiguous than a surrender
     word: "hold position" is agreement, "I will not hold position" is the
     opposite, and matching the phrase bare impounded the player for refusing.
+    Trailing negators are the same bug from the other side — "of course not"
+    and "I will do no such thing" used to read as consent because `not`/`no`
+    sat *after* the phrase.
     """
-    norm = normalize(raw)
-    return any(normalize(p) in norm and not negated(raw, p, window)
-               for p in phrases)
+    words = _words(raw)
+    for p in phrases:
+        for start, end in _phrase_spans(words, p):
+            if not _span_negated(words, start, end, before=window, after=after):
+                return True
+    return False
