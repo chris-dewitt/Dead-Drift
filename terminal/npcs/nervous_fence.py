@@ -41,13 +41,19 @@ import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
-from terminal.npcs.keywords import hit
+from terminal.npcs.keywords import affirmed_hit, affirmed_phrase_hit, hit
 
-_DEAL_KEYWORDS = [
-    "manifest", "contents", "partial contents", "cargo list",
-    "what's inside", "show you", "tell you what", "give you",
-    "trade", "exchange", "deal", "swap", "offer you", "barter",
+# Cargo-offer phrases stay substring. Short tokens are whole-word *and*
+# negation-checked: bare substring "deal" / "give you" used to 1-turn
+# RELEASE ordinary talk ("what's the deal", "I'll give you a minute")
+# for the full +2,500 payout with bribe_cost 0.
+_DEAL_PHRASES = [
+    "partial contents", "cargo list",
+    "what's inside", "whats inside", "show you",
 ]
+_DEAL_WORDS = (
+    "manifest", "contents", "trade", "exchange", "swap", "barter",
+)
 _CREDIT_AMOUNT = 800
 # Split for word-boundary matching. As bare substrings "owe" lives inside
 # *power* and *however*, and "rent" inside *different*, *current* and
@@ -240,7 +246,8 @@ class NervousFence(BaseNPC):
             ])
 
         # ------------ CARGO DEAL --------------------------------------
-        if any(w in raw for w in _DEAL_KEYWORDS):
+        if (affirmed_phrase_hit(raw, _DEAL_PHRASES)
+                or affirmed_hit(raw, _DEAL_WORDS)):
             self._deal_offered = True
             self._current_path = "DEAL"
             bus.emit(EVT_NLP_EXPLOIT, npc="nervous_fence", exploit_key="cargo_manifest")
