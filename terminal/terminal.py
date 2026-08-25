@@ -112,7 +112,7 @@ _SCAN_VOCAB: dict[str, dict[str, str]] = {
     },
     "RELAY-7 FELIX": {
         "manifest": "DEAL★", "contents": "DEAL★", "cargo list": "DEAL★",
-        "trade": "DEAL", "exchange": "DEAL", "give you": "DEAL",
+        "trade": "DEAL", "exchange": "DEAL", "what's inside": "DEAL★",
         "plan": "DISTRACT★", "legitimate": "DISTRACT★", "business": "DISTRACT",
         "retire": "DISTRACT", "dream": "DISTRACT", "five years": "DISTRACT★",
         "debt": "SYMPATHY", "clone": "SYMPATHY", "broke": "SYMPATHY",

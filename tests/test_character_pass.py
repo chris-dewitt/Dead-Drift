@@ -129,6 +129,42 @@ def test_felix_sympathy_needs_an_actual_appeal():
     assert felix2._sympathy_t == 1
 
 
+@pytest.mark.parametrize("line", [
+    "what's the deal",
+    "whats the deal",
+    "that's a good deal",
+    "deal",
+    "can we make a deal",
+    "I'll give you my transponder code",
+    "let me give you a minute",
+    "tell you what, I'm lost",
+    "I can offer you nothing",
+    "I don't want to trade insults",
+])
+def test_felix_deal_does_not_release_ordinary_talk(line):
+    """DEAL is a 1-turn RELEASE with bribe_cost 0 → full +2,500 payout.
+    Bare substrings 'deal' / 'give you' fired on Felix's own prompt
+    ('come to an arrangement') and on stall-talk."""
+    felix = _npc("nervous_fence")
+    outcome, _ = felix.respond(line)
+    assert outcome != NPCOutcome.RELEASE, f"Felix RELEASEd on {line!r}"
+    assert felix._current_path != "DEAL"
+
+
+@pytest.mark.parametrize("line", [
+    "manifest",
+    "I'll show you the cargo list",
+    "what's inside",
+    "trade",
+    "contents",
+])
+def test_felix_real_cargo_offer_still_deals(line):
+    felix = _npc("nervous_fence")
+    outcome, _ = felix.respond(line)
+    assert outcome == NPCOutcome.RELEASE
+    assert felix._current_path == "DEAL"
+
+
 # ── bribes that actually cost money ─────────────────────────────────────────
 
 @pytest.mark.parametrize("key,line,expected", [
