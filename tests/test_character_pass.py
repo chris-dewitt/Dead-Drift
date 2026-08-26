@@ -129,6 +129,74 @@ def test_felix_sympathy_needs_an_actual_appeal():
     assert felix2._sympathy_t == 1
 
 
+# ── Dray: 1-turn SNITCH impound / TRADE release on ordinary talk ─────────────
+
+@pytest.mark.parametrize("line", [
+    "I'd rather talk about barges",
+    "I can prove I'm a courier",
+    "can you approve that",
+    "this job is illegal",
+    "I wanted to report the barge pattern",
+    "I'm not a snitch",
+    "I won't rat",
+])
+def test_dray_does_not_impound_ordinary_talk_as_snitching(line):
+    """SNITCH is a 1-turn IMPOUND. Substring 'rat'/'prove'/'report' fired on
+    gripes and identity talk — including 'I'd rather talk about barges',
+    which is the COMMISERATE path this NPC exists for."""
+    dray = _npc("dray")
+    outcome, _ = dray.respond(line)
+    assert outcome != NPCOutcome.IMPOUND, f"Dray IMPOUNDed on {line!r}"
+    assert dray._current_path != "SNITCH"
+
+
+@pytest.mark.parametrize("line", [
+    "I'll report you to dispatch",
+    "I'm going to turn you in",
+    "snitch",
+    "you rat",
+    "who are you really",
+])
+def test_dray_real_snitch_still_impounds(line):
+    dray = _npc("dray")
+    outcome, _ = dray.respond(line)
+    assert outcome == NPCOutcome.IMPOUND
+    assert dray._current_path == "SNITCH"
+
+
+@pytest.mark.parametrize("line", [
+    "I heard you on this channel",
+    "see you at the next gate",
+    "I found this job hard",
+    "how do I navigate this sector",
+    "we should wait for the window",
+])
+def test_dray_does_not_release_ordinary_talk_as_intel_trade(line):
+    """TRADE / SOLIDARITY are 1-turn RELEASE + 2,500. 'gate' lived inside
+    *navigate*, 'heard'/'channel' echoed his own intro, and 'we should wait'
+    was not solidarity."""
+    dray = _npc("dray")
+    outcome, _ = dray.respond(line)
+    assert outcome != NPCOutcome.RELEASE, f"Dray RELEASEd on {line!r}"
+    assert dray._current_path not in ("INTEL TRADE", "SOLIDARITY")
+
+
+@pytest.mark.parametrize("line,path", [
+    ("want to trade intel", "INTEL TRADE"),
+    ("got something for you", "INTEL TRADE"),
+    ("I know something about barges", "INTEL TRADE"),
+    ("ask about a shortcut", "INTEL TRADE"),
+    ("the scanner's down tuesday", "INTEL TRADE"),
+    ("we're the same side", "SOLIDARITY"),
+    ("solidarity", "SOLIDARITY"),
+])
+def test_dray_real_intel_and_solidarity_still_release(line, path):
+    dray = _npc("dray")
+    outcome, _ = dray.respond(line)
+    assert outcome == NPCOutcome.RELEASE
+    assert dray._current_path == path
+
+
 # ── bribes that actually cost money ─────────────────────────────────────────
 
 @pytest.mark.parametrize("key,line,expected", [

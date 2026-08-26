@@ -17,55 +17,88 @@ import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
+from terminal.npcs.keywords import affirmed_hit, affirmed_phrase_hit, hit
 
-_COMMISERATE_KEYWORDS = [
-    "hate", "hate this job", "rough", "awful", "worst", "terrible",
-    "barge", "barges", "repo men", "repo", "debt", "clone",
-    "nova soma", "corporation", "corpo", "bullshit", "unfair",
-    "tired", "exhausted", "done", "over it", "can't believe",
-    "same", "same boat", "feel you", "know what you mean",
-    "underpaid", "no choice", "trapped", "stuck",
-    "quota", "sector", "what are they even", "makes no sense",
-    # Playtest fix: "gripe" / "griping" / "complain" should land here.
+# Split for word-boundary matching. Bare substrings on the 1-turn paths
+# used to fire on ordinary chatter:
+#   SNITCH  "rat" inside *rather* / "prove" inside *approve* → IMPOUND
+#   TRADE   "gate" inside *navigate* / "heard" echoing his intro → RELEASE + 2,500
+#   SOLIDARITY  "we should wait" → RELEASE + 2,500
+_COMMISERATE_PHRASES = [
+    "hate this job", "repo men", "nova soma", "can't believe",
+    "same boat", "feel you", "know what you mean", "no choice",
+    "what are they even", "makes no sense", "fed up", "had it",
+    "over it",
+]
+_COMMISERATE_WORDS = (
+    "hate", "rough", "awful", "worst", "terrible",
+    "barge", "barges", "repo", "debt", "clone",
+    "corporation", "corpo", "bullshit", "unfair", "illegal",
+    "tired", "exhausted", "done", "same",
+    "underpaid", "trapped", "stuck",
+    "quota", "sector",
     "gripe", "griping", "gripes", "moan", "moaning", "whinge",
     "whinging", "complain", "complaining", "complaint", "vent",
-    "venting", "bitching", "fed up", "had it",
+    "venting", "bitching",
+)
+_TRADE_PHRASES = [
+    "got something", "know something",
+    "something weird", "weird one", "check this out",
+    "you'll never guess", "youll never guess",
+    "gate code", "gate scanner", "heard something",
 ]
-_TRADE_KEYWORDS = [
-    "intel", "tip", "route", "patrol", "heard", "scanner",
-    "exchange", "swap", "trade", "got something", "know something",
-    "found", "shortcut", "gate", "frequency", "channel",
-    "something weird", "weird one", "check this out", "you'll never guess",
-]
+_TRADE_WORDS = (
+    "intel", "tip", "route", "patrol", "scanner",
+    "exchange", "swap", "trade", "shortcut", "frequency",
+)
 _BRIBE_AMOUNT = 500
-_CORPO_KEYWORDS = [
+_CORPO_PHRASES = [
+    "in accordance", "required documentation", "transit authority",
+    "clearance code",
+]
+_CORPO_WORDS = (
     "regulation", "compliance", "protocol", "procedure", "properly",
     "official", "license", "certified", "authorised", "authorized",
-    "formally", "policy", "in accordance", "required documentation",
-    "transit authority", "form", "permit", "clearance code",
+    "formally", "policy", "form", "permit",
+)
+# "report you" / "flag you" rather than bare "report"/"prove": offering
+# barge intel ("report the pattern") or identity ("I can prove I'm a
+# courier") is not a snitch, and "rather"/"approve" used to substring-hit.
+_SNITCH_PHRASES = [
+    "turn you in", "who are you really", "report you", "flag you",
+    "prove it", "prove who",
 ]
-_SNITCH_KEYWORDS = [
-    "report", "flag", "authority", "turn you in", "rat", "snitch",
-    "arrest", "warrant", "illegal", "infraction", "violation",
-    "documentation", "supervisor", "who are you really", "prove",
+_SNITCH_WORDS = (
+    "flag", "authority", "rat", "snitch",
+    "arrest", "warrant", "infraction", "violation",
+    "documentation", "supervisor",
+)
+_MARROW_PHRASES = [
+    "the fence", "relay fence", "relay-7", "off-book", "off book",
+    "black market", "back channel", "back-channel",
+    "your partner", "old crew", "who do you know",
 ]
-_MARROW_KEYWORDS = [
-    "marrow", "the fence", "relay fence", "felix", "relay-7", "off-book",
-    "off book", "fence", "fencing", "black market", "back channel", "back-channel",
-    "calla", "your partner", "old crew", "who do you know",
-]
-_GHOST_KEYWORDS = [
-    "ghost", "ghost lane", "shadow run", "shadow lane", "blind spot",
-    "dead zone", "dead scanner", "unmarked", "hidden route", "quiet lane",
-    "off the map", "no transponder", "off-grid", "invisible", "dark run",
+_MARROW_WORDS = (
+    "marrow", "felix", "fence", "fencing", "calla",
+)
+_GHOST_PHRASES = [
+    "ghost lane", "shadow run", "shadow lane", "blind spot",
+    "dead zone", "dead scanner", "hidden route", "quiet lane",
+    "off the map", "no transponder", "off-grid", "dark run",
     "quiet route", "secret route", "back route",
 ]
-_SOLIDARITY_KEYWORDS = [
-    "together", "solidarity", "comrades", "all of us", "we should",
-    "workers", "organize", "organise", "real union", "collective",
-    "against nova soma", "against the union", "fight back",
-    "same side", "on your side", "we're the same", "one of us",
+_GHOST_WORDS = (
+    "ghost", "unmarked", "invisible",
+)
+_SOLIDARITY_PHRASES = [
+    "all of us", "real union", "against nova soma", "against the union",
+    "fight back", "same side", "on your side", "we're the same",
+    "were the same", "one of us",
 ]
+_SOLIDARITY_WORDS = (
+    "together", "solidarity", "comrades", "workers",
+    "organize", "organise", "collective",
+)
 
 
 class Dray(BaseNPC):
@@ -105,7 +138,8 @@ class Dray(BaseNPC):
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         raw = parsed.raw.lower()
 
-        if any(w in raw for w in _SNITCH_KEYWORDS):
+        if (affirmed_phrase_hit(raw, _SNITCH_PHRASES)
+                or affirmed_hit(raw, _SNITCH_WORDS)):
             self._patience = 0
             # J.3.5 (T-5) — snitching gets YOU towed; it is a trap, not a player
             # exploit. Don't file it in Records as a discovered vulnerability.
@@ -126,7 +160,7 @@ class Dray(BaseNPC):
                 "*radio clicks off, then back on* Actually, one more thing: you're flagged.",
             ])
 
-        if any(w in raw for w in _CORPO_KEYWORDS):
+        if hit(raw, _CORPO_PHRASES, _CORPO_WORDS):
             self._corpo_flags += 1
             if self._corpo_flags >= 2:
                 self._patience = 0
@@ -149,7 +183,8 @@ class Dray(BaseNPC):
                 "forget the script. What do you actually want.",
             ])
 
-        if any(w in raw for w in _TRADE_KEYWORDS):
+        if (affirmed_phrase_hit(raw, _TRADE_PHRASES)
+                or affirmed_hit(raw, _TRADE_WORDS)):
             self._traded = True
             self._current_path = "INTEL TRADE"
             bus.emit(EVT_NLP_EXPLOIT, npc="dray", exploit_key="intel_trade")
@@ -200,7 +235,7 @@ class Dray(BaseNPC):
                 "Now we're both slightly richer and the day is better.",
             ])
 
-        if any(w in raw for w in _MARROW_KEYWORDS):
+        if hit(raw, _MARROW_PHRASES, _MARROW_WORDS):
             self._marrow_dropped = True
             self._current_path = "MARROW CONTACT"
             bus.emit(EVT_NLP_EXPLOIT, npc="dray", exploit_key="marrow_contact")
@@ -223,7 +258,7 @@ class Dray(BaseNPC):
                 "Barge Three is taking a long arc east. You've got four minutes. Go.",
             ])
 
-        if any(w in raw for w in _GHOST_KEYWORDS):
+        if hit(raw, _GHOST_PHRASES, _GHOST_WORDS):
             self._ghost_given = True
             self._current_path = "GHOST ROUTE"
             bus.emit(EVT_NLP_EXPLOIT, npc="dray", exploit_key="ghost_route")
@@ -247,7 +282,8 @@ class Dray(BaseNPC):
                 "Two minutes from now, that window opens. Move.",
             ])
 
-        if any(w in raw for w in _SOLIDARITY_KEYWORDS):
+        if (affirmed_phrase_hit(raw, _SOLIDARITY_PHRASES)
+                or affirmed_hit(raw, _SOLIDARITY_WORDS)):
             self._solidarity_shown = True
             self._current_path = "SOLIDARITY"
             bus.emit(EVT_NLP_EXPLOIT, npc="dray", exploit_key="solidarity")
@@ -273,7 +309,7 @@ class Dray(BaseNPC):
                 "I'll stay on channel so they think this frequency's occupied. Go.",
             ])
 
-        if any(w in raw for w in _COMMISERATE_KEYWORDS):
+        if hit(raw, _COMMISERATE_PHRASES, _COMMISERATE_WORDS):
             self._gripe_count += 1
             self._current_path = "COMMISERATE"
             self.disposition += 2
