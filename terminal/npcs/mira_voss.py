@@ -20,21 +20,27 @@ import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT, EVT_HULL_DAMAGE
+from terminal.npcs.keywords import hit
 
 
 _PAY_AMOUNT = 700
-_INTEL_KEYWORDS = [
-    "patrol", "barge", "gate", "schedule", "frequency", "channel",
-    "checkpoint", "patrol pattern", "barge route", "scanner",
-    "patrol window", "blind spot", "gate timing", "intel",
-    "tip", "heard something", "the route is", "i know where",
-    "saw a", "spotted",
+# Phrase matches stay substring. Short tokens use word boundaries so
+# "gate" cannot fire INTEL inside *navigate*/*investigate*, "patrol"
+# cannot fire inside *patrols*, and HOSTILE "useless"/"scam"/"threat"
+# cannot slam the comm on ordinary talk ("I'm useless with a torch",
+# "this isn't a scam", "what would make you patch this").
+_INTEL_PHRASES = [
+    "patrol pattern", "barge route", "patrol window", "blind spot",
+    "gate timing", "heard something", "the route is", "i know where",
 ]
-_CARGO_KEYWORDS = [
-    "manifest", "contents", "cargo list", "what i'm hauling",
-    "share the haul", "split the cargo", "take a cut", "piece of the cargo",
-    "trade some cargo", "slice of cargo", "give you some",
+_INTEL_WORDS = (
+    "patrol", "intel", "scanner", "frequency",
+)
+_CARGO_PHRASES = [
+    "cargo list", "what i'm hauling", "share the haul", "split the cargo",
+    "take a cut", "piece of the cargo", "trade some cargo", "slice of cargo",
 ]
+_CARGO_WORDS = ("manifest",)
 _TECHNICAL_KEYWORDS = [
     # Things a real hull tech would say
     "compound", "patch compound", "polyseal", "ceramic plate",
@@ -44,11 +50,12 @@ _TECHNICAL_KEYWORDS = [
     "graphene mesh", "reinforcement strip", "bonded layer",
     "decompression", "vacuum seal", "weld bead", "carbon braid",
 ]
-_HOSTILE_KEYWORDS = [
-    "shut up", "fuck", "i'll kill", "bitch", "hag", "old woman",
-    "useless", "you're nothing", "rip you off", "scam",
-    "threat", "make you", "you better", "or else",
+_HOSTILE_PHRASES = [
+    "shut up", "fuck you", "i'll kill", "old woman",
+    "you're nothing", "you are nothing", "you're useless", "you are useless",
+    "rip you off", "or else",
 ]
+_HOSTILE_WORDS = ("bitch", "hag")
 
 
 class MiraVoss(BaseNPC):
@@ -103,7 +110,7 @@ class MiraVoss(BaseNPC):
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         raw = parsed.raw.lower()
 
-        if any(w in raw for w in _HOSTILE_KEYWORDS):
+        if hit(raw, _HOSTILE_PHRASES, _HOSTILE_WORDS):
             self._patience = 0
             return NPCOutcome.IMPOUND, random.choice([
                 "*comm slams off*  Right.  Fix yourself, then.  "
@@ -184,7 +191,7 @@ class MiraVoss(BaseNPC):
             ])
 
         # Intel offer — patrol/barge/gate info
-        if any(w in raw for w in _INTEL_KEYWORDS):
+        if hit(raw, _INTEL_PHRASES, _INTEL_WORDS):
             self._intel_gave = True
             self._current_path = "INTEL TRADE"
             bus.emit(EVT_NLP_EXPLOIT, npc="mira_voss", exploit_key="intel_trade")
@@ -206,7 +213,7 @@ class MiraVoss(BaseNPC):
             ])
 
         # Cargo offer
-        if any(w in raw for w in _CARGO_KEYWORDS):
+        if hit(raw, _CARGO_PHRASES, _CARGO_WORDS):
             self._cargo_gave = True
             self._current_path = "CARGO TRADE"
             bus.emit(EVT_NLP_EXPLOIT, npc="mira_voss", exploit_key="cargo_share")

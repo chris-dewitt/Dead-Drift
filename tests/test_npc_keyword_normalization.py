@@ -190,6 +190,95 @@ def test_dispatcher_whole_word_rest_still_releases():
     assert dispatcher._current_path == "COFFEE BREAK"
 
 
+def _mira():
+    from terminal.npc_logic import make_npc
+    return make_npc("mira_voss", run_context={"credits": 0})
+
+
+def test_mira_useless_with_a_torch_is_not_hostile():
+    """HOSTILE used to substring-match 'useless'/'scam'/'make you'/'you better'
+    and slam the comm on ordinary talk — including a player trying the
+    technical path ('I'm useless with a torch')."""
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for line in (
+        "I'm useless with a torch",
+        "this isn't a scam right",
+        "what would make you patch this",
+        "you better tell me the price",
+        "I don't mean this as a threat",
+    ):
+        mira = _mira()
+        out, _ = mira.respond(line)
+        assert out == NPCOutcome.CONTINUE, f"{line!r} impounded: {out}"
+        assert mira._current_path == ""
+
+
+def test_mira_actual_insults_still_impound():
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for line in ("shut up", "fuck you", "you're useless", "or else"):
+        mira = _mira()
+        out, _ = mira.respond(line)
+        assert out == NPCOutcome.IMPOUND, f"{line!r} did not impound: {out}"
+
+
+def test_mira_ordinary_talk_is_not_an_intel_trade():
+    """INTEL used to substring-match 'gate' inside *navigate*/*investigate*,
+    'patrol' inside *patrols*, and generic words like 'channel'/'saw a' —
+    1-turn RELEASE + hull patch + 2,500 credits."""
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for line in (
+        "any patrols today",
+        "see you at the next gate",
+        "this channel is noisy",
+        "how do I navigate this",
+        "I need to investigate this leak",
+        "I saw a leak on my hull",
+    ):
+        mira = _mira()
+        out, _ = mira.respond(line)
+        assert out == NPCOutcome.CONTINUE, f"{line!r} released: {out}"
+        assert mira._current_path != "INTEL TRADE"
+
+
+def test_mira_actual_intel_still_releases():
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for line in ("patrol", "barge route", "gate timing", "blind spot", "intel"):
+        mira = _mira()
+        out, _ = mira.respond(line)
+        assert out == NPCOutcome.RELEASE, f"{line!r} did not release: {out}"
+        assert mira._current_path == "INTEL TRADE"
+
+
+def test_mira_give_you_some_time_is_not_a_cargo_trade():
+    """CARGO used to substring-match 'give you some' and 'contents' on
+    stall lines, 1-turn RELEASING a free patch."""
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for line in (
+        "give you some time",
+        "give you some space",
+        "I don't know the contents of that offer",
+    ):
+        mira = _mira()
+        out, _ = mira.respond(line)
+        assert out == NPCOutcome.CONTINUE, f"{line!r} released: {out}"
+        assert mira._current_path != "CARGO TRADE"
+
+
+def test_mira_actual_cargo_offer_still_releases():
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for line in ("manifest", "share the haul", "slice of cargo", "take a cut"):
+        mira = _mira()
+        out, _ = mira.respond(line)
+        assert out == NPCOutcome.RELEASE, f"{line!r} did not release: {out}"
+        assert mira._current_path == "CARGO TRADE"
+
+
 def test_pirate_extended_threat_keywords_land():
     """Playtest fix: more menacing phrasing should still register as a
     threat path, not bounce to filler."""
