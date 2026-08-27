@@ -162,7 +162,7 @@ _SCAN_VOCAB: dict[str, dict[str, str]] = {
         "weld bead": "TECH★", "graphene mesh": "TECH★", "vac-seal": "TECH★",
         "ceramic plate": "TECH", "hull plate": "TECH", "argon": "TECH",
         "polyseal": "TECH★", "stress fracture": "TECH",
-        "shut up": "HOSTILE!", "fuck": "HOSTILE!", "useless": "HOSTILE!",
+        "shut up": "HOSTILE!", "fuck you": "HOSTILE!", "you're useless": "HOSTILE!",
     },
 }
 
