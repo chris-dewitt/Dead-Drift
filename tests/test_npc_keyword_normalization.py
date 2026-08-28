@@ -190,6 +190,46 @@ def test_dispatcher_whole_word_rest_still_releases():
     assert dispatcher._current_path == "COFFEE BREAK"
 
 
+def test_nova_ordinary_talk_is_not_a_fraud_confession():
+    """Nova Soma's CONFESS list used to 1-turn IMPOUND ordinary courier talk:
+    'i am running' inside 'I am running late', 'i committed' inside
+    'I committed to this delivery', bare 'fraud' inside 'this isn't fraud'."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for line in (
+        "I am running late",
+        "I am running out of fuel",
+        "I am running a courier route",
+        "I committed to this delivery",
+        "this isn't fraud",
+        "I am not a smuggler",
+        "I lied to myself about this debt",
+    ):
+        nova = make_npc("nova_soma_collections")
+        out, _ = nova.respond(line)
+        assert out != NPCOutcome.IMPOUND, f"{line!r} falsely confessed"
+
+
+def test_nova_actual_fraud_confession_still_impounds():
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for line in (
+        "I stole the cargo",
+        "I committed fraud",
+        "this is fraud",
+        "I am a smuggler",
+        "I have no license",
+        "the manifest is fake",
+        "I'm on the run",
+        "I lied to you about the debt",
+    ):
+        nova = make_npc("nova_soma_collections")
+        out, _ = nova.respond(line)
+        assert out == NPCOutcome.IMPOUND, f"{line!r} should still confess"
+
+
 def test_pirate_extended_threat_keywords_land():
     """Playtest fix: more menacing phrasing should still register as a
     threat path, not bounce to filler."""
