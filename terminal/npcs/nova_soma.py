@@ -18,6 +18,7 @@ Fail paths:
 from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import affirmed_hit, hit
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
 
@@ -53,11 +54,18 @@ _HOSTILE_KEYWORDS = [
     "screw you", "robot bitch", "shut down", "garbage",
     "useless bot", "kill yourself", "human now", "real person",
 ]
-_CONFESS_KEYWORDS = [
-    "i stole", "i committed", "fraud", "i lied to", "the manifest is fake",
-    "i am running", "i am illegal", "smuggler", "no license",
-    "outstanding warrant", "off-books",
+# Phrase matches stay substring. Short tokens used to fire on ordinary
+# courier talk: "I am running late" matched "i am running", "I committed
+# to this delivery" matched "i committed", "this isn't fraud" matched
+# "fraud", "I am not a smuggler" matched "smuggler". Scan chips light
+# CONFESS! on fraud / smuggler / no license — those must still land.
+_CONFESS_PHRASES = [
+    "i stole", "i committed fraud", "i committed a crime", "i committed theft",
+    "the manifest is fake", "i am illegal", "i'm illegal", "im illegal",
+    "outstanding warrant", "off-books", "on the run", "running from the law",
+    "i lied about", "i lied to you", "no license",
 ]
+_CONFESS_WORDS = ("smuggler", "fraud")
 
 
 class NovaSomaCollections(BaseNPC):
@@ -102,7 +110,7 @@ class NovaSomaCollections(BaseNPC):
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         raw = parsed.raw.lower()
 
-        if any(w in raw for w in _CONFESS_KEYWORDS):
+        if hit(raw, _CONFESS_PHRASES) or affirmed_hit(raw, _CONFESS_WORDS):
             self._patience = 0
             return NPCOutcome.IMPOUND, random.choice([
                 "*tone shifts cold*  I'm sorry, customer, "
