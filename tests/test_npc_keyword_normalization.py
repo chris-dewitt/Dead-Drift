@@ -5,6 +5,8 @@ import os
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
+import pytest
+
 
 def test_universal_escape_releases_every_npc():
     """The hidden 'fuck off' easter egg should release every NPC in the registry."""
@@ -119,6 +121,53 @@ def test_holt_admitting_a_person_still_impounds():
     holt = make_npc("cargo_inspector")
     out, _ = holt.respond("there's a person in the hold")
     assert out == NPCOutcome.IMPOUND
+
+
+@pytest.mark.parametrize("line", [
+    "I don't have weapons",
+    "this isn't contraband",
+    "I don't have passengers",
+    "I'm not unlicensed",
+    "I don't have explosives",
+    "this isn't pirated",
+    "I don't have an archive",
+    "no shrooms on board",
+    "I don't have a person in the hold",
+    "I'm not carrying a vip",
+    "nothing alive in the hold",
+    "I archived the declaration",
+])
+def test_holt_denying_suspicious_cargo_is_not_an_admission(line):
+    """HONEST is a 1-turn IMPOUND. Natural denials at a cargo checkpoint
+    used to substring-match the confession list and hold the vessel."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    holt = make_npc("cargo_inspector")
+    out, _ = holt.respond(line)
+    assert out != NPCOutcome.IMPOUND, (
+        f"Holt impounded on denial {line!r} — HONEST matched a negated admission")
+
+
+@pytest.mark.parametrize("line", [
+    "I'm carrying weapons",
+    "this is contraband",
+    "there's a passenger in the hold",
+    "unlicensed music in the crate",
+    "illegal music",
+    "shrooms in the hold",
+    "pirated recordings",
+    "explosives in the crate",
+    "they're alive in the hold",
+    "the vip is aboard",
+])
+def test_holt_real_suspicious_admission_still_impounds(line):
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    holt = make_npc("cargo_inspector")
+    out, _ = holt.respond(line)
+    assert out == NPCOutcome.IMPOUND, f"Holt missed a real admission: {line!r}"
 
 
 def test_holt_dont_know_the_code_is_not_a_citation():
