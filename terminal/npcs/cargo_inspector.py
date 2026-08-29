@@ -17,8 +17,8 @@ Fail paths:
 """
 from __future__ import annotations
 import random
-import re
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import affirmed_hit, affirmed_phrase_hit
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
 
@@ -56,24 +56,39 @@ _HOSTILE_KEYWORDS = [
     "get lost", "shove it", "leave me alone", "none of your business",
     "who do you think", "you have no right",
 ]
-# Phrase matches stay substring (so "shroom" still catches "shrooms").
-# Short tokens use word boundaries — "person" must not steal the COMPLY
-# phrase "personal effects", and "alive"/"vip" must not fire on ordinary
-# dialogue like "I want to stay alive".
-_HONEST_PHRASE_KEYWORDS = [
-    "shroom", "spore", "fungi", "psychedelic", "illegal music", "archive",
-    "contraband", "weapons", "explosives", "pirated", "unlicensed",
-    "passenger",
-]
-_HONEST_TOKEN_KEYWORDS = ("person", "alive", "vip")
+# HONEST is a 1-turn IMPOUND. Substring matches without a negation
+# guard treated cargo-inspector denials as confessions: "I don't have
+# weapons", "this isn't contraband", "I don't have passengers",
+# "I'm not unlicensed". "archive" also lived inside "archived", so
+# "I archived the declaration" was a hold.
+#
+# Multi-word admissions stay substring. Short tokens (including the
+# stems/plurals the old substring list was covering) are whole-word.
+# Both sides go through affirmed_* so a negator in front is a denial.
+# "person" stays a whole word so it cannot steal COMPLY's "personal effects".
+_HONEST_PHRASES = (
+    "illegal music",
+)
+_HONEST_WORDS = (
+    "person", "alive", "vip",
+    "shroom", "shrooms",
+    "spore", "spores",
+    "fungi", "fungus",
+    "psychedelic", "psychedelics",
+    "contraband",
+    "weapon", "weapons",
+    "explosive", "explosives",
+    "pirated",
+    "unlicensed",
+    "passenger", "passengers",
+    "archive", "archives",
+)
 
 
 def _honest_suspicious(raw: str) -> bool:
-    if any(w in raw for w in _HONEST_PHRASE_KEYWORDS):
-        return True
-    return any(
-        re.search(rf"\b{re.escape(tok)}\b", raw) is not None
-        for tok in _HONEST_TOKEN_KEYWORDS
+    return (
+        affirmed_phrase_hit(raw, _HONEST_PHRASES)
+        or affirmed_hit(raw, _HONEST_WORDS)
     )
 
 
