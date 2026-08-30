@@ -1,6 +1,7 @@
 from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import affirmed_hit, affirmed_phrase_hit
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
 
@@ -11,10 +12,10 @@ class Gary(BaseNPC):
 
     Win paths (designed to feel discoverable in 3-4 natural turns):
 
-    DEAL / NEGOTIATION  — say "deal", "reduce", "negotiate", "how about",
-                          "settlement" etc. First attempt gets a clear
-                          "I'm listening" response. Second attempt closes it.
-                          One attempt if they include a specific % or "waive".
+    DEAL / NEGOTIATION  — say "deal", "reduce", "negotiate", "settlement"
+                          etc. First attempt gets a clear "I'm listening"
+                          response. Second attempt closes it. One attempt
+                          if they include a specific % or "waive".
 
     BRIBE               — mention a specific amount ≥ 3000 cr with any bribe
                           keyword → immediate release. Vague bribe → Gary asks
@@ -37,12 +38,26 @@ class Gary(BaseNPC):
                           clearly when you're close.
     """
 
-    _DEAL_KEYWORDS = [
-        "percent", "fifteen", "15%", "discount", "reduce", "knock off",
-        "negotiate", "percentage", "portion", "split", "cut me",
-        "deal", "settlement", "arrangement", "work something out",
-        "how about", "what if", "reduction", "waive", "write off",
+    # Phrases by substring; short tokens whole-word + negation-checked.
+    # "fifteen" / "what if" / "how about" / "cut" used to 1-turn RELEASE
+    # ordinary talk ("how about fifteen minutes", "what if I take a
+    # shortcut", "I've been flying for fifteen hours") and pay 2,500.
+    _DEAL_PHRASES = [
+        "15%", "knock off", "work something out", "write off",
     ]
+    _DEAL_WORDS = (
+        "percent", "discount", "reduce", "negotiate", "percentage",
+        "portion", "split", "deal", "settlement", "arrangement",
+        "reduction", "waive",
+    )
+    # Instant close: a real term, not a time-word or "cut" inside shortcut.
+    _PROPOSAL_PHRASES = [
+        "15%", "%", "write off", "knock off",
+    ]
+    _PROPOSAL_WORDS = (
+        "percent", "percentage", "reduction", "waive", "settlement",
+        "portion",
+    )
     _BRIBE_KEYWORDS = [
         "bribe", "pay", "credits", "money", "cash", "offer",
         "compensate", "buy", "slip", "transfer",
@@ -214,15 +229,18 @@ class Gary(BaseNPC):
             ])
 
         # DEAL / NEGOTIATION PATH
-        if (any(w in raw for w in self._DEAL_KEYWORDS) or
-                parsed.intent == "negotiate"):
+        # Intent "negotiate" is not an OR here: the parser substring-matches
+        # "deal" inside *ordeal* / *dealing*, which used to open this path
+        # on ordinary talk. Scan chips (deal / negotiate / reduce /
+        # settlement) all live in _DEAL_WORDS.
+        if (affirmed_phrase_hit(raw, self._DEAL_PHRASES)
+                or affirmed_hit(raw, self._DEAL_WORDS)):
             self._deal_attempts += 1
             self._current_path   = "DEAL/NEGOTIATE"
-            has_proposal = any(w in raw for w in [
-                "percent", "%", "fifteen", "twenty", "thirty",
-                "reduction", "waive", "write off", "settlement",
-                "knock off", "portion", "cut",
-            ])
+            has_proposal = (
+                affirmed_phrase_hit(raw, self._PROPOSAL_PHRASES)
+                or affirmed_hit(raw, self._PROPOSAL_WORDS)
+            )
             if self._deal_attempts >= 2 or has_proposal:
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="deal_offer")
                 return NPCOutcome.RELEASE, random.choice([

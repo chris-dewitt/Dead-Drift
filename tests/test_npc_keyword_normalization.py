@@ -201,3 +201,61 @@ def test_pirate_extended_threat_keywords_land():
     out, _ = pirate.respond("vent your hold and walk away")
     assert out in (NPCOutcome.CONTINUE, NPCOutcome.RELEASE)
     assert pirate._current_path == "INTIMIDATE"
+
+
+def test_gary_time_talk_is_not_a_fee_deal():
+    """'fifteen' / 'what if' / 'how about' / 'cut' used to 1-turn RELEASE
+    ordinary barge talk and pay the 2,500 RELEASE bounty."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for line in (
+        "what if I take a shortcut",
+        "how about fifteen minutes",
+        "cut me a break",
+        "what if I wait twenty seconds",
+        "how about thirty minutes",
+        "I've been flying for fifteen hours",
+        "I had an ordeal yesterday",
+        "I don't want a deal",
+    ):
+        gary = make_npc("gary", run_context={})
+        out, _ = gary.respond(line)
+        assert out != NPCOutcome.RELEASE, f"{line!r} 1-turn RELEASEd Gary"
+        assert gary._current_path != "DEAL/NEGOTIATE", (
+            f"{line!r} opened DEAL/NEGOTIATE: {gary._current_path!r}"
+        )
+
+
+def test_gary_real_percent_deal_still_releases():
+    """A specific % / waive / settlement is still the designed 1-turn DEAL."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for line in (
+        "fifteen percent off the fees",
+        "how about 15%",
+        "knock off fifteen percent",
+        "waive the fees",
+        "write off the debt",
+        "let's negotiate a settlement",
+    ):
+        gary = make_npc("gary", run_context={})
+        out, _ = gary.respond(line)
+        assert out == NPCOutcome.RELEASE, f"{line!r} did not RELEASE: {out}"
+        assert gary._current_path == "DEAL/NEGOTIATE"
+
+
+def test_gary_bare_deal_still_needs_a_second_turn():
+    """Scan-chip 'deal' / 'reduce' still open the path; closing it takes
+    a second attempt unless the player names a real term."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    gary = make_npc("gary", run_context={})
+    out1, _ = gary.respond("deal")
+    assert out1 == NPCOutcome.CONTINUE
+    assert gary._current_path == "DEAL/NEGOTIATE"
+    out2, _ = gary.respond("can you reduce the fees")
+    assert out2 == NPCOutcome.RELEASE
+    assert gary._current_path == "DEAL/NEGOTIATE"
