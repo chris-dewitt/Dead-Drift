@@ -201,3 +201,74 @@ def test_pirate_extended_threat_keywords_land():
     out, _ = pirate.respond("vent your hold and walk away")
     assert out in (NPCOutcome.CONTINUE, NPCOutcome.RELEASE)
     assert pirate._current_path == "INTIMIDATE"
+
+
+def test_toll_ordinary_talk_is_not_a_barge_call():
+    """HOSTILE used to substring-match first and IMPOUND on turn one.
+    'kill' lived inside 'skill', 'gun' inside 'begun', 'force' inside
+    'enforcement'/'forced', and polite lines like 'good luck' / 'I'll try it'
+    were treated as attacks — including when the player was trying to pay."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    ordinary = [
+        "that's not my skill set",
+        "I've begun the payment process",
+        "I was forced into this job",
+        "this enforcement is unfair",
+        "good luck with your shift",
+        "I'll try it",
+        "I don't want to die",
+        "please don't kill me",
+        "I won't fight you",
+        "I refuse to believe that",
+        "try it another way",
+        "bring it up with dispatch",
+        "make me understand",
+        "I have a gunshot hull leak",
+        "blast from the past",
+        "this is a threat to my livelihood",
+        "I don't have the force to pay yet",
+        "I'm a soldier of fortune",
+    ]
+    for line in ordinary:
+        toll = make_npc("toll_authority")
+        out, _ = toll.respond(line)
+        assert out != NPCOutcome.IMPOUND, (
+            f"Toll impounded on {line!r} — a false HOSTILE match")
+        assert not toll.barge_called
+        assert toll._current_path != "HOSTILE"
+
+
+def test_toll_real_threats_still_impound():
+    """Designed HOSTILE lines must still call the barge on turn one."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    threats = [
+        "I won't pay",
+        "come at me",
+        "I'll shoot",
+        "over my dead body",
+        "I'm going to destroy this gate",
+        "bring it on",
+    ]
+    for line in threats:
+        toll = make_npc("toll_authority")
+        out, _ = toll.respond(line)
+        assert out == NPCOutcome.IMPOUND, f"Toll let a real threat through: {line!r}"
+        assert toll._current_path == "HOSTILE"
+        assert toll.barge_called
+
+
+def test_toll_pay_line_is_not_stolen_by_hostile():
+    """HOSTILE is evaluated before PAY. A payment offer that happens to
+    contain an old substring ('force', 'try it') must still be able to pay."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    toll = make_npc("toll_authority")
+    out, _ = toll.respond("I will pay fifteen hundred credits")
+    assert out == NPCOutcome.RELEASE
+    assert toll._paid
+    assert not toll.barge_called

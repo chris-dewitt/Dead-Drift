@@ -14,6 +14,7 @@ Outcomes:
 from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import affirmed_hit, affirmed_phrase_hit
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
 
@@ -36,12 +37,24 @@ _UNION_GRIPE_WORDS = [
     "they never", "always late", "never show up", "bureaucrats",
     "red tape",
 ]
-_HOSTILE_WORDS = [
-    "shoot", "threat", "force", "refuse", "fight", "gun",
-    "die", "kill", "destroy", "blast", "threaten", "won't pay",
-    "not paying", "over my dead", "make me", "try it",
-    "good luck", "come at me", "bring it",
+# Unambiguous threat phrases. Substring, then negation-checked so
+# "I will not come at you" is not a barge call.
+_HOSTILE_PHRASES = [
+    "won't pay", "wont pay", "not paying", "over my dead",
+    "come at me", "bring it on", "open fire", "shoot you",
+    "kill you", "destroy you", "blast you", "make me pay",
+    "can't make me", "cant make me",
 ]
+# Whole-word threats. The old substring list called a barge on
+# "that's not my skill set" (kill), "I've begun the payment"
+# (gun), "this enforcement is unfair" (force), "good luck with
+# your shift", and "I'll try it" — HOSTILE runs first, so those
+# also stole intended PAY lines. Negation-checked: "I don't want
+# to die" / "please don't kill me" are pleas, not attacks.
+_HOSTILE_WORDS = (
+    "shoot", "fight", "kill", "die", "destroy", "threaten",
+    "gun", "guns",
+)
 _PAY_PHRASES = (
     "i'll pay", "i can pay", "here's 1500", "here is 1500",
     "pay the toll", "pay the fee", "pay fifteen hundred",
@@ -110,7 +123,8 @@ class TollAuthority(BaseNPC):
     def _decide_outcome(self, parsed: ParsedInput) -> str:
         text_l = parsed.raw.lower()
 
-        if any(w in text_l for w in _HOSTILE_WORDS):
+        if (affirmed_phrase_hit(text_l, _HOSTILE_PHRASES)
+                or affirmed_hit(text_l, _HOSTILE_WORDS)):
             self._current_path = "HOSTILE"
             self._barge_called = True
             self.disposition = -10
