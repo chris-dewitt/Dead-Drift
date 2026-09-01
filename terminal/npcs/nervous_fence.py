@@ -41,7 +41,7 @@ import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
-from terminal.npcs.keywords import hit
+from terminal.npcs.keywords import affirmed_hit, affirmed_phrase_hit, hit
 
 _DEAL_KEYWORDS = [
     "manifest", "contents", "partial contents", "cargo list",
@@ -69,13 +69,25 @@ _DISTRACT_KEYWORDS = [
     "side hustle", "when you're done", "getting out",
     "one day", "dream", "future", "retire", "vision",
 ]
-_HOSTILE_KEYWORDS = [
-    "report you", "expose you", "authorities", "turn you in", "rat you out",
+# Phrase matches stay substring so "report you" still catches "report you to
+# dispatch". Short tokens and anything a courier says while being *helpful*
+# ("I'll tell you what's in the hold", "I'm going to tell you the truth")
+# used to 1-turn IMPOUND — including the advertised DEAL line "I'll tell you
+# what". Negation-checked so "I won't report you" / "I don't snitch" don't
+# call a barge either.
+_HOSTILE_PHRASES = [
+    "report you", "expose you", "turn you in", "rat you out",
     "ratted you", "illegal operation", "arrest you", "warrant for",
-    "snitch", "grass you up", "not your friend", "scan your channel",
+    "grass you up", "not your friend", "scan your channel",
     "transponder check", "log this channel", "file complaint",
-    "trace your signal", "i'll tell", "going to tell",
+    "trace your signal",
+    "i'll tell them", "i'll tell the", "im going to tell them",
+    "i'm going to tell them", "tell the authorities", "tell dispatch",
+    "tell the union", "call the authorities", "going to report",
 ]
+_HOSTILE_WORDS = (
+    "snitch",
+)
 # New: business/legal advice keywords — Felix wants to go legit
 _LEGITIMACY_KEYWORDS = [
     "llc", "incorporate", "incorporated", "incorporation",
@@ -218,7 +230,8 @@ class NervousFence(BaseNPC):
         raw = parsed.raw.lower()
 
         # ------------ HARD HOSTILE — overt threat ----------------------
-        if any(w in raw for w in _HOSTILE_KEYWORDS):
+        if (affirmed_phrase_hit(raw, _HOSTILE_PHRASES)
+                or affirmed_hit(raw, _HOSTILE_WORDS)):
             self._spooked = True
             self._patience = 0
             return NPCOutcome.IMPOUND, random.choice([

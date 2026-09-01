@@ -99,6 +99,55 @@ def test_felix_gossip_keyword_arms_path_without_npc_name():
     assert "name" in line.lower() or "whom" in line.lower() or "rumour" in line.lower()
 
 
+def test_felix_ill_tell_you_is_not_a_barge_call():
+    """HOSTILE used to substring-match 'i'll tell' / 'going to tell', so
+    cooperative lines — including the advertised DEAL phrase 'I'll tell
+    you what' — 1-turn IMPOUNDed a Felix intercept."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for line in (
+        "I'll tell you what's in the hold",
+        "I'll tell you what I've got",
+        "I'm going to tell you the truth",
+        "I'll tell you why I'm here",
+        "the authorities keep chasing me",
+        "I don't snitch",
+        "I won't report you",
+    ):
+        felix = make_npc("nervous_fence")
+        out, _ = felix.respond(line)
+        assert out != NPCOutcome.IMPOUND, f"{line!r} called a barge"
+
+
+def test_felix_tell_you_what_still_deals():
+    """The DEAL pickup 'tell you what' must reach DEAL, not HOSTILE."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    felix = make_npc("nervous_fence")
+    out, _ = felix.respond("I'll tell you what I've got")
+    assert out == NPCOutcome.RELEASE
+    assert felix._current_path == "DEAL"
+
+
+def test_felix_real_threats_still_impound():
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for line in (
+        "I'll report you",
+        "I'll snitch",
+        "turn you in to dispatch",
+        "I'll tell the authorities",
+        "expose you to the union",
+        "I'm going to tell them about this relay",
+    ):
+        felix = make_npc("nervous_fence")
+        out, _ = felix.respond(line)
+        assert out == NPCOutcome.IMPOUND, f"{line!r} should still call a barge"
+
+
 def test_holt_personal_effects_is_compliant_not_impound():
     """Documented COMPLY phrase 'personal effects' used to substring-match
     HONEST token 'person' and IMPOUND instead of waving the player through."""
