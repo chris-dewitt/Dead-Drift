@@ -80,7 +80,9 @@ class BaseNPC(ABC):
             return NPCOutcome.RELEASE, line
 
         if self._patience <= 0:
-            return NPCOutcome.IMPOUND, self._out_of_patience_line()
+            outcome, line = self._patience_exhausted()
+            self._log.append((self.name.upper(), line))
+            return outcome, line
 
         outcome, response = self._evaluate(parsed)
         if outcome == NPCOutcome.CONTINUE:
@@ -121,6 +123,14 @@ class BaseNPC(ABC):
 
     def _out_of_patience_line(self) -> str:
         return "Alright, that's it. Harpoon's locked. You're getting towed."
+
+    def _patience_exhausted(self) -> tuple[str, str]:
+        """Outcome when the next player line arrives with no patience left.
+
+        Default is IMPOUND. Allies that promise a sign-off override this so
+        the flavour line and the terminal outcome match.
+        """
+        return NPCOutcome.IMPOUND, self._out_of_patience_line()
 
     def bribe_cost(self) -> int:
         """Credits the player owes for a successful bribe. Override in subclasses."""
