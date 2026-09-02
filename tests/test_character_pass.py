@@ -120,6 +120,37 @@ def test_marrow_greeting_needs_an_actual_greeting():
     assert warm.disposition >= 2
 
 
+def test_marrow_sign_off_releases_instead_of_impounding():
+    """Marrow's docstring and patience-out line both promise a pass-through.
+    BaseNPC still returned IMPOUND once patience hit zero, so chatting with
+    the ally for a full conversation towed the ship and skipped the payout."""
+    marrow = _npc("underground_dj")
+    filler = "the work never ends out here"
+    for _ in range(marrow.patience):
+        outcome, _ = marrow.respond(filler)
+        assert outcome == NPCOutcome.CONTINUE, (
+            f"filler {filler!r} must not hit a win/lose path, got {outcome}")
+    outcome, line = marrow.respond(filler)
+    assert outcome == NPCOutcome.RELEASE, (
+        f"Marrow patience-out must RELEASE, got {outcome}")
+    assert "pass through" in line.lower()
+    assert marrow._current_path == "SIGNED OFF"
+
+
+def test_hostile_npcs_still_impound_when_patience_runs_out():
+    """The Marrow override must not leak into NPCs that actually tow."""
+    gary = _npc("gary")
+    filler = "xyzzy plugh qwerty"
+    for _ in range(gary.patience):
+        outcome, _ = gary.respond(filler)
+        if outcome != NPCOutcome.CONTINUE:
+            # Gary has a lot of pickups; if this filler accidentally wins,
+            # the test is invalid — pick a colder line rather than pass.
+            pytest.fail(f"Gary filler {filler!r} hit {outcome} before patience-out")
+    outcome, _ = gary.respond(filler)
+    assert outcome == NPCOutcome.IMPOUND
+
+
 def test_felix_sympathy_needs_an_actual_appeal():
     felix = _npc("nervous_fence")
     felix.respond("that ship has a lot of power in the current sector")

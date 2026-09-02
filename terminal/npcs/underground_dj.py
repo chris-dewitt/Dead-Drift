@@ -273,6 +273,14 @@ class UndergroundDJ(BaseNPC):
         return ("...Right. I've gotta change the record. "
                 "Pass through, pilot. Roost will be here if you need it again.")
 
+    def _patience_exhausted(self) -> tuple[str, str]:
+        # BaseNPC otherwise hardcodes IMPOUND here, so a long chat with the
+        # ally who "never impounds" still towed the ship and skipped the
+        # 2,500-credit release payout. The sign-off line already says
+        # "Pass through"; the terminal has to mean it.
+        self._current_path = "SIGNED OFF"
+        return NPCOutcome.RELEASE, self._out_of_patience_line()
+
     def _marrow_filler(self) -> str:
         return random.choice([
             "The Roost runs twenty-four hours, no commercials, no Nova Soma. "
