@@ -3,6 +3,7 @@ import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
 from terminal.economy import EFFECT_REPAIR_25, EFFECT_STIM
+from terminal.npcs.keywords import affirmed_hit, affirmed_phrase_hit
 from core.event_bus import bus, EVT_NLP_EXPLOIT, EVT_BAX_SPEAK
 
 
@@ -33,16 +34,30 @@ class Kress(BaseNPC):
     # 22 distinct accepted pickup words across paths (was 14, under the
     # 15-keyword floor). Same five paths, broader vocabulary so the
     # player can hit them with natural phrasing.
-    _INTEL_KEYWORDS    = ["intel", "tip", "tips", "info", "information",
-                           "what's ahead", "next sector", "patrol", "scan",
-                           # B.3 additions:
-                           "chatter", "broadcast", "tell me", "what do you know",
-                           "give me something", "rumor", "rumour", "heads up"]
-    _CONTRABAND_WORDS  = ["contraband", "stims", "fuel", "jammer", "smoke",
-                           "shield", "patch", "hack", "warez", "stuff",
-                           # B.3 additions:
-                           "wares", "merchandise", "goods", "off-books",
-                           "off the books", "supplies"]
+    #
+    # Short tokens used to substring-match ordinary talk and 1-turn sell
+    # a priced package: `patch` inside *dispatch*, `stuff` in any "I have
+    # stuff going on", `smoke` in "I don't smoke", `tell me` in small talk.
+    # Phrases stay substring; tokens are whole-word + negation so the
+    # scan chips (`intel`/`tip`/`patrol`/`scan`, `contraband`/`fuel`/
+    # `jammer`/`stims`) still land.
+    _INTEL_PHRASES = [
+        "what's ahead", "next sector", "what do you know",
+        "give me something", "heads up",
+    ]
+    _INTEL_WORDS = (
+        "intel", "tip", "tips", "info", "information",
+        "patrol", "scan", "chatter", "broadcast",
+        "rumor", "rumour",
+    )
+    _CONTRABAND_PHRASES = [
+        "off-books", "off the books", "hull patch",
+    ]
+    _CONTRABAND_WORDS = (
+        "contraband", "stims", "fuel", "jammer", "smoke",
+        "shield", "patch", "hack", "warez", "wares",
+        "merchandise", "goods", "supplies",
+    )
     _GREASE_KEYWORDS   = ["volkov", "old debt", "owe", "owed", "vienna",
                            # B.3 additions:
                            "favor", "favour", "favor for a favor",
@@ -247,14 +262,16 @@ class Kress(BaseNPC):
                 ])
 
         # INTEL REQUEST — J.1: priced tips charge both ledgers ("the tab").
-        if any(w in raw for w in self._INTEL_KEYWORDS):
+        if (affirmed_phrase_hit(raw, self._INTEL_PHRASES)
+                or affirmed_hit(raw, self._INTEL_WORDS)):
             self._intel_count += 1
             sector = self._ctx.get("sector_index", 0)
             line, price = random.choice(self._intel_menu(sector))
             return self._sell(line, price, effect=None, path="INTEL")
 
         # CONTRABAND REQUEST — J.1: hull patch mends +25, stims bank a charge.
-        if any(w in raw for w in self._CONTRABAND_WORDS):
+        if (affirmed_phrase_hit(raw, self._CONTRABAND_PHRASES)
+                or affirmed_hit(raw, self._CONTRABAND_WORDS)):
             self._contraband_count += 1
             line, price, effect = random.choice(self._CONTRABAND_MENU)
             return self._sell(line, price, effect=effect, path="CONTRABAND")

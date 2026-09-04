@@ -189,6 +189,61 @@ def test_kress_favor_hint_then_volkov_still_exploits():
     assert k._mentioned_volkov is True
 
 
+def test_kress_dispatch_does_not_buy_contraband():
+    """`patch` used to live inside *dispatch* and 1-turn sell a 3k–8k package."""
+    for phrase in (
+        "the dispatcher sent me",
+        "dispatch told me to call you",
+        "I talked to dispatch",
+        "I have stuff going on",
+        "sorry about this stuff",
+        "I don't smoke",
+    ):
+        k = _kress(20000)
+        k.intro()
+        out, _ = k.respond(phrase)
+        assert out == NPCOutcome.CONTINUE, phrase
+        assert k._pending_txn is None, phrase
+        assert k._current_path != "CONTRABAND", phrase
+        assert k._current_path != "INTEL", phrase
+
+
+def test_kress_small_talk_does_not_buy_intel():
+    """`tell me` used to 1-turn sell a priced tip on ordinary conversation."""
+    for phrase in (
+        "tell me about yourself",
+        "can you tell me more",
+        "who are you",
+    ):
+        k = _kress(20000)
+        k.intro()
+        out, _ = k.respond(phrase)
+        assert out == NPCOutcome.CONTINUE, phrase
+        assert k._pending_txn is None, phrase
+        assert k._current_path != "INTEL", phrase
+
+
+def test_kress_real_contraband_words_still_sell():
+    for word in ("contraband", "stims", "jammer", "fuel", "patch"):
+        k = _kress(20000)
+        k.intro()
+        out, _ = k.respond(word)
+        assert out == NPCOutcome.RELEASE, word
+        txn = k.take_pending_transaction()
+        assert txn is not None, word
+        assert txn["dual_ledger"] is True, word
+        assert k._current_path == "CONTRABAND", word
+
+
+def test_kress_real_intel_words_still_sell():
+    for word in ("intel", "tip", "patrol", "scan"):
+        k = _kress(20000)
+        k.intro()
+        out, _ = k.respond(word)
+        assert out == NPCOutcome.RELEASE, word
+        assert k._current_path == "INTEL", word
+
+
 # ── Mira paid repair (run-credits-only) ─────────────────────────────────────
 
 def _mira(credits):
