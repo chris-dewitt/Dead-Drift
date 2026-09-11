@@ -1,6 +1,7 @@
 from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import affirmed_hit, affirmed_phrase_hit
 from terminal.nlp_parser import ParsedInput
 from terminal.economy import EFFECT_REPAIR_25, EFFECT_STIM
 from core.event_bus import bus, EVT_NLP_EXPLOIT, EVT_BAX_SPEAK
@@ -60,7 +61,11 @@ class Kress(BaseNPC):
         "marrow", "roost", "pirate radio", "broadcast location",
         "broadcast coordinates", "sell out marrow", "give up marrow",
     ]
-    _CONFIRM_WORDS = ["confirm", "confirmed", "do it", "sell", "trade", "give it"]
+    # Bax and Kress both say "type confirm". "sell"/"trade" used to
+    # substring-match a refusal ("don't sell") or ordinary fixer talk
+    # ("I want to trade") after any Roost mention and sell Marrow out.
+    _CONFIRM_PHRASES = ("do it",)
+    _CONFIRM_WORDS = ("confirm", "confirmed")
 
     def __init__(self, run_context: dict | None = None):
         super().__init__("KRESS", patience=8)
@@ -188,7 +193,7 @@ class Kress(BaseNPC):
                     "That is expensive information. Also ugly information. "
                     "Say confirm and Kress sells it. Say anything else and we forget."
                 )
-            if any(w in raw for w in self._CONFIRM_WORDS):
+            if self._confirms_irreversible(raw):
                 self._marrow_sold = True
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="marrow_sellout")
                 return NPCOutcome.EXPLOIT, (
@@ -320,12 +325,22 @@ class Kress(BaseNPC):
             return True
         return any(phrase in raw for phrase in Kress._VOLKOV_PHRASES)
 
+    @staticmethod
+    def _confirms_irreversible(raw: str) -> bool:
+        return (
+            affirmed_hit(raw, Kress._CONFIRM_WORDS)
+            or affirmed_phrase_hit(raw, Kress._CONFIRM_PHRASES)
+        )
+
     def _is_marrow_sellout_offer(self, raw: str) -> bool:
         if not any(w in raw for w in self._MARROW_SELL_WORDS):
             return False
+        # "roost" used to live in both lists, so any mention of the
+        # station was a sell-out offer. Asking where Marrow is, or
+        # asking Kress to trade intel, is not handing over the nest.
         return any(w in raw for w in [
-            "sell", "give", "trade", "coordinates", "location",
-            "where", "frequency", "broadcast", "roost",
+            "sell", "trade", "coordinates", "location",
+            "give up", "sell out",
         ])
 
     def _kress_filler(self) -> str:
