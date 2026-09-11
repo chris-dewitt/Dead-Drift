@@ -94,6 +94,57 @@ def test_marrow_betrayal_paths_warn_then_confirm():
     assert dispatcher._current_path == "MARROW BETRAYAL"
 
 
+def test_marrow_inquiry_is_not_a_sellout_offer():
+    """Asking about Marrow/the Roost is not handing him to Local 404."""
+    dispatcher = make_npc("union_dispatcher", run_context={})
+    out, _ = dispatcher.respond("tell me about Marrow")
+    assert out == NPCOutcome.CONTINUE
+    assert dispatcher._marrow_warning is False
+
+    kress = make_npc("kress", run_context={})
+    out, _ = kress.respond("the Roost")
+    assert out == NPCOutcome.CONTINUE
+    assert kress._marrow_warning is False
+    assert kress._marrow_sold is False
+
+
+def test_marrow_refusal_does_not_confirm_betrayal():
+    """Refusing the Form 88-R / sell-out prompt must not kill Marrow.
+
+    Trigger: Dispatcher or Kress warn on a real report/sell-out line, then
+    the player says 'don't do it' / 'I won't report it' / 'don't sell'.
+    Those used to substring-match confirm tokens and file the raid.
+    """
+    dispatcher = make_npc("union_dispatcher", run_context={})
+    out, line = dispatcher.respond("I want to report Marrow's Roost broadcast location")
+    assert out == NPCOutcome.CONTINUE
+    assert "confirm" in line.lower()
+    for refusal in (
+        "don't do it",
+        "I won't report it",
+        "I cannot confirm",
+        "please don't file it",
+    ):
+        d2 = make_npc("union_dispatcher", run_context={})
+        d2.respond("I want to report Marrow's Roost broadcast location")
+        out, _ = d2.respond(refusal)
+        assert out == NPCOutcome.CONTINUE, refusal
+        assert d2._marrow_warning is False, refusal
+
+    for refusal in (
+        "don't do it",
+        "don't sell",
+        "I want to trade",
+        "I cannot confirm",
+    ):
+        k2 = make_npc("kress", run_context={})
+        k2.respond("I can sell out Marrow's Roost broadcast location")
+        out, _ = k2.respond(refusal)
+        assert out == NPCOutcome.CONTINUE, refusal
+        assert k2._marrow_sold is False, refusal
+        assert k2._marrow_warning is False, refusal
+
+
 def test_terminal_consequences_record_kress_tip_and_marrow_death():
     meta = _fresh_meta("consequence")
     rm = _run_manager(meta)

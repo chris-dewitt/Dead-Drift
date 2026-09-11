@@ -2,6 +2,7 @@ from __future__ import annotations
 import random
 import re
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import affirmed_hit, affirmed_phrase_hit
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT, EVT_BAX_SPEAK
 
@@ -63,7 +64,12 @@ class UnionDispatcher(BaseNPC):
         "marrow", "roost", "pirate radio", "broadcast location",
         "broadcast coordinates", "unlicensed relay",
     ]
-    _CONFIRM_WORDS = ["confirm", "confirmed", "do it", "submit", "file it", "report it"]
+    # The warning line says "Say confirm". Extra tokens like "do it" /
+    # "report it" are fine as genuine consent, but they must not fire on
+    # a refusal ("don't do it", "I won't report it") — that used to file
+    # Form 88-R and kill Marrow for the rest of the campaign.
+    _CONFIRM_PHRASES = ("do it", "file it", "report it")
+    _CONFIRM_WORDS = ("confirm", "confirmed")
 
     def __init__(self, vocabulary_vault=None, run_context: dict | None = None):
         super().__init__("DISPATCHER", patience=9)
@@ -134,7 +140,7 @@ class UnionDispatcher(BaseNPC):
                     "This generates Form 88-R, irreversible enforcement referral. "
                     "Say confirm if you wish me to file it."
                 )
-            if any(w in raw for w in self._CONFIRM_WORDS):
+            if self._confirms_irreversible(raw):
                 bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="marrow_betrayal")
                 return NPCOutcome.EXPLOIT, (
                     "Referral filed. Local 404 raid packet generated. "
@@ -391,12 +397,22 @@ class UnionDispatcher(BaseNPC):
             for tok in self._COFFEE_WORDS
         )
 
+    @staticmethod
+    def _confirms_irreversible(raw: str) -> bool:
+        return (
+            affirmed_hit(raw, UnionDispatcher._CONFIRM_WORDS)
+            or affirmed_phrase_hit(raw, UnionDispatcher._CONFIRM_PHRASES)
+        )
+
     def _is_marrow_betrayal(self, raw: str) -> bool:
         if not any(w in raw for w in self._MARROW_BETRAYAL_WORDS):
             return False
+        # Asking about Marrow ("tell me about the Roost", "where is he")
+        # is the designed MARROW? twitchy-filler path, not a Form 88-R
+        # filing. Only actual report/location language opens the warning.
         return any(w in raw for w in [
-            "report", "file", "give", "tell", "coordinates", "location",
-            "where", "frequency", "broadcast", "unlicensed",
+            "report", "file", "coordinates", "location",
+            "give up", "sell out", "turn in",
         ])
 
     def get_path_progress(self) -> list[tuple[str, int, int]]:
