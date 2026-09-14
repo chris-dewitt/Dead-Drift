@@ -158,6 +158,41 @@ def test_barge_intercept_skips_comm_on_mobile(tmp_path):
     assert barge.state == BargeState.AIM
 
 
+def test_toll_checkpoint_skips_terminal_on_mobile(tmp_path):
+    """Ch3 sector 2 is always TOLL AUTHORITY; t=10s must not open a comm
+    the Android slice has no keyboard for."""
+    set_mobile(True)
+    from roguelite.meta_progression import MetaProgression
+    from roguelite.run_manager import RunManager
+    meta = MetaProgression(save_path=tmp_path / "meta.json")
+    rm = RunManager(meta)
+    rm._t = 100.0
+    rm._last_voice_char_t = 0.0
+    rm._open_toll_terminal()
+    assert rm.active_terminal is None
+    assert rm._pending_terminal is None
+
+
+def test_chapter_3_sector_2_is_always_toll_authority():
+    """The Android toll leak is not a rare roll — Ch3 sector 2 is TOLL."""
+    import random
+    from roguelite.procedural import THEME_TOLL_AUTHORITY, _pick_theme
+    assert _pick_theme(2, 3, random.Random(0)) == THEME_TOLL_AUTHORITY
+
+
+def test_toll_checkpoint_still_opens_on_desktop(tmp_path):
+    set_mobile(False)
+    from roguelite.meta_progression import MetaProgression
+    from roguelite.run_manager import RunManager
+    meta = MetaProgression(save_path=tmp_path / "meta.json")
+    rm = RunManager(meta)
+    rm._t = 100.0
+    rm._last_voice_char_t = 0.0
+    rm._open_toll_terminal()
+    assert rm.active_terminal is not None
+    assert rm.active_terminal.npc.name == "TOLL AUTHORITY"
+
+
 def test_shop_skipped_on_mobile(tmp_path, monkeypatch):
     set_mobile(True)
     from roguelite.meta_progression import MetaProgression
