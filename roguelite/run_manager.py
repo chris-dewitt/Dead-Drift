@@ -1922,6 +1922,10 @@ class RunManager:
                 rock_b.vel.y += away.y * impulse
 
     def _open_toll_terminal(self):
+        from mobile.mode import skip_terminals
+        if skip_terminals():
+            # Mobile slice has no terminals — fly the checkpoint.
+            return
         from terminal.npc_logic import make_npc
         from terminal.terminal import Terminal
         bus.emit(EVT_BAX_SPEAK, line=random.choice([
