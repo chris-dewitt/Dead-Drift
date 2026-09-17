@@ -120,6 +120,18 @@ def test_overlay_jump_pulses_when_ready():
     assert pygame.K_j in V.drain_pulses()
 
 
+def test_overlay_keydown_pulses_include_unicode():
+    """Game._handle_events must stamp unicode on overlay pulses.
+
+    pygame.event.Event(KEYDOWN, {key: ...}) does not grow a unicode attr;
+    corridor dialogs and terminals crash if they read it.
+    """
+    from pathlib import Path
+    src = Path("core/game.py").read_text(encoding="utf-8")
+    assert '"unicode": ""' in src
+    assert "drain_pulses()" in src
+
+
 def test_open_terminal_noops_on_mobile(tmp_path):
     set_mobile(True)
     from roguelite.meta_progression import MetaProgression

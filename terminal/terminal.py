@@ -791,10 +791,11 @@ class Terminal:
         elif event.key == pygame.K_BACKSPACE:
             self._trigger_key_feedback("backspace")
             self._input = self._input[:-1]
-        elif event.unicode and event.unicode.isprintable():
-            if len(self._input) < 78:
+        else:
+            ch = getattr(event, "unicode", "") or ""
+            if ch and ch.isprintable() and len(self._input) < 78:
                 self._trigger_key_feedback("normal")
-                self._input += event.unicode
+                self._input += ch
 
     def _trigger_key_feedback(self, kind: str) -> None:
         self._key_type = kind
