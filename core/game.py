@@ -422,7 +422,12 @@ class Game:
         if self._overlay is not None:
             self._overlay.sync(self)
             for key in drain_pulses():
-                self._route_keydown(pygame.event.Event(pygame.KEYDOWN, {"key": key}))
+                # Overlay pulses are synthetic — pygame does not fill
+                # `unicode` unless we set it. Corridor dialogs and the
+                # terminal read event.unicode; a missing attribute crashes
+                # the Android slice when JUMP/TALK is tapped over a clerk.
+                self._route_keydown(pygame.event.Event(
+                    pygame.KEYDOWN, {"key": key, "unicode": ""}))
 
     def _pause_game(self) -> None:
         if self.states.state in self._PAUSEABLE:

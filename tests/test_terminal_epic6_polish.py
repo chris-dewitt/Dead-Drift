@@ -123,3 +123,17 @@ def test_terminal_outcome_sfx_key_distinguishes_paradox():
     assert _terminal_outcome_sfx_key("exploit", "SQL INJECT") == "term_outcome_exploit"
     assert _terminal_outcome_sfx_key("exploit", "PARADOX CRASH") == "term_outcome_paradox"
     assert _terminal_outcome_sfx_key("impound") == "term_outcome_impound"
+
+
+def test_terminal_handle_key_tolerates_missing_unicode():
+    """Overlay pulses omit unicode; CONFIRM/BACK must not AttributeError."""
+    import pygame
+    from terminal.terminal import Terminal
+
+    pygame.init()
+    terminal = Terminal(_ScriptedNPC().instance)
+    for key in (pygame.K_a, pygame.K_SPACE, pygame.K_RETURN, pygame.K_ESCAPE):
+        ev = pygame.event.Event(pygame.KEYDOWN, {"key": key})
+        assert not hasattr(ev, "unicode")
+        terminal.handle_key(ev)
+    assert terminal.outcome == "abort"

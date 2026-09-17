@@ -121,9 +121,10 @@ class _CorridorDialog:
             self._submit()
         elif event.key == pygame.K_BACKSPACE:
             self._input = self._input[:-1]
-        elif event.unicode and event.unicode.isprintable():
-            if len(self._input) < 40:
-                self._input += event.unicode
+        else:
+            ch = getattr(event, "unicode", "") or ""
+            if ch and ch.isprintable() and len(self._input) < 40:
+                self._input += ch
 
     def _abort(self):
         """Player pressed ESC — bail with the dialog's `penalty` response

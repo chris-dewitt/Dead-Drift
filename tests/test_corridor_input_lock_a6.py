@@ -161,3 +161,32 @@ def test_dialog_render_source_includes_esc_hint_string():
     src = Path("delivery/corridor/base.py").read_text(encoding="utf-8")
     assert "ESC skip" in src
     assert "ENTER submit" in src
+
+
+def test_dialog_overlay_pulses_without_unicode_do_not_crash():
+    """Android overlay injects KEYDOWN with only `key` set.
+
+    Walking into the Ch.3 clerk opens a typing dialog. JUMP/TALK/DOWN then
+    pulse SPACE/E/DOWN. pygame.event.Event without `unicode` used to
+    AttributeError in handle_key and kill the process.
+    """
+    pygame.init()
+    pygame.font.init()
+    from delivery.corridor.base import _CorridorDialog
+    from delivery.corridor.elements import NPCEncounter
+
+    enc = NPCEncounter(
+        x=300, npc_name="CLERK", prompt="Form 27-B please.",
+        responses=[
+            {"keywords": [], "credits": 0, "outcome": "penalty",
+             "lore": "Filed under K-9."},
+        ],
+    )
+    dlg = _CorridorDialog(enc)
+    for key in (pygame.K_SPACE, pygame.K_e, pygame.K_DOWN, pygame.K_ESCAPE):
+        ev = pygame.event.Event(pygame.KEYDOWN, {"key": key})
+        assert not hasattr(ev, "unicode")
+        dlg.handle_key(ev)
+    assert dlg._result is not None
+    _credits, _lore, outcome = dlg._result
+    assert outcome == "penalty"
