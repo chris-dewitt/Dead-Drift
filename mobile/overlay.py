@@ -237,9 +237,9 @@ class TouchOverlay:
                     return True
             return False
         if game._menu_mode in ("confirm_overwrite", "confirm_delete_run"):
-            if ly > py + 40:
-                V.pulse(pygame.K_RETURN if lx < S.SCREEN_W / 2 else pygame.K_ESCAPE)
-                return True
+            # BACK (left) / CONFIRM (right) already pulse ESCAPE / RETURN, which
+            # is the correct mapping. A full-width left=ENTER / right=ESC split
+            # inverted those buttons: tapping BACK confirmed the wipe.
             return False
         if game._menu_mode != "main":
             return False
