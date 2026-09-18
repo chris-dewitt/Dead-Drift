@@ -120,6 +120,58 @@ def test_overlay_jump_pulses_when_ready():
     assert pygame.K_j in V.drain_pulses()
 
 
+def _menu_overlay_game(menu_mode: str):
+    from types import SimpleNamespace
+    from core.state_manager import GameState
+
+    class _States:
+        state = GameState.MAIN_MENU
+
+    return SimpleNamespace(
+        _effective_state=lambda: GameState.MAIN_MENU,
+        states=_States(),
+        _menu_mode=menu_mode,
+        run_mgr=SimpleNamespace(jump_ready=False),
+        ship=SimpleNamespace(cargo=None),
+        _delivery=None,
+        _main_menu_rows=lambda: [],
+    )
+
+
+@pytest.mark.parametrize("menu_mode", ("confirm_delete_run", "confirm_overwrite"))
+def test_overlay_confirm_dialog_buttons_match_labels(menu_mode):
+    """BACK must cancel; CONFIRM must confirm. The old full-width split
+    inverted those dashboard buttons and could wipe a save on BACK."""
+    from mobile.overlay import TouchOverlay
+
+    game = _menu_overlay_game(menu_mode)
+    ov = TouchOverlay()
+    ov.sync(game)
+    back = next(b for b in ov.buttons if b.action == "back")
+    confirm = next(b for b in ov.buttons if b.action == "confirm")
+
+    V.reset()
+    assert ov._down(1, back.rect.centerx, back.rect.centery, game) is True
+    assert V.drain_pulses() == [pygame.K_ESCAPE]
+
+    V.reset()
+    assert ov._down(2, confirm.rect.centerx, confirm.rect.centery, game) is True
+    assert V.drain_pulses() == [pygame.K_RETURN]
+
+
+@pytest.mark.parametrize("menu_mode", ("confirm_delete_run", "confirm_overwrite"))
+def test_overlay_confirm_dialog_empty_left_space_does_not_confirm(menu_mode):
+    from mobile.overlay import TouchOverlay
+
+    game = _menu_overlay_game(menu_mode)
+    ov = TouchOverlay()
+    ov.sync(game)
+    # Left-of-center, below the prompt — used to pulse ENTER (wipe).
+    V.reset()
+    ov._down(3, 200, int(S.SCREEN_H * 0.75), game)
+    assert pygame.K_RETURN not in V.drain_pulses()
+
+
 def test_open_terminal_noops_on_mobile(tmp_path):
     set_mobile(True)
     from roguelite.meta_progression import MetaProgression
