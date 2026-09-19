@@ -45,6 +45,8 @@ _CMPOPS = {
     ast.Eq: operator.eq, ast.NotEq: operator.ne, ast.Lt: operator.lt,
     ast.LtE: operator.le, ast.Gt: operator.gt, ast.GtE: operator.ge,
 }
+_MAX_RENDER_WEIGHT = 4096
+_MAX_REPEAT = 256
 
 
 class _Unsafe(Exception):
@@ -98,7 +100,9 @@ class ReplSession:
             except ZeroDivisionError:
                 return ReplResult(output=["Traceback (most recent call last):",
                                           "ZeroDivisionError: division by zero"])
-            except (OverflowError, ValueError):
+            except TypeError as e:
+                return ReplResult(output=[f"TypeError: {e}"])
+            except (MemoryError, OverflowError, ValueError):
                 return ReplResult(output=["OverflowError: result too large for the sandbox"])
             return ReplResult(output=[repr(value)])
 
@@ -139,9 +143,13 @@ class ReplSession:
         if isinstance(node, ast.BinOp) and type(node.op) in _BINOPS:
             left, right = self._safe_eval(node.left), self._safe_eval(node.right)
             self._guard(node.op, left, right)
-            return _BINOPS[type(node.op)](left, right)
+            value = _BINOPS[type(node.op)](left, right)
+            self._guard_value(value)
+            return value
         if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARYOPS:
-            return _UNARYOPS[type(node.op)](self._safe_eval(node.operand))
+            value = _UNARYOPS[type(node.op)](self._safe_eval(node.operand))
+            self._guard_value(value)
+            return value
         if isinstance(node, ast.BoolOp):
             vals = [self._safe_eval(v) for v in node.values]
             result = vals[0]
@@ -158,11 +166,12 @@ class ReplSession:
             return True
         if isinstance(node, (ast.List, ast.Tuple)):
             vals = [self._safe_eval(e) for e in node.elts]
-            return vals if isinstance(node, ast.List) else tuple(vals)
+            value = vals if isinstance(node, ast.List) else tuple(vals)
+            self._guard_value(value)
+            return value
         raise _Unsafe
 
-    @staticmethod
-    def _guard(op, left, right) -> None:
+    def _guard(self, op, left, right) -> None:
         """Refuse cheap DoS: giant exponents / huge shifts."""
         if isinstance(op, ast.Pow):
             try:
@@ -170,3 +179,27 @@ class ReplSession:
                     raise OverflowError
             except TypeError:
                 raise _Unsafe
+        if isinstance(op, ast.Mult):
+            self._guard_repeat(left, right)
+            self._guard_repeat(right, left)
+
+    @staticmethod
+    def _guard_repeat(seq, repeat) -> None:
+        if not isinstance(seq, (str, list, tuple)) or not isinstance(repeat, int):
+            return
+        repeat = max(0, repeat)
+        if repeat > _MAX_REPEAT or _render_weight(seq) * repeat > _MAX_RENDER_WEIGHT:
+            raise OverflowError
+
+    @staticmethod
+    def _guard_value(value) -> None:
+        if _render_weight(value) > _MAX_RENDER_WEIGHT:
+            raise OverflowError
+
+
+def _render_weight(value) -> int:
+    if isinstance(value, str):
+        return len(value)
+    if isinstance(value, (list, tuple)):
+        return 2 + sum(_render_weight(v) for v in value)
+    return len(repr(value))

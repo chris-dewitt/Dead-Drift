@@ -94,6 +94,24 @@ def test_marrow_betrayal_paths_warn_then_confirm():
     assert dispatcher._current_path == "MARROW BETRAYAL"
 
 
+def test_marrow_betrayal_cancel_phrases_do_not_confirm():
+    kress = make_npc("kress", run_context={})
+    out, _ = kress.respond("I can sell out Marrow's Roost broadcast location")
+    assert out == NPCOutcome.CONTINUE
+    out, line = kress.respond("don't sell it")
+    assert out == NPCOutcome.CONTINUE
+    assert "confirm" in line.lower()
+    assert kress._marrow_sold is False
+
+    dispatcher = make_npc("union_dispatcher", run_context={})
+    out, _ = dispatcher.respond("I want to report Marrow's Roost broadcast location")
+    assert out == NPCOutcome.CONTINUE
+    out, line = dispatcher.respond("don't report it")
+    assert out == NPCOutcome.CONTINUE
+    assert "confirm" in line.lower()
+    assert dispatcher._marrow_warning is False
+
+
 def test_terminal_consequences_record_kress_tip_and_marrow_death():
     meta = _fresh_meta("consequence")
     rm = _run_manager(meta)

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 from abc import ABC, abstractmethod
 from terminal.nlp_parser import NLPParser, ParsedInput
 
@@ -8,6 +9,10 @@ class NPCOutcome:
     RELEASE   = "release"     # player wins, ship released
     IMPOUND   = "impound"     # player loses, ship towed
     EXPLOIT   = "exploit"     # player found a logic flaw
+
+
+_CONFIRM_CANCEL_RE = re.compile(
+    r"\b(?:no|not|never|cancel|abort|stop|forget|dont|don't|do\s+not)\b")
 
 
 class BaseNPC(ABC):
@@ -125,6 +130,25 @@ class BaseNPC(ABC):
     def bribe_cost(self) -> int:
         """Credits the player owes for a successful bribe. Override in subclasses."""
         return 0
+
+    def _explicit_confirmation(self, raw: str,
+                               extra_phrases: tuple[str, ...] = ()) -> bool:
+        """True only for a direct irreversible-action confirmation.
+
+        These prompts say "type confirm"; substring matching is dangerous here
+        because phrases like "don't confirm" or "don't sell it" must cancel.
+        """
+        normalized = " ".join(
+            re.sub(r"[^a-z0-9']+", " ", (raw or "").lower()).split()
+        )
+        if not normalized or _CONFIRM_CANCEL_RE.search(normalized):
+            return False
+        phrases = {
+            "confirm", "confirmed", "i confirm", "yes confirm",
+            "yes confirmed", "do it",
+        }
+        phrases.update(extra_phrases)
+        return normalized in phrases
 
     # ------------------------------------------------------------------
     # J.1 — priced transactions (the terminal stops lying about money)
