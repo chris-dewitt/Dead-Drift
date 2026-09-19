@@ -1,7 +1,18 @@
 from __future__ import annotations
 import json
 import os
+from pathlib import Path
 from config import settings as S
+
+
+def _atomic_json_dump(path: Path, payload) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
 
 
 class VocabularyVault:
@@ -24,14 +35,25 @@ class VocabularyVault:
 
     # ------------------------------------------------------------------
     def load(self):
-        if os.path.exists(S.BAX_VOCAB_FILE):
-            with open(S.BAX_VOCAB_FILE, "r") as f:
-                self._data = json.load(f)
+        if not os.path.exists(S.BAX_VOCAB_FILE):
+            return
+        try:
+            with open(S.BAX_VOCAB_FILE, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+        except (json.JSONDecodeError, OSError, TypeError):
+            # Same truncate-on-write hole as campaign slots: a killed save
+            # must not prevent Game() from constructing Bax.
+            return
+        if isinstance(loaded, dict):
+            terms = loaded.get("terms", [])
+            backdoors = loaded.get("backdoors", {})
+            self._data = {
+                "terms": terms if isinstance(terms, list) else [],
+                "backdoors": backdoors if isinstance(backdoors, dict) else {},
+            }
 
     def save(self):
-        os.makedirs(os.path.dirname(S.BAX_VOCAB_FILE), exist_ok=True)
-        with open(S.BAX_VOCAB_FILE, "w") as f:
-            json.dump(self._data, f, indent=2)
+        _atomic_json_dump(Path(S.BAX_VOCAB_FILE), self._data)
 
     # ------------------------------------------------------------------
     def add_term(self, word: str):
