@@ -1,10 +1,27 @@
 from __future__ import annotations
 import copy
 import json
+import os
 from pathlib import Path
 
 from config import settings as S
 from core.event_bus import bus, EVT_DEBT_UPDATE
+
+
+def _atomic_json_dump(path: Path, payload) -> None:
+    """Write JSON without truncating the live file first.
+
+    `open(..., "w")` empties the destination before dump finishes. An
+    Android process kill (or a crash) in that window leaves an empty
+    slot, and the next boot used to raise JSONDecodeError in Game().
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
 
 
 class MetaProgression:
@@ -60,16 +77,20 @@ class MetaProgression:
         # reputation, bax_hums_heard) aren't shared by reference across instances.
         defaults = copy.deepcopy(self._DEFAULTS)
         if path.is_file():
-            with open(path, encoding="utf-8") as f:
-                self._data = {**defaults, **json.load(f)}
-        else:
-            self._data = defaults
+            try:
+                with open(path, encoding="utf-8") as f:
+                    loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    self._data = {**defaults, **loaded}
+                    return
+            except (json.JSONDecodeError, OSError, TypeError):
+                # Truncated / half-written slot — SaveManager.list_slots already
+                # treats this as empty; Game() must not crash on the same file.
+                pass
+        self._data = defaults
 
     def save(self):
-        path = self._save_path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(self._data, f, indent=2)
+        _atomic_json_dump(self._save_path, self._data)
         if self._after_save:
             self._after_save()
 

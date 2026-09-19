@@ -70,3 +70,56 @@ def test_migrate_legacy_run_history(save_env, monkeypatch):
         data = json.load(f)
     assert data["debt"] == 999
     assert data["chapters_completed"] == [1]
+
+
+def test_truncated_slot_does_not_crash_meta_load(save_env):
+    """Android can kill the process after `open(w)` truncates the slot.
+
+    SaveManager.list_slots already swallows JSONDecodeError; Game() then
+    constructs MetaProgression on the same path and used to raise.
+    """
+    from roguelite.meta_progression import MetaProgression
+
+    mgr = SaveManager()
+    path = mgr.create_fresh_save(1)
+    path.write_text("", encoding="utf-8")
+    meta = MetaProgression(save_path=path)
+    assert meta.debt == 350000
+    assert meta.chapters_completed == []
+    assert meta.clone_count == 1
+
+
+def test_partial_json_slot_does_not_crash_meta_load(save_env):
+    from roguelite.meta_progression import MetaProgression
+
+    mgr = SaveManager()
+    path = mgr.create_fresh_save(1)
+    path.write_text('{"debt": 12000, "chapters_completed":', encoding="utf-8")
+    meta = MetaProgression(save_path=path)
+    assert meta.debt == 350000
+
+
+def test_meta_save_leaves_valid_json_and_no_tmp(save_env):
+    from roguelite.meta_progression import MetaProgression
+
+    path = save_env / "slot_01.json"
+    meta = MetaProgression(save_path=path)
+    meta._data["debt"] = 12345
+    meta.save()
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["debt"] == 12345
+    assert not (save_env / "slot_01.json.tmp").exists()
+
+
+def test_truncated_vocab_file_does_not_crash_vault(tmp_path, monkeypatch):
+    from bax.vocabulary_vault import VocabularyVault
+
+    vocab = tmp_path / "bax_vocabulary.json"
+    vocab.write_text("{", encoding="utf-8")
+    monkeypatch.setattr(S, "BAX_VOCAB_FILE", str(vocab))
+    vault = VocabularyVault()
+    assert vault.get_all_terms() == []
+    vault.add_term("blevins")
+    assert json.loads(vocab.read_text(encoding="utf-8"))["terms"] == ["blevins"]
+    assert not (tmp_path / "bax_vocabulary.json.tmp").exists()
