@@ -130,6 +130,13 @@ def test_c10_vault_key_resolves(key, filename):
     assert canon in resolve_keys(npc)        # and it's the first resolved alias
 
 
+def test_records_vulnerability_db_lists_entire_terminal_roster():
+    from renderer.records_screen import _NPC_LABEL
+
+    labels = {key for key, _label in _NPC_LABEL}
+    assert set(KEYS).issubset(labels)
+
+
 # ── bonus — the whole roster survives a first input headless ────────────────
 
 @pytest.mark.parametrize("key", KEYS)
