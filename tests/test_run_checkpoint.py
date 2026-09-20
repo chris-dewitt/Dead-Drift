@@ -133,15 +133,43 @@ def test_terminal_checkpoint_resumes_safe_state(mini_game):
     mini_game.states = MagicMock(state=GameState.TERMINAL)
     mini_game._state_before_pause = None
     mini_game._delivery_pending = False
+    mini_game.run_mgr._pending_advance = True
 
     data = build_checkpoint(mini_game)
 
     assert data["game_state"] == "FLIGHT"
+    assert data["run_mgr"]["pending_advance"] is False
 
     mini_game._delivery_pending = True
     data = build_checkpoint(mini_game)
 
     assert data["game_state"] == "DELIVERY"
+
+
+def test_checkpoint_roundtrips_paid_harmonica_charge(mini_game):
+    rm = mini_game.run_mgr
+    rm._harm_heal_total = 15.0
+
+    data = build_checkpoint(mini_game)
+    rm._harm_heal_total = 5.0
+
+    assert restore_checkpoint(mini_game, data) is True
+    assert rm._harm_heal_total == pytest.approx(15.0)
+
+
+def test_game_checkpoint_flushes_matching_meta_progression(mini_game):
+    from core.game import Game
+
+    game = mini_game
+    game.meta = game.run_mgr.meta
+    game.save_mgr = MagicMock()
+    game.meta.add_debt(3000, source="KRESS STIMS")
+
+    Game._save_run_checkpoint(game)
+
+    persisted = json.loads(game.meta._save_path.read_text())
+    assert persisted["debt"] == game.meta.debt
+    game.save_mgr.save_run_checkpoint.assert_called_once_with(game)
 
 
 def test_checkpoint_roundtrips_wreck_state(mini_game):

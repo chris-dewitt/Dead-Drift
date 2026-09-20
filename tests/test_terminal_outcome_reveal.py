@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -59,4 +61,36 @@ def test_game_holds_impound_terminal_outcome_before_completing():
     assert game._start_terminal_outcome_hold(NPCOutcome.IMPOUND)
     assert game._terminal_win_str == "TERMINAL TERMINATED"
     assert 1.0 <= game._terminal_win_hold_t <= 2.0
+
+
+def test_completed_terminal_cannot_pause_before_outcome_is_applied():
+    from core.game import Game
+    from core.state_manager import GameState
+
+    transition = MagicMock()
+    game = Game.__new__(Game)
+    game.states = SimpleNamespace(state=GameState.TERMINAL, transition=transition)
+    game.run_mgr = SimpleNamespace(active_terminal=SimpleNamespace(is_done=True))
+    game._state_before_pause = None
+
+    game._pause_game()
+
+    transition.assert_not_called()
+    assert game._state_before_pause is None
+
+
+def test_in_progress_terminal_remains_pauseable():
+    from core.game import Game
+    from core.state_manager import GameState
+
+    transition = MagicMock()
+    game = Game.__new__(Game)
+    game.states = SimpleNamespace(state=GameState.TERMINAL, transition=transition)
+    game.run_mgr = SimpleNamespace(active_terminal=SimpleNamespace(is_done=False))
+    game._state_before_pause = None
+
+    game._pause_game()
+
+    transition.assert_called_once_with(GameState.PAUSED)
+    assert game._state_before_pause == GameState.TERMINAL
 

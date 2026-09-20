@@ -509,7 +509,8 @@ def build_checkpoint(game) -> dict:
         state_name = game._state_before_pause.name
     # Terminal instances are transient and not serialized. Resume at the
     # underlying flight gate unless the terminal had already queued delivery.
-    if state_name == "TERMINAL":
+    terminal_was_dropped = state_name == "TERMINAL"
+    if terminal_was_dropped:
         state_name = "DELIVERY" if getattr(game, "_delivery_pending", False) else "FLIGHT"
 
     return {
@@ -528,7 +529,10 @@ def build_checkpoint(game) -> dict:
             # run keeps its accumulated flight seconds.
             "run_total_time": getattr(rm, "_run_total_time", 0.0),
             "jump_ready_fired": rm._jump_ready_fired,
-            "pending_advance": rm._pending_advance,
+            # A jump terminal owns this flag. If that transient terminal is
+            # dropped, the player must reopen it rather than having an
+            # unrelated comm outcome advance the sector after resume.
+            "pending_advance": rm._pending_advance and not terminal_was_dropped,
             "shop_pending": rm._shop_pending,
             "spawn_queue": list(rm._spawn_queue),
             "flare_cd": rm._flare_cd,
@@ -545,6 +549,7 @@ def build_checkpoint(game) -> dict:
             "compliance_spawn_cd": getattr(rm, "_compliance_spawn_cd", 12.0),
             "emp_burst_available": getattr(rm, "_emp_burst_available", False),
             "emp_burst_active_t": getattr(rm, "_emp_burst_active_t", 0.0),
+            "harm_heal_total": getattr(rm, "_harm_heal_total", 5.0),
             "run_debt_reduced": rm._run_debt_reduced,
             "run_snaps": rm._run_snaps,
             "run_slingshots": rm._run_slingshots,
@@ -604,6 +609,7 @@ def restore_checkpoint(game, data: dict) -> bool:
     rm._compliance_spawn_cd = float(rmd.get("compliance_spawn_cd", 12.0))
     rm._emp_burst_available = bool(rmd.get("emp_burst_available", False))
     rm._emp_burst_active_t = float(rmd.get("emp_burst_active_t", 0.0))
+    rm._harm_heal_total = float(rmd.get("harm_heal_total", 5.0))
     rm._run_debt_reduced = int(rmd.get("run_debt_reduced", 0))
     rm._run_snaps = int(rmd.get("run_snaps", 0))
     rm._run_slingshots = int(rmd.get("run_slingshots", 0))
