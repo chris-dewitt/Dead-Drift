@@ -170,3 +170,68 @@ def test_checkpoint_roundtrips_wreck_state(mini_game):
     assert restored.gap_frac == pytest.approx(0.42)
     assert restored.weak_hp == 1
     assert restored.is_triggered is False
+
+
+def test_delivery_result_checkpoint_promotes_to_interstitial(mini_game, tmp_path):
+    """Pause-save on the RESULT card must not restore a fresh corridor.
+
+    Concrete trigger: finish delivery → _compute_result pays debt → ESC →
+    Save & Quit → RESUME RUN. Without the promote, restore rebuilt
+    DeliverySequence from approach and a second clear double-applied pay_off.
+    """
+    from delivery.delivery_sequence import DeliverySequence
+
+    meta = mini_game.run_mgr.meta
+    debt_before = meta.debt
+    mini_game.states = MagicMock(state=GameState.DELIVERY)
+    mini_game._state_before_pause = None
+    mini_game._delivery_chapter = 1
+    ds = DeliverySequence(meta, chapter=1, ship=mini_game.ship)
+    ds._run_stars = 3
+    ds._run = None
+    ds._phase = DeliverySequence.PHASE_RESULT
+    ds._compute_result()
+    mini_game._delivery = ds
+
+    paid_once = debt_before - meta.debt
+    assert paid_once > 0
+    assert ds._result_applied is True
+
+    data = build_checkpoint(mini_game)
+    assert data["game_state"] == "INTERSTITIAL"
+    assert data["game_flow"]["interstitial_completed"] == 1
+    assert data["game_flow"]["interstitial_next"] == 2
+    assert data["game_flow"]["interstitial_campaign_end"] is False
+    assert data["game_flow"]["interstitial_t"] == pytest.approx(11.0)
+
+    # Simulate resume: wipe delivery and re-apply checkpoint.
+    mini_game._delivery = None
+    mini_game._interstitial_completed = 0
+    mini_game._interstitial_next = 0
+    mini_game._interstitial_t = 0.0
+    debt_after_first = meta.debt
+
+    assert restore_checkpoint(mini_game, data) is True
+    assert mini_game._delivery is None
+    assert mini_game._interstitial_completed == 1
+    assert mini_game._interstitial_next == 2
+    assert mini_game._interstitial_campaign_end is False
+    assert mini_game._interstitial_t == pytest.approx(11.0)
+    # Meta debt unchanged by restore — no second payout path exists.
+    assert meta.debt == debt_after_first
+
+
+def test_compute_result_is_idempotent(mini_game):
+    from delivery.delivery_sequence import DeliverySequence
+
+    meta = mini_game.run_mgr.meta
+    debt_before = meta.debt
+    ds = DeliverySequence(meta, chapter=1, ship=mini_game.ship)
+    ds._run_stars = 3
+    ds._run = None
+    ds._compute_result()
+    mid = meta.debt
+    ds._compute_result()
+    assert meta.debt == mid
+    assert mid < debt_before
+    assert ds._result_applied is True
