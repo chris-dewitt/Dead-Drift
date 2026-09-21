@@ -555,9 +555,9 @@ class Game:
         self._run_just_completed = False
         if self.save_mgr.has_run_checkpoint():
             if self.save_mgr.load_run_checkpoint(self):
-                from roguelite.run_checkpoint import load_checkpoint_file
+                from roguelite.run_checkpoint import load_checkpoint_file, resume_game_state
                 data = load_checkpoint_file(self.save_mgr.run_checkpoint_path())
-                gs_name = (data or {}).get("game_state", "FLIGHT")
+                gs_name = resume_game_state(data or {})
                 try:
                     target = GameState[gs_name]
                 except KeyError:
@@ -941,9 +941,11 @@ class Game:
             if self.run_mgr.draft.is_confirmed():
                 self.run_mgr.apply_draft(self.ship)
                 self._checkpoint_cd = 25.0
-                self._save_run_checkpoint()
-                # Epic 18 — show difficulty picker before launching into FLIGHT
+                # Epic 18 — show difficulty picker before launching into FLIGHT.
+                # Snapshot *after* the transition so RESUME RUN lands here
+                # instead of re-running the draft (apply_draft already fired).
                 self._goto(GameState.DIFFICULTY_SELECT)
+                self._save_run_checkpoint()
 
         elif state == GameState.DIFFICULTY_SELECT:
             pass   # driven entirely by key events in handle_event()

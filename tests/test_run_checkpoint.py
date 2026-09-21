@@ -15,6 +15,7 @@ from roguelite.run_checkpoint import (
     build_checkpoint,
     load_checkpoint_file,
     restore_checkpoint,
+    resume_game_state,
     save_checkpoint_file,
 )
 
@@ -170,3 +171,41 @@ def test_checkpoint_roundtrips_wreck_state(mini_game):
     assert restored.gap_frac == pytest.approx(0.42)
     assert restored.weak_hp == 1
     assert restored.is_triggered is False
+
+
+def test_loadout_confirm_checkpoint_resumes_at_difficulty(mini_game):
+    """After apply_draft the ship has cargo. A LOADOUT_DRAFT snapshot of
+    that state must resume at the difficulty picker, not a fresh draft."""
+    mini_game.states = MagicMock(state=GameState.LOADOUT_DRAFT)
+    mini_game._state_before_pause = None
+    data = build_checkpoint(mini_game)
+
+    assert data["game_state"] == "LOADOUT_DRAFT"
+    assert data["draft_applied"] is True
+    assert data["ship"]["cargo"] is not None
+    assert resume_game_state(data) == "DIFFICULTY_SELECT"
+
+    mini_game.states = MagicMock(state=GameState.DIFFICULTY_SELECT)
+    data = build_checkpoint(mini_game)
+    assert data["game_state"] == "DIFFICULTY_SELECT"
+    assert resume_game_state(data) == "DIFFICULTY_SELECT"
+
+
+def test_undrafted_loadout_checkpoint_stays_on_loadout(mini_game):
+    """A loadout snapshot with no cargo is still a real draft — don't skip it."""
+    mini_game.states = MagicMock(state=GameState.LOADOUT_DRAFT)
+    mini_game.ship.cargo = None
+    data = build_checkpoint(mini_game)
+    assert resume_game_state(data) == "LOADOUT_DRAFT"
+
+
+def test_start_run_drops_previous_sector(mini_game):
+    """Next-chapter start_run must not keep the previous layout around.
+    Otherwise pause-save during loadout would snapshot the old sector and
+    draft_applied would read True before the player confirmed anything."""
+    rm = mini_game.run_mgr
+    assert rm._sector is not None
+    rm.start_run(mini_game.ship)
+    assert rm._sector is None
+    assert mini_game.ship.cargo is None
+    assert rm.draft.is_confirmed() is False

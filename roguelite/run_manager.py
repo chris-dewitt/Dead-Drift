@@ -401,6 +401,10 @@ class RunManager:
         self._run_seed = secrets.randbelow(2 ** 31)
         self._frame_name = ""
         self._sector_index = 0
+        # Drop the previous run's layout. Leaving it in place made
+        # pause-save during the next chapter's loadout serialize the old
+        # sector, and made `draft_applied` (sector is not None) lie.
+        self._sector = None
         # Epic 8.4 — hardcore total run time tracker.
         self._run_total_time = 0.0
         self._barges.clear()
