@@ -14,6 +14,27 @@ from roguelite.procedural import SectorLayout
 CHECKPOINT_VERSION = 1
 
 
+def resume_game_state(data: dict) -> str:
+    """Map a checkpoint's stored scene to the scene RESUME RUN should enter.
+
+    Loadout confirm used to snapshot ``LOADOUT_DRAFT`` *after* ``apply_draft``
+    and *before* the difficulty picker. Killing the process on that screen
+    (Android home is the easy repro) then left RESUME RUN on a fresh,
+    unconfirmed draft. The next confirm ran ``apply_draft`` a second time
+    and replaced the saved hull, modules, and cargo.
+
+    Those snapshots already have cargo aboard. Send them to the difficulty
+    picker instead of the draft.
+    """
+    gs = str(data.get("game_state", "FLIGHT") or "FLIGHT")
+    if gs != "LOADOUT_DRAFT":
+        return gs
+    cargo = (data.get("ship") or {}).get("cargo")
+    if data.get("draft_applied") and cargo:
+        return "DIFFICULTY_SELECT"
+    return gs
+
+
 def _vec(d: dict) -> Vec2:
     return Vec2(float(d["x"]), float(d["y"]))
 
