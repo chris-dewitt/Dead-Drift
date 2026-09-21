@@ -121,7 +121,14 @@ class RepoBarge:
             self.body.apply_force(brake)
 
         elif self.state == BargeState.CLAMP:
-            if self._tether:
+            # CLAMP/TORCH both require a live tether. Without one (e.g. after
+            # a checkpoint restore that cannot serialize the harpoon), drop
+            # back to patrol — never torch at arbitrary range.
+            if not self._tether or not self._tether.is_active:
+                self._tether = None
+                self._torch_warned = False
+                self.state = BargeState.PATROL
+            else:
                 self._tether.barge_pos = self.body.pos
                 self._tether.update(dt)
                 if not self._tether.is_active:
@@ -132,16 +139,20 @@ class RepoBarge:
                     self.state = BargeState.TORCH
 
         elif self.state == BargeState.TORCH:
-            if not self._torch_warned:
-                self._torch_warned = True
-                bus.emit(EVT_TORCH_ACTIVE, barge=self, countdown=self.TORCH_INTERVAL)
-            self._torch_cd -= dt
-            if self._torch_cd <= 0:
-                self._unbolt_module(ship)
-                self._torch_cd = self.TORCH_INTERVAL
-                # Re-emit so countdown resets each cycle
-                bus.emit(EVT_TORCH_ACTIVE, barge=self, countdown=self.TORCH_INTERVAL)
-            if self._tether:
+            if not self._tether or not self._tether.is_active:
+                self._tether = None
+                self._torch_warned = False
+                self.state = BargeState.PATROL
+            else:
+                if not self._torch_warned:
+                    self._torch_warned = True
+                    bus.emit(EVT_TORCH_ACTIVE, barge=self, countdown=self.TORCH_INTERVAL)
+                self._torch_cd -= dt
+                if self._torch_cd <= 0:
+                    self._unbolt_module(ship)
+                    self._torch_cd = self.TORCH_INTERVAL
+                    # Re-emit so countdown resets each cycle
+                    bus.emit(EVT_TORCH_ACTIVE, barge=self, countdown=self.TORCH_INTERVAL)
                 self._tether.barge_pos = self.body.pos
                 self._tether.update(dt)
                 if not self._tether.is_active:
