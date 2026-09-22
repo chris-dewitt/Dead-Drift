@@ -129,6 +129,70 @@ def test_checkpoint_roundtrips_chapter_six_drive_and_pursuit_state(mini_game):
     assert restored_vessel._hits == 1
 
 
+def test_orbit_bonus_not_reclaimable_after_checkpoint_restore(mini_game):
+    """Orbit bonuses must key by well index — id(well) dies on GravityWell rebuild."""
+    from physics.gravity import GravityWell, ThreeBodySystem
+    from roguelite.procedural import SectorLayout
+    from roguelite.run_manager import SLINGSHOT_CREDIT_BONUS
+
+    rm = mini_game.run_mgr
+    meta = rm.meta
+    ship = mini_game.ship
+    wells = [
+        GravityWell(120.0, 140.0, 800.0, 60.0),
+        GravityWell(420.0, 300.0, 900.0, 60.0),
+    ]
+    rm._sector = SectorLayout(
+        index=0,
+        gravity=ThreeBodySystem(wells),
+        hazards=[],
+        enemy_budget=1,
+        is_ambush=False,
+        theme="t",
+        name="n",
+        formerly="f",
+    )
+    rm._orbit_bonus_claimed.clear()
+    rm._orbit_t = 0.0
+    rm._orbit_well_id = None
+
+    bonus = int(SLINGSHOT_CREDIT_BONUS * S.ORBIT_BONUS_MULT)
+    meta._data["debt"] = 50_000
+    debt_before = meta.debt
+
+    # Claim both wells as a live orbit would.
+    for idx in range(len(wells)):
+        rm._orbit_bonus_claimed.add(idx)
+        meta.pay_off(bonus, source="ORBIT BONUS")
+        rm._run_debt_reduced += bonus
+        rm._sector_credits += bonus
+    debt_after_claim = meta.debt
+    assert debt_after_claim == debt_before - 2 * bonus
+
+    data = build_checkpoint(mini_game)
+    assert data["run_mgr"]["orbit_bonus_claimed"] == [0, 1]
+
+    # Warm restore rebuilds wells; claimed indices must still block payout.
+    assert restore_checkpoint(mini_game, data) is True
+    assert rm._orbit_bonus_claimed == {0, 1}
+    assert [type(w).__name__ for w in rm._sector.gravity.wells] == [
+        "GravityWell", "GravityWell",
+    ]
+
+    for well in rm._sector.gravity.wells:
+        ship.body.pos.x = well.pos.x + 40.0
+        ship.body.pos.y = well.pos.y
+        ship.body.vel.x = (S.ORBIT_SPEED_MIN + S.SLINGSHOT_SPEED) * 0.5
+        ship.body.vel.y = 0.0
+        rm._orbit_t = 0.0
+        rm._orbit_well_id = None
+        for _ in range(int(S.ORBIT_BONUS_DURATION / 0.05) + 10):
+            rm._check_orbital_bonus(0.05)
+
+    assert meta.debt == debt_after_claim
+    assert rm._run_debt_reduced == 2 * bonus
+
+
 def test_terminal_checkpoint_resumes_safe_state(mini_game):
     mini_game.states = MagicMock(state=GameState.TERMINAL)
     mini_game._state_before_pause = None

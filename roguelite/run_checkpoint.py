@@ -555,6 +555,10 @@ def build_checkpoint(game) -> dict:
             "last_winning_path": rm._last_winning_path,
             "alien_spoken": rm._alien_spoken,
             "well_hit_times": {str(k): v for k, v in rm._well_hit_times.items()},
+            # Well indices (stable across GravityWell rebuild on restore).
+            "orbit_bonus_claimed": sorted(
+                int(i) for i in getattr(rm, "_orbit_bonus_claimed", set())
+            ),
         },
         "ship": _ship_to_dict(ship),
         "frame_name": getattr(rm, "_frame_name", ""),
@@ -614,6 +618,11 @@ def restore_checkpoint(game, data: dict) -> bool:
     rm._last_winning_path = str(rmd.get("last_winning_path", ""))
     rm._alien_spoken = bool(rmd.get("alien_spoken", False))
     rm._well_hit_times = {}
+    rm._orbit_bonus_claimed = {
+        int(i) for i in rmd.get("orbit_bonus_claimed", [])
+    }
+    rm._orbit_well_id = None
+    rm._orbit_t = 0.0
     rm._active_terminal = None
     rm._intercepting_barge = None
     rm._ship = ship
