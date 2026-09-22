@@ -56,13 +56,27 @@ _WORD_NUMS = {
 def extract_credit_amount(text: str) -> int | None:
     """
     Pull a credit amount from natural language input.
-    Handles: '5000', '5k', 'five grand', 'ten thousand credits', etc.
+    Handles: '5000', '5k', '1.5k', '1,500', 'five grand', 'ten thousand credits', etc.
     """
     lower = text.lower()
+    # '1.5k' / '12.5k' — must beat bare '5k' inside the fractional form
+    m = re.search(r'\b(\d+)\.(\d+)\s*k\b', lower)
+    if m:
+        whole = int(m.group(1))
+        frac = m.group(2)
+        # 1.5k → 1500; 12.25k → 12250 (frac digits scale against 1000)
+        scale = 10 ** len(frac)
+        return whole * 1000 + int(frac) * (1000 // scale)
     # '5k' / '10k' style
     m = re.search(r'\b(\d+)\s*k\b', lower)
     if m:
         return int(m.group(1)) * 1000
+    # Comma-grouped amounts: '1,500' / '10,000' / '1,000,000'
+    # Without this, '\b(\d{3,7})\b' latches the trailing group ('1,500'→500)
+    # or a zero-padded fragment ('10,000'→0).
+    m = re.search(r'\b(\d{1,3}(?:,\d{3})+)\b', lower)
+    if m:
+        return int(m.group(1).replace(',', ''))
     # Raw digits 3–7 digits (skip Local 404 union designation)
     for m in re.finditer(r'\b(\d{3,7})\b', lower):
         val = int(m.group(1))
