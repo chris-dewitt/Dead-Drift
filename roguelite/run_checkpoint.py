@@ -14,6 +14,17 @@ from roguelite.procedural import SectorLayout
 CHECKPOINT_VERSION = 1
 
 
+def _frame_hull_bonus_from_name(name: str) -> int:
+    """Recover a frame hull bonus from a saved frame name (old checkpoints)."""
+    if not name:
+        return 0
+    from roguelite.loadout_draft import _FRAME_POOL
+    for frame in _FRAME_POOL:
+        if frame.get("name") == name:
+            return int(frame.get("hull_bonus", 0))
+    return 0
+
+
 def _vec(d: dict) -> Vec2:
     return Vec2(float(d["x"]), float(d["y"]))
 
@@ -145,6 +156,7 @@ def _ship_to_dict(ship) -> dict:
         "angle": ship.body.angle,
         "mass": ship.body.mass,
         "hull": ship.hull,
+        "hull_max": getattr(ship, "hull_max", S.HULL_MAX),
         "fuel": getattr(ship, "fuel", S.FUEL_MAX),
         "destroyed": ship._destroyed,
         "iframe_t": getattr(ship, "_iframe_t", 0.0),
@@ -171,6 +183,7 @@ def _restore_ship(ship, d: dict) -> None:
     ship.body.angle = float(d["angle"])
     ship.body.mass = float(d.get("mass", S.SHIP_MASS))
     ship.hull = float(d["hull"])
+    ship.hull_max = float(d.get("hull_max", S.HULL_MAX))
     ship.fuel = float(d.get("fuel", S.FUEL_MAX))
     ship._destroyed = bool(d.get("destroyed", False))
     ship._iframe_t = float(d.get("iframe_t", 0.0))
@@ -552,6 +565,7 @@ def build_checkpoint(game) -> dict:
             "sector_snaps": rm._sector_snaps,
             "sector_credits": rm._sector_credits,
             "sector_start_hull": rm._sector_start_hull,
+            "frame_hull_bonus": int(getattr(rm, "_frame_hull_bonus", 0) or 0),
             "last_winning_path": rm._last_winning_path,
             "alien_spoken": rm._alien_spoken,
             "well_hit_times": {str(k): v for k, v in rm._well_hit_times.items()},
@@ -611,6 +625,7 @@ def restore_checkpoint(game, data: dict) -> bool:
     rm._sector_snaps = int(rmd.get("sector_snaps", 0))
     rm._sector_credits = int(rmd.get("sector_credits", 0))
     rm._sector_start_hull = float(rmd.get("sector_start_hull", S.HULL_MAX))
+    rm._frame_hull_bonus = int(rmd.get("frame_hull_bonus", 0) or 0)
     rm._last_winning_path = str(rmd.get("last_winning_path", ""))
     rm._alien_spoken = bool(rmd.get("alien_spoken", False))
     rm._well_hit_times = {}
@@ -627,6 +642,10 @@ def restore_checkpoint(game, data: dict) -> bool:
     _restore_entities(rm, data.get("entities", []))
     _restore_ship(ship, data.get("ship", {}))
     rm._frame_name = data.get("frame_name", "")
+    if not getattr(rm, "_frame_hull_bonus", 0) and rm._frame_name:
+        rm._frame_hull_bonus = _frame_hull_bonus_from_name(rm._frame_name)
+    if hasattr(rm, "sync_hull_cap"):
+        rm.sync_hull_cap(ship, fill=False)
 
     flow = data.get("game_flow", {})
     game_state = data.get("game_state", "FLIGHT")
