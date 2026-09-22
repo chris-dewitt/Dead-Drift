@@ -511,6 +511,11 @@ def build_checkpoint(game) -> dict:
     # underlying flight gate unless the terminal had already queued delivery.
     if state_name == "TERMINAL":
         state_name = "DELIVERY" if getattr(game, "_delivery_pending", False) else "FLIGHT"
+    # A destroyed ship mid-death-flash must never resume as FLIGHT — there is
+    # no second EVT_SHIP_DESTROYED, so the player would softlock. Route to
+    # DECANTING so RESUME shows the clone invoice instead.
+    if getattr(ship, "_destroyed", False) and state_name != "DECANTING":
+        state_name = "DECANTING"
 
     return {
         "version": CHECKPOINT_VERSION,
