@@ -144,6 +144,53 @@ def test_terminal_checkpoint_resumes_safe_state(mini_game):
     assert data["game_state"] == "DELIVERY"
 
 
+def test_resume_does_not_replay_debt_milestones(mini_game):
+    """A new process must not fast-forward the sector clock on resume."""
+    rm = mini_game.run_mgr
+    rm._run_debt_reduced = 20000
+    rm._next_debt_recovered_milestone = 20500
+    rm._sector_timer = 0.0
+    rm._sector_dur = 20.0
+    data = build_checkpoint(mini_game)
+
+    # Fresh RunManager: constructor parks the watermark on the first step.
+    rm._next_debt_recovered_milestone = S.DEBT_RECOVERED_MILESTONE
+    rm._run_debt_reduced = 0
+    rm._sector_timer = 0.0
+    assert restore_checkpoint(mini_game, data) is True
+    assert rm._next_debt_recovered_milestone == 20500
+    rm._check_debt_recovered_milestones()
+    assert rm._sector_timer == pytest.approx(0.0)
+    assert rm.jump_ready is False
+
+
+def test_legacy_checkpoint_skips_already_crossed_milestones(mini_game):
+    rm = mini_game.run_mgr
+    rm._run_debt_reduced = 9000
+    rm._sector_timer = 0.0
+    rm._sector_dur = 20.0
+    data = build_checkpoint(mini_game)
+    del data["run_mgr"]["next_debt_milestone"]
+
+    rm._next_debt_recovered_milestone = S.DEBT_RECOVERED_MILESTONE
+    rm._sector_timer = 0.0
+    assert restore_checkpoint(mini_game, data) is True
+    assert rm._next_debt_recovered_milestone == 9500
+    rm._check_debt_recovered_milestones()
+    assert rm._sector_timer == pytest.approx(0.0)
+
+
+def test_debt_milestone_still_pressures_live_play(mini_game):
+    rm = mini_game.run_mgr
+    rm._run_debt_reduced = 1000
+    rm._next_debt_recovered_milestone = 1000
+    rm._sector_timer = 2.0
+    rm._sector_dur = 20.0
+    rm._check_debt_recovered_milestones()
+    assert rm._sector_timer == pytest.approx(3.0)
+    assert rm._next_debt_recovered_milestone == 1500
+
+
 def test_checkpoint_roundtrips_wreck_state(mini_game):
     from antagonists.wreck import SpaceWreck
 

@@ -500,6 +500,22 @@ def _restore_entities(rm, entities: list[dict]) -> None:
 # Run manager snapshot
 # ---------------------------------------------------------------------------
 
+def _restored_debt_milestone(reduced: int, saved) -> int:
+    """Watermark for debt-pressure milestones after a checkpoint load.
+
+    Saves written before ``next_debt_milestone`` existed have already
+    fired every threshold at or below ``reduced``. Replaying them on a
+    fresh ``RunManager`` (watermark stuck at 500) adds a second of sector
+    time per even step and, past ~20k recovered, opens JUMP immediately.
+    """
+    step = S.DEBT_RECOVERED_MILESTONE
+    if saved is not None:
+        return int(saved)
+    if step <= 0:
+        return 0
+    return (int(reduced) // step + 1) * step
+
+
 def build_checkpoint(game) -> dict:
     """Serialize in-run state from a Game instance."""
     rm = game.run_mgr
@@ -546,6 +562,12 @@ def build_checkpoint(game) -> dict:
             "emp_burst_available": getattr(rm, "_emp_burst_available", False),
             "emp_burst_active_t": getattr(rm, "_emp_burst_active_t", 0.0),
             "run_debt_reduced": rm._run_debt_reduced,
+            # Pressure watermark. A fresh RunManager starts this at the
+            # first threshold; without it, resume replays every crossed
+            # milestone and fast-forwards the sector clock.
+            "next_debt_milestone": getattr(
+                rm, "_next_debt_recovered_milestone", S.DEBT_RECOVERED_MILESTONE
+            ),
             "run_snaps": rm._run_snaps,
             "run_slingshots": rm._run_slingshots,
             "sector_slingshots": rm._sector_slingshots,
@@ -605,6 +627,9 @@ def restore_checkpoint(game, data: dict) -> bool:
     rm._emp_burst_available = bool(rmd.get("emp_burst_available", False))
     rm._emp_burst_active_t = float(rmd.get("emp_burst_active_t", 0.0))
     rm._run_debt_reduced = int(rmd.get("run_debt_reduced", 0))
+    rm._next_debt_recovered_milestone = _restored_debt_milestone(
+        rm._run_debt_reduced, rmd.get("next_debt_milestone")
+    )
     rm._run_snaps = int(rmd.get("run_snaps", 0))
     rm._run_slingshots = int(rmd.get("run_slingshots", 0))
     rm._sector_slingshots = int(rmd.get("sector_slingshots", 0))
