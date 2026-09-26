@@ -517,6 +517,10 @@ def build_checkpoint(game) -> dict:
         "game_state": state_name,
         "run_seed": getattr(rm, "_run_seed", 0),
         "chapter": rm._current_chapter(),
+        # Replay runs (cargo dossiers) set this. Resume must keep it, or
+        # `_current_chapter()` falls through to natural progression and the
+        # run can clear the wrong chapter.
+        "chapter_override": getattr(rm, "_chapter_override", None),
         "draft_applied": rm._sector is not None,
         "sector": _sector_to_dict(rm._sector) if rm._sector else None,
         "entities": _entities_to_dict(rm),
@@ -555,6 +559,14 @@ def build_checkpoint(game) -> dict:
             "last_winning_path": rm._last_winning_path,
             "alien_spoken": rm._alien_spoken,
             "well_hit_times": {str(k): v for k, v in rm._well_hit_times.items()},
+            # Rolled once in start_run(). Resume bypasses start_run(), so
+            # without this the mutator silently drops (timer, barges, free death).
+            "mutator": (
+                rm.mutators.active.key
+                if getattr(rm, "mutators", None) is not None and rm.mutators.active
+                else None
+            ),
+            "novice_pass_consumed": bool(getattr(rm, "_novice_pass_consumed", False)),
         },
         "ship": _ship_to_dict(ship),
         "frame_name": getattr(rm, "_frame_name", ""),
@@ -569,6 +581,43 @@ def build_checkpoint(game) -> dict:
             "interstitial_t": float(getattr(game, "_interstitial_t", 0.0)),
         },
     }
+
+
+def _restore_run_identity(rm, data: dict, rmd: dict) -> None:
+    """Put back the chapter target and mutator start_run() would have set.
+
+    Resume does not call start_run(), so a fresh RunManager has no override
+    and no mutator. Leaving them unset changes the run: dossier replays
+    complete the natural next chapter, and mutator rules (slingshot-only
+    timer, quiet-sector barges, novice-pass death fee) silently stop.
+    """
+    if "chapter_override" in data:
+        raw = data.get("chapter_override")
+        rm.set_chapter_override(int(raw) if raw else None)
+    else:
+        # Pre-fix checkpoints stored the resolved chapter only. A mismatch
+        # with natural progression means the save was a dossier replay.
+        saved = data.get("chapter")
+        if saved is not None:
+            saved = int(saved)
+            if saved != rm._current_chapter():
+                rm.set_chapter_override(saved)
+
+    from roguelite.mutators import MUTATORS
+    from ship.gun import Gun
+
+    if "mutator" in rmd:
+        key = rmd.get("mutator")
+        rm.mutators.active = MUTATORS.get(key) if key else None
+    else:
+        rm.mutators.clear()
+    rm._novice_pass_consumed = bool(rmd.get("novice_pass_consumed", False))
+    if hasattr(rm, "draft"):
+        rm.draft.set_mutator(rm.mutators.active)
+    # start_run() writes this class attr; resume has to do it too.
+    Gun.malfunction_multiplier = (
+        3.0 if rm.mutators.is_active("system_glitch") else 1.0
+    )
 
 
 def restore_checkpoint(game, data: dict) -> bool:
@@ -614,6 +663,7 @@ def restore_checkpoint(game, data: dict) -> bool:
     rm._last_winning_path = str(rmd.get("last_winning_path", ""))
     rm._alien_spoken = bool(rmd.get("alien_spoken", False))
     rm._well_hit_times = {}
+    _restore_run_identity(rm, data, rmd)
     rm._active_terminal = None
     rm._intercepting_barge = None
     rm._ship = ship

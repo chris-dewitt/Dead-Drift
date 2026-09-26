@@ -144,6 +144,162 @@ def test_terminal_checkpoint_resumes_safe_state(mini_game):
     assert data["game_state"] == "DELIVERY"
 
 
+def _resumed_game(tmp_path, name):
+    """A process that loaded the menu and has not called start_run()."""
+    from roguelite.meta_progression import MetaProgression
+    from roguelite.run_manager import RunManager
+    from ship.ship import PlayerShip
+
+    meta = MetaProgression(save_path=tmp_path / f"{name}.json")
+    ship = PlayerShip()
+    game = MagicMock()
+    game.run_mgr = RunManager(meta)
+    game.ship = ship
+    game.meta = meta
+    game.states = MagicMock(state=GameState.FLIGHT)
+    game._state_before_pause = None
+    game._delivery_chapter = 1
+    game._delivery_pending = False
+    game._delivery_delay_t = 0.0
+    game._delivery = None
+    game._terminal_win_hold_t = 0.0
+    game._terminal_win_str = ""
+    game._interstitial_completed = 1
+    game._interstitial_next = 2
+    game._interstitial_campaign_end = False
+    game._interstitial_t = 0.0
+    return game
+
+
+def test_resume_keeps_dossier_replay_on_its_chapter(mini_game, tmp_path):
+    """Save & Continue during a dossier replay must not clear the next chapter.
+
+    Natural progression after chapter 1 is chapter 2. A chapter 1 replay sets
+    `_chapter_override`. Resume used to drop the override, so finishing the
+    run called `complete_chapter(2)`.
+    """
+    mini_game.run_mgr.meta._data["chapters_completed"] = [1]
+    mini_game.run_mgr.set_chapter_override(1)
+    data = build_checkpoint(mini_game)
+
+    resumed = _resumed_game(tmp_path, "replay")
+    resumed.meta._data["chapters_completed"] = [1]
+    assert resumed.run_mgr._current_chapter() == 2
+
+    assert restore_checkpoint(resumed, data) is True
+    assert resumed.run_mgr._chapter_override == 1
+    assert resumed.run_mgr._current_chapter() == 1
+
+
+def test_legacy_replay_checkpoint_does_not_advance_the_campaign(mini_game, tmp_path):
+    """Saves written before chapter_override existed still stored `chapter`."""
+    mini_game.run_mgr.meta._data["chapters_completed"] = [1]
+    mini_game.run_mgr.set_chapter_override(1)
+    data = build_checkpoint(mini_game)
+    del data["chapter_override"]
+
+    resumed = _resumed_game(tmp_path, "legacy-replay")
+    resumed.meta._data["chapters_completed"] = [1]
+    assert restore_checkpoint(resumed, data) is True
+    assert resumed.run_mgr._current_chapter() == 1
+
+
+def test_resume_of_a_natural_run_does_not_invent_an_override(mini_game, tmp_path):
+    mini_game.run_mgr.meta._data["chapters_completed"] = [1]
+    mini_game.run_mgr.set_chapter_override(None)
+    data = build_checkpoint(mini_game)
+    assert data["chapter"] == 2
+    assert data["chapter_override"] is None
+
+    resumed = _resumed_game(tmp_path, "natural")
+    resumed.meta._data["chapters_completed"] = [1]
+    assert restore_checkpoint(resumed, data) is True
+    assert resumed.run_mgr._chapter_override is None
+    assert resumed.run_mgr._current_chapter() == 2
+
+
+def test_resume_keeps_slingshot_only_from_advancing_the_timer(mini_game, tmp_path):
+    from roguelite.mutators import MUTATORS
+
+    mini_game.run_mgr.mutators.active = MUTATORS["slingshot_only"]
+    mini_game.run_mgr._sector_timer = 4.0
+    data = build_checkpoint(mini_game)
+
+    resumed = _resumed_game(tmp_path, "sling")
+    assert resumed.run_mgr.mutators.active is None
+    assert restore_checkpoint(resumed, data) is True
+    assert resumed.run_mgr.mutators.is_active("slingshot_only")
+
+    before = resumed.run_mgr._sector_timer
+    resumed.run_mgr.update(1.0)
+    assert resumed.run_mgr._sector_timer == pytest.approx(before)
+
+
+def test_resume_keeps_quiet_sector_from_spawning_barges(mini_game, tmp_path):
+    from roguelite.mutators import MUTATORS
+
+    rm = mini_game.run_mgr
+    rm.mutators.active = MUTATORS["quiet_sector"]
+    rm._sector_index = 1
+    rm._barges.clear()
+    data = build_checkpoint(mini_game)
+
+    resumed = _resumed_game(tmp_path, "quiet")
+    assert restore_checkpoint(resumed, data) is True
+    assert resumed.run_mgr.mutators.is_active("quiet_sector")
+    resumed.run_mgr._spawn_barge()
+    assert resumed.run_mgr._barges == []
+
+
+def test_resume_restores_veteran_clone_without_adding_debt(mini_game, tmp_path):
+    from roguelite.mutators import MUTATORS
+
+    mini_game.run_mgr.mutators.active = MUTATORS["veteran_clone"]
+    mini_game.run_mgr.meta._data["debt"] = 150_000
+    data = build_checkpoint(mini_game)
+
+    resumed = _resumed_game(tmp_path, "veteran")
+    resumed.meta._data["debt"] = 150_000
+    assert restore_checkpoint(resumed, data) is True
+    assert resumed.run_mgr.mutators.is_active("veteran_clone")
+    assert resumed.meta.debt == 150_000
+
+
+def test_resume_remembers_a_spent_novice_pass(mini_game, tmp_path):
+    from roguelite.mutators import MUTATORS
+    from ship.gun import Gun
+
+    mini_game.run_mgr.mutators.active = MUTATORS["novice_pass"]
+    mini_game.run_mgr._novice_pass_consumed = True
+    data = build_checkpoint(mini_game)
+
+    Gun.malfunction_multiplier = 3.0
+    resumed = _resumed_game(tmp_path, "novice")
+    try:
+        assert restore_checkpoint(resumed, data) is True
+        assert resumed.run_mgr.mutators.is_active("novice_pass")
+        assert resumed.run_mgr._novice_pass_consumed is True
+        # A non-glitch resume must not keep another run's malfunction rate.
+        assert Gun.malfunction_multiplier == 1.0
+    finally:
+        Gun.malfunction_multiplier = 1.0
+
+
+def test_resume_reapplies_system_glitch_malfunction_rate(mini_game, tmp_path):
+    from roguelite.mutators import MUTATORS
+    from ship.gun import Gun
+
+    mini_game.run_mgr.mutators.active = MUTATORS["system_glitch"]
+    data = build_checkpoint(mini_game)
+    Gun.malfunction_multiplier = 1.0
+    resumed = _resumed_game(tmp_path, "glitch")
+    try:
+        assert restore_checkpoint(resumed, data) is True
+        assert Gun.malfunction_multiplier == 3.0
+    finally:
+        Gun.malfunction_multiplier = 1.0
+
+
 def test_checkpoint_roundtrips_wreck_state(mini_game):
     from antagonists.wreck import SpaceWreck
 
