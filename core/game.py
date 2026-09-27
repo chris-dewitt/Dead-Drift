@@ -547,6 +547,14 @@ class Game:
             return
         try:
             self.save_mgr.save_run_checkpoint(self)
+            # pay_off / add_debt / inc_milestone update the ledger in memory
+            # only. The 25s snapshot restores spendable credits; without
+            # this save, RESUME keeps the pre-run debt and the next shop
+            # purchase adds its price on top of that stale total.
+            # Run snapshot first: a kill between the two writes keeps a
+            # module the player just bought and drops the price. The
+            # reverse would bill them for a module the checkpoint lacks.
+            self.meta.save()
         except OSError:
             pass
 

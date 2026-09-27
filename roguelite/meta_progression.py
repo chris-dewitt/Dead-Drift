@@ -1,10 +1,26 @@
 from __future__ import annotations
 import copy
 import json
+import os
 from pathlib import Path
 
 from config import settings as S
 from core.event_bus import bus, EVT_DEBT_UPDATE
+
+
+def _atomic_json_dump(path: Path, payload) -> None:
+    """Write JSON without truncating the live file first.
+
+    `open(..., "w")` empties the destination before dump finishes. A
+    process kill in that window leaves an empty slot.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
 
 
 class MetaProgression:
@@ -66,10 +82,7 @@ class MetaProgression:
             self._data = defaults
 
     def save(self):
-        path = self._save_path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(self._data, f, indent=2)
+        _atomic_json_dump(self._save_path, self._data)
         if self._after_save:
             self._after_save()
 
