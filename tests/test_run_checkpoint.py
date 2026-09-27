@@ -144,6 +144,63 @@ def test_terminal_checkpoint_resumes_safe_state(mini_game):
     assert data["game_state"] == "DELIVERY"
 
 
+def test_flight_autosave_persists_debt_before_shop_spend(mini_game, tmp_path, monkeypatch):
+    """Closing the window after a checkpoint must not restore credits on a stale ledger.
+
+    pay_off reduces debt in memory only. RESUME used to load the last
+    explicit save (difficulty select / Save & Return) while restoring
+    _run_debt_reduced. The next shop purchase then add_debt'd on top.
+    """
+    from core.game import Game
+    from roguelite.meta_progression import MetaProgression
+    from roguelite.save_manager import SaveManager
+
+    saves = tmp_path / "debt-saves"
+    monkeypatch.setattr(S, "SAVES_DIR", str(saves))
+    monkeypatch.setattr(S, "MANIFEST_FILE", str(saves / "manifest.json"))
+    monkeypatch.setattr(S, "MAX_SAVE_SLOTS", 3)
+
+    mgr = SaveManager()
+    slot = mgr.active_save_path()
+    meta = MetaProgression(save_path=slot)
+    start_debt = meta.debt
+    meta.pay_off(20_000, source="SECTOR CLEAR")
+    assert meta.debt == start_debt - 20_000
+
+    mini_game.run_mgr.meta = meta
+    mini_game.run_mgr._run_debt_reduced = 20_000
+    mini_game.meta = meta
+    mini_game.save_mgr = mgr
+
+    Game._save_run_checkpoint(mini_game)
+
+    resumed = MetaProgression(save_path=slot)
+    assert resumed.debt == start_debt - 20_000
+    resumed.add_debt(5_000, source="SHOP: HULL PATCH")
+    assert resumed.debt == start_debt - 15_000
+
+
+def test_meta_save_keeps_previous_slot_if_dump_fails(tmp_path, monkeypatch):
+    from roguelite.meta_progression import MetaProgression
+
+    path = tmp_path / "slot.json"
+    meta = MetaProgression(save_path=path)
+    meta.pay_off(1_000, source="SECTOR CLEAR")
+    meta.save()
+    good = path.read_text(encoding="utf-8")
+
+    def boom(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("roguelite.meta_progression.json.dump", boom)
+    meta.pay_off(5_000, source="SLINGSHOT")
+    with pytest.raises(OSError):
+        meta.save()
+    assert path.read_text(encoding="utf-8") == good
+    reloaded = MetaProgression(save_path=path)
+    assert reloaded.debt == meta.debt + 5_000
+
+
 def test_checkpoint_roundtrips_wreck_state(mini_game):
     from antagonists.wreck import SpaceWreck
 

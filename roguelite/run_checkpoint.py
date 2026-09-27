@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -666,8 +667,15 @@ def restore_checkpoint(game, data: dict) -> bool:
 def save_checkpoint_file(path: Path, game) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = build_checkpoint(game)
-    with open(path, "w", encoding="utf-8") as f:
+    # Same truncate window as the campaign slot: a kill during open("w")
+    # used to leave a half-written checkpoint that RESUME treats as "no
+    # run" and then deletes.
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
 
 
 def load_checkpoint_file(path: Path) -> dict | None:
