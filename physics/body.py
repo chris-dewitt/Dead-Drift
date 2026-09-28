@@ -118,7 +118,14 @@ class RigidBody2D:
             # to kill the "blur of death" feel — at 1.1x cap drag_k≈11,
             # at 2x cap drag_k≈40 (recovers in ~30ms).
             drag_k = 10.0 * (1.0 + excess_pct * 3.0)
-            self.vel = self.vel * (1.0 - excess_pct * dt * drag_k)
+            # A hitch (alt-tab, resize, GC) makes dt large enough that
+            # excess_pct * dt * drag_k exceeds 1. The factor then goes
+            # negative and the next frames amplify speed to infinity —
+            # slingshot overdrive expiring, or a gravity-well impulse,
+            # is enough to start it. Drag may stop the ship; it must
+            # not reverse or magnify velocity.
+            drag = min(1.0, excess_pct * dt * drag_k)
+            self.vel = self.vel * (1.0 - drag)
 
         self.pos = self.pos + self.vel * dt
         self._force = Vec2()   # reset accumulator
