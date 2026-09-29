@@ -682,12 +682,14 @@ class RunManager:
         self._check_comms(dt)
         self.flight_events.update(dt, self)
 
-    def handle_key(self, event: pygame.event.Event):
-        # Route to cargo's key handler first (e.g. TriplicateForm popup)
+    def handle_key(self, event: pygame.event.Event) -> bool:
+        # Route to cargo's key handler first (e.g. paperwork form popup).
+        # True means the cargo consumed the key — callers must not also
+        # treat it as a flight command (H is both a form key and the heal).
         if self._ship is not None and self._ship.cargo is not None:
             if hasattr(self._ship.cargo, "handle_key"):
                 if self._ship.cargo.handle_key(event):
-                    return
+                    return True
         if event.key == pygame.K_j and self._sector_timer >= self._sector_dur:
             from mobile.mode import skip_terminals
             if skip_terminals():
@@ -704,6 +706,7 @@ class RunManager:
         elif event.key == pygame.K_q and self._emp_burst_available:
             # Chapter 6 — one-shot EMP from Chen's gift
             self.trigger_emp_burst()
+        return False
 
     def _open_kress_terminal(self):
         from core.event_bus import EVT_KRESS_DIALLED
