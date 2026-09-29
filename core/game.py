@@ -788,11 +788,9 @@ class Game:
                 return
             # H = Epic 11.1c harmonica heal session. Locks rotation,
             # +5 hull over 6s, blocked within 300 px of an active barge.
-            # Chapter 3 paperwork still prompts H. That press has to file
-            # the form; swallowing it here times the form out for 14 hull.
+            # Paperwork must not prompt H — this return happens before cargo.
             if event.key == pygame.K_h:
-                if not self.run_mgr.handle_key(event):
-                    self.run_mgr.start_harmonica_session()
+                self.run_mgr.start_harmonica_session()
                 return
             self.run_mgr.handle_key(event)
         elif state == GameState.TERMINAL:

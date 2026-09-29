@@ -5,7 +5,10 @@ from cargo.cargo_base import BaseCargo
 from core.event_bus import bus, EVT_BAX_SPEAK
 from config import settings as S
 
-_POPUP_KEYS = [(pygame.K_f, "F"), (pygame.K_g, "G"), (pygame.K_h, "H")]
+# H is the harmonica heal and the flight handler returns before cargo
+# sees it. A form that asked for H could never be filed, and the timeout
+# took 14 hull. Prompts are F and G only.
+_POPUP_KEYS = [(pygame.K_f, "F"), (pygame.K_g, "G")]
 
 _POPUP_BAX = [
     "Form 27-B, subsection 9. By ORDER of the bloody Union, mate. Press [{k}]!",
