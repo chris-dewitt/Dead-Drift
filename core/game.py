@@ -1830,7 +1830,11 @@ class Game:
             self._run_just_completed = True
             self._goto(GameState.MAIN_MENU)
         else:
-            # Auto-advance into next chapter's loadout draft
+            # Auto-advance into the campaign's next chapter. A dossier
+            # replay pins _chapter_override for the run that just delivered;
+            # leaving it set makes start_run() rebuild that same chapter,
+            # so the "load next chapter" prompt loops forever.
+            self.run_mgr.set_chapter_override(None)
             self.run_mgr.start_run(self.ship)
             self._run_just_completed = False
             self._goto(GameState.LOADOUT_DRAFT)
