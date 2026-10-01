@@ -92,6 +92,94 @@ def test_session_cancels_on_input_reason():
     assert ship.harm_session_active is False
 
 
+def test_paperwork_never_asks_for_the_harmonica_key():
+    """Flight binds H to the heal and returns before cargo sees the key.
+
+    A form that asked for H could never be filed. The 4s timeout then took
+    14 hull, and there was no other key for that prompt. Prompts are F/G.
+    """
+    pygame.init()
+    from cargo.paperwork import SentientPaperwork, _POPUP_KEYS
+
+    assert pygame.K_h not in {key for key, _name in _POPUP_KEYS}
+    assert {name for _key, name in _POPUP_KEYS} == {"F", "G"}
+
+    cargo = SentientPaperwork()
+    for _ in range(40):
+        cargo._trigger_form()
+        assert cargo.popup_key in (pygame.K_f, pygame.K_g)
+        assert cargo.popup_key_name in {"F", "G"}
+        assert cargo.handle_key(
+            pygame.event.Event(pygame.KEYDOWN, key=cargo.popup_key)) is True
+        assert cargo.popup_active is False
+
+
+def test_h_still_starts_harmonica_while_a_form_is_waiting():
+    pygame.init()
+    from cargo.paperwork import SentientPaperwork
+    from core.game import Game
+    from core.state_manager import GameState
+    from roguelite.run_manager import RunManager
+
+    class _States:
+        state = GameState.FLIGHT
+
+    cargo = SentientPaperwork()
+    cargo._trigger_form()
+    assert cargo.popup_active is True
+    filed = cargo._forms_filed
+
+    rm = RunManager.__new__(RunManager)
+    rm._ship = SimpleNamespace(cargo=cargo)
+    started = {"harm": False}
+    rm.start_harmonica_session = lambda: started.__setitem__("harm", True) or True
+
+    game = Game.__new__(Game)
+    game.states = _States()
+    game.run_mgr = rm
+    game.audio = None
+    game._PAUSEABLE = frozenset()
+
+    Game._route_keydown(game, pygame.event.Event(pygame.KEYDOWN, key=pygame.K_h))
+
+    assert started["harm"] is True
+    assert cargo.popup_active is True
+    assert cargo._forms_filed == filed
+
+
+def test_flight_files_an_f_or_g_form():
+    pygame.init()
+    from cargo.paperwork import SentientPaperwork
+    from core.game import Game
+    from core.state_manager import GameState
+    from roguelite.run_manager import RunManager
+
+    class _States:
+        state = GameState.FLIGHT
+
+    cargo = SentientPaperwork()
+    cargo.popup_active = True
+    cargo.popup_key = pygame.K_f
+    cargo.popup_key_name = "F"
+
+    rm = RunManager.__new__(RunManager)
+    rm._ship = SimpleNamespace(cargo=cargo)
+    started = {"harm": False}
+    rm.start_harmonica_session = lambda: started.__setitem__("harm", True) or True
+
+    game = Game.__new__(Game)
+    game.states = _States()
+    game.run_mgr = rm
+    game.audio = None
+    game._PAUSEABLE = frozenset()
+
+    Game._route_keydown(game, pygame.event.Event(pygame.KEYDOWN, key=pygame.K_f))
+
+    assert cargo.popup_active is False
+    assert cargo._forms_filed == 1
+    assert started["harm"] is False
+
+
 def test_ship_rotation_locked_during_session():
     pygame.init()
     pygame.font.init()

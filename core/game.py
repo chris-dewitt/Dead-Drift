@@ -788,6 +788,7 @@ class Game:
                 return
             # H = Epic 11.1c harmonica heal session. Locks rotation,
             # +5 hull over 6s, blocked within 300 px of an active barge.
+            # Paperwork must not prompt H — this return happens before cargo.
             if event.key == pygame.K_h:
                 self.run_mgr.start_harmonica_session()
                 return
