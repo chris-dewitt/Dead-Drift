@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import os
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
@@ -52,6 +54,56 @@ def test_interstitial_advances_after_chapter_four_and_ends_after_six():
 
     assert game._interstitial_next == 7
     assert game._interstitial_campaign_end is True
+
+
+def test_interstitial_continue_clears_dossier_chapter_override():
+    """Beating a dossier run must load the campaign frontier, not the replay.
+
+    Cargo Dossiers sets `_chapter_override`. The interstitial prompt says
+    it will load the next chapter, then `_exit_interstitial` calls
+    `start_run()`. If the override is still set, that rebuilds the chapter
+    the player just finished and the campaign never advances.
+    """
+    from core.game import Game
+    from core.state_manager import GameState
+    from roguelite.meta_progression import MetaProgression
+    from roguelite.run_manager import RunManager
+
+    with tempfile.TemporaryDirectory() as tmp:
+        meta = MetaProgression(save_path=Path(tmp) / "meta.json")
+        meta._data["chapters_completed"] = [1, 2]
+        rm = RunManager.__new__(RunManager)
+        rm.meta = meta
+        rm._chapter_override = 2
+        assert rm._current_chapter() == 2
+
+        seen = []
+        started = []
+        game = Game.__new__(Game)
+        game._interstitial_campaign_end = False
+        game.run_mgr = rm
+        game.ship = object()
+        game._goto = lambda state: seen.append(state)
+
+        def _start_run(ship):
+            started.append(rm._current_chapter())
+
+        rm.start_run = _start_run
+
+        Game._exit_interstitial(game)
+
+        assert seen == [GameState.LOADOUT_DRAFT]
+        assert started == [3]
+        assert rm._chapter_override is None
+
+        # Replaying an earlier chapter must also return to the frontier,
+        # not restart the replay.
+        rm._chapter_override = 1
+        seen.clear()
+        started.clear()
+        Game._exit_interstitial(game)
+        assert started == [3]
+        assert rm._chapter_override is None
 
 
 def test_encrypted_drive_final_terminal_is_chapter_aware():
