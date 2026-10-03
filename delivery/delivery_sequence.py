@@ -555,6 +555,9 @@ class DeliverySequence:
         self._bonus    = 0
         self._fee_cut  = 0
         self._done     = False
+        # Set once the payout and chapter clear have been written. Game
+        # drops the run checkpoint at that point so a resume cannot replay it.
+        self._reward_committed = False
 
         # Approach stars track
         self._approach_score = 0   # 0=miss, 1=ok, 2=centred
@@ -1686,6 +1689,7 @@ class DeliverySequence:
         except Exception:
             pass
         self.meta.save()
+        self._reward_committed = True
 
     def _draw_result(self, surface: pygame.Surface, W: int, H: int):
         """I.5.3 — RESULT card rebuilt in the corridor's DKC tally style:

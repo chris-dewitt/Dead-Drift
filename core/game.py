@@ -304,9 +304,14 @@ class Game:
 
     def _on_run_end(self, success, **_):
         if success:
-            self.save_mgr.delete_run_checkpoint()
+            # The flight autosave stops here, and the delivery sequence is
+            # several minutes with no timer of its own. Deleting the checkpoint
+            # before that sequence means closing the window (or a kill on
+            # Android) drops every sector of the chapter. Keep a resumable
+            # snapshot until the payout is committed.
             self._delivery_chapter = self.run_mgr._current_chapter()
             self.meta.clear_debt_chunk()
+            self.meta.save()
             bus.emit(EVT_BAX_SPEAK, priority=True, line=random.choice([
                 "Five sectors. FIVE. And we're still breathin'. "
                 "Drop-off confirmed. Station on approach. Don't crash now.",
@@ -319,10 +324,24 @@ class Game:
             ]))
             self._delivery_pending = True
             self._delivery_delay_t = 2.4
+            self._save_run_checkpoint()
         else:
             self.meta.save()
             self._run_just_completed = False
             self._goto(GameState.MAIN_MENU)
+
+    def _begin_delivery(self) -> None:
+        """Start the drop-off sequence and snapshot it for resume."""
+        self._delivery_pending = False
+        self._delivery = DeliverySequence(
+            self.meta, chapter=self._delivery_chapter, ship=self.ship)
+        # The last sector almost always ends inside the jump terminal. The
+        # flight-only path used to be the only one that copied the clock, so
+        # a normal hardcore clear stored a best time of zero.
+        self._delivery._total_time_for_hardcore = float(
+            getattr(self.run_mgr, "_run_total_time", 0.0))
+        self._goto(GameState.DELIVERY)
+        self._save_run_checkpoint()
 
     # ------------------------------------------------------------------
     # Bax hum (§7.4) — one per run on first delivery success.
@@ -543,6 +562,15 @@ class Game:
             self.running = False
 
     def _save_run_checkpoint(self) -> None:
+        # Once the delivery payout is on disk, a leftover DELIVERY snapshot
+        # would rebuild the corridor and pay it out again.
+        delivery = getattr(self, "_delivery", None)
+        if delivery is not None and getattr(delivery, "_reward_committed", False):
+            try:
+                self.save_mgr.delete_run_checkpoint()
+            except OSError:
+                pass
+            return
         if self.run_mgr._sector is None and not self.run_mgr.draft.is_confirmed():
             return
         try:
@@ -850,14 +878,7 @@ class Game:
                 self.bax.update(dt)
                 self.cockpit_renderer.update(dt)
                 if self._delivery_delay_t <= 0:
-                    self._delivery_pending = False
-                    self._delivery = DeliverySequence(self.meta, chapter=self._delivery_chapter,
-                                                      ship=self.ship)
-                    # Epic 8.4 — pass total run time so HARDCORE best-time
-                    # recording uses real flight elapsed seconds, not delivery scene time.
-                    self._delivery._total_time_for_hardcore = float(
-                        getattr(self.run_mgr, "_run_total_time", 0.0))
-                    self._goto(GameState.DELIVERY)
+                    self._begin_delivery()
             else:
                 self._torch_warn_t = max(0.0, self._torch_warn_t - dt)
                 self.run_mgr.update(dt)
@@ -931,11 +952,7 @@ class Game:
                 self.bax.update(dt)
                 self.cockpit_renderer.update(dt)
                 if self._delivery_delay_t <= 0:
-                    self._delivery_pending = False
-                    self._delivery = DeliverySequence(self.meta,
-                                                      chapter=self._delivery_chapter,
-                                                      ship=self.ship)
-                    self._goto(GameState.DELIVERY)
+                    self._begin_delivery()
 
         elif state == GameState.LOADOUT_DRAFT:
             if self.run_mgr.draft.is_confirmed():
@@ -951,6 +968,8 @@ class Game:
         elif state == GameState.DELIVERY:
             if self._delivery is not None:
                 self._delivery.update(self._dt)
+                if getattr(self._delivery, "_reward_committed", False):
+                    self.save_mgr.delete_run_checkpoint()
                 if self._delivery.is_done:
                     self._delivery = None
                     self._enter_interstitial()
