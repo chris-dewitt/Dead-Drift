@@ -24,6 +24,41 @@ def test_extract_credit_skips_local_404():
     assert extract_credit_amount("pay 1500 credits") == 1500
 
 
+def test_bare_hundred_is_one_hundred_not_ten_thousand():
+    """The unit word 'hundred' must not multiply itself (100 * 100 = 10,000)."""
+    from terminal.nlp_parser import extract_credit_amount
+
+    assert extract_credit_amount("a hundred") == 100
+    assert extract_credit_amount("I'll pay a hundred") == 100
+    assert extract_credit_amount("hundred credits") == 100
+    assert extract_credit_amount("I've been waiting a hundred years") == 100
+    assert extract_credit_amount("five hundred") == 500
+    assert extract_credit_amount("two hundred") == 200
+    assert extract_credit_amount("fifteen hundred credits") == 1500
+    assert extract_credit_amount("a hundred thousand") == 100000
+
+
+def test_toll_and_gary_do_not_charge_ten_thousand_for_a_hundred():
+    """Ordinary 'a hundred' talk must not RELEASE the gate or inflate debt."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    toll = make_npc("toll_authority")
+    outcome, _ = toll.respond("I've been waiting a hundred years")
+    assert outcome != NPCOutcome.RELEASE
+    assert toll.bribe_cost() == 0
+
+    offered = make_npc("toll_authority")
+    outcome, _ = offered.respond("I'll pay a hundred")
+    assert outcome != NPCOutcome.RELEASE
+    assert offered.bribe_cost() == 0
+
+    gary = make_npc("gary")
+    outcome, _ = gary.respond("I'll pay a hundred")
+    assert outcome == NPCOutcome.CONTINUE
+    assert gary.bribe_cost() == 0
+
+
 def test_gary_sympathy_two_turns():
     from terminal.npc_logic import make_npc
     from terminal.npcs.base_npc import NPCOutcome

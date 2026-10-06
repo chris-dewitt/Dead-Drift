@@ -69,11 +69,18 @@ def extract_credit_amount(text: str) -> int | None:
         if val == 404 and re.search(r'local\s*404', lower):
             continue
         return val
-    # 'fifteen hundred' / 'five hundred' style (before bare 'five' -> 5000 heuristic)
+    # 'fifteen hundred' / 'five hundred' style (before bare 'five' -> 5000 heuristic).
+    # Skip the unit word itself: "hundred" is also in _WORD_NUMS as 100, so
+    # matching it and multiplying by 100 turned "a hundred" / "a hundred
+    # years" into 10,000 and Gate Seven / Gary charged that as a bribe.
     if "hundred" in lower and "thousand" not in lower:
         for word, val in _WORD_NUMS.items():
+            if word == "hundred":
+                continue
             if re.search(rf"\b{re.escape(word)}\b", lower):
                 return val * 100
+        if re.search(r"\bhundred\b", lower):
+            return 100
     # 'five thousand' / 'twenty grand' style
     for word, val in _WORD_NUMS.items():
         if re.search(rf"\b{re.escape(word)}\b", lower):
