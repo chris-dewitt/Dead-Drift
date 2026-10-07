@@ -45,6 +45,61 @@ def test_set_active_and_list_slots(save_env):
     assert slots == {1: True, 2: False, 3: True}
 
 
+def test_resume_of_truncated_checkpoint_does_not_start_a_new_run(save_env):
+    """RESUME on a half-written slot_XX_run.json must not delete it.
+
+    `_begin_run_from_menu` unlinks the checkpoint. That is correct when
+    the player asks for a new run, and it used to also run when RESUME
+    could not parse the snapshot.
+    """
+    from core.game import Game
+
+    mgr = SaveManager()
+    mgr.create_fresh_save(1)
+    ckpt = mgr.run_checkpoint_path(1)
+    ckpt.write_text("{not json", encoding="utf-8")
+    started: list[str] = []
+
+    class _Host:
+        save_mgr = mgr
+
+        def _bind_meta_from_active_slot(self):
+            return None
+
+        def _begin_run_from_menu(self):
+            started.append("new")
+
+        def _goto(self, state):
+            started.append(str(state))
+
+    Game._continue_from_menu(_Host())
+    assert started == []
+    assert ckpt.read_text(encoding="utf-8") == "{not json"
+
+
+def test_continue_without_checkpoint_still_starts_a_run(save_env):
+    from core.game import Game
+
+    mgr = SaveManager()
+    mgr.create_fresh_save(1)
+    started: list[str] = []
+
+    class _Host:
+        save_mgr = mgr
+
+        def _bind_meta_from_active_slot(self):
+            return None
+
+        def _begin_run_from_menu(self):
+            started.append("new")
+
+        def _goto(self, state):
+            started.append(str(state))
+
+    Game._continue_from_menu(_Host())
+    assert started == ["new"]
+
+
 def test_delete_run_checkpoint(save_env):
     mgr = SaveManager()
     mgr.create_fresh_save(1)

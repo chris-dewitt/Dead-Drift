@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -664,10 +665,29 @@ def restore_checkpoint(game, data: dict) -> bool:
 
 
 def save_checkpoint_file(path: Path, game) -> None:
+    """Replace the checkpoint only after the new payload is fully on disk.
+
+    `open(path, "w")` truncates the live file before `json.dump` finishes.
+    Autosave runs every 25s in flight, and `_save_run_checkpoint` swallows
+    `OSError`. A kill or a full disk in that window used to leave a 0-byte
+    `slot_XX_run.json`. RESUME then treated the unreadable file as "no run"
+    and started a fresh loadout, which deletes the snapshot.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = build_checkpoint(game)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2)
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
 
 
 def load_checkpoint_file(path: Path) -> dict | None:

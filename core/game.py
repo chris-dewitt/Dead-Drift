@@ -566,6 +566,11 @@ class Game:
                     self._shop = ShopScreen(self.run_mgr, self.ship)
                 self._goto(target)
                 return
+            # Snapshot is on disk but unreadable (truncated autosave).
+            # Falling through used to call _begin_run_from_menu, which
+            # deletes the file and starts a new loadout. Stay on the menu;
+            # DELETE RUN is the explicit way to drop it.
+            return
         if self.save_mgr.slot_info(self.save_mgr.active_slot_id).exists:
             self._begin_run_from_menu()
         else:
