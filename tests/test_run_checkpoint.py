@@ -52,6 +52,24 @@ def mini_game(tmp_path, monkeypatch):
     return game
 
 
+def test_failed_checkpoint_write_keeps_the_previous_snapshot(mini_game, tmp_path, monkeypatch):
+    """A dump that dies after the old file would have been truncated must
+    leave that snapshot readable. Autosave swallows OSError."""
+    path = tmp_path / "run.json"
+    save_checkpoint_file(path, mini_game)
+    original = path.read_bytes()
+
+    def boom(*_a, **_k):
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr("roguelite.run_checkpoint.json.dump", boom)
+    with pytest.raises(OSError):
+        save_checkpoint_file(path, mini_game)
+    assert path.read_bytes() == original
+    assert load_checkpoint_file(path)["version"] == CHECKPOINT_VERSION
+    assert not path.with_name(path.name + ".tmp").exists()
+
+
 def test_checkpoint_roundtrip(mini_game, tmp_path):
     path = tmp_path / "run.json"
     save_checkpoint_file(path, mini_game)
