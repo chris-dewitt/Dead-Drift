@@ -146,6 +146,52 @@ def test_mobile_jump_advances_without_terminal(tmp_path):
     assert called == ["advance"]
 
 
+def test_final_jump_pays_once_when_pressed_twice(tmp_path, monkeypatch):
+    """Last-sector JUMP ends the run without reloading the timer.
+
+    The victory beat stays in FLIGHT for 2.4s with jump_ready still true, so
+    a second press (or a second touch event in the same frame) used to pay
+    the sector bonus again and emit another run-end. Game._on_run_end clears
+    50,000 debt per event, and each event resets that 2.4s window.
+    """
+    set_mobile(True)
+    monkeypatch.setattr(S, "SAVES_DIR", str(tmp_path))
+    from core.event_bus import bus, EVT_RUN_END
+    from roguelite.meta_progression import MetaProgression
+    from roguelite.run_manager import RunManager
+    from types import SimpleNamespace
+
+    meta = MetaProgression(save_path=tmp_path / "meta.json")
+    rm = RunManager(meta)
+    rm._sector_index = S.SECTORS_PER_RUN - 1
+    rm._sector_timer = rm._sector_dur + 5.0
+    rm._ship = SimpleNamespace(hull=S.HULL_MAX, cargo=None)
+    rm._sector_start_hull = S.HULL_MAX
+    starting = meta.debt
+    ends: list[bool] = []
+
+    def _on_end(success=False, **_):
+        ends.append(bool(success))
+        if success:
+            meta.clear_debt_chunk()
+
+    bus.subscribe(EVT_RUN_END, _on_end)
+    try:
+        ev = pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_j})
+        rm.handle_key(ev)
+        rm.handle_key(ev)
+        # Timer may have been disarmed; a direct second clear must still no-op.
+        rm._sector_timer = rm._sector_dur + 5.0
+        rm._advance_sector()
+    finally:
+        bus.unsubscribe(EVT_RUN_END, _on_end)
+
+    assert ends == [True]
+    assert rm._sector_index == S.SECTORS_PER_RUN
+    assert meta.debt == starting - 4500 - 50000
+    assert rm._run_debt_reduced == 4500
+
+
 def test_barge_intercept_skips_comm_on_mobile(tmp_path):
     set_mobile(True)
     from antagonists.repo_barge import RepoBarge, BargeState
