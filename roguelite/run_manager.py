@@ -1545,6 +1545,14 @@ class RunManager:
                  ]))
 
     def _advance_sector(self):
+        # Clearing the last sector ends the run without reloading the timer,
+        # and the victory beat stays in FLIGHT. A second JUMP (the mobile
+        # button stays enabled for that 2.4s, and a double touch event can
+        # land in the same frame) would pay the sector bonus again and emit
+        # another run-end — each one clears another 50,000 off the ledger
+        # and restarts the window. Once the run is over, ignore it.
+        if self._sector_index >= S.SECTORS_PER_RUN:
+            return
         bus.emit(EVT_WARP_JUMP)
         sector_bonus = 4500
         self.meta.pay_off(sector_bonus, source="SECTOR CLEAR")
@@ -1581,6 +1589,8 @@ class RunManager:
             cargo = getattr(self._ship, "cargo", None) if self._ship else None
             if cargo is not None and hasattr(cargo, "force_clear_inversion"):
                 cargo.force_clear_inversion(self._ship)
+            # Disarm JUMP so the victory beat cannot clear the sector again.
+            self._sector_timer = 0.0
             bus.emit(EVT_RUN_END, success=True)
             return
 
