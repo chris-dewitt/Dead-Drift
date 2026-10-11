@@ -128,6 +128,23 @@ _INTENT_PATTERNS: list[tuple[str, list[str]]] = [
                        "purpose", "void", "entropy", "existence"]),
 ]
 
+
+def _intent_cue_hit(pattern: str, lower: str) -> bool:
+    """True when `pattern` is an intent cue in `lower`.
+
+    Single tokens match on word boundaries. A bare substring test treated
+    "fund" as a bribe inside "fundamental", "pay" as a bribe inside
+    "payload", and "file" as a threat inside "profile" — three ordinary
+    lines then impounded Eddie, Felix, and Morwenna, and two of them hung
+    up on Kress. "apolog" is a stem (apology / apologise / apologize), so
+    it stays a prefix. Multi-word cues stay substring matches.
+    """
+    if pattern == "apolog":
+        return re.search(r"\bapolog", lower) is not None
+    if " " in pattern:
+        return pattern in lower
+    return re.search(rf"\b{re.escape(pattern)}\b", lower) is not None
+
 # J.2.1 — SQL / code-injection signatures. Each entry is a recognisable
 # injection SHAPE, not a bare keyword: "union" only counts before SELECT
 # (players legitimately complain about the Union), tautologies only with an
@@ -232,7 +249,10 @@ class NLPParser:
         scores: dict[str, int] = {}
 
         for label, pattern_words in _INTENT_PATTERNS:
-            hits = sum(1 for w in pattern_words if w in lower or w in kw_set)
+            hits = sum(
+                1 for w in pattern_words
+                if _intent_cue_hit(w, lower) or w in kw_set
+            )
             if hits:
                 scores[label] = hits
 
