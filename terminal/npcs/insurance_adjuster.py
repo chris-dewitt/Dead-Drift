@@ -1,6 +1,7 @@
 from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import word_hit
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
 
@@ -65,10 +66,13 @@ class InsuranceAdjuster(BaseNPC):
         "natural hazard", "unforeseeable", "uncontrollable", "accident",
         "accidental", "couldn't avoid", "no way to avoid",
         "unavoidable collision", "natural obstacle", "space debris",
-        "field hazard", "rock", "couldn't help", "natural cause",
+        "field hazard", "couldn't help", "natural cause",
         # scan-chip sync (FORCE-MAJ lights on bare "gravitational")
         "gravitational",
     ]
+    # "rock" sits inside "rocket" / "rocketed". A hull line like "a rocket
+    # hit us and it's not my fault" was approving the claim on turn one.
+    _ROCK_WORDS = ("rock", "rocks")
     _FORMAL_CLAIM_KEYWORDS = [
         "covered event", "force majeure", "environmental damage",
         "not pilot error", "clause 14", "natural damage",
@@ -85,7 +89,7 @@ class InsuranceAdjuster(BaseNPC):
     # --- COUNTER CLAIM THREAT keywords ---
     _LEGAL_THREAT_KEYWORDS = [
         "small claims", "counter-claim", "counterclaim", "tribunal",
-        "file against you", "file against nova", "sue", "legal action",
+        "file against you", "file against nova", "legal action",
         "solicitor", "file a claim", "take you to court",
         "report you", "regulatory body", "ombudsman",
         # natural-language variants
@@ -94,6 +98,9 @@ class InsuranceAdjuster(BaseNPC):
         "legal team", "take legal", "get a lawyer", "escalate this",
         "arbitration board", "my attorney", "legal proceedings",
     ]
+    # "sue" sits inside "issue" and "pursue" — the two words a claimant
+    # actually says. Whole-word, plus the conjugations a real threat uses.
+    _SUE_WORDS = ("sue", "sues", "sued", "suing")
 
     # --- EXHAUSTION / SYMPATHY toward Morwenna ---
     _SYMPATHY_KEYWORDS = [
@@ -309,7 +316,10 @@ class InsuranceAdjuster(BaseNPC):
             ]
 
         # --- FORCE MAJEURE ---
-        has_natural = any(kw in raw for kw in self._NATURAL_CAUSE_KEYWORDS)
+        has_natural = (
+            any(kw in raw for kw in self._NATURAL_CAUSE_KEYWORDS)
+            or word_hit(raw, self._ROCK_WORDS)
+        )
         has_formal  = any(kw in raw for kw in self._FORMAL_CLAIM_KEYWORDS)
         if has_natural:
             self._force_majeure_natural = True
@@ -353,7 +363,10 @@ class InsuranceAdjuster(BaseNPC):
                 ])
 
         # --- COUNTER CLAIM THREAT ---
-        legal_hit = any(kw in raw for kw in self._LEGAL_THREAT_KEYWORDS)
+        legal_hit = (
+            any(kw in raw for kw in self._LEGAL_THREAT_KEYWORDS)
+            or word_hit(raw, self._SUE_WORDS)
+        )
         if legal_hit:
             self._legal_threat_hits += 1
             self._current_path = "COUNTER CLAIM"
