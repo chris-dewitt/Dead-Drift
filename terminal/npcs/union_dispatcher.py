@@ -2,6 +2,7 @@ from __future__ import annotations
 import random
 import re
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import word_hit
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT, EVT_BAX_SPEAK
 
@@ -27,9 +28,12 @@ class UnionDispatcher(BaseNPC):
         "unregistered", "wave", "function", "probability", "uncertainty",
         "eigenstate", "entangled", "decoherence",
     }
-    _LEGAL_KEYWORDS = ["grievance", "violation", "lawyer", "lawsuit", "sue",
+    _LEGAL_KEYWORDS = ["grievance", "violation", "lawyer", "lawsuit",
                        "charter", "clause", "article", "rights", "illegal",
                        "union rules", "arbitration", "injunction", "appeal"]
+    # "sue" sits inside "issue". Three ordinary fee complaints were a
+    # grievance and released the ship. Conjugations stay whole words.
+    _SUE_WORDS = ("sue", "sues", "sued", "suing")
     _BRIBE_KEYWORDS = ["credits", "pay", "money", "bribe", "offer", "deal",
                        "cash", "transfer", "compensate", "buy"]
     _BIG_BRIBES     = ["10k", "ten thousand", "20k", "twenty", "fifty", "50k",
@@ -277,7 +281,8 @@ class UnionDispatcher(BaseNPC):
 
         # LEGAL PRESSURE
         if (parsed.intent == "legal" or
-                any(w in raw for w in self._LEGAL_KEYWORDS)):
+                any(w in raw for w in self._LEGAL_KEYWORDS) or
+                word_hit(raw, self._SUE_WORDS)):
             self._legal_points += 1
             self._current_path  = "LEGAL PRESSURE"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="legal_pressure")
