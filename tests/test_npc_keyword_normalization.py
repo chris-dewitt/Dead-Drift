@@ -190,6 +190,62 @@ def test_dispatcher_whole_word_rest_still_releases():
     assert dispatcher._current_path == "COFFEE BREAK"
 
 
+def test_pirate_hello_and_fragment_do_not_end_the_intercept():
+    """Substring tone/threat tokens used to release a courier who wasn't
+    talking like a pirate or threatening anyone.
+
+    'hell' lives inside hello and shell. 'mate' lives inside material and
+    ultimate. Two of those lines used to close MUTUAL RESPECT and pay the
+    2,500 release. 'frag' lives inside fragment, so one debris line with
+    two tether snaps used to close INTIMIDATE the same way. Bare 'well'
+    counted 'as well' / 'I am well' / 'farewell' toward the physics flex.
+    """
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    def run(lines, snaps=0):
+        pirate = make_npc("pirate", run_context={"run_snaps": snaps})
+        last = NPCOutcome.CONTINUE
+        for line in lines:
+            last, _ = pirate.respond(line)
+        return last, pirate._current_path
+
+    out, path = run(["hello", "hello again"])
+    assert out == NPCOutcome.CONTINUE
+    assert path != "MUTUAL RESPECT"
+
+    out, path = run(["check the shell", "the shell is fine"])
+    assert out == NPCOutcome.CONTINUE
+    assert path != "MUTUAL RESPECT"
+
+    out, path = run([
+        "the material is standard freight",
+        "ultimate deadline on this drop",
+    ])
+    assert out == NPCOutcome.CONTINUE
+    assert path != "MUTUAL RESPECT"
+
+    out, path = run(["what the hell is this", "hell of a welcome, mate"])
+    assert out == NPCOutcome.RELEASE
+    assert path == "MUTUAL RESPECT"
+
+    out, path = run(["a fragment hit the hull"], snaps=3)
+    assert out == NPCOutcome.CONTINUE
+    assert path != "INTIMIDATE"
+
+    out, path = run(["frag you if you touch the hold"], snaps=3)
+    assert out == NPCOutcome.RELEASE
+    assert path == "INTIMIDATE"
+
+    out, path = run(["as well", "I am well", "farewell"])
+    assert out == NPCOutcome.CONTINUE
+    assert path != "ESCAPE FLEX"
+
+    out, path = run(["gravity well on the port side"])
+    assert out == NPCOutcome.CONTINUE
+    assert path == "ESCAPE FLEX"
+
+
 def test_pirate_extended_threat_keywords_land():
     """Playtest fix: more menacing phrasing should still register as a
     threat path, not bounce to filler."""

@@ -1,6 +1,7 @@
 from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import hit
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
 
@@ -37,41 +38,51 @@ class Pirate(BaseNPC):
         "all of it", "give it", "the payload", "payload", "the haul",
         "i'll drop", "drop the", "leave the",
     ]
-    _ESCAPE_KEYWORDS = [
-        "slingshot", "gravity well", "gravity assist", "well",
-        "trajectory", "vector", "burn", "delta-v", "orbital",
-        "swing past", "swing by", "swing around", "outrun",
-        "thruster", "thrust", "newtonian", "momentum",
-        # extended physics vocabulary
-        "escape burn", "counter burn", "counter-burn", "run hot",
-        "punch it", "boost", "break away", "break free", "flight path",
+    # Phrases stay substring. Single tokens are whole words — bare "well"
+    # used to live here and counted "as well" / "I am well" / "farewell"
+    # as a gravity-well flex.
+    _ESCAPE_PHRASES = [
+        "gravity well", "gravity assist",
+        "swing past", "swing by", "swing around",
+        "escape burn", "counter burn", "run hot",
+        "punch it", "break away", "break free", "flight path",
         "escape route", "escape vector", "exit vector", "course change",
         "slingshot out", "orbital sling", "gravity sling", "well assist",
         "boost away", "speed away", "pull away", "arc away",
     ]
-    _PIRATE_TONE = [
-        "shite", "damn", "bastard", "hell", "bollocks", "arse",
-        "scuttle", "blast", "void you", "void off", "out here",
-        "freebooter", "freelancer", "outer", "belt", "burn it",
-        # extended pirate vocabulary
-        "mate", "bleeding", "drifter", "free run", "no charter",
-        "no law out here", "void take", "uncharted", "out in the void",
-        "no law", "no rules", "borderless", "hull to hull",
+    _ESCAPE_WORDS = (
+        "slingshot", "trajectory", "vector", "burn", "delta-v", "orbital",
+        "outrun", "thruster", "thrust", "newtonian", "momentum",
+        "counter-burn", "boost",
+    )
+    # "hell" inside *hello*/*shell* and "mate" inside *material*/*ultimate*
+    # used to count as pirate talk and release on the second line.
+    _PIRATE_TONE_PHRASES = [
+        "void you", "void off", "out here", "burn it",
+        "free run", "no charter", "no law out here", "void take",
+        "out in the void", "no law", "no rules", "hull to hull",
         "don't answer to", "answer to no one",
     ]
+    _PIRATE_TONE_WORDS = (
+        "shite", "damn", "bastard", "hell", "bollocks", "arse",
+        "scuttle", "blast", "freebooter", "freelancer", "outer", "belt",
+        "mate", "bleeding", "drifter", "uncharted", "borderless",
+    )
     _KRELL_KEYWORDS = [
         "krell", "outer belt", "outer-belt", "the belt", "tongueless krell",
     ]
-    _THREAT_KEYWORDS = [
-        "blow", "shoot", "destroy", "wreck", "guns", "weapons",
-        "ordnance", "blast", "open fire", "fire on", "torch you",
-        # Playtest fix: extended pirate-hostility keywords so credible
-        # threats land more often.
+    # "frag" inside *fragment* used to read as a weapons threat.
+    _THREAT_PHRASES = [
+        "open fire", "fire on", "torch you",
         "vent your hold", "vent the hold", "hull breach", "rip you",
         "scuttle you", "send you home", "snap your spine",
-        "atomise", "atomize", "punch through", "burn through",
-        "frag", "frag you", "kill you", "scrap you", "split you",
+        "punch through", "burn through",
+        "frag you", "kill you", "scrap you", "split you",
     ]
+    _THREAT_WORDS = (
+        "blow", "shoot", "destroy", "wreck", "guns", "weapons",
+        "ordnance", "blast", "atomise", "atomize", "frag",
+    )
     _LEGAL_KEYWORDS = [
         "union", "charter", "article", "lawful", "illegal", "law",
         "court", "judge", "arrest", "warrant",
@@ -182,7 +193,7 @@ class Pirate(BaseNPC):
             ])
 
         # KRELLBORN-CODE TONE — they respect pirates back
-        if any(w in raw for w in self._PIRATE_TONE):
+        if hit(raw, self._PIRATE_TONE_PHRASES, self._PIRATE_TONE_WORDS):
             self._tone_turns += 1
             self._current_path = "MUTUAL RESPECT"
             self.disposition  += 2
@@ -204,7 +215,7 @@ class Pirate(BaseNPC):
             ])
 
         # SLINGSHOT FLEX — knows their physics
-        if any(w in raw for w in self._ESCAPE_KEYWORDS):
+        if hit(raw, self._ESCAPE_PHRASES, self._ESCAPE_WORDS):
             self._escape_turns += 1
             self._current_path  = "ESCAPE FLEX"
             self.disposition   += 1
@@ -225,7 +236,7 @@ class Pirate(BaseNPC):
             ])
 
         # HULL THREAT — must be credible (validated by snaps)
-        if any(w in raw for w in self._THREAT_KEYWORDS):
+        if hit(raw, self._THREAT_PHRASES, self._THREAT_WORDS):
             run_snaps = self._ctx.get("run_snaps", 0)
             credible = run_snaps >= 2
             self._current_path = "INTIMIDATE"
