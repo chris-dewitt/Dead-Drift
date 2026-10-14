@@ -40,6 +40,13 @@ _BINOPS = {
     ast.Div: operator.truediv, ast.FloorDiv: operator.floordiv,
     ast.Mod: operator.mod, ast.Pow: operator.pow,
 }
+# Largest str/list/tuple the sandbox will build. The terminal accepts ~78
+# characters, which is enough for `"a" * 10**18` and `"%100000000s" % "x"`.
+# Those used to allocate (or raise MemoryError) on the game thread and kill
+# the process. Ordinary repeats (`"ab" * 3`) stay under this.
+_MAX_RESULT = 10_000
+_FORMAT_FLAGS = set("-#+0 ")
+_FORMAT_TYPES = set("diouxXeEfFgGcrs")
 _UNARYOPS = {ast.UAdd: operator.pos, ast.USub: operator.neg, ast.Not: operator.not_}
 _CMPOPS = {
     ast.Eq: operator.eq, ast.NotEq: operator.ne, ast.Lt: operator.lt,
@@ -49,6 +56,91 @@ _CMPOPS = {
 
 class _Unsafe(Exception):
     """Raised by the arithmetic evaluator when it meets a node it won't touch."""
+
+
+def _seq_repeat_too_big(left, right, limit: int = _MAX_RESULT) -> bool:
+    """True when `left * right` would build a str/list/tuple past `limit`.
+
+    An empty sequence times any int is empty, which Python returns without
+    allocating, so that stays allowed. Bool is an int subclass (`"a" * True`)
+    and is a one-character repeat, not a bomb.
+    """
+    seq = count = None
+    if isinstance(left, (str, list, tuple)) and type(right) is int:
+        seq, count = left, right
+    elif isinstance(right, (str, list, tuple)) and type(left) is int:
+        seq, count = right, left
+    else:
+        return False
+    if count <= 0 or len(seq) == 0:
+        return False
+    return count > limit or len(seq) > limit or len(seq) * count > limit
+
+
+def _format_too_wide(fmt, value, limit: int = _MAX_RESULT) -> bool:
+    """True when `fmt % value` would pad a field wider than `limit`.
+
+    Literal widths (`%100000000s`) and star widths (`%*s` % (10**9, "x"))
+    both allocate before the result is ever printed. Precision (`%.*s`) only
+    truncates, so it is not a width. A malformed specifier returns False and
+    the real formatter raises, which the caller turns into an error line.
+    """
+    if not isinstance(fmt, str):
+        return False
+    mapping = isinstance(value, dict)
+    args = [] if mapping else (list(value) if isinstance(value, tuple) else [value])
+    ai = 0
+    i = 0
+    n = len(fmt)
+    while i < n:
+        if fmt[i] != "%":
+            i += 1
+            continue
+        if i + 1 < n and fmt[i + 1] == "%":
+            i += 2
+            continue
+        i += 1
+        keyed = False
+        if i < n and fmt[i] == "(":
+            end = fmt.find(")", i + 1)
+            if end < 0:
+                return False
+            i = end + 1
+            keyed = True
+        while i < n and fmt[i] in _FORMAT_FLAGS:
+            i += 1
+        width = None
+        if i < n and fmt[i] == "*":
+            if mapping or ai >= len(args) or type(args[ai]) is not int:
+                return False
+            width = args[ai]
+            ai += 1
+            i += 1
+        else:
+            j = i
+            while j < n and fmt[j].isdigit():
+                j += 1
+            if j > i:
+                width = int(fmt[i:j])
+                i = j
+        if i < n and fmt[i] == ".":
+            i += 1
+            if i < n and fmt[i] == "*":
+                if not mapping:
+                    ai += 1
+                i += 1
+            else:
+                while i < n and fmt[i].isdigit():
+                    i += 1
+        if i < n and fmt[i] in _FORMAT_TYPES:
+            i += 1
+            if not mapping and not keyed:
+                ai += 1
+        else:
+            return False
+        if isinstance(width, int) and abs(width) > limit:
+            return True
+    return False
 
 
 class ReplSession:
@@ -98,8 +190,15 @@ class ReplSession:
             except ZeroDivisionError:
                 return ReplResult(output=["Traceback (most recent call last):",
                                           "ZeroDivisionError: division by zero"])
-            except (OverflowError, ValueError):
+            except OverflowError:
                 return ReplResult(output=["OverflowError: result too large for the sandbox"])
+            except MemoryError:
+                # Backstop if a size check is missed. Never let it kill the run.
+                return ReplResult(output=["MemoryError: result too large for the sandbox"])
+            except TypeError as e:
+                return ReplResult(output=[f"TypeError: {e}"])
+            except ValueError as e:
+                return ReplResult(output=[f"ValueError: {e}"])
             return ReplResult(output=[repr(value)])
 
         # Valid statement (assignment, loop, def…) but nothing to print.
@@ -163,10 +262,15 @@ class ReplSession:
 
     @staticmethod
     def _guard(op, left, right) -> None:
-        """Refuse cheap DoS: giant exponents / huge shifts."""
+        """Refuse cheap DoS: giant exponents, sequence repeats, format widths."""
         if isinstance(op, ast.Pow):
             try:
                 if abs(right) > 128 or abs(left) > 10_000:
                     raise OverflowError
             except TypeError:
                 raise _Unsafe
+            return
+        if isinstance(op, ast.Mult) and _seq_repeat_too_big(left, right):
+            raise OverflowError
+        if isinstance(op, ast.Mod) and _format_too_wide(left, right):
+            raise OverflowError
