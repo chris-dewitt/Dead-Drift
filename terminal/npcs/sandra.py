@@ -1,6 +1,7 @@
 from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import hit
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
 
@@ -58,17 +59,26 @@ class Sandra(BaseNPC):
         "shook them", "ran the sector", "perfect run", "record time",
         "did it clean", "no damage", "snapped it",
     ]
-    _CONFESSION_KEYWORDS = [
-        "favourite", "favorite", "pet", "show pony", "trophy",
-        "puppet", "tool", "used", "complicit", "their property",
-        "their courier", "their poster", "they own", "owned",
-        # extended confession vocabulary
-        "poster child", "mascot", "golden", "role model",
-        "model courier", "propaganda", "they use you", "showcase you",
+    # Short tokens are whole words. As bare substrings "used" lives inside
+    # *confused*, *refused*, and *accused*; "pet" inside *competitor* and
+    # *puppet*; "owned" inside *downed*. Two ordinary lines ("I'm confused"
+    # then "I'm not your competitor") used to score a confession and pay
+    # the exploit.
+    _CONFESSION_PHRASES = [
+        "show pony", "their property",
+        "their courier", "their poster", "they own",
+        "poster child", "role model",
+        "model courier", "they use you", "showcase you",
         "golden girl", "golden boy", "their golden", "their darling",
         "their example", "held up as", "used as", "you're their",
         "made an example", "the example", "proof of concept",
     ]
+    _CONFESSION_WORDS = (
+        "favourite", "favorite", "favorites", "favourites",
+        "pet", "pets", "trophy",
+        "puppet", "puppets", "tool", "tools", "used", "complicit", "owned",
+        "mascot", "mascots", "golden", "propaganda",
+    )
     _APOLOGY_KEYWORDS = [
         "sorry", "apologise", "apologize", "my fault", "my bad",
         "wrong", "shouldn't have", "regret", "forgive", "humble",
@@ -231,7 +241,7 @@ class Sandra(BaseNPC):
             ])
 
         # CONFESSION — turn her own pride against her
-        if any(w in raw for w in self._CONFESSION_KEYWORDS):
+        if hit(raw, self._CONFESSION_PHRASES, self._CONFESSION_WORDS):
             self._confession_score += 2
             self._current_path      = "CONFESSION"
             self.disposition       += 0   # this isn't about being liked
