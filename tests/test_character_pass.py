@@ -435,3 +435,39 @@ def test_scan_words_stay_in_the_word_list_not_the_phrase_list():
     not_hailed = _npc("lost_frequency")
     not_hailed.respond("I am ecstatic about this")
     assert not not_hailed._heard_static, "'ecstatic' matched the token 'static'"
+
+
+def test_sandra_ordinary_words_do_not_confess():
+    """Confession tokens were bare substrings. "used" sits inside confused /
+    refused / accused, "pet" inside competitor, and "owned" inside downed.
+    Two ordinary lines scored 4 and paid the exploit."""
+    sandra = _npc("sandra")
+    first, _ = sandra.respond("I'm confused about why you stopped me")
+    assert first == NPCOutcome.CONTINUE
+    assert sandra._confession_score == 0
+    second, _ = sandra.respond("I'm not your competitor")
+    assert second == NPCOutcome.CONTINUE
+    assert sandra._confession_score == 0
+    assert sandra._current_path != "CONFESSION"
+
+    wreck = _npc("sandra")
+    wreck.respond("they downed my ship on the way in")
+    outcome, _ = wreck.respond("I refused to be accused of running")
+    assert outcome == NPCOutcome.CONTINUE
+    assert wreck._confession_score == 0
+
+
+def test_sandra_real_confession_still_exploits():
+    sandra = _npc("sandra")
+    first, _ = sandra.respond("you're their puppet")
+    assert first == NPCOutcome.CONTINUE
+    assert sandra._confession_score == 2
+    second, _ = sandra.respond("you're just a tool")
+    assert second == NPCOutcome.EXPLOIT
+    assert sandra._current_path == "CONFESSION"
+
+    pet = _npc("sandra")
+    pet.respond("you're their pet")
+    outcome, _ = pet.respond("they used you")
+    assert outcome == NPCOutcome.EXPLOIT
+    assert pet._confession_score >= 4
