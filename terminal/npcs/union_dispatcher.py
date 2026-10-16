@@ -38,7 +38,7 @@ class UnionDispatcher(BaseNPC):
     # Longer / unique coffee-break cues stay substring so plurals and
     # compounds still land ("coffees", "overtime").
     _COFFEE_PHRASES = [
-        "coffee", "lunch", "tired", "hungry", "food",
+        "coffee", "lunch", "hungry", "food",
         "overtime", "exhausted",
         "long day", "been here", "working late",
         "thirsty", "snack", "drink", "need a break",
@@ -51,7 +51,10 @@ class UnionDispatcher(BaseNPC):
     #   eat  ⊂ create / great / feature
     #   break ⊂ breakfast / breakthrough
     #   tea ⊂ team
-    _COFFEE_WORDS = ["rest", "eat", "break", "shift", "hours", "tea", "water"]
+    # "tired" is long enough to look unique and still sits inside
+    # "retired" / "I retired", which is ordinary courier talk — not a
+    # break request. Whole word only.
+    _COFFEE_WORDS = ["rest", "eat", "break", "shift", "hours", "tea", "water", "tired"]
     _FORMS_WORDS    = ["forms", "paperwork", "backlog",
                        "bureaucracy", "procedure", "stack", "pile", "admin",
                        "in-tray", "intray", "in tray", "47 forms", "the forms",
