@@ -190,6 +190,36 @@ def test_dispatcher_whole_word_rest_still_releases():
     assert dispatcher._current_path == "COFFEE BREAK"
 
 
+def test_dispatcher_retired_is_not_a_coffee_break():
+    """'tired' sits inside 'retired'. Saying you retired used to end the
+    collection and pay the negotiation bonus on turn one."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for line in (
+        "I'm retired",
+        "I retired from hauling",
+        "I was retired last year",
+    ):
+        dispatcher = make_npc("union_dispatcher")
+        out, _ = dispatcher.respond(line)
+        assert out == NPCOutcome.CONTINUE, line
+        assert dispatcher._current_path != "COFFEE BREAK", line
+        assert dispatcher._coffee_hit is False, line
+
+
+def test_dispatcher_actual_tired_still_releases():
+    """A real 'tired' is still the mandatory-break clause."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    dispatcher = make_npc("union_dispatcher")
+    out, _ = dispatcher.respond("you look tired")
+    assert out == NPCOutcome.RELEASE
+    assert dispatcher._current_path == "COFFEE BREAK"
+    assert dispatcher._coffee_hit is True
+
+
 def test_pirate_extended_threat_keywords_land():
     """Playtest fix: more menacing phrasing should still register as a
     threat path, not bounce to filler."""
