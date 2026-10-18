@@ -38,24 +38,38 @@ class UndergroundDJ(BaseNPC):
         "heads up", "what's coming", "what's ahead", "patrol window",
         "where are they", "how many barges", "next sector",
     ]
-    _DEDICATION_KEYWORDS = [
-        "play", "song", "dedication", "dedicate", "request",
-        "track", "tune", "spin", "bring it",
-        "music", "something good", "put something on", "play something",
+    # 1-turn EXPLOIT. Short tokens are whole words: "play" lived inside
+    # *display* / *player*, "tune" inside *fortune*, "spin" inside *spine*.
+    _DEDICATION_PHRASES = [
+        "bring it", "something good", "put something on", "play something",
         "drop a track", "play for me", "play me something",
-        "good track", "play it", "soundtrack", "what's playing",
+        "good track", "play it", "what's playing", "whats playing",
     ]
-    _HANDLE_KEYWORDS = [
-        "name's", "i'm called", "they call me", "handle", "callsign",
-        "go by", "name is", "shoutout", "shout out",
+    _DEDICATION_WORDS = (
+        "play", "played", "playing", "song", "dedication", "dedicate",
+        "request", "track", "tune", "spin", "music", "soundtrack",
+    )
+    # "go by" matched "I'll go by the relay", "name is" matched "the station
+    # name is", and "put me on" matched "put me on hold" — each a 1-turn
+    # HANDLE exploit.
+    _HANDLE_PHRASES = [
+        "name's", "i'm called", "im called", "they call me",
+        "i go by", "go by the name", "shout out",
         "my name", "call me", "known as", "they know me",
         "broadcast my name", "say my name", "mention me",
-        "give me a shout", "put me on", "shout me out",
+        "give me a shout", "put me on the air", "shout me out",
     ]
-    _TRACK_TRADE_KEYWORDS = [
-        "archive", "from the archive", "vinyl", "side a", "side b",
-        "record", "recording", "bootleg", "master tape", "tape",
+    _HANDLE_WORDS = ("handle", "callsign", "shoutout")
+    # Bare "record" is a whole word in "for the record" / "off the record"
+    # and a prefix of "recorded". "side a" as a substring is "side and".
+    # The trade itself only exists when the hold actually has the archive.
+    _TRACK_TRADE_PHRASES = [
+        "from the archive", "master tape",
     ]
+    _TRACK_TRADE_WORDS = (
+        "archive", "vinyl", "recording", "recordings", "bootleg",
+        "tape", "tapes", "side a", "side b",
+    )
     # Split for word-boundary matching: the bare token "hi" is a substring of
     # *this*, *nothing*, *him* and *his*, so on the old substring test almost
     # every sentence a player typed opened with Marrow's greeting path.
@@ -126,12 +140,11 @@ class UndergroundDJ(BaseNPC):
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         raw = parsed.raw.lower()
 
-        # TRACK TRADE — only viable with Acoustic Archive cargo
-        if any(w in raw for w in self._TRACK_TRADE_KEYWORDS) and not self._track_traded:
-            has_archive = self._ctx.get("cargo_state") is None and \
-                          self._ctx.get("sector_index") is not None
-            # We can't directly know the cargo type from ctx here — fallback to
-            # checking if a track-trade keyword is paired with intent.
+        # TRACK TRADE — only with the Acoustic Archive actually aboard.
+        # cargo_type is set by RunManager._build_run_context.
+        if (not self._track_traded
+                and self._ctx.get("cargo_type") == "AcousticArchive"
+                and hit(raw, self._TRACK_TRADE_PHRASES, self._TRACK_TRADE_WORDS)):
             self._current_path = "TRACK TRADE"
             self._track_traded = True
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="track_trade")
@@ -197,7 +210,7 @@ class UndergroundDJ(BaseNPC):
             ])
 
         # DEDICATION
-        if any(w in raw for w in self._DEDICATION_KEYWORDS):
+        if hit(raw, self._DEDICATION_PHRASES, self._DEDICATION_WORDS):
             self._dedication_set = True
             self._current_path   = "DEDICATION"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="dedication")
@@ -214,7 +227,7 @@ class UndergroundDJ(BaseNPC):
             ])
 
         # HANDLE EXCHANGE
-        if any(w in raw for w in self._HANDLE_KEYWORDS):
+        if hit(raw, self._HANDLE_PHRASES, self._HANDLE_WORDS):
             self._handle_offered = True
             self._current_path   = "HANDLE"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="handle")

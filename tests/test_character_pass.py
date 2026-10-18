@@ -120,6 +120,65 @@ def test_marrow_greeting_needs_an_actual_greeting():
     assert warm.disposition >= 2
 
 
+@pytest.mark.parametrize("line", [
+    "for the record, I'm just passing through",
+    "off the record",
+    "I recorded the frequency",
+    "can you display the roster",
+    "the player on this run",
+    "I had good fortune out here",
+    "watch your spine on the hatch",
+    "I'll stay on this side and wait",
+    "I'll go by the relay later",
+    "put me on hold",
+    "the station name is on the manifest",
+])
+def test_marrow_ordinary_talk_does_not_pay_a_one_turn_exploit(line):
+    """DEDICATION, HANDLE, and TRACK TRADE are 1-turn EXPLOIT (+5,000).
+
+    Substring hits paid that out for ordinary lines: "play" inside
+    *display*, "tune" inside *fortune*, "record" inside "for the record",
+    "side a" inside "side and", "go by" inside "I'll go by", "put me on"
+    inside "put me on hold". Carrying the archive must not change that.
+    """
+    marrow = _npc("underground_dj", run_context={"cargo_type": "AcousticArchive"})
+    outcome, _ = marrow.respond(line)
+    assert outcome != NPCOutcome.EXPLOIT, line
+    assert marrow._current_path not in {"TRACK TRADE", "DEDICATION", "HANDLE"}
+    assert not marrow._track_traded
+
+
+def test_marrow_track_trade_requires_the_acoustic_archive():
+    """Saying vinyl / archive with an empty hold used to pay the trade."""
+    marrow = _npc("underground_dj", run_context={})
+    outcome, _ = marrow.respond("I've got the vinyl from the archive")
+    assert outcome != NPCOutcome.EXPLOIT
+    assert not marrow._track_traded
+
+
+def test_marrow_for_the_record_does_not_spend_the_archive_trade():
+    marrow = _npc("underground_dj", run_context={"cargo_type": "AcousticArchive"})
+    marrow.respond("for the record, I'm just passing through")
+    assert not marrow._track_traded
+    outcome, _ = marrow.respond("take the vinyl")
+    assert outcome == NPCOutcome.EXPLOIT
+    assert marrow._current_path == "TRACK TRADE"
+
+
+def test_marrow_real_dedication_handle_and_archive_trade_still_land():
+    dedication = _npc("underground_dj")
+    assert dedication.respond("play something")[0] == NPCOutcome.EXPLOIT
+    assert dedication._current_path == "DEDICATION"
+
+    handle = _npc("underground_dj")
+    assert handle.respond("they call me Red")[0] == NPCOutcome.EXPLOIT
+    assert handle._current_path == "HANDLE"
+
+    trader = _npc("underground_dj", run_context={"cargo_type": "AcousticArchive"})
+    assert trader.respond("side b of the master tape")[0] == NPCOutcome.EXPLOIT
+    assert trader._current_path == "TRACK TRADE"
+
+
 def test_felix_sympathy_needs_an_actual_appeal():
     felix = _npc("nervous_fence")
     felix.respond("that ship has a lot of power in the current sector")
