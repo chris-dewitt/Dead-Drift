@@ -2,6 +2,7 @@ from __future__ import annotations
 import random
 import re
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import normalize
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT, EVT_BAX_SPEAK
 
@@ -52,6 +53,41 @@ class UnionDispatcher(BaseNPC):
     #   break ⊂ breakfast / breakthrough
     #   tea ⊂ team
     _COFFEE_WORDS = ["rest", "eat", "break", "shift", "hours", "tea", "water"]
+    # Same tokens in ordinary English are not a break request. Scrubbed
+    # before the word-boundary pass so they cannot fire the one-turn
+    # COFFEE BREAK release. Real cues ("get some rest", "take a break",
+    # "end of shift") are phrases and already returned above.
+    _COFFEE_FALSE_FRIENDS = (
+        re.compile(r"\bthe\s+rest\b"),
+        re.compile(r"\brest\s+of\b"),
+        re.compile(
+            r"\b(?:do not|don't|dont|never|won't|wont|cannot|can't|cant|not|no)"
+            r"\s+(?:\w+\s+){0,3}break\b"
+        ),
+        re.compile(
+            r"\bbreak\s+(?:the|a|an|it|this|that|my|your|our|their"
+            r"|open|down|up|into|apart)\b"
+        ),
+        re.compile(
+            r"\bshift\s+(?:the|a|an|it|this|that|over|cargo|left|right"
+            r"|my|your|our|their)\b"
+        ),
+        re.compile(r"\bhours\s+(?:out|away|until|ahead|from|left)\b"),
+        re.compile(r"\b\d{3,4}\s+hours\b"),
+        re.compile(
+            r"\b(?:in|within)\s+"
+            r"(?:(?:about|around|roughly|just|only|another|a|an|\d+"
+            r"|one|two|three|four|five|six|seven|eight|nine|ten"
+            r"|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen"
+            r"|eighteen|nineteen|twenty|thirty|forty|fifty|sixty"
+            r"|couple|few|half|several|next)\s+){1,3}hours\b"
+        ),
+        re.compile(r"\bhold(?:s|ing)?\s+water\b"),
+        re.compile(
+            r"\beat\s+(?:the|a|my|your|that|this|our|their)\s+"
+            r"(?:cost|loss|fee|debt|charge|fine|tab|price|bill|charges|fees)\b"
+        ),
+    )
     _FORMS_WORDS    = ["forms", "paperwork", "backlog",
                        "bureaucracy", "procedure", "stack", "pile", "admin",
                        "in-tray", "intray", "in tray", "47 forms", "the forms",
@@ -384,10 +420,14 @@ class UnionDispatcher(BaseNPC):
         return NPCOutcome.CONTINUE, self._dispatcher_filler()
 
     def _mentions_coffee_break(self, raw: str) -> bool:
+        raw = normalize(raw)
         if any(w in raw for w in self._COFFEE_PHRASES):
             return True
+        scrubbed = raw
+        for pat in self._COFFEE_FALSE_FRIENDS:
+            scrubbed = pat.sub(" ", scrubbed)
         return any(
-            re.search(rf"\b{re.escape(tok)}\b", raw) is not None
+            re.search(rf"\b{re.escape(tok)}\b", scrubbed) is not None
             for tok in self._COFFEE_WORDS
         )
 
