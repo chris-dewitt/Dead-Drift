@@ -190,6 +190,61 @@ def test_dispatcher_whole_word_rest_still_releases():
     assert dispatcher._current_path == "COFFEE BREAK"
 
 
+def test_dispatcher_coffee_words_ignore_ordinary_false_friends():
+    """'rest' / 'break' / 'shift' / 'hours' / 'water' / 'eat' are whole words
+    on purpose, but ordinary courier lines use those words for something
+    else. Each of these used to end final collections on turn one."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    lines = [
+        "the rest of the cargo is clean",
+        "rest of the manifest checks out",
+        "don't break the seal",
+        "break down the charges",
+        "shift the cargo to bay two",
+        "the station is two hours out",
+        "I'll be there in two hours",
+        "that doesn't hold water",
+        "I'll eat the cost",
+        "this is not a break",
+        "you said 1700 hours",
+    ]
+    for line in lines:
+        dispatcher = make_npc("union_dispatcher")
+        out, _ = dispatcher.respond(line)
+        assert out == NPCOutcome.CONTINUE, line
+        assert dispatcher._current_path != "COFFEE BREAK", line
+        assert dispatcher._coffee_hit is False, line
+
+
+def test_dispatcher_real_coffee_words_still_release():
+    """False-friend scrubbing must leave the designed one-word cues,
+    and a real cue later in the same sentence still wins."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    lines = [
+        "break",
+        "I need rest",
+        "take a break",
+        "end of shift",
+        "I've been flying for hours",
+        "I need to eat",
+        "I need water",
+        "night shift",
+        "sixteen hours",
+        "the rest of the crew should rest",
+        "don't break the seal, I need to eat",
+    ]
+    for line in lines:
+        dispatcher = make_npc("union_dispatcher")
+        out, _ = dispatcher.respond(line)
+        assert out == NPCOutcome.RELEASE, line
+        assert dispatcher._current_path == "COFFEE BREAK", line
+        assert dispatcher._coffee_hit is True, line
+
+
 def test_pirate_extended_threat_keywords_land():
     """Playtest fix: more menacing phrasing should still register as a
     threat path, not bounce to filler."""
