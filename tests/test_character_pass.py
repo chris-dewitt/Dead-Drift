@@ -108,6 +108,59 @@ def test_bowen_personal_and_expose_still_crack_him():
 
 # ── Marrow and Felix: paths that fired on almost any sentence ───────────────
 
+@pytest.mark.parametrize("line", [
+    "play it safe",
+    "let's play it safe",
+    "play it cool until the gate opens",
+    "we'll play it by ear",
+    "that's music to my ears",
+    "we're on track for the window",
+    "back on track",
+    "don't lose track of the crates",
+    "keep track of the cargo",
+    "track the shipment",
+    "track this cargo",
+])
+def test_marrow_ordinary_idioms_are_not_a_dedication(line):
+    """DEDICATION is a 1-turn EXPLOIT (+5,000). The pickup phrases `play it`,
+    `music`, and `track` also live inside ordinary speech, so "play it safe",
+    "music to my ears", and "on track" ended the Roost encounter and paid out."""
+    marrow = _npc("underground_dj")
+    outcome, _ = marrow.respond(line)
+    assert outcome != NPCOutcome.EXPLOIT, line
+    assert marrow._current_path != "DEDICATION"
+
+
+def test_marrow_red_tape_is_not_a_track_trade():
+    """TRACK TRADE is a 1-turn EXPLOIT. `tape` is the pickup, so "red tape"
+    traded a master tape the player never offered and closed the channel."""
+    marrow = _npc("underground_dj", run_context={"sector_index": 1})
+    outcome, _ = marrow.respond("the gate was all red tape")
+    assert outcome != NPCOutcome.EXPLOIT
+    assert marrow._current_path != "TRACK TRADE"
+    assert not marrow._track_traded
+
+
+def test_marrow_real_dedication_and_tape_still_land():
+    dedication = _npc("underground_dj")
+    assert dedication.respond("play it")[0] == NPCOutcome.EXPLOIT
+    assert dedication._current_path == "DEDICATION"
+
+    track = _npc("underground_dj")
+    assert track.respond("play that track")[0] == NPCOutcome.EXPLOIT
+    assert track._current_path == "DEDICATION"
+
+    # An idiom plus a real request still dedicates.
+    both = _npc("underground_dj")
+    assert both.respond("play it safe, but play it anyway")[0] == NPCOutcome.EXPLOIT
+    assert both._current_path == "DEDICATION"
+
+    trader = _npc("underground_dj", run_context={"sector_index": 1})
+    assert trader.respond("I've got the master tape")[0] == NPCOutcome.EXPLOIT
+    assert trader._current_path == "TRACK TRADE"
+    assert trader._track_traded
+
+
 def test_marrow_greeting_needs_an_actual_greeting():
     """His greeting branch warms him by +2. Bare "hi" inside *this* and
     *nothing* meant nearly every line the player typed did that."""
