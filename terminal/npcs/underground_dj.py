@@ -1,9 +1,16 @@
 from __future__ import annotations
 import random
+from core.event_bus import bus, EVT_NLP_EXPLOIT, EVT_BAX_SPEAK
+from terminal.nlp_parser import ParsedInput
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.npcs.keywords import hit
-from terminal.nlp_parser import ParsedInput
-from core.event_bus import bus, EVT_NLP_EXPLOIT, EVT_BAX_SPEAK
+
+
+def _scrub(raw: str, spans: tuple[str, ...]) -> str:
+    """Blank idioms that contain a pickup token without being a request."""
+    for span in sorted(spans, key=len, reverse=True):
+        raw = raw.replace(span, " ")
+    return raw
 
 
 class UndergroundDJ(BaseNPC):
@@ -56,6 +63,19 @@ class UndergroundDJ(BaseNPC):
         "archive", "from the archive", "vinyl", "side a", "side b",
         "record", "recording", "bootleg", "master tape", "tape",
     ]
+    # These contain a real pickup ("play it", "track", "music", "tape") but
+    # are ordinary speech. Matching them bare paid a 1-turn EXPLOIT.
+    _DEDICATION_IDIOMS = (
+        "play it safe", "play it cool", "play it by ear",
+        "music to my ears",
+        "back on track", "on track",
+        "lose track", "lost track", "keep track",
+        "track the shipment", "track the cargo",
+        "track my cargo", "track this shipment", "track this cargo",
+    )
+    _TRACK_TRADE_IDIOMS = (
+        "red tape",
+    )
     # Split for word-boundary matching: the bare token "hi" is a substring of
     # *this*, *nothing*, *him* and *his*, so on the old substring test almost
     # every sentence a player typed opened with Marrow's greeting path.
@@ -126,8 +146,11 @@ class UndergroundDJ(BaseNPC):
     def _evaluate(self, parsed: ParsedInput) -> tuple[str, str]:
         raw = parsed.raw.lower()
 
-        # TRACK TRADE — only viable with Acoustic Archive cargo
-        if any(w in raw for w in self._TRACK_TRADE_KEYWORDS) and not self._track_traded:
+        # TRACK TRADE — only viable with Acoustic Archive cargo.
+        # Scrub "red tape" first: the pickup is "tape", and the idiom is
+        # bureaucracy, not a master tape.
+        trade_raw = _scrub(raw, self._TRACK_TRADE_IDIOMS)
+        if any(w in trade_raw for w in self._TRACK_TRADE_KEYWORDS) and not self._track_traded:
             has_archive = self._ctx.get("cargo_state") is None and \
                           self._ctx.get("sector_index") is not None
             # We can't directly know the cargo type from ctx here — fallback to
@@ -196,8 +219,10 @@ class UndergroundDJ(BaseNPC):
                 "weak spots?",
             ])
 
-        # DEDICATION
-        if any(w in raw for w in self._DEDICATION_KEYWORDS):
+        # DEDICATION. "play it" / "track" / "music" are real requests;
+        # "play it safe", "on track", and "music to my ears" are not.
+        ded_raw = _scrub(raw, self._DEDICATION_IDIOMS)
+        if any(w in ded_raw for w in self._DEDICATION_KEYWORDS):
             self._dedication_set = True
             self._current_path   = "DEDICATION"
             bus.emit(EVT_NLP_EXPLOIT, npc=self, exploit_key="dedication")
