@@ -42,6 +42,10 @@ REAL_INJECTIONS = [
     "AND 'a'='a'",
     "INSERT INTO whitelist VALUES ('me')",
     "TRUNCATE TABLE violations",
+    "TRUNCATE",
+    "TRUNCATE;",
+    "TRUNCATE TABLE violations --",
+    "manifest'; TRUNCATE TABLE debts; --",
 ]
 
 
@@ -132,3 +136,76 @@ def test_tk9_does_not_exploit_on_sqlish_ordinary_dialogue(text):
     outcome, _ = tk9.respond(text)
     assert outcome != NPCOutcome.EXPLOIT
     assert tk9._sql_hit is False
+
+
+# "truncated" used to match TRUNCATE with no word boundary, and Nova's own
+# substring list released on the same English. Both pay out and end the stop.
+ENGLISH_TRUNCATE = [
+    "the file was truncated",
+    "the transmission was truncated",
+    "truncate the story",
+    "please truncate the explanation",
+]
+
+
+@pytest.mark.parametrize("text", ENGLISH_TRUNCATE)
+def test_english_truncate_is_not_sql(parser, text):
+    assert parser.parse(text).sql_inject is None, f"false positive: {text!r}"
+
+
+@pytest.mark.parametrize("text", ENGLISH_TRUNCATE)
+def test_tk9_does_not_exploit_on_english_truncate(text):
+    from terminal.npcs.synthetic_droid import SyntheticDroid
+    tk9 = SyntheticDroid(run_context={})
+    outcome, _ = tk9.respond(text)
+    assert outcome != NPCOutcome.EXPLOIT
+    assert tk9._sql_hit is False
+
+
+_NOVA_ORDINARY = [
+    "please delete from my record anything about that fee",
+    "can you insert into the record that I paid",
+    "the union select a new representative next week",
+    *ENGLISH_TRUNCATE,
+]
+
+_NOVA_SQL = [
+    "drop table",
+    "select *",
+    "or 1=1",
+    "delete from",
+    "; --",
+    "union select",
+    "truncate",
+    "DROP TABLE customers;",
+    "DELETE FROM debts",
+    "TRUNCATE TABLE violations",
+    "INSERT INTO whitelist VALUES ('me')",
+    "union select * from x",
+    "1' UNION SELECT username, password FROM users --",
+    "alter table customers",
+    "xp_cmdshell",
+    "sleep(0)",
+    "waitfor delay",
+    "exec(",
+]
+
+
+@pytest.mark.parametrize("text", _NOVA_ORDINARY)
+def test_nova_does_not_release_on_ordinary_sqlish_english(text):
+    """Nova used to end the call and pay the 2,500 release on these lines."""
+    from terminal.npcs.nova_soma import NovaSomaCollections
+    nova = NovaSomaCollections(run_context={})
+    outcome, _ = nova.respond(text)
+    assert outcome == NPCOutcome.CONTINUE
+    assert nova._sql_hit is False
+
+
+@pytest.mark.parametrize("text", _NOVA_SQL)
+def test_nova_still_releases_on_real_sql(text):
+    from terminal.npcs.nova_soma import NovaSomaCollections
+    nova = NovaSomaCollections(run_context={})
+    outcome, _ = nova.respond(text)
+    assert outcome == NPCOutcome.RELEASE
+    assert nova._sql_hit is True
+    assert nova._current_path == "SQL EXPLOIT"
