@@ -143,13 +143,21 @@ _SQL_SIGNATURES = [
     # "delete from my record" / "insert into the report" is normal terminal
     # dialogue, and a false hit is either a free win or a security strike.
     r"DELETE\s+FROM\s+\w+(?=\s*(?:WHERE\b|;|--|#|$))",
-    r"INSERT\s+INTO\s+\w+(?:\s*\([^)]*\))?\s+(?:VALUES|SELECT)\b",
-    r"UPDATE\s+\w+\s+SET",
+    # VALUES needs a parenthesised list. "insert into the values we discussed"
+    # is English; "INSERT INTO whitelist VALUES ('me')" is the injection.
+    r"INSERT\s+INTO\s+\w+(?:\s*\([^)]*\))?\s+(?:VALUES\s*\(|SELECT\b)",
+    # SET must assign a column. "update the set" and "update the settings"
+    # are English; "UPDATE debts SET balance=0" is the injection. SET is a
+    # whole word so it cannot fire on the prefix of "settings".
+    r"UPDATE\s+\w+\s+SET\b\s+\w+\s*=",
     r"SELECT\s+\*",                                   # SELECT * (star is unambiguous)
-    r"SELECT\s+\w+(?:\s*,\s*\w+)*\s+FROM\b",          # SELECT col[,col] FROM …
+    # A column list only counts as a finished statement: table name, then
+    # WHERE / end / comment. "select one from the list" and "select cargo
+    # from the manifest" keep going in English, so they are not injections.
+    r"SELECT\s+\w+(?:\s*,\s*\w+)*\s+FROM\s+\w+(?=\s*(?:WHERE\b|;|--|#|$))",
     # UNION must contain a SELECT list, not the English phrase "union select
-    # a new representative".
-    r"UNION(?:\s+ALL)?\s+SELECT(?:\s+\*|\s+\w+(?:\s*,\s*\w+)*\s+FROM\b)",
+    # a new representative" or "union select one from the list".
+    r"UNION(?:\s+ALL)?\s+SELECT(?:\s+\*|\s+\w+(?:\s*,\s*\w+)*\s+FROM\s+\w+(?=\s*(?:WHERE\b|;|--|#|$)))",
     # Common tautologies only.  The broad old word=word shape treated ordinary
     # counter-offers such as "1500 or fee = 2000" as intrusion attempts.
     r"(?:OR|AND)\s+(?:(?P<sql_num>\d+)\s*=\s*(?P=sql_num)|"
