@@ -38,9 +38,13 @@ REAL_INJECTIONS = [
     "DELETE FROM debts",                            # complete direct DML statement
     "you owe nothing'; UPDATE debts SET balance=0 --",
     "SELECT * FROM manifest",
+    "SELECT username FROM users",
+    "SELECT username, password FROM users WHERE id=1",
     "OR 1=1",
     "AND 'a'='a'",
     "INSERT INTO whitelist VALUES ('me')",
+    "INSERT INTO whitelist SELECT * FROM users",
+    "UPDATE debts SET balance=0",
     "TRUNCATE TABLE violations",
 ]
 
@@ -68,8 +72,18 @@ INNOCENT_TEXT = [
     "just following orders, or so they say",
     "please delete from my record anything about that fee",
     "can you insert into the record that I paid",
+    "insert into the values we discussed",
     "the union select a new representative next week",
+    "the union select one from the list",
     "I can pay fee = 1500 or fee = 2000 credits",
+    "I'll select one from the list",
+    "please select one from the menu",
+    "select cargo from the manifest",
+    "can you select a route from the chart",
+    "please update the set of coordinates",
+    "can you update the set",
+    "I need you to update the settings",
+    "update the settings",
 ]
 
 
@@ -124,7 +138,7 @@ def test_tk9_does_not_exploit_on_union_complaint():
     assert tk9._sql_hit is False
 
 
-@pytest.mark.parametrize("text", INNOCENT_TEXT[-4:])
+@pytest.mark.parametrize("text", INNOCENT_TEXT)
 def test_tk9_does_not_exploit_on_sqlish_ordinary_dialogue(text):
     """SQL vocabulary in a sentence must not award the 5,000-credit exploit."""
     from terminal.npcs.synthetic_droid import SyntheticDroid
@@ -132,3 +146,19 @@ def test_tk9_does_not_exploit_on_sqlish_ordinary_dialogue(text):
     outcome, _ = tk9.respond(text)
     assert outcome != NPCOutcome.EXPLOIT
     assert tk9._sql_hit is False
+
+
+@pytest.mark.parametrize("text", [
+    "I'll select one from the list",
+    "select cargo from the manifest",
+    "please update the set of coordinates",
+    "I need you to update the settings",
+    "insert into the values we discussed",
+])
+def test_morwenna_does_not_exploit_on_sqlish_ordinary_dialogue(text):
+    """CLAIM-7 must not approve a claim because the player spoke English."""
+    from terminal.npcs.insurance_adjuster import InsuranceAdjuster
+    m = InsuranceAdjuster(run_context={})
+    outcome, _ = m.respond(text)
+    assert outcome != NPCOutcome.EXPLOIT
+    assert m._sql_hit is False
