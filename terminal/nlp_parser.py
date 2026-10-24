@@ -74,11 +74,15 @@ def extract_credit_amount(text: str) -> int | None:
         for word, val in _WORD_NUMS.items():
             if re.search(rf"\b{re.escape(word)}\b", lower):
                 return val * 100
-    # 'five thousand' / 'twenty grand' style
+    # 'five thousand' / 'twenty grand' / 'five k'. The unit has to be its
+    # own word: a bare "k" or "grand" substring turned "ok take four",
+    # "I know one route", and "four grandchildren" into thousands of credits.
+    if re.search(r"\b(?:thousands?|grand|k)\b", lower):
+        for word, val in _WORD_NUMS.items():
+            if re.search(rf"\b{re.escape(word)}\b", lower):
+                return val * 1000
     for word, val in _WORD_NUMS.items():
         if re.search(rf"\b{re.escape(word)}\b", lower):
-            if "thousand" in lower or "grand" in lower or "k" in lower:
-                return val * 1000
             if val >= 5:
                 return val * 1000
     return None
