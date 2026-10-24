@@ -24,6 +24,66 @@ def test_extract_credit_skips_local_404():
     assert extract_credit_amount("pay 1500 credits") == 1500
 
 
+def test_extract_credit_ignores_k_and_grand_inside_words():
+    """Letter k and the fragment 'grand' are not money units.
+
+    Distinct from bare number-words ('five minutes', 'a hundred'), which
+    still use the >=5 / hundred heuristics.
+    """
+    from terminal.nlp_parser import extract_credit_amount
+
+    assert extract_credit_amount("ok take four") is None
+    assert extract_credit_amount("I know one route") is None
+    assert extract_credit_amount("ask me one question") is None
+    assert extract_credit_amount("make two stops") is None
+    assert extract_credit_amount("I have four grandchildren") is None
+    assert extract_credit_amount("my grandfather has four ships") is None
+    # Real shorthand still maps.
+    assert extract_credit_amount("five k") == 5000
+    assert extract_credit_amount("take four k") == 4000
+    assert extract_credit_amount("5k") == 5000
+    assert extract_credit_amount("twenty grand") == 20000
+    assert extract_credit_amount("ten thousand credits") == 10000
+    assert extract_credit_amount("five thousands") == 5000
+
+
+def test_ordinary_k_and_grand_words_do_not_bribe():
+    """'ok take four' must not clear a gate or bill the player thousands."""
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    for phrase in (
+        "ok take four",
+        "I know one route",
+        "ask me one question",
+        "I have four grandchildren",
+    ):
+        toll = make_npc("toll_authority")
+        o, _ = toll.respond(phrase)
+        assert o == NPCOutcome.CONTINUE, phrase
+        assert toll.bribe_cost() == 0, phrase
+
+        holt = make_npc("cargo_inspector")
+        o, _ = holt.respond(phrase)
+        assert o == NPCOutcome.CONTINUE, phrase
+        assert holt.bribe_cost() == 0, phrase
+
+        felix = make_npc("nervous_fence")
+        o, _ = felix.respond(phrase)
+        assert o == NPCOutcome.CONTINUE, phrase
+        assert felix.bribe_cost() == 0, phrase
+
+        nova = make_npc("nova_soma_collections")
+        o, _ = nova.respond(phrase)
+        assert o == NPCOutcome.CONTINUE, phrase
+
+    # An actual offer still clears and bills.
+    paid = make_npc("toll_authority")
+    o, _ = paid.respond("I'll pay four k for the toll")
+    assert o == NPCOutcome.RELEASE
+    assert paid.bribe_cost() == 4000
+
+
 def test_gary_sympathy_two_turns():
     from terminal.npc_logic import make_npc
     from terminal.npcs.base_npc import NPCOutcome
