@@ -139,6 +139,10 @@ class PlayerShip:
     _IMPACT_SOURCES = frozenset({
         "debris", "debris_shower", "satellite", "mine",
         "dead_station", "wreck", "shower",
+        # Theme chip hazards. Missing from this set, each overlap billed
+        # hull every frame (60 Hz) and deleted the ship: junk-belt trash,
+        # frozen-trail comet ice, and the graveyard station's ring sweep.
+        "trash", "comet", "station_ring",
     })
 
     # ------------------------------------------------------------------
