@@ -512,6 +512,40 @@ def build_checkpoint(game) -> dict:
     if state_name == "TERMINAL":
         state_name = "DELIVERY" if getattr(game, "_delivery_pending", False) else "FLIGHT"
 
+    # The payout is applied the instant the corridor finishes, while the
+    # result card is still on screen (GameState.DELIVERY). A pause-save
+    # in that window used to resume a brand-new delivery, and finishing
+    # it paid the chapter out again. Treat a settled result as the
+    # interstitial the game is about to enter.
+    delivery = getattr(game, "_delivery", None)
+    phase = getattr(delivery, "_phase", None) if delivery is not None else None
+    result_phase = (
+        getattr(delivery, "PHASE_RESULT", "result") if delivery is not None else "result"
+    )
+    delivery_settled = state_name == "DELIVERY" and phase == result_phase
+
+    completed = getattr(game, "_delivery_chapter", rm._current_chapter())
+    flow = {
+        "delivery_chapter": completed,
+        "delivery_pending": bool(getattr(game, "_delivery_pending", False)),
+        "delivery_delay_t": float(getattr(game, "_delivery_delay_t", 0.0)),
+        "terminal_win_hold_t": float(getattr(game, "_terminal_win_hold_t", 0.0)),
+        "interstitial_completed": getattr(game, "_interstitial_completed", 1),
+        "interstitial_next": getattr(game, "_interstitial_next", 2),
+        "interstitial_campaign_end": bool(getattr(game, "_interstitial_campaign_end", False)),
+        "interstitial_t": float(getattr(game, "_interstitial_t", 0.0)),
+    }
+    if delivery_settled:
+        state_name = "INTERSTITIAL"
+        next_ch = int(completed) + 1
+        meta = getattr(rm, "meta", None)
+        already_cleared = bool(getattr(meta, "campaign_cleared_at_least_once", False))
+        flow["delivery_pending"] = False
+        flow["interstitial_completed"] = int(completed)
+        flow["interstitial_next"] = next_ch
+        flow["interstitial_campaign_end"] = next_ch > 6 or already_cleared
+        flow["interstitial_t"] = 11.0
+
     return {
         "version": CHECKPOINT_VERSION,
         "game_state": state_name,
@@ -558,16 +592,7 @@ def build_checkpoint(game) -> dict:
         },
         "ship": _ship_to_dict(ship),
         "frame_name": getattr(rm, "_frame_name", ""),
-        "game_flow": {
-            "delivery_chapter": getattr(game, "_delivery_chapter", rm._current_chapter()),
-            "delivery_pending": bool(getattr(game, "_delivery_pending", False)),
-            "delivery_delay_t": float(getattr(game, "_delivery_delay_t", 0.0)),
-            "terminal_win_hold_t": float(getattr(game, "_terminal_win_hold_t", 0.0)),
-            "interstitial_completed": getattr(game, "_interstitial_completed", 1),
-            "interstitial_next": getattr(game, "_interstitial_next", 2),
-            "interstitial_campaign_end": bool(getattr(game, "_interstitial_campaign_end", False)),
-            "interstitial_t": float(getattr(game, "_interstitial_t", 0.0)),
-        },
+        "game_flow": flow,
     }
 
 

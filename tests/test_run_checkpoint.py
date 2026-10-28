@@ -170,3 +170,83 @@ def test_checkpoint_roundtrips_wreck_state(mini_game):
     assert restored.gap_frac == pytest.approx(0.42)
     assert restored.weak_hp == 1
     assert restored.is_triggered is False
+
+
+class _DeliveryPhase:
+    PHASE_RESULT = "result"
+
+    def __init__(self, phase: str):
+        self._phase = phase
+
+
+def _pause_during_delivery(mini_game, phase: str, chapter: int):
+    mini_game.states.state = GameState.PAUSED
+    mini_game._state_before_pause = GameState.DELIVERY
+    mini_game._delivery = _DeliveryPhase(phase)
+    mini_game._delivery_chapter = chapter
+    # Stale interstitial fields from an earlier chapter must not leak.
+    mini_game._interstitial_completed = 1
+    mini_game._interstitial_next = 2
+    mini_game._interstitial_campaign_end = False
+    mini_game._interstitial_t = 0.0
+
+
+def test_pause_on_result_card_does_not_replay_payout(mini_game, monkeypatch):
+    """Corridor payout is already in the campaign save when the result
+    card is up. Resuming that pause must not start delivery over."""
+    meta = mini_game.run_mgr.meta
+    meta._data["debt"] = 40_000
+    meta.pay_off(8_000, source="DELIVERY PAYOUT")
+    meta.complete_chapter(1)
+    assert meta.debt == 32_000
+
+    _pause_during_delivery(mini_game, "result", 1)
+    data = build_checkpoint(mini_game)
+
+    assert data["game_state"] == "INTERSTITIAL"
+    flow = data["game_flow"]
+    assert flow["delivery_chapter"] == 1
+    assert flow["delivery_pending"] is False
+    assert flow["interstitial_completed"] == 1
+    assert flow["interstitial_next"] == 2
+    assert flow["interstitial_campaign_end"] is False
+    assert flow["interstitial_t"] == 11.0
+
+    def _boom(*_a, **_k):
+        raise AssertionError("settled delivery must not construct a new sequence")
+
+    monkeypatch.setattr(
+        "delivery.delivery_sequence.DeliverySequence", _boom
+    )
+    assert restore_checkpoint(mini_game, data) is True
+    assert mini_game._delivery is None
+    assert meta.debt == 32_000
+    assert mini_game._interstitial_completed == 1
+    assert mini_game._interstitial_next == 2
+    assert mini_game._interstitial_campaign_end is False
+    assert mini_game._interstitial_t == 11.0
+
+
+def test_pause_on_chapter_six_result_is_campaign_end(mini_game):
+    _pause_during_delivery(mini_game, "result", 6)
+    data = build_checkpoint(mini_game)
+    flow = data["game_flow"]
+    assert data["game_state"] == "INTERSTITIAL"
+    assert flow["interstitial_completed"] == 6
+    assert flow["interstitial_next"] == 7
+    assert flow["interstitial_campaign_end"] is True
+
+
+def test_pause_mid_corridor_still_resumes_delivery(mini_game):
+    """Payout has not been applied yet — resume still restarts delivery."""
+    meta = mini_game.run_mgr.meta
+    meta._data["debt"] = 40_000
+    _pause_during_delivery(mini_game, "run", 3)
+    data = build_checkpoint(mini_game)
+    assert data["game_state"] == "DELIVERY"
+
+    assert restore_checkpoint(mini_game, data) is True
+    from delivery.delivery_sequence import DeliverySequence
+    assert isinstance(mini_game._delivery, DeliverySequence)
+    assert mini_game._delivery._phase == DeliverySequence.PHASE_APPROACH
+    assert meta.debt == 40_000
