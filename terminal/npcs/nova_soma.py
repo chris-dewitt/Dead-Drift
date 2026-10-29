@@ -18,6 +18,7 @@ Fail paths:
 from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import word_hit
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
 
@@ -41,13 +42,20 @@ _POLICY_KEYWORDS = [
     "case number", "ticket", "incident",
     "section", "clause", "ns-",   # scan-chip sync (POLICY lights on these)
 ]
-_HARDSHIP_KEYWORDS = [
+_HARDSHIP_PHRASES = [
     "hardship", "financial hardship", "mental health", "wellness",
     "self-care", "i am struggling", "burnout", "exhausted",
-    "unable to continue", "stress", "anxiety", "crisis",
-    "support", "speak to someone", "duty of care", "mental load",
+    "unable to continue", "anxiety", "crisis",
+    "speak to someone", "duty of care", "mental load",
     "human resources", "ombudsman",
 ]
+# Whole words. "stress" sits inside *distress* / *distressing* (a beacon,
+# a signal, a call) and "support" sits inside *unsupported*. A substring
+# match released the ship on turn one for those.
+_HARDSHIP_WORDS = (
+    "stress", "stressed", "stressful", "stressing",
+    "support", "supported", "supporting",
+)
 _HOSTILE_KEYWORDS = [
     "fuck", "fucking", "shut up", "shut the", "die", "i hate",
     "screw you", "robot bitch", "shut down", "garbage",
@@ -214,7 +222,8 @@ class NovaSomaCollections(BaseNPC):
             ])
 
         # Hardship statement — corporate CYA reflex
-        if any(w in raw for w in _HARDSHIP_KEYWORDS):
+        if (any(w in raw for w in _HARDSHIP_PHRASES)
+                or word_hit(raw, _HARDSHIP_WORDS)):
             self._hardship_used = True
             self._current_path = "HARDSHIP"
             bus.emit(EVT_NLP_EXPLOIT, npc="nova_soma_collections",
