@@ -201,3 +201,42 @@ def test_pirate_extended_threat_keywords_land():
     out, _ = pirate.respond("vent your hold and walk away")
     assert out in (NPCOutcome.CONTINUE, NPCOutcome.RELEASE)
     assert pirate._current_path == "INTIMIDATE"
+
+
+def test_nova_distress_is_not_a_hardship_release():
+    """'stress' is a wellness keyword. It must not fire inside *distress*.
+
+    A jump-gate Nova Soma call released on turn one — and paid the 2,500
+    negotiation bonus — for 'distress beacon', 'distress signal', and
+    'distress call'. Real stress language still takes the hardship path.
+    'support' inside *unsupported* is the same false release.
+    """
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    innocent = (
+        "the distress beacon is not mine",
+        "I'm sending a distress signal",
+        "this is a distress call",
+        "that news is distressing",
+        "this cargo type is unsupported",
+    )
+    for line in innocent:
+        nova = make_npc("nova_soma_collections")
+        out, _ = nova.respond(line)
+        assert out == NPCOutcome.CONTINUE, line
+        assert nova._current_path != "HARDSHIP", line
+        assert nova._hardship_used is False
+
+    for line in (
+        "I'm under a lot of stress",
+        "stress",
+        "I'm stressed",
+        "it's been a stressful shift",
+        "I need support",
+        "I'm supporting a family on this run",
+    ):
+        nova = make_npc("nova_soma_collections")
+        out, _ = nova.respond(line)
+        assert out == NPCOutcome.RELEASE, line
+        assert nova._current_path == "HARDSHIP", line
