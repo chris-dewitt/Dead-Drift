@@ -18,6 +18,7 @@ Outcomes:
 from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import is_money_offer
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT, EVT_HULL_DAMAGE
 
@@ -152,7 +153,9 @@ class MiraVoss(BaseNPC):
         # Credits — offer ≥700 → solid patch. J.1: off-books medic, so this
         # deducts run credits ONLY (no meta debt). Charged at the fixed 700
         # price; the patch is Mira's own repair(45). Broke → counter-offer.
-        if parsed.amount is not None and parsed.amount >= _PAY_AMOUNT:
+        if (is_money_offer(raw)
+                and parsed.amount is not None
+                and parsed.amount >= _PAY_AMOUNT):
             if self._credits() < _PAY_AMOUNT:
                 return NPCOutcome.CONTINUE, (
                     f"*stops welding*  You SAID {parsed.amount}.  Your account "

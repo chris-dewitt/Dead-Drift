@@ -77,6 +77,39 @@ def hit(raw: str, phrases: Iterable[str] = (),
     return phrase_hit(raw, phrases) or word_hit(raw, tokens)
 
 
+# Amount-gated NPCs (Holt, Felix, Dray, Mira) used to treat every parsed
+# number as cash. `extract_credit_amount` maps any 3–7 digit run, so
+# "the crate weighs 1200 kilos" and "serial number 4120" closed the
+# terminal and billed that figure. A real offer is either the whole line
+# (scan chips light on bare "600" / "800") or a line that actually talks
+# about money.
+_MONEY_WORDS = (
+    "credit", "credits", "cr", "pay", "paid", "paying", "payment",
+    "bribe", "cash", "money", "grand", "thousand", "fee", "fees",
+    "offer", "transfer", "wire", "compensate",
+)
+_BARE_FIGURE = re.compile(
+    r"^\$?\d{1,7}(?:\.\d+)?\s*(?:k|cr|credits?|grand)?$",
+    re.IGNORECASE,
+)
+
+
+def is_money_offer(raw: str) -> bool:
+    """True when `raw` is a price, not a number that happens to be nearby.
+
+    Bare figures ("600", "2k", "1500 credits") stay offers so the scan
+    chips still land. A weight, a serial, or a wait ("1200 kilos",
+    "serial number 4120", "waiting 600 seconds") does not.
+    """
+    text = normalize(raw).strip()
+    bare = text.replace(",", "").strip(".,!?;:'\"")
+    if _BARE_FIGURE.fullmatch(bare):
+        return True
+    if word_hit(text, _MONEY_WORDS):
+        return True
+    return re.search(r"\b\d+\s*k\b", text) is not None
+
+
 def all_words(*groups: Sequence[str]) -> tuple[str, ...]:
     """Flatten phrase + token groups into one deduped tuple.
 

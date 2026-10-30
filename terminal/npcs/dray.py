@@ -15,6 +15,7 @@ Outcomes:
 from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import is_money_offer
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
 
@@ -173,7 +174,9 @@ class Dray(BaseNPC):
                 "We're square.",
             ])
 
-        if parsed.amount is not None and parsed.amount >= _BRIBE_AMOUNT:
+        if (is_money_offer(raw)
+                and parsed.amount is not None
+                and parsed.amount >= _BRIBE_AMOUNT):
             self._paid = True
             # J.1 — the run only deducts what `bribe_cost()` reports. Dray
             # tracked that he'd been paid but never how much, so every bribe

@@ -19,6 +19,7 @@ from __future__ import annotations
 import random
 import re
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import is_money_offer
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
 
@@ -216,7 +217,8 @@ class CargoInspector(BaseNPC):
 
         # Aliveness B.8 — too-low offer gets a specific counter-offer
         # naming Holt's floor instead of a generic refusal.
-        if (parsed.amount is not None
+        if (is_money_offer(raw)
+                and parsed.amount is not None
                 and 0 < parsed.amount < _BRIBE_AMOUNT):
             self._current_path = "BRIBE"
             return NPCOutcome.CONTINUE, random.choice([
@@ -230,7 +232,9 @@ class CargoInspector(BaseNPC):
                 f"{_BRIBE_AMOUNT}, sir. Round numbers make filings easier.",
             ])
 
-        if parsed.amount is not None and parsed.amount >= _BRIBE_AMOUNT:
+        if (is_money_offer(raw)
+                and parsed.amount is not None
+                and parsed.amount >= _BRIBE_AMOUNT):
             self._bribed = True
             self._bribe_paid = parsed.amount
             # Aliveness B.1 — standardised dossier label. Holt files it
