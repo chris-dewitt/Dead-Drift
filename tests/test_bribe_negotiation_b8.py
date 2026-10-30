@@ -74,6 +74,63 @@ def test_meeting_floor_releases_npc():
     assert out == NPCOutcome.RELEASE
 
 
+def test_weights_and_serials_are_not_bribes():
+    """A nearby number is not an offer. Holt bills it as a documentation
+    fee, Felix and Dray pocket it, and Mira spends 700 run credits on a
+    patch the player never bought — then the terminal closes."""
+    pygame.init()
+    pygame.font.init()
+    from terminal.npc_logic import make_npc
+    from terminal.npcs.base_npc import NPCOutcome
+
+    ordinary = (
+        "the crate weighs 1200 kilos",
+        "about 800 kilos of spare parts",
+        "serial number 4120",
+        "I've been waiting 600 seconds",
+    )
+    for line in ordinary:
+        holt = make_npc("cargo_inspector")
+        out, _ = holt.respond(line)
+        assert out != NPCOutcome.RELEASE, line
+        assert holt.bribe_cost() == 0
+        assert not (holt._current_path or "").startswith("BRIBE")
+
+        felix = make_npc("nervous_fence")
+        out, _ = felix.respond(line)
+        assert felix.bribe_cost() == 0, line
+        assert not (felix._current_path or "").startswith("BRIBE")
+
+        dray = make_npc("dray")
+        # "crate" contains the snitch token "rat", which is a different gate.
+        if "crate" not in line:
+            out, _ = dray.respond(line)
+            assert dray.bribe_cost() == 0, line
+            assert not (dray._current_path or "").startswith("BRIBE")
+
+    mira = make_npc("mira_voss", run_context={"credits": 5000})
+    out, _ = mira.respond("the crack is 800 millimeters")
+    assert out != NPCOutcome.RELEASE
+    assert mira.take_pending_transaction() is None
+
+    holt_paid = make_npc("cargo_inspector")
+    assert holt_paid.respond("600")[0] == NPCOutcome.RELEASE
+    assert holt_paid.bribe_cost() == 600
+
+    felix_paid = make_npc("nervous_fence")
+    assert felix_paid.respond("800")[0] == NPCOutcome.RELEASE
+    assert felix_paid.bribe_cost() == 800
+
+    dray_paid = make_npc("dray")
+    assert dray_paid.respond("here's 500 credits")[0] == NPCOutcome.RELEASE
+    assert dray_paid.bribe_cost() == 500
+
+    mira_paid = make_npc("mira_voss", run_context={"credits": 5000})
+    assert mira_paid.respond("here's 700 credits for a patch")[0] == NPCOutcome.RELEASE
+    txn = mira_paid.take_pending_transaction()
+    assert txn is not None and txn["amount"] == 700
+
+
 def test_low_bribe_keeps_dossier_label_generic_until_amount_clears_floor():
     """Below-floor turn keeps `_current_path` at the generic `BRIBE` so
     the chip strip doesn't show a misleading paid label."""

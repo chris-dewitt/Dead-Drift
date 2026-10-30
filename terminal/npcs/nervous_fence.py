@@ -39,9 +39,9 @@ HOSTILE             — overt threat (report / expose / arrest / snitch).
 from __future__ import annotations
 import random
 from terminal.npcs.base_npc import BaseNPC, NPCOutcome
+from terminal.npcs.keywords import hit, is_money_offer
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
-from terminal.npcs.keywords import hit
 
 _DEAL_KEYWORDS = [
     "manifest", "contents", "partial contents", "cargo list",
@@ -68,6 +68,9 @@ _DISTRACT_KEYWORDS = [
     "what do you do", "tell me about", "your operation",
     "side hustle", "when you're done", "getting out",
     "one day", "dream", "future", "retire", "vision",
+    # Scan chip DISTRACT lights on this phrase. It is his roadmap, not a
+    # price — "five" must not fall through as a credit amount.
+    "five years",
 ]
 _HOSTILE_KEYWORDS = [
     "report you", "expose you", "authorities", "turn you in", "rat you out",
@@ -265,7 +268,8 @@ class NervousFence(BaseNPC):
         # ------------ CREDIT BRIBE ------------------------------------
         # Aliveness B.8 — too-low bribe gets a specific counter-offer
         # naming the floor, not vague filler.
-        if (parsed.amount is not None
+        if (is_money_offer(raw)
+                and parsed.amount is not None
                 and 0 < parsed.amount < _CREDIT_AMOUNT):
             self._current_path = "BRIBE"
             return NPCOutcome.CONTINUE, random.choice([
@@ -281,7 +285,9 @@ class NervousFence(BaseNPC):
                     _CREDIT_AMOUNT=_CREDIT_AMOUNT),
             ])
 
-        if parsed.amount is not None and parsed.amount >= _CREDIT_AMOUNT:
+        if (is_money_offer(raw)
+                and parsed.amount is not None
+                and parsed.amount >= _CREDIT_AMOUNT):
             self._paid = True
             self._bribe_paid = parsed.amount
             # Aliveness B.1 — standardised dossier label
