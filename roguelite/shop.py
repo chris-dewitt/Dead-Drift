@@ -79,8 +79,17 @@ class _ShopItem:
                 if isinstance(mod, Thruster):
                     mod.inject_fuel_mix(1.35, 40.0)
         elif self.tag == "jammer":
-            for barge in getattr(run_mgr, "_barges", []):
-                barge._intercept_cd = max(barge._intercept_cd, S.JAMMER_COOLDOWN)
+            # The market opens after the sector is already cleared, and
+            # leaving it calls _load_next_sector, which throws the current
+            # barges away. Arming their intercept cooldown never reaches
+            # the flight the player just paid for — and a long intercept
+            # cooldown is what makes a barge harpoon, not what stops it.
+            # _spawn_barge already refuses to launch while this timer is up,
+            # and it survives the sector change (checkpointed, ticked in flight).
+            run_mgr._barge_suppression_t = max(
+                float(getattr(run_mgr, "_barge_suppression_t", 0.0) or 0.0),
+                float(S.JAMMER_COOLDOWN),
+            )
         elif self.tag == "intel":
             from core.event_bus import bus, EVT_BAX_SPEAK
             bus.emit(EVT_BAX_SPEAK, line=random.choice([
