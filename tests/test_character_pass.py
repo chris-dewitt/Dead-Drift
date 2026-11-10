@@ -326,6 +326,22 @@ def test_bax_dark_pools_are_tagged_for_the_voice_filter():
     "I'm not going to comply, and I won't hold position",
     "I won't cooperate",
     "not happening, I'm not waiting here",
+    # Negation that follows the agreement, which the backward-only guard missed.
+    "of course not",
+    "Of course I will not hold position",
+    "Of course I won't hold position",
+    "yes sir, no",
+    "happy to? absolutely not",
+    "whatever you say, I won't",
+    "as you wish? no",
+    "will do, not a chance",
+    "certainly not",
+    "I certainly will not",
+    "I'm unwilling to hold position",
+    "I am unwilling to wait here",
+    "I'm unable to comply",
+    "I'm unhappy to wait",
+    "I'm unhappy to hold position",
 ])
 def test_bowen_refusal_containing_a_surrender_phrase_is_still_a_refusal(line):
     """`hit()` ignores negation, so a refusal that merely contains a surrender
@@ -339,6 +355,12 @@ def test_bowen_refusal_containing_a_surrender_phrase_is_still_a_refusal(line):
 @pytest.mark.parametrize("line", [
     "okay, I'll wait right here", "no problem", "of course, hold position",
     "sure", "fine, whatever you say", "understood, I'll hold",
+    # "no" here opens an agreement idiom, not a refusal.
+    "I'll wait, no problem",
+    "I will wait here no matter what",
+    "certainly, I'll wait",
+    "I'm unhappy but I'll wait",
+    "I'm unable, but I'll comply",
 ])
 def test_bowen_genuine_surrender_still_impounds(line):
     """The negation guard must not cost him his whole trick."""

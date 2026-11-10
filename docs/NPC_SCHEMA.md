@@ -140,7 +140,9 @@ all one shape: *a pickup matched something the player did not mean.*
    **not** hold position" and impounded a player for refusing — the same
    false-compliance bug the character pass existed to fix, re-entering
    through the phrase list. Agreement phrases now use `affirmed_phrase_hit`.
-   For a multi-word phrase the first word is the negation anchor.
+   A negator in the three words before the phrase counts ("not hold position"),
+   and so does one in the three words after it ("of course not", "certainly not",
+   "will do, not a chance"). "no problem" and "no matter" are not negations.
 2. **Typographic apostrophes.** Every pickup word is written with `'`. Pasted
    or autocorrected text carries `’`, which defeated both the word matcher
    (`won’t` never matched the token `won't`) and the `n't` negation suffix,
