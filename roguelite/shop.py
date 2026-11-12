@@ -24,6 +24,21 @@ _TAG_COL: dict[str, tuple] = {
     "armor_pierce":     (200,  60, 255),
 }
 
+def _heal_hull(ship, amount: float) -> None:
+    """Add hull without ever lowering it.
+
+    PlayerShip.repair honours hull_cap (casual headroom, reinforced
+    plate). A stub ship in a test has no repair method — still refuse
+    to clamp a value that is already above HULL_MAX back down to it.
+    """
+    if hasattr(ship, "repair"):
+        ship.repair(amount)
+        return
+    cap = float(getattr(ship, "hull_cap", S.HULL_MAX))
+    cap = max(cap, float(ship.hull))
+    ship.hull = min(cap, float(ship.hull) + amount)
+
+
 def _condition(cost: int) -> tuple[str, tuple]:
     """Return (badge_label, color) based on item price tier."""
     if cost >= 1800:
@@ -72,7 +87,7 @@ class _ShopItem:
 
     def apply(self, ship, run_mgr):
         if self.tag == "hull_patch":
-            ship.hull = min(S.HULL_MAX, ship.hull + 50.0)
+            _heal_hull(ship, 50.0)
         elif self.tag == "thrust_boost":
             from ship.modules.thruster import Thruster
             for mod in ship.chain.get_active("propulsion"):
@@ -89,7 +104,7 @@ class _ShopItem:
                 "Encrypted manifest. Their dispatch code is 'article 7'. Use it.",
             ]))
         elif self.tag == "repair_drone":
-            ship.hull = min(S.HULL_MAX, ship.hull + 110.0)
+            _heal_hull(ship, 110.0)
         elif self.tag == "cargo_stabilizer":
             if ship.cargo is not None:
                 ship.cargo.integrity = min(100.0, ship.cargo.integrity + 60.0)

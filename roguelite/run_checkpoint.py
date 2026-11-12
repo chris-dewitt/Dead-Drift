@@ -145,6 +145,7 @@ def _ship_to_dict(ship) -> dict:
         "angle": ship.body.angle,
         "mass": ship.body.mass,
         "hull": ship.hull,
+        "hull_cap": float(getattr(ship, "hull_cap", S.HULL_MAX)),
         "fuel": getattr(ship, "fuel", S.FUEL_MAX),
         "destroyed": ship._destroyed,
         "iframe_t": getattr(ship, "_iframe_t", 0.0),
@@ -171,6 +172,10 @@ def _restore_ship(ship, d: dict) -> None:
     ship.body.angle = float(d["angle"])
     ship.body.mass = float(d.get("mass", S.SHIP_MASS))
     ship.hull = float(d["hull"])
+    # Missing on checkpoints written before hull_cap existed. Use the
+    # higher of HULL_MAX and the restored hull so a casual resume cannot
+    # be healed back down to 200.
+    ship.hull_cap = float(d.get("hull_cap", max(S.HULL_MAX, ship.hull)))
     ship.fuel = float(d.get("fuel", S.FUEL_MAX))
     ship._destroyed = bool(d.get("destroyed", False))
     ship._iframe_t = float(d.get("iframe_t", 0.0))

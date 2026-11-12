@@ -453,7 +453,11 @@ class RunManager:
         cargo  = self.draft.selected_cargo
         self._frame_name = frame.get("name", "")
 
-        ship.hull       = min(S.HULL_MAX, S.HULL_MAX + frame.get("hull_bonus", 0))
+        # Positive hull_bonus (REINFORCED JUNK MK2, +20) has to survive.
+        # min(HULL_MAX, HULL_MAX + bonus) discarded it, so the heavy frame
+        # kept the 1.3x mass and none of the armour.
+        bonus = float(frame.get("hull_bonus", 0) or 0)
+        ship.set_hull_cap(S.HULL_MAX + bonus)
         ship.body.mass  = S.SHIP_MASS * frame.get("mass_mod", 1.0)
         ship.chain.install(module, 1)
         ship.cargo      = cargo
@@ -2215,8 +2219,10 @@ class RunManager:
                          line="Not now, mate — there's a barge near. "
                               "Get clear an' I'll play.")
                 return False
-        # Hull at full? Decline politely.
-        if getattr(self._ship, "hull", 0) >= S.HULL_MAX:
+        # Hull at full? Decline politely. Casual / reinforced caps sit
+        # above HULL_MAX, so a ship at 210 of 230 is not full.
+        cap = float(getattr(self._ship, "hull_cap", S.HULL_MAX))
+        if getattr(self._ship, "hull", 0) >= cap:
             bus.emit(EVT_BAX_SPEAK,
                      line="Hull's pristine. Save it for when you actually need it, eh?")
             return False
@@ -2278,8 +2284,12 @@ class RunManager:
             self._harm_heal_total * progress)
         delta = target_total - self._harm_heal_paid
         if delta > 0:
-            ship.hull = min(S.HULL_MAX, ship.hull + delta)
-            self._harm_heal_paid += delta
+            before = ship.hull
+            if hasattr(ship, "repair"):
+                ship.repair(delta)
+            else:
+                ship.hull = ship.hull + delta
+            self._harm_heal_paid += ship.hull - before
         if self._harm_session_t <= 0:
             ship.harm_session_active = False
             bus.emit(EVT_BAX_SPEAK,
