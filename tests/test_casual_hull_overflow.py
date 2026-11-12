@@ -57,6 +57,99 @@ def test_difficulty_hull_delta_still_exceeds_max():
     from ship.ship import PlayerShip
     ship = PlayerShip()
     delta = 30
-    ship.hull = max(1.0, min(S.HULL_MAX + delta, ship.hull + delta))
+    ship.set_hull_cap(S.HULL_MAX + delta)
     assert ship.hull == S.HULL_MAX + 30
+    assert ship.hull_cap == S.HULL_MAX + 30
     assert ship.hull_pct == 1.0
+
+
+def test_fuel_canister_does_not_delete_casual_headroom():
+    """Grabbing a canister used to clamp repair() at HULL_MAX.
+
+    Casual starts at 230. The first fuel pickup called repair(12) and
+    the ship landed on 200 — the difficulty bonus was gone.
+    """
+    from roguelite.run_manager import RunManager
+    from ship.ship import PlayerShip
+
+    ship = PlayerShip()
+    ship.set_hull_cap(S.HULL_MAX + 30)
+    rm = RunManager.__new__(RunManager)
+    rm._ship = ship
+    rm._on_canister_grab()
+    assert ship.hull == pytest.approx(S.HULL_MAX + 30)
+
+    ship.hull = S.HULL_MAX + 10
+    rm._on_canister_grab()
+    assert ship.hull == pytest.approx(S.HULL_MAX + 22)
+
+
+def test_shop_hull_patch_heals_toward_casual_cap():
+    from roguelite.shop import _ShopItem
+    from ship.ship import PlayerShip
+
+    ship = PlayerShip()
+    ship.set_hull_cap(S.HULL_MAX + 30)
+    ship.hull = S.HULL_MAX + 30
+    patch = _ShopItem("Hull Patch Pack", "", "", 1000, "hull_patch")
+    patch.apply(ship, None)
+    assert ship.hull == pytest.approx(S.HULL_MAX + 30)
+
+    ship.hull = S.HULL_MAX - 40
+    drone = _ShopItem("Auto-Repair Drone", "", "", 2200, "repair_drone")
+    drone.apply(ship, None)
+    assert ship.hull == pytest.approx(S.HULL_MAX + 30)
+
+
+def _run_with_frame(tmp_path, frame_name: str):
+    from roguelite.meta_progression import MetaProgression
+    from roguelite.run_manager import RunManager
+    from ship.ship import PlayerShip
+
+    ship = PlayerShip()
+    rm = RunManager(MetaProgression(save_path=tmp_path / "meta.json"))
+    rm.start_run(ship)
+    frames = rm.draft._choices[0]
+    for i, frame in enumerate(frames):
+        if frame["name"] == frame_name:
+            rm.draft._selected[0] = i
+            return ship, rm
+    raise AssertionError(f"{frame_name} missing from the draft")
+
+
+def test_reinforced_frame_hull_bonus_is_real(tmp_path):
+    """REINFORCED JUNK MK2 advertises +20 hull and 1.3x mass.
+
+    apply_draft used to min() the bonus away, so the heavy frame was
+    strictly worse than the stock hull.
+    """
+    ship, rm = _run_with_frame(tmp_path, "REINFORCED JUNK MK2")
+    rm.apply_draft(ship)
+    assert ship.hull == pytest.approx(S.HULL_MAX + 20)
+    assert ship.hull_cap == pytest.approx(S.HULL_MAX + 20)
+    assert ship.body.mass == pytest.approx(S.SHIP_MASS * 1.3)
+
+
+def test_casual_and_reinforced_stack_on_confirm(tmp_path):
+    from core.game import Game
+
+    ship, rm = _run_with_frame(tmp_path, "REINFORCED JUNK MK2")
+    rm.apply_draft(ship)
+
+    host = type("Host", (), {})()
+    host._DIFF_OPTS = Game._DIFF_OPTS
+    host.meta = rm.meta
+    host.ship = ship
+    host.run_mgr = rm
+    host._diff_cursor = 0  # CASUAL
+    host._goto = lambda _state: None
+    event = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+    Game._handle_difficulty_key(host, event)
+    assert ship.hull == pytest.approx(S.HULL_MAX + 20 + 30)
+    assert ship.hull_cap == pytest.approx(S.HULL_MAX + 50)
+    assert ship.hull_pct == pytest.approx(1.0)
+
+    ship.hull -= 40
+    assert ship.hull_pct == pytest.approx((S.HULL_MAX + 10) / (S.HULL_MAX + 50))
+    ship.repair(12)
+    assert ship.hull == pytest.approx(S.HULL_MAX + 22)

@@ -19,6 +19,10 @@ class PlayerShip:
     def __init__(self):
         self.body       = RigidBody2D(S.SCREEN_W / 2, S.SCREEN_H / 2, mass=S.SHIP_MASS)
         self.hull       = S.HULL_MAX
+        # Ceiling for repairs. Casual difficulty and the reinforced frame
+        # both start above HULL_MAX; heals must restore to that ceiling
+        # and must never clamp a healthier ship back down to 200.
+        self.hull_cap   = S.HULL_MAX
         self.fuel       = S.FUEL_MAX
         self.chain      = SignalChain()
         self.gun        = Gun()
@@ -163,18 +167,32 @@ class PlayerShip:
             self._destroyed = True
             bus.emit(EVT_SHIP_DESTROYED, source=source)
 
-    def repair(self, amount: float):
-        self.hull = min(S.HULL_MAX, self.hull + amount)
+    def set_hull_cap(self, cap: float) -> None:
+        """Set this run's full-hull ceiling and fill the ship to it."""
+        self.hull_cap = max(1.0, float(cap))
+        self.hull = self.hull_cap
+
+    def repair(self, amount: float) -> None:
+        if amount <= 0:
+            return
+        # A ship already above the recorded cap (old checkpoint, or a
+        # cap that was never raised) must not lose hull to a "heal".
+        cap = max(float(getattr(self, "hull_cap", S.HULL_MAX)), self.hull)
+        self.hull_cap = cap
+        self.hull = min(cap, self.hull + amount)
 
     # ------------------------------------------------------------------
     @property
     def hull_pct(self) -> float:
-        # Clamped: CASUAL difficulty starts hull above HULL_MAX (+30
-        # headroom), but every consumer (renderer colour lerps, damage
-        # scars, audio tiers, HUD bars) expects a 0..1 fraction —
+        # Clamped: CASUAL difficulty and the reinforced frame start hull
+        # above HULL_MAX, but every consumer (renderer colour lerps,
+        # damage scars, audio tiers, HUD bars) expects a 0..1 fraction —
         # unclamped this produced negative colour channels and crashed
         # the DELTA-7 ship draw the moment a casual run rendered.
-        return max(0.0, min(1.0, self.hull / S.HULL_MAX))
+        cap = float(getattr(self, "hull_cap", S.HULL_MAX) or S.HULL_MAX)
+        if cap <= 0:
+            cap = S.HULL_MAX
+        return max(0.0, min(1.0, self.hull / cap))
 
     @property
     def pos(self) -> Vec2:
@@ -203,6 +221,7 @@ class PlayerShip:
     def reset(self):
         self.body              = RigidBody2D(S.SCREEN_W / 2, S.SCREEN_H / 2, mass=S.SHIP_MASS)
         self.hull              = S.HULL_MAX
+        self.hull_cap          = S.HULL_MAX
         self.fuel              = S.FUEL_MAX
         self._destroyed        = False
         self._thrusting        = False

@@ -70,6 +70,21 @@ def test_checkpoint_roundtrip(mini_game, tmp_path):
     )
 
 
+def test_checkpoint_keeps_hull_cap_above_max(mini_game):
+    """A resumed casual ship must remember the ceiling heals restore to."""
+    ship = mini_game.ship
+    ship.hull_cap = S.HULL_MAX + 50
+    ship.hull = S.HULL_MAX + 10
+    data = build_checkpoint(mini_game)
+    ship.hull_cap = S.HULL_MAX
+    ship.hull = 40.0
+    assert restore_checkpoint(mini_game, data) is True
+    assert ship.hull_cap == pytest.approx(S.HULL_MAX + 50)
+    assert ship.hull == pytest.approx(S.HULL_MAX + 10)
+    ship.repair(80)
+    assert ship.hull == pytest.approx(S.HULL_MAX + 50)
+
+
 def test_checkpoint_roundtrips_chapter_six_drive_and_pursuit_state(mini_game):
     from antagonists.compliance_vessel import ComplianceVessel
     from cargo.encrypted_drive import EncryptedDrive

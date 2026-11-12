@@ -1018,14 +1018,19 @@ class Game:
         elif event.key in (_pg.K_RETURN, _pg.K_SPACE):
             _, _, key = self._DIFF_OPTS[self._diff_cursor]
             self.meta.set_difficulty(key)
-            # Apply hull delta immediately on the ship
-            delta = self.meta.hull_start_delta()
-            if delta != 0 and self.ship is not None:
+            # Frame bonus and difficulty stack. The old ceiling was
+            # HULL_MAX + delta, which assumed every frame started at
+            # HULL_MAX — casual + reinforced both landed on the casual
+            # number and the +20 plate never existed.
+            if self.ship is not None:
                 import config.settings as _S
-                self.ship.hull = max(1.0, min(
-                    _S.HULL_MAX + delta,
-                    self.ship.hull + delta,
-                ))
+                bonus = 0.0
+                draft = getattr(self.run_mgr, "draft", None)
+                frame = getattr(draft, "selected_frame", None) if draft is not None else None
+                if isinstance(frame, dict):
+                    bonus = float(frame.get("hull_bonus", 0) or 0)
+                delta = self.meta.hull_start_delta()
+                self.ship.set_hull_cap(_S.HULL_MAX + bonus + delta)
             self._goto(GameState.FLIGHT)
 
     def _render_difficulty_select(self) -> None:
