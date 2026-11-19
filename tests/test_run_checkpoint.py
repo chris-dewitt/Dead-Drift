@@ -170,3 +170,82 @@ def test_checkpoint_roundtrips_wreck_state(mini_game):
     assert restored.gap_frac == pytest.approx(0.42)
     assert restored.weak_hp == 1
     assert restored.is_triggered is False
+
+
+def _disk_debt(meta) -> int | None:
+    if not meta._save_path.is_file():
+        return None
+    return int(json.loads(meta._save_path.read_text(encoding="utf-8"))["debt"])
+
+
+def test_payoff_stays_in_memory_until_the_checkpoint_commits_it(mini_game):
+    """Resume Run reloads the slot file, then the checkpoint.
+
+    Sector clears, exploits, and shop prices only changed the in-memory
+    ledger. The 25s autosave stored the ship. Closing the game and
+    resuming restored the purchases and forgot the credits.
+    """
+    from roguelite.meta_progression import MetaProgression
+    from roguelite.save_manager import SaveManager
+
+    meta = mini_game.run_mgr.meta
+    before = meta.debt
+    meta.pay_off(12500, source="SECTOR CLEAR")
+    meta.add_debt(1000, source="SHOP: HULL PATCH PACK")
+    assert meta.debt == before - 11500
+    assert _disk_debt(meta) != meta.debt
+
+    mini_game.meta = meta
+    SaveManager().save_run_checkpoint(mini_game)
+
+    reloaded = MetaProgression(save_path=meta._save_path)
+    assert reloaded.debt == before - 11500
+
+
+def test_checkpoint_commits_post_campaign_bar_income(mini_game):
+    from roguelite.meta_progression import MetaProgression
+    from roguelite.save_manager import SaveManager
+
+    meta = mini_game.run_mgr.meta
+    meta._data["chapters_completed"] = [1, 2, 3, 4, 5, 6]
+    meta.pay_off(4000, source="SECTOR CLEAR")
+    assert meta.bar_credits == 4000
+    assert not meta._save_path.is_file() or "bar_credits" not in json.loads(
+        meta._save_path.read_text(encoding="utf-8"))
+
+    mini_game.meta = meta
+    SaveManager().save_run_checkpoint(mini_game)
+
+    reloaded = MetaProgression(save_path=meta._save_path)
+    assert reloaded.ledger_wiped
+    assert reloaded.bar_credits == 4000
+    assert reloaded.debt == meta.debt
+
+
+def test_quit_snapshots_flight_and_skips_delivery(mini_game):
+    from types import SimpleNamespace
+
+    from core.game import Game
+    from roguelite.meta_progression import MetaProgression
+    from roguelite.save_manager import SaveManager
+
+    meta = mini_game.run_mgr.meta
+    before = meta.debt
+    meta.pay_off(8000, source="EXPLOIT")
+    mini_game.meta = meta
+    mini_game.save_mgr = SaveManager()
+    mini_game._PERSIST_ON_QUIT = Game._PERSIST_ON_QUIT
+    mini_game._save_run_checkpoint = Game._save_run_checkpoint.__get__(mini_game)
+
+    mini_game.states = SimpleNamespace(state=GameState.DELIVERY)
+    mini_game._state_before_pause = None
+    Game._persist_progress(mini_game)
+    assert _disk_debt(meta) != meta.debt
+    assert not mini_game.save_mgr.has_run_checkpoint()
+
+    mini_game.states = SimpleNamespace(state=GameState.PAUSED)
+    mini_game._state_before_pause = GameState.FLIGHT
+    Game._persist_progress(mini_game)
+    reloaded = MetaProgression(save_path=meta._save_path)
+    assert reloaded.debt == before - 8000
+    assert mini_game.save_mgr.has_run_checkpoint()
