@@ -64,6 +64,17 @@ class Game:
         GameState.DELIVERY,
     })
 
+    # Closing the window mid-run. Flight, shop, and the difficulty picker
+    # are safe to snapshot: the checkpoint matches the ledger. Terminal
+    # conversations are not serialized, so saving there would bill a bribe
+    # and drop the conversation. Delivery and the interstitial rebuild the
+    # payout on resume. Loadout can still be holding the previous sector.
+    _PERSIST_ON_QUIT = frozenset({
+        GameState.FLIGHT,
+        GameState.SHOP,
+        GameState.DIFFICULTY_SELECT,
+    })
+
     def __init__(self):
         pygame.init()
         # Route every pygame.font.SysFont("monospace", ...) call through
@@ -402,6 +413,7 @@ class Game:
         from mobile.virtual_input import drain_pulses
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                self._persist_progress()
                 self.running = False
             elif event.type in (getattr(pygame, "WINDOWRESIZED", -10),
                                 getattr(pygame, "VIDEORESIZE", -11)):
@@ -541,6 +553,15 @@ class Game:
             self._settings_cursor = 0
         elif action == "quit":
             self.running = False
+
+    def _persist_progress(self) -> None:
+        """Flush ledger + checkpoint when the snapshot matches the run."""
+        state = self.states.state
+        if state == GameState.PAUSED and self._state_before_pause is not None:
+            state = self._state_before_pause
+        if state not in self._PERSIST_ON_QUIT:
+            return
+        self._save_run_checkpoint()
 
     def _save_run_checkpoint(self) -> None:
         if self.run_mgr._sector is None and not self.run_mgr.draft.is_confirmed():

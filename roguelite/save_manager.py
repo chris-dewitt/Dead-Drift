@@ -204,6 +204,18 @@ class SaveManager:
 
     def save_run_checkpoint(self, game) -> None:
         from roguelite.run_checkpoint import save_checkpoint_file
+        # The checkpoint restores hull, sector, and shop upgrades. The
+        # campaign ledger is a separate file and pay_off/add_debt do not
+        # write it. Saving the run without the ledger made Resume Run
+        # restore a purchased hull on top of the pre-run debt, and drop
+        # every credit earned since the last death, pause, or chapter end.
+        # Write the ledger first so a crash between the two files keeps
+        # the money and replays a few seconds, rather than keeping the
+        # position and forgetting the money.
+        meta = getattr(game, "meta", None)
+        save = getattr(meta, "save", None)
+        if callable(save):
+            save()
         save_checkpoint_file(self.run_checkpoint_path(), game)
 
     def load_run_checkpoint(self, game) -> bool:
