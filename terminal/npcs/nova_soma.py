@@ -21,11 +21,48 @@ from terminal.npcs.base_npc import BaseNPC, NPCOutcome
 from terminal.nlp_parser import ParsedInput
 from core.event_bus import bus, EVT_NLP_EXPLOIT
 
-_SQL_INJECT_KEYWORDS = [
-    "drop table", "select *", "delete from", "; --", "or 1=1", "or '1'='1",
-    "union select", "insert into", "truncate", "alter table",
-    "exec(", "xp_cmdshell", "sleep(0)", "waitfor delay",
-]
+# Scan chips and one-word DDL the parser will not classify on their own.
+# A stem only counts when nothing follows it. "delete from my record" is
+# ordinary dialogue; the chip "delete from" is the exploit.
+_SQL_BARE_STEMS = (
+    "delete from",
+    "union select",
+    "insert into",
+    "truncate",
+)
+# Shapes the parser does not own. These are not English words, so a
+# substring is still the injection.
+_SQL_SHORTCUTS = (
+    "; --",
+    "alter table",
+    "xp_cmdshell",
+    "sleep(0)",
+    "waitfor delay",
+)
+
+
+def _sql_exploit(parsed: ParsedInput) -> bool:
+    """True when the line is an injection, not SQL vocabulary in a sentence."""
+    if parsed.sql_inject:
+        return True
+    raw = parsed.raw.lower()
+    if any(shortcut in raw for shortcut in _SQL_SHORTCUTS):
+        return True
+    for stem in _SQL_BARE_STEMS:
+        start = 0
+        while True:
+            idx = raw.find(stem, start)
+            if idx < 0:
+                break
+            end = idx + len(stem)
+            prev_ok = idx == 0 or not raw[idx - 1].isalnum()
+            next_ok = end == len(raw) or not raw[end].isalnum()
+            if prev_ok and next_ok and not raw[end:].strip():
+                return True
+            start = idx + 1
+    return False
+
+
 _PARADOX_KEYWORDS = [
     "this statement is false", "i am not a customer", "i have already paid",
     "if you can hear me", "this call is not happening", "you are not real",
@@ -140,7 +177,7 @@ class NovaSomaCollections(BaseNPC):
             ])
 
         # SQL injection — the bot's customer-lookup query crashes; defaults to "handled"
-        if any(w in raw for w in _SQL_INJECT_KEYWORDS):
+        if _sql_exploit(parsed):
             self._sql_hit = True
             self._current_path = "SQL EXPLOIT"
             bus.emit(EVT_NLP_EXPLOIT, npc="nova_soma_collections",

@@ -138,7 +138,9 @@ _INTENT_PATTERNS: list[tuple[str, list[str]]] = [
 # boundary without a separate stacked-query branch.
 _SQL_SIGNATURES = [
     r"DROP\s+TABLE",
-    r"TRUNCATE(?:\s+TABLE)?",
+    # "truncated" / "truncate the story" are English. DDL is the bare verb
+    # or TRUNCATE TABLE <name>, ended by a statement boundary.
+    r"TRUNCATE\b(?:\s+TABLE\b(?:\s+\w+)?)?(?=\s*(?:;|--|#|$))",
     # DML verbs need the rest of a statement.  Bare English such as
     # "delete from my record" / "insert into the report" is normal terminal
     # dialogue, and a false hit is either a free win or a security strike.
